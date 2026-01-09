@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Patrimônio SEMED</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="card-login" id="login-container">
+        <span class="icone-app">📦</span>
+        <h1>Patrimônio SEMED</h1>
+        <form id="form-login">
+            <input type="text" id="usuario" placeholder="NOME DE USUÁRIO" required>
+            <input type="password" id="senha" placeholder="SENHA" required>
+            <button type="submit">ENTRAR</button>
+        </form>
+    </div>
+
+    <div id="app-content" style="display: none;">
+        </div>
+
+    <script src="script.js"></script>
+    <div id="modalCadastro" class="modal" style="display:none; position:fixed; z-index:1000; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.5);">
+        <div style="background:#fff; margin:5% auto; padding:20px; width:50%; border-radius:8px;">
+            <h3>Cadastros Básicos</h3>
+            <select id="selecionarTabela" onchange="alternarCamposCadastro()" style="width:100%; padding:10px; margin-bottom:15px;">
+                <option value="">Selecione a tabela...</option>
+                <option value="categorias">Categorias</option>
+                <option value="locais">Locais</option>
+                <option value="setores">Setores</option>
+                <option value="produtos">Produtos</option>
+                <option value="patrimonios">Patrimônios (Lote)</option>
+            </select>
+
+            <div id="formDinamico">
+                </div>
+
+            <div style="margin-top:20px; text-align:right;">
+                <button onclick="salvarCadastro()" style="padding:10px 20px; background:green; color:white; border:none; cursor:pointer;">Salvar</button>
+                <button onclick="fecharModal()" style="padding:10px 20px; background:red; color:white; border:none; cursor:pointer;">Fechar</button>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

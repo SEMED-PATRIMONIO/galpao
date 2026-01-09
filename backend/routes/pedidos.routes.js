@@ -157,16 +157,29 @@ router.get('/pendentes', verificarToken, verificarPerfil(['admin', 'super']), as
     }
 });
 
-// ADMIN: Ver detalhes de uma solicitação específica
-router.get('/:id/detalhes', verificarToken, async (req, res) => {
+// Obter detalhes de um pedido específico
+router.get('/:id', verificarToken, async (req, res) => {
     try {
-        const itens = await db.query(`
-            SELECT pi.*, pr.nome as produto_nome
-            FROM pedido_itens pi
-            JOIN produtos pr ON pi.produto_id = pr.id
-            WHERE pi.pedido_id = $1
-        `, [req.params.id]);
-        res.json(itens.rows);
+        const { id } = req.params;
+        const pedido = await db.query(
+            `SELECT p.id, p.status, p.data_criacao, u.nome as solicitante, l.nome as escola
+             FROM pedidos p
+             JOIN usuarios u ON p.usuario_origem_id = u.id
+             JOIN locais l ON p.local_destino_id = l.id
+             WHERE p.id = $1`, [id]
+        );
+
+        // AQUI ESTÁ A CORREÇÃO: Adicionamos p.quantidade_estoque no SELECT abaixo
+        const itens = await db.query(
+            `SELECT pi.*, p.nome as produto_nome, p.quantidade_estoque
+             FROM pedido_itens pi
+             JOIN produtos p ON pi.produto_id = p.id
+             WHERE pi.pedido_id = $1`, [id]
+        );
+
+        if (pedido.rows.length === 0) return res.status(404).json({ error: 'Pedido não encontrado' });
+
+        res.json({ ...pedido.rows[0], itens: itens.rows });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -298,5 +311,6 @@ router.post('/:id/confirmar-recebimento', verificarToken, async (req, res) => {
         res.json({ message: "RECEBIMENTO CONFIRMADO COM SUCESSO!" });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
+
 
 module.exports = router;

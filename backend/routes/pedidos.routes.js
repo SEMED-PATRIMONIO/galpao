@@ -157,10 +157,12 @@ router.get('/pendentes', verificarToken, verificarPerfil(['admin', 'super']), as
     }
 });
 
-// Obter detalhes de um pedido específico
+// Rota para obter detalhes de um pedido específico
 router.get('/:id', verificarToken, async (req, res) => {
     try {
         const { id } = req.params;
+
+        // 1. Busca os dados do cabeçalho do pedido
         const pedido = await db.query(
             `SELECT p.id, p.status, p.data_criacao, u.nome as solicitante, l.nome as escola
              FROM pedidos p
@@ -169,18 +171,25 @@ router.get('/:id', verificarToken, async (req, res) => {
              WHERE p.id = $1`, [id]
         );
 
-        // AQUI ESTÁ A CORREÇÃO: Adicionamos p.quantidade_estoque no SELECT abaixo
+        if (pedido.rows.length === 0) {
+            return res.status(404).json({ error: 'Pedido não encontrado' });
+        }
+
+        // 2. Busca os itens com a Quantidade em Estoque (COALESCE garante que não retorne nulo)
         const itens = await db.query(
-            `SELECT pi.*, p.nome as produto_nome, p.quantidade_estoque
+            `SELECT pi.*, 
+                    pr.nome as produto_nome, 
+                    COALESCE(pr.quantidade_estoque, 0) as quantidade_estoque
              FROM pedido_itens pi
-             JOIN produtos p ON pi.produto_id = p.id
+             JOIN produtos pr ON pi.produto_id = pr.id
              WHERE pi.pedido_id = $1`, [id]
         );
 
-        if (pedido.rows.length === 0) return res.status(404).json({ error: 'Pedido não encontrado' });
-
+        // Retorna o objeto completo
         res.json({ ...pedido.rows[0], itens: itens.rows });
+
     } catch (err) {
+        console.error("Erro ao buscar pedido:", err); // Mostra erro no terminal do servidor se houver
         res.status(500).json({ error: err.message });
     }
 });
@@ -314,3 +323,4 @@ router.post('/:id/confirmar-recebimento', verificarToken, async (req, res) => {
 
 
 module.exports = router;
+

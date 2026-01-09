@@ -4997,4 +4997,92 @@ async function confirmarEntregaEscola(id) {
             carregarDashboard();
         }
     } catch (err) { alert("Erro ao confirmar"); }
+
+}
+
+// Dentro da função verPedidosAutorizacao()
+async function verPedidosAutorizacao() {
+    const container = document.getElementById('main-content');
+    // ... (código de fetch) ...
+
+    // CORREÇÃO 1: Adicionado style="color: white" no título e margin-top
+    // CORREÇÃO 2: Adicionado botão VOLTAR antes do título
+    container.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px;">
+            <button onclick="verDashboard()" style="padding: 8px 15px; background: #64748b; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                ⬅ VOLTAR
+            </button>
+            <h2 style="color: white; margin: 0;">SOLICITAÇÕES AGUARDANDO AUTORIZAÇÃO</h2>
+        </div>
+        
+        ${pedidos.length === 0 ? '<p style="color: white">Nenhuma solicitação pendente.</p>' : ''}
+        
+        <div class="grid-pedidos">
+            ${pedidos.map(p => `
+                <div class="card-pedido">
+                    <h3>Pedido #${p.id}</h3>
+                    <p><strong>Escola:</strong> ${p.escola}</p>
+                    <p><strong>Solicitante:</strong> ${p.solicitante}</p>
+                    <p><strong>Data:</strong> ${new Date(p.data_criacao).toLocaleDateString()}</p>
+                    <button onclick="analisarPedido(${p.id})" class="btn-analisar">ANALISAR</button>
+                </div>
+            `).join('')}
+        </div>
+    `;
+}
+
+// Dentro da função analisarPedido(id)
+async function analisarPedido(id) {
+    // ... (código de fetch inicial) ...
+    
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    
+    // CORREÇÃO 3, 4 e 5: Ajustes na tabela (text-align, width do input e valor do estoque)
+    modal.innerHTML = `
+        <div class="modal-content">
+            <h2>Análise do Pedido #${pedido.id}</h2>
+            <p><strong>Escola:</strong> ${pedido.escola}</p>
+            
+            <table class="tabela-detalhes" style="width: 100%; text-align: center;">
+                <thead>
+                    <tr>
+                        <th style="text-align: left;">Produto</th>
+                        <th>Tamanho</th>
+                        <th>Solicitado</th>
+                        <th>Em Estoque</th> <th>Aprovado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${pedido.itens.map(item => `
+                        <tr>
+                            <td style="text-align: left;">${item.produto_nome}</td>
+                            <td>${item.tamanho || '-'}</td>
+                            <td>${item.quantidade_solicitada}</td>
+                            
+                            <td style="font-weight: bold; color: ${item.quantidade_estoque < item.quantidade_solicitada ? 'red' : 'green'}">
+                                ${item.quantidade_estoque}
+                            </td>
+
+                            <td>
+                                <input type="number" 
+                                       id="aprov_${item.id}" 
+                                       value="${item.quantidade_solicitada}"
+                                       min="0" 
+                                       max="${item.quantidade_estoque}"
+                                       style="width: 80px; padding: 5px; text-align: center;">
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+
+            <div style="margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end;">
+                <button onclick="fecharModal()" style="background: #64748b; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer;">Cancelar</button>
+                <button onclick="finalizarAnalise(${pedido.id})" style="background: #16a34a; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer;">CONFIRMAR AUTORIZAÇÃO</button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
 }

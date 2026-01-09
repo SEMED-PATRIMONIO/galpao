@@ -5003,86 +5003,148 @@ async function confirmarEntregaEscola(id) {
 // Dentro da função verPedidosAutorizacao()
 async function verPedidosAutorizacao() {
     const container = document.getElementById('main-content');
-    // ... (código de fetch) ...
+    container.innerHTML = '<p style="color: white; padding: 20px;">Carregando solicitações...</p>';
 
-    // CORREÇÃO 1: Adicionado style="color: white" no título e margin-top
-    // CORREÇÃO 2: Adicionado botão VOLTAR antes do título
-    container.innerHTML = `
-        <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px;">
-            <button onclick="verDashboard()" style="padding: 8px 15px; background: #64748b; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                ⬅ VOLTAR
-            </button>
-            <h2 style="color: white; margin: 0;">SOLICITAÇÕES AGUARDANDO AUTORIZAÇÃO</h2>
-        </div>
-        
-        ${pedidos.length === 0 ? '<p style="color: white">Nenhuma solicitação pendente.</p>' : ''}
-        
-        <div class="grid-pedidos">
-            ${pedidos.map(p => `
-                <div class="card-pedido">
-                    <h3>Pedido #${p.id}</h3>
-                    <p><strong>Escola:</strong> ${p.escola}</p>
-                    <p><strong>Solicitante:</strong> ${p.solicitante}</p>
-                    <p><strong>Data:</strong> ${new Date(p.data_criacao).toLocaleDateString()}</p>
-                    <button onclick="analisarPedido(${p.id})" class="btn-analisar">ANALISAR</button>
+    try {
+        const res = await fetch(`${API_URL}/pedidos/status/AGUARDANDO_AUTORIZACAO`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+
+        if (!res.ok) throw new Error("Erro ao buscar pedidos");
+
+        const pedidos = await res.json();
+
+        // HTML corrigido com botão Voltar e Texto Branco
+        container.innerHTML = `
+            <div style="padding: 20px;">
+                <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px;">
+                    <button onclick="verDashboard()" 
+                            style="padding: 10px 20px; background: #64748b; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
+                        ⬅ VOLTAR
+                    </button>
+                    <h2 style="color: #ffffff; margin: 0; font-size: 1.5rem; text-shadow: 1px 1px 2px black;">
+                        SOLICITAÇÕES AGUARDANDO AUTORIZAÇÃO
+                    </h2>
                 </div>
-            `).join('')}
-        </div>
-    `;
+                
+                ${pedidos.length === 0 ? '<p style="color: white; font-size: 1.1rem;">Nenhuma solicitação pendente.</p>' : ''}
+                
+                <div class="grid-pedidos">
+                    ${pedidos.map(p => `
+                        <div class="card-pedido">
+                            <h3>Pedido #${p.id}</h3>
+                            <p><strong>Escola:</strong> ${p.escola}</p>
+                            <p><strong>Solicitante:</strong> ${p.solicitante}</p>
+                            <p><strong>Data:</strong> ${new Date(p.data_criacao).toLocaleDateString()}</p>
+                            <button onclick="analisarPedido(${p.id})" class="btn-analisar">ANALISAR</button>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    } catch (err) {
+        console.error(err);
+        container.innerHTML = '<p style="color: white">Erro ao carregar solicitações. Verifique o console.</p>';
+    }
 }
 
 // Dentro da função analisarPedido(id)
 async function analisarPedido(id) {
-    // ... (código de fetch inicial) ...
-    
-    const modal = document.createElement('div');
-    modal.className = 'modal-overlay';
-    
-    // CORREÇÃO 3, 4 e 5: Ajustes na tabela (text-align, width do input e valor do estoque)
-    modal.innerHTML = `
-        <div class="modal-content">
-            <h2>Análise do Pedido #${pedido.id}</h2>
-            <p><strong>Escola:</strong> ${pedido.escola}</p>
-            
-            <table class="tabela-detalhes" style="width: 100%; text-align: center;">
-                <thead>
-                    <tr>
-                        <th style="text-align: left;">Produto</th>
-                        <th>Tamanho</th>
-                        <th>Solicitado</th>
-                        <th>Em Estoque</th> <th>Aprovado</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${pedido.itens.map(item => `
-                        <tr>
-                            <td style="text-align: left;">${item.produto_nome}</td>
-                            <td>${item.tamanho || '-'}</td>
-                            <td>${item.quantidade_solicitada}</td>
-                            
-                            <td style="font-weight: bold; color: ${item.quantidade_estoque < item.quantidade_solicitada ? 'red' : 'green'}">
-                                ${item.quantidade_estoque}
-                            </td>
+    try {
+        const res = await fetch(`${API_URL}/pedidos/${id}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
 
-                            <td>
-                                <input type="number" 
-                                       id="aprov_${item.id}" 
-                                       value="${item.quantidade_solicitada}"
-                                       min="0" 
-                                       max="${item.quantidade_estoque}"
-                                       style="width: 80px; padding: 5px; text-align: center;">
-                            </td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>
+        if (!res.ok) throw new Error("Erro ao carregar detalhes do pedido");
 
-            <div style="margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end;">
-                <button onclick="fecharModal()" style="background: #64748b; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer;">Cancelar</button>
-                <button onclick="finalizarAnalise(${pedido.id})" style="background: #16a34a; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer;">CONFIRMAR AUTORIZAÇÃO</button>
+        const pedido = await res.json();
+
+        // Verifica se existem itens para evitar erro de .map
+        if (!pedido.itens || pedido.itens.length === 0) {
+            alert("Este pedido não possui itens.");
+            return;
+        }
+
+        // Remove modal anterior se existir (evita duplicação)
+        const modalExistente = document.querySelector('.modal-overlay');
+        if (modalExistente) modalExistente.remove();
+
+        const modal = document.createElement('div');
+        modal.className = 'modal-overlay';
+        
+        // Montagem do HTML da Tabela
+        modal.innerHTML = `
+            <div class="modal-content">
+                <h2 style="color: #333; border-bottom: 2px solid #eee; padding-bottom: 10px;">
+                    Análise do Pedido #${pedido.id}
+                </h2>
+                <p><strong>Escola:</strong> ${pedido.escola}</p>
+                
+                <div style="overflow-x: auto;">
+                    <table class="tabela-detalhes" style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+                        <thead>
+                            <tr style="background: #f8fafc; color: #333;">
+                                <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Produto</th>
+                                <th style="padding: 10px; border: 1px solid #ddd;">Tam.</th>
+                                <th style="padding: 10px; border: 1px solid #ddd;">Solicitado</th>
+                                <th style="padding: 10px; border: 1px solid #ddd;">Em Estoque</th>
+                                <th style="padding: 10px; border: 1px solid #ddd;">Aprovado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${pedido.itens.map(item => {
+                                const temEstoque = item.quantidade_estoque >= item.quantidade_solicitada;
+                                const corEstoque = temEstoque ? 'green' : 'red';
+                                
+                                return `
+                                <tr>
+                                    <td style="padding: 10px; border: 1px solid #ddd; text-align: left;">${item.produto_nome}</td>
+                                    <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">${item.tamanho || '-'}</td>
+                                    <td style="padding: 10px; border: 1px solid #ddd; text-align: center; font-weight: bold;">${item.quantidade_solicitada}</td>
+                                    
+                                    <td style="padding: 10px; border: 1px solid #ddd; text-align: center; color: ${corEstoque}; font-weight: bold;">
+                                        ${item.quantidade_estoque}
+                                    </td>
+
+                                    <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">
+                                        <input type="number" 
+                                               id="aprov_${item.id}" 
+                                               value="${item.quantidade_solicitada}"
+                                               min="0" 
+                                               max="${item.quantidade_estoque}"
+                                               style="width: 80px; padding: 5px; text-align: center; border: 1px solid #ccc; border-radius: 4px;">
+                                    </td>
+                                </tr>
+                                `;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div style="margin-top: 25px; display: flex; gap: 10px; justify-content: flex-end;">
+                    <button onclick="fecharModal()" 
+                            style="background: #64748b; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer;">
+                        Cancelar
+                    </button>
+                    <button onclick="finalizarAnalise(${pedido.id})" 
+                            style="background: #16a34a; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
+                        ✅ CONFIRMAR AUTORIZAÇÃO
+                    </button>
+                </div>
             </div>
-        </div>
-    `;
-    
-    document.body.appendChild(modal);
+        `;
+        
+        document.body.appendChild(modal);
+
+    } catch (err) {
+        console.error("Erro ao abrir análise:", err);
+        alert("Erro ao carregar dados. Verifique se o servidor foi reiniciado.");
+    }
 }
+
+// Garanta que esta função auxiliar exista
+function fecharModal() {
+    const modal = document.querySelector('.modal-overlay');
+    if (modal) modal.remove();
+}
+

@@ -1,4 +1,5 @@
 const express = require('express');
+const router = express.Router();
 const cors = require('cors');
 const db = require('./db');
 const { verificarToken } = require('./auth/auth.middleware');

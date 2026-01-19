@@ -2,102 +2,94 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const { verificarToken, verificarPerfil } = require('../auth/auth.middleware');
-// Rota para buscar categorias (usado nos selects do frontend)
-router.get('/categorias', async (req, res) => {
+
+// Entrada em massa de Patrimônio
+router.post('/patrimonio/massa', verificarToken, verificarPerfil(['admin', 'estoque']), async (req, res) => {
+    const { produto_id, series } = req.body; // 'series' é um array de strings
+    const LOCAL_CENTRAL_ID = 1; // ID referente ao 'ESTOQUE CENTRAL' no seu banco
+
     try {
-        const result = await db.query('SELECT * FROM categorias ORDER BY nome');
+        await db.query('BEGIN');
+
+        for (let serie of series) {
+            // Inserção individual de cada item de patrimônio
+            await db.query(
+                `INSERT INTO patrimonios (produto_id, numero_serie, local_id, status) 
+                 VALUES ($1, $2, $3, 'ESTOQUE')`,
+                [produto_id, serie.trim().toUpperCase(), LOCAL_CENTRAL_ID]
+            );
+        }
+
+        // Atualiza a quantidade total no cadastro do produto
+        await db.query(
+            'UPDATE produtos SET quantidade_estoque = quantidade_estoque + $1 WHERE id = $2',
+            [series.length, produto_id]
+        );
+
+        // Registro no Histórico Log
+        await db.query(
+            "INSERT INTO historico (usuario_id, acao, tipo_historico) VALUES ($1, $2, 'PRINCIPAL')",
+            [req.userId, `ENTRADA DE ${series.length} ITENS DE PATRIMÔNIO NO ESTOQUE CENTRAL`]
+        );
+
+        await db.query('COMMIT');
+        res.json({ message: 'PATRIMÔNIOS CADASTRADOS E ESTOQUE ATUALIZADO!' });
+    } catch (err) {
+        await db.query('ROLLBACK');
+        res.status(500).json({ error: "ERRO AO PROCESSAR PATRIMÔNIO: " + err.message });
+    }
+});
+
+// Listar estoque com alertas de nível baixo (para MATERIAL)
+router.get('/central', verificarToken, async (req, res) => {
+    try {
+        const result = await db.query(`
+            SELECT p.*, c.nome as categoria_nome,
+            (p.tipo = 'MATERIAL' AND p.quantidade_estoque <= p.alerta_minimo) as alerta_baixo
+            FROM produtos p
+            LEFT JOIN categorias c ON p.categoria_id = c.id
+            ORDER BY p.nome ASC
+        `);
         res.json(result.rows);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-// Rota genérica para tabelas simples (categorias, locais, setores)
-router.post('/basico/:tabela', async (req, res) => {
-    const { tabela } = req.params;
-    const { nome } = req.body;
-    try {
-        const result = await db.query(
-            `INSERT INTO ${tabela} (nome) VALUES ($1) RETURNING *`,
-            [nome.toUpperCase()]
-        );
-        res.status(201).json(result.rows[0]);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// Cadastro de Produtos com lógica de Grade de Uniformes
-router.post('/produtos', async (req, res) => {
-    const { nome, tipo, categoria_id, quantidade_estoque, alerta_minimo } = req.body;
-    
-    try {
-        if (tipo === 'UNIFORMES') {
-            let grade = [];
-            const nomeUpper = nome.toUpperCase();
-            
-            // Define a grade baseada no nome
-            if (nomeUpper.includes('TENIS')) {
-                grade = ["22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43"];
-            } else {
-                grade = ["2", "4", "6", "8", "10", "12", "14", "16", "PP", "P", "M", "G", "GG", "XGG"];
-            }
-
-            // Insere um registro para cada tamanho da grade
-            const queries = grade.map(tamanho => {
-                return db.query(
-                    `INSERT INTO produtos (nome, tipo, categoria_id, quantidade_estoque, alerta_minimo) 
-                     VALUES ($1, $2, $3, $4, $5)`,
-                    [`${nomeUpper} - TAM ${tamanho}`, tipo, categoria_id, quantidade_estoque, null]
-                );
-            });
-            await Promise.all(queries);
-            res.status(201).json({ message: "Grade de uniformes cadastrada com sucesso." });
-        } else {
-            // Cadastro simples para MATERIAL
-            const result = await db.query(
-                `INSERT INTO produtos (nome, tipo, categoria_id, quantidade_estoque, alerta_minimo) 
-                 VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-                [nome.toUpperCase(), tipo, categoria_id, quantidade_estoque, alerta_minimo]
-            );
-            res.status(201).json(result.rows[0]);
-        }
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// Rota para cadastrar patrimônio em lote
-router.post('/patrimonio', verificarToken, async (req, res) => {
-    const { produto_id, local_id, nota_fiscal, numeros_serie } = req.body;
-
-    if (!produto_id || !local_id || !nota_fiscal || !numeros_serie || !Array.isArray(numeros_serie)) {
-        return res.status(400).json({ error: "DADOS INCOMPLETOS PARA CADASTRO EM LOTE" });
-    }
+// Rota para transferir um item de patrimônio específico
+router.post('/patrimonio/transferir', verificarToken, verificarPerfil(['admin', 'logistica']), async (req, res) => {
+    const { patrimonio_id, local_destino_id } = req.body;
 
     try {
         await db.query('BEGIN');
 
-        for (const serie of numeros_serie) {
-            await db.query(
-                `INSERT INTO patrimonios (produto_id, local_id, numero_serie, nota_fiscal, status) 
-                 VALUES ($1, $2, $3, $4, 'DISPONIVEL')`,
-                [produto_id, local_id, serie, nota_fiscal]
-            );
+        // 1. Busca dados atuais do patrimônio para o log
+        const patrimonio = await db.query(
+            "SELECT p.numero_serie, l.nome as local_atual FROM patrimonios p JOIN locais l ON p.local_id = l.id WHERE p.id = $1",
+            [patrimonio_id]
+        );
 
-            // Incrementa o estoque do produto automaticamente
-            await db.query(
-                `UPDATE produtos SET quantidade_estoque = quantidade_estoque + 1 WHERE id = $1`,
-                [produto_id]
-            );
-        }
+        if (patrimonio.rowCount === 0) throw new Error("PATRIMÔNIO NÃO ENCONTRADO.");
+
+        // 2. Atualiza o local do patrimônio
+        await db.query(
+            "UPDATE patrimonios SET local_id = $1, status = 'ALOCADO' WHERE id = $2",
+            [local_destino_id, patrimonio_id]
+        );
+
+        // 3. Registra a movimentação no Histórico
+        const localDestino = await db.query("SELECT nome FROM locais WHERE id = $1", [local_destino_id]);
+        
+        await db.query(
+            "INSERT INTO historico (usuario_id, acao, tipo_historico) VALUES ($1, $2, 'PRINCIPAL')",
+            [req.userId, `TRANSFERIU PATRIMÔNIO ${patrimonio.rows[0].numero_serie} DE ${patrimonio.rows[0].local_atual} PARA ${localDestino.rows[0].nome}`]
+        );
 
         await db.query('COMMIT');
-        res.json({ message: `${numeros_serie.length} ITENS CADASTRADOS COM SUCESSO` });
+        res.json({ message: "TRANSFERÊNCIA CONCLUÍDA COM SUCESSO!" });
     } catch (err) {
         await db.query('ROLLBACK');
-        console.error(err);
-        res.status(500).json({ error: "ERRO AO CADASTRAR PATRIMÔNIO: " + err.message });
+        res.status(500).json({ error: err.message });
     }
 });
 

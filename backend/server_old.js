@@ -181,37 +181,6 @@ app.use((req, res) => {
     res.sendFile(path.join(frontendPath, 'index.html'));
 });
 
-// Rota unificada para Alertas de Logística (Entrega + Devolução)
-app.get('/api/alertas/logistica/geral', verificarToken, async (req, res) => {
-    try {
-        // Conta entregas prontas E devoluções autorizadas
-        const result = await db.query(`
-            SELECT COUNT(*) FROM pedidos 
-            WHERE status IN ('COLETA_LIBERADA', 'DEVOLUCAO_AUTORIZADA')
-        `);
-        res.json({ total: parseInt(result.rows[0].count) });
-    } catch (err) { 
-        res.status(500).json({ error: err.message }); 
-    }
-});
-
-// Adicione esta rota ao seu arquivo de pedidos
-router.get('/alertas/devolucoes', verificarToken, async (req, res) => {
-    try {
-        const query = `
-            SELECT status, COUNT(*) as total 
-            FROM pedidos 
-            WHERE tipo_pedido = 'DEVOLUCAO' 
-            AND status IN ('DEVOLUCAO_PENDENTE', 'DEVOLUCAO_AUTORIZADA', 'DEVOLUCAO_EM_TRANSITO')
-            GROUP BY status`;
-        
-        const { rows } = await db.query(query);
-        res.json(rows);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
 const PORT = 3000;
 app.listen(PORT, () => {
     console.log(`Servidor rodando em https://patrimoniosemed.paiva.api.br:${PORT}`);

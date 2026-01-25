@@ -164,7 +164,6 @@ function carregarDashboard() {
 
     // --- 1. FERRAMENTAS COMUNS (Todos os perfis) ---
     const menuComum = `
-        <div class="secao-titulo">FERRAMENTAS E CONTA</div>
         <button class="btn-grande" onclick="abrirCalculadoraConversao()">
             <i>🧮</i><span>CALCULADORA</span>
         </button>
@@ -176,7 +175,6 @@ function carregarDashboard() {
     // --- 2. PERFIL: SUPER (Gestão de Usuários) ---
     if (perfil === 'super') {
         html += `
-            <div class="secao-titulo">ADMINISTRAÇÃO DO SISTEMA</div>
             <button class="btn-grande" onclick="telaGerenciarUsuarios()">
                 <i>👥</i><span>GERENCIAR USUÁRIOS</span>
             </button>
@@ -189,7 +187,6 @@ function carregarDashboard() {
     // --- 3. PERFIL: ESCOLA ---
     if (perfil === 'escola') {
         html += `
-            <div class="secao-titulo">MINHA UNIDADE (ESCOLA)</div>
             <button class="btn-grande" onclick="listarPedidosEmCaminho()">
                 <i>🚚</i><span>CONFIRMAR RECEBIMENTO</span>
             </button>
@@ -223,10 +220,9 @@ function carregarDashboard() {
             <button class="btn-grande" onclick="telaVisualizarEstoque()">
                 <i>📊</i><span>VISUALIZAR ESTOQUE</span>
             </button>
-            <div class="badge-container" onclick="renderizarDashboardGeral()" style="cursor:pointer;">
-                <span>📊 Dashboard</span>
-                <span id="badge-pendentes" class="badge-notificacao">0</span>
-            </div>
+            <button class="btn-grande" onclick="renderizarDashboardGeral()">
+                <i>📊</i><span>PAINEL DE PEDIDOS</span>
+            </button>
         `;
         // Chama alertas de novas solicitações de Escolas e Logística
         setTimeout(() => verificarSolicitacoesPendentes(), 500);
@@ -235,7 +231,6 @@ function carregarDashboard() {
     // --- 5. PERFIL: ESTOQUE ---
     if (perfil === 'estoque') {
         html += `
-            <div class="secao-titulo">OPERAÇÕES DE ESTOQUE</div>
             <button class="btn-grande" onclick="abrirPainelSeparacao()">
                 <i>📦</i><span>SEPARAÇÃO DE VOLUMES</span>
             </button>
@@ -245,7 +240,6 @@ function carregarDashboard() {
             <button class="btn-grande" onclick="telaReceberDevolucoes()">
                 <i>🔄</i><span>RECEBER DEVOLUÇÕES</span>
             </button>
-            <div class="secao-titulo">PAINEL</div>
             <button class="btn-grande" onclick="telaGerenciarPatrimonio()">
                 <i>🏷️</i><span>LANÇAR/MOVER PATRIMÔNIO</span>
             </button>
@@ -263,7 +257,6 @@ function carregarDashboard() {
     // --- 6. PERFIL: LOGÍSTICA ---
     if (perfil === 'logistica') {
         html += `
-            <div class="secao-titulo">LOGÍSTICA E TRANSPORTE</div>
             <button class="btn-grande" onclick="listarColetaLogistica()">
                 <i>🚚</i><span>RECOLHER E TRANSPORTAR PEDIDO</span>
             </button>
@@ -3929,10 +3922,13 @@ async function renderizarDashboardGeral() {
         container.innerHTML = `
             <div style="padding:20px; animation: fadeIn 0.5s;">
                 <h2 style="color:#1e3a8a; margin-bottom:20px; display:flex; align-items:center; gap:10px;">
-                    <span>📊 Dashboard Executivo</span>
+                    <span>📦 PAINEL GERAL DE PEDIDOS</span>
                     <small style="font-size:0.9rem; color:#64748b; font-weight:normal;">(Atualizado em tempo real)</small>
                 </h2>
-
+                <button onclick="carregarDashboard()" 
+                    style="background:#64748b; color:white; border:none; padding:10px 18px; border-radius:6px; cursor:pointer; font-weight:bold; display:flex; align-items:center; gap:8px; transition: background 0.2s;">
+                    ⬅️ VOLTAR
+                </button>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom:30px;">
                     ${renderizarCardInfo('⚖️ PENDENTES', getCount('AGUARDANDO_AUTORIZACAO'), '#fbbf24', 'AGUARDANDO_AUTORIZACAO')}
                     ${renderizarCardInfo('📦 SEPARAÇÃO', getCount('APROVADO'), '#3b82f6', 'APROVADO')}

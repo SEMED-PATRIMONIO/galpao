@@ -59,7 +59,7 @@ document.getElementById('form-login')?.addEventListener('submit', async (e) => {
             localStorage.setItem('token', data.token);
             localStorage.setItem('perfil', data.perfil);
             localStorage.setItem('nome', data.nome);
-            localStorage.setItem('local_id', data.local_id); // Salva o ID da Escola no navegador
+            localStorage.setItem('local_id', data.local_id || ""); // Salva o ID da Escola no navegador
             TOKEN = data.token;
             carregarDashboard();
             // --- FIM DO TRECHO ---
@@ -2859,17 +2859,17 @@ async function renderizarFormSolicitacaoUniforme() {
 }
 
 async function enviarPedidoEscola(tipo) {
-    const localId = localStorage.getItem('local_id');
-
-    if (carrinhoSolicitacao.length === 0) return alert("Sua lista está vazia!");
+    // 🟢 BUSCA O LOCAL GUARDADO: Lê o ID que salvamos no login
+    const localIdLogado = localStorage.getItem('local_id');
     
-    if (!localId || localId === "null") {
-        alert("⚠️ ERRO: Usuário sem escola vinculada. Faça login novamente ou contate o Admin.");
-        return;
+    if (!localIdLogado || localIdLogado === "") {
+        return alert("ERRO: Seu usuário não está vinculado a uma escola. Contate o administrador.");
     }
 
-    const dados = {
-        local_destino_id: parseInt(localId),
+    if (carrinhoSolicitacao.length === 0) return alert("Adicione itens à solicitação!");
+
+    const dadosPedido = {
+        local_destino_id: parseInt(localIdLogado), // Envia o ID da escola do usuário
         tipo_pedido: tipo,
         itens: carrinhoSolicitacao
     };
@@ -2881,15 +2881,19 @@ async function enviarPedidoEscola(tipo) {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${localStorage.getItem('token')}`
             },
-            body: JSON.stringify(dados)
+            body: JSON.stringify(dadosPedido)
         });
 
         if (res.ok) {
-            alert("✅ Pedido enviado com sucesso!");
+            alert("✅ Solicitação enviada com sucesso!");
             carrinhoSolicitacao = [];
             carregarDashboard();
+        } else {
+            alert("Erro ao enviar solicitação.");
         }
-    } catch (err) { alert("Erro de conexão."); }
+    } catch (err) {
+        alert("Erro de conexão com o servidor.");
+    }
 }
 
 function ordenarTamanhos(lista) {

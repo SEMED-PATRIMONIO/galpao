@@ -7,13 +7,39 @@ const { verificarToken, verificarPerfil } = require('../auth/auth.middleware');
 router.get('/usuarios/lista', verificarToken, async (req, res) => {
     try {
         const result = await db.query(`
-            SELECT u.id, u.nome, u.usuario, u.perfil, u.status, l.nome as local_nome 
+            SELECT u.id, u.nome, u.perfil, u.status, u.local_id, l.nome as local_nome 
             FROM usuarios u 
             LEFT JOIN locais l ON u.local_id = l.id 
             ORDER BY u.nome ASC
         `);
         res.json(result.rows);
-    } catch (err) { res.status(500).json({ error: err.message }); }
+    } catch (err) { 
+        console.error("Erro na lista de usuários:", err.message);
+        res.status(500).json({ error: "Erro interno: " + err.message }); 
+    }
+});
+
+router.get('/locais/lista-simples', verificarToken, async (req, res) => {
+    try {
+        const result = await db.query("SELECT id, nome FROM locais ORDER BY nome ASC");
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao buscar locais: " + err.message });
+    }
+});
+
+router.post('/usuarios/criar', verificarToken, async (req, res) => {
+    const { nome, senha, perfil, local_id, status } = req.body;
+    try {
+        await db.query(
+            "INSERT INTO usuarios (nome, senha, perfil, local_id, status) VALUES ($1, $2, $3, $4, $5)",
+            [nome, senha, perfil, local_id, status || 'ativo']
+        );
+        res.status(201).json({ message: "Usuário criado!" });
+    } catch (err) {
+        console.error("Erro SQL no cadastro:", err.message);
+        res.status(500).json({ error: "Erro ao inserir no banco de dados." });
+    }
 });
 
 // ALTERAR STATUS DO USUÁRIO (Ativar/Inativar)
@@ -26,35 +52,13 @@ router.patch('/usuarios/:id/status', verificarToken, async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ROTA: Criar Novo Utilizador (Apenas SUPER)
-router.post('/usuarios/criar', verificarToken, async (req, res) => {
-    const { nome, usuario, senha, perfil, local_id, status } = req.body;
-
-    try {
-        // Verifica se o login já existe
-        const check = await db.query("SELECT id FROM usuarios WHERE usuario = $1", [usuario]);
-        if (check.rowCount > 0) {
-            return res.status(400).json({ error: "Este nome de utilizador já está em uso." });
-        }
-
-        // Insere o novo utilizador
-        // Nota: Se usar bcrypt, deve fazer o hash da senha antes deste passo
-        await db.query(
-            `INSERT INTO usuarios (nome, usuario, senha, perfil, local_id, status) 
-             VALUES ($1, $2, $3, $4, $5, $6)`,
-            [nome, usuario, senha, perfil, local_id, status]
-        );
-
-        res.status(201).json({ message: "Utilizador criado com sucesso!" });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: "Erro interno ao criar utilizador." });
-    }
-});
-
 // ==========================================
 // 1. ROTAS DE PEDIDOS / SOLICITAÇÕES
 // ==========================================
+router.get('/locais/dropdown', verificarToken, async (req, res) => {
+    const result = await db.query("SELECT id, nome FROM locais ORDER BY nome ASC");
+    res.json(result.rows);
+});
 
 // Listar pedidos pendentes (Admin)
 router.get('/pedidos/aguardando-autorizacao', verificarToken, async (req, res) => {

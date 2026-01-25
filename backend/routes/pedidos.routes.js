@@ -125,45 +125,108 @@ router.post('/:id/iniciar-separacao', verificarToken, verificarPerfil(['estoque'
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// 1. Listar pedidos aguardando autorização (Admin)
+router.get('/aguardando-autorizacao', verificarToken, verificarPerfil(['admin', 'super']), async (req, res) => {
+    try {
+        const result = await db.query(`
+            SELECT p.*, l.nome as escola_nome 
+            FROM pedidos p 
+            JOIN locais l ON p.local_destino_id = l.id 
+            WHERE p.status = 'AGUARDANDO_AUTORIZACAO'
+            ORDER BY p.data_criacao DESC
+        `);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao buscar pedidos pendentes" });
+    }
+});
+
+router.get('/:id/itens', verificarToken, async (req, res) => {
+    try {
+        const result = await db.query(`
+            SELECT pi.*, p.nome as produto_nome 
+            FROM pedido_itens pi 
+            JOIN produtos p ON pi.produto_id = p.id 
+            WHERE pi.pedido_id = $1`, [req.params.id]);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao carregar itens do pedido" });
+    }
+});
+
+// 2. Autorizar pedido com baixa automática no estoque
+router.patch('/:id/autorizar', verificarToken, verificarPerfil(['admin', 'super']), async (req, res) => {
+    const { id } = req.params;
+    const { itens, acao } = req.body;
+
+    try {
+        await db.query('BEGIN');
+
+        if (acao === 'RECUSAR') {
+            await db.query("UPDATE pedidos SET status = 'RECUSADO' WHERE id = $1", [id]);
+        } else {
+            // 1. VERIFICAÇÃO DE SALDO ANTES DE TUDO
+            for (const item of itens) {
+                const checkEstoque = await db.query(`
+                    SELECT eg.quantidade, p.nome 
+                    FROM estoque_grades eg
+                    JOIN produtos p ON eg.produto_id = p.id
+                    WHERE eg.produto_id = $1 
+                      AND eg.local_id = (SELECT id FROM locais WHERE nome = 'ESTOQUE CENTRAL')
+                      AND eg.tamanho_id = (SELECT id FROM estoque_tamanhos WHERE tamanho = $2)
+                `, [item.produto_id, item.tamanho]);
+
+                const saldoAtual = checkEstoque.rows[0]?.quantidade || 0;
+                const nomeProd = checkEstoque.rows[0]?.nome || "Produto";
+
+                if (saldoAtual < item.quantidade) {
+                    throw new Error(`SALDO INSUFICIENTE: ${nomeProd} (${item.tamanho}) tem apenas ${saldoAtual} em estoque.`);
+                }
+            }
+
+            // 2. SE CHEGOU AQUI, HÁ SALDO PARA TUDO. PROCESSA A BAIXA.
+            await db.query(
+                "UPDATE pedidos SET status = 'PEDIDO AUTORIZADO', autorizado_por = $1, data_autorizacao = NOW() WHERE id = $2",
+                [req.userId, id]
+            );
+
+            for (const item of itens) {
+                // Baixa no estoque
+                await db.query(`
+                    UPDATE estoque_grades 
+                    SET quantidade = quantidade - $1 
+                    WHERE produto_id = $2 
+                      AND local_id = (SELECT id FROM locais WHERE nome = 'ESTOQUE CENTRAL')
+                      AND tamanho_id = (SELECT id FROM estoque_tamanhos WHERE tamanho = $3)
+                `, [item.quantidade, item.produto_id, item.tamanho]);
+
+                // Atualiza o item do pedido com a quantidade que foi realmente autorizada
+                await db.query(
+                    "UPDATE pedido_itens SET quantidade_atendida = $1 WHERE pedido_id = $2 AND produto_id = $3 AND tamanho = $4",
+                    [item.quantidade, id, item.produto_id, item.tamanho]
+                );
+            }
+        }
+
+        await db.query('COMMIT');
+        res.json({ message: "OPERAÇÃO CONCLUÍDA COM SUCESSO!" });
+    } catch (err) {
+        await db.query('ROLLBACK');
+        res.status(400).json({ error: err.message }); // 400 indica erro de regra de negócio
+    }
+});
+
 // 6. ROTA DE CONTAGEM PARA ALERTAS VISUAIS (Segundo plano)
 router.get('/contagem/alertas', verificarToken, async (req, res) => {
     try {
-        // 1. Busca dados do usuário com segurança
-        const userRes = await db.query('SELECT local_id, perfil FROM usuarios WHERE id = $1', [req.userId]);
-        
-        if (userRes.rows.length === 0) {
-            return res.status(404).json({ error: "Usuário não encontrado" });
-        }
-
-        const { local_id, perfil } = userRes.rows[0];
-
-        // 2. Executa as contagens baseadas nos status exatos do seu banco
-        // Ajuste os nomes dos status ('EM_TRANSPORTE', etc) se forem diferentes no seu SQL
-        const queries = {
-            admin: "SELECT COUNT(*) FROM pedidos WHERE status = 'AGUARDANDO_AUTORIZACAO'",
-            estoque: "SELECT COUNT(*) FROM pedidos WHERE status = 'APROVADO'",
-            logistica: "SELECT COUNT(*) FROM pedidos WHERE status = 'COLETA_LIBERADA'",
-            escola: "SELECT COUNT(*) FROM pedidos WHERE status = 'EM_TRANSPORTE' AND local_destino_id = $1"
-        };
-
-        const [admin, estoque, logistica, escola] = await Promise.all([
-            db.query(queries.admin),
-            db.query(queries.estoque),
-            db.query(queries.logistica),
-            db.query(queries.escola, [local_id])
-        ]);
-
-        // 3. Retorna o objeto exatamente como o frontend espera
-        res.json({
-            admin_pendente: parseInt(admin.rows[0].count) || 0,
-            estoque_pendente: parseInt(estoque.rows[0].count) || 0,
-            logistica_pendente: parseInt(logistica.rows[0].count) || 0,
-            escola_recebimento: parseInt(escola.rows[0].count) || 0
-        });
-
+        // Esta query conta quantos pedidos precisam de atenção
+        const result = await db.query(`
+            SELECT COUNT(*) FROM pedidos 
+            WHERE status IN ('AGUARDANDO_AUTORIZACAO', 'COLETA_LIBERADA')
+        `);
+        res.json({ total: parseInt(result.rows[0].count) });
     } catch (err) {
-        console.error("ERRO CRÍTICO NA ROTA DE ALERTAS:", err.message);
-        res.status(500).json({ error: "Erro interno ao processar contagem: " + err.message });
+        res.status(500).json({ error: "Erro na contagem de alertas" });
     }
 });
 

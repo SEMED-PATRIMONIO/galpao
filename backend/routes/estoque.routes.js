@@ -81,6 +81,41 @@ router.post('/abastecer-uniforme', verificarToken, verificarPerfil(['admin', 'es
     }
 });
 
+// Rota para entrada de uniformes no Estoque Central
+router.post('/entrada-uniforme', verificarToken, verificarPerfil(['admin', 'estoque', 'super']), async (req, res) => {
+    const { itens } = req.body;
+
+    try {
+        await db.query('BEGIN');
+
+        // 1. Localizar o ID do Estoque Central
+        const localRes = await db.query("SELECT id FROM locais WHERE nome = 'ESTOQUE CENTRAL' LIMIT 1");
+        if (localRes.rowCount === 0) throw new Error("LOCAL 'ESTOQUE CENTRAL' NÃO ENCONTRADO NO BANCO.");
+        const localCentralId = localRes.rows[0].id;
+
+        for (const item of itens) {
+            // 2. Pegar o ID do tamanho pelo nome (ex: 'P', '42')
+            const tamRes = await db.query("SELECT id FROM estoque_tamanhos WHERE tamanho = $1", [item.tamanho]);
+            if (tamRes.rowCount === 0) continue;
+            const tamanhoId = tamRes.rows[0].id;
+
+            // 3. UPSERT (Insere se não existir, ou soma se já existir)
+            await db.query(`
+                INSERT INTO estoque_grades (produto_id, local_id, tamanho_id, quantidade)
+                VALUES ($1, $2, $3, $4)
+                ON CONFLICT (produto_id, local_id, tamanho_id) 
+                DO UPDATE SET quantidade = estoque_grades.quantidade + EXCLUDED.quantidade
+            `, [item.produto_id, localCentralId, tamanhoId, item.quantidade]);
+        }
+
+        await db.query('COMMIT');
+        res.json({ message: "ESTOQUE ATUALIZADO COM SUCESSO NO ESTOQUE CENTRAL!" });
+    } catch (err) {
+        await db.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // ROTA: Buscar saldo detalhado de uniformes por tamanho
 router.get('/grade-uniformes', verificarToken, verificarPerfil(['admin', 'estoque', 'super', 'logistica']), async (req, res) => {
     try {

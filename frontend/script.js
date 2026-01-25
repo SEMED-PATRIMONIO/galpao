@@ -20,28 +20,55 @@ document.addEventListener('input', (e) => {
     }
 });
 
+// Função para gerar campos de Patrimônio dinamicamente
+function gerarCamposSerie() {
+    const qtd = document.getElementById('qtd_patrimonio').value;
+    const container = document.getElementById('container_series');
+    container.innerHTML = ''; // Limpa campos anteriores
+
+    for (let i = 0; i < qtd; i++) {
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.placeholder = `NÚMERO DE SÉRIE / PLAQUETA ${i + 1}`;
+        input.className = 'input-serie';
+        input.required = true;
+        container.appendChild(input);
+    }
+}
+
 // Login simplificado (sem e-mail)
+// Localize este bloco no seu script.js e substitua por este:
+// Localize este bloco no seu script.js e substitua por este:
 document.getElementById('form-login')?.addEventListener('submit', async (e) => {
     e.preventDefault();
+    
     const usuario = document.getElementById('usuario').value;
     const senha = document.getElementById('senha').value;
 
-    const res = await fetch(`${API_URL}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ usuario, senha })
-    });
+    try {
+        const res = await fetch(`${API_URL}/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ usuario, senha })
+        });
 
-    const data = await res.json();
-    if (res.ok) {
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('perfil', data.perfil);
-        localStorage.setItem('nome', data.nome);
-        localStorage.setItem('local_id', data.local_id);        
-        TOKEN = data.token;
-        carregarDashboard();
-    } else {
-        alert('ERRO: ' + data.message);
+        const data = await res.json();
+
+        if (res.ok) {
+            // --- INÍCIO DO TRECHO QUE VOCÊ PERGUNTOU ---
+            localStorage.setItem('token', data.token);
+            localStorage.setItem('perfil', data.perfil);
+            localStorage.setItem('nome', data.nome);
+            localStorage.setItem('local_id', data.local_id); // Salva o ID da Escola no navegador
+            TOKEN = data.token;
+            carregarDashboard();
+            // --- FIM DO TRECHO ---
+        } else {
+            alert('ERRO: ' + (data.message || 'Falha no login'));
+        }
+    } catch (err) {
+        console.error("Erro na conexão de login:", err);
+        alert("Erro ao conectar com o servidor.");
     }
 });
 
@@ -61,23 +88,58 @@ function mostrarLogin() {
     loginContainer.style.display = 'block';
     app.style.display = 'none';
 }
+// Carregar alertas para Perfil Escola
+async function verificarAlertasEscola() { // Removi o localId daqui
+    try {
+        // A rota correta no seu server.js + pedidos.routes.js
+        const res = await fetch(`${API_URL}/pedidos/alertas-escola`, { 
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        
+        if (!res.ok) return;
+        const pedidos = await res.json();
+        
+        const alertContainer = document.getElementById('alertas-container');
+        if (!alertContainer) return;
 
-function logout() {
-    localStorage.clear();
-    window.location.reload();
+        if (pedidos.length > 0) {
+            alertContainer.innerHTML = `
+                <div style="background: #fef2f2; color: #dc2626; padding: 15px; border-radius: 8px; border: 1px solid #fee2e2; margin-bottom: 20px; font-weight: bold; text-align: center;">
+                    ⚠️ ATENÇÃO: VOCÊ POSSUI ${pedidos.length} PEDIDO(S) EM TRANSPORTE PARA ESTA UNIDADE!
+                </div>`;
+        } else {
+            alertContainer.innerHTML = '';
+        }
+    } catch (err) {
+        console.error("Erro nos alertas:", err);
+    }
 }
 
-/**
- * FUNÇÃO DASHBOARD UNIFICADA
- * Centraliza o acesso de todos os perfis utilizando o sistema de cards gamificados.
- */
+// Renderizar estoque com Alerta Visual de nível baixo
+async function renderizarEstoqueCentral() {
+    const res = await fetch(`${API_URL}/estoque/central`, {
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+    const produtos = await res.json();
+
+    const html = produtos.map(p => `
+        <div class="item-estoque ${p.alerta_baixo ? 'estoque-baixo' : ''}">
+            <span>${p.nome}</span>
+            <span>QTD: ${p.quantidade_estoque}</span>
+            ${p.alerta_baixo ? '<b style="color: red;">⚠️ BAIXO ESTOQUE</b>' : ''}
+        </div>
+    `).join('');
+    document.getElementById('lista-estoque').innerHTML = html;
+}
+
+// --- FUNÇÃO DASHBOARD REVISADA COM REGRAS DE PERFIS ESPECÍFICAS ---
 function carregarDashboard() {
     const perfil = localStorage.getItem('perfil') ? localStorage.getItem('perfil').toLowerCase() : null;
     const nome = localStorage.getItem('nome');
+    const localId = localStorage.getItem('local_id');
     const container = document.getElementById('app-content');
     const loginContainer = document.getElementById('login-container');
 
-    // Proteção de Acesso
     if (!perfil) {
         if (loginContainer) loginContainer.style.display = 'block';
         if (container) container.style.display = 'none';
@@ -87,850 +149,805 @@ function carregarDashboard() {
     if (loginContainer) loginContainer.style.display = 'none';
     if (container) container.style.display = 'block';
 
-    // 1. Montagem do Cabeçalho e Estrutura Base
-    container.innerHTML = `
+    // Cabeçalho Padrão
+    let html = `
         <div class="header-app">
             <span class="logo-texto">📦 PATRIMÔNIO SEMED</span>
-            <div class="user-info">
-                <div class="user-text">Olá, ${nome} <span class="badge-perfil">${perfil.toUpperCase()}</span></div>
-                <button onclick="logout()" class="btn-sair-neon">SAIR</button>
+            <div style="text-align: right;">
+                <div style="font-size: 0.9rem; font-weight: bold; color: #1e40af;">Olá, ${nome} (${perfil.toUpperCase()})</div>
+                <button onclick="logout()" style="width: auto; padding: 5px 15px; background: #dc2626; font-size: 0.8rem; margin-top: 5px; color:white; border:none; border-radius:4px; cursor:pointer;">SAIR</button>
             </div>
         </div>
-        
-        <div id="area-alertas"></div>
-
-        <div class="dashboard-grid" id="grid-principal">
-            </div>
-
-        <div class="ferramentas-rodape">
-            <button class="btn-utilitario" onclick="telaAlterarSenha()">🔑 ALTERAR SENHA</button>
-            ${perfil === 'super' ? `<button class="btn-utilitario" onclick="telaGerenciarUsuarios()">👥 USUÁRIOS</button>` : ''}
-        </div>
+        <div id="area-alertas" style="margin-bottom:20px;"></div>
+        <div class="grid-menu-principal">
     `;
 
-    // 2. Definição Dinâmica de Botões por Perfil
-    const grid = document.getElementById('grid-principal');
-    const botoes = {
-        admin: [
-            { texto: 'GESTÃO DE PEDIDOS', icon: '📋', acao: () => abrirGestaoPedidosAdmin() },
-            { texto: 'ENTRADA DE ESTOQUE', icon: '📥', acao: () => abrirEntradaEstoque() },
-            { texto: 'TRANSFERIR PATRIMÔNIO', icon: '🔄', acao: () => abrirTransferenciaPatrimonio() },
-            { texto: 'CADASTROS BÁSICOS', icon: '⚙️', acao: () => abrirModalCadastro() },
-            { texto: 'INTELIGÊNCIA DE DADOS', icon: '📊', acao: () => abrirDashboardRelatorios() }
-        ],
-        escola: [
-            { texto: 'SOLICITAR UNIFORMES', icon: '👕', acao: () => abrirSolicitacaoUniformes() },
-            { texto: 'DEVOLVER UNIFORMES', icon: '🔄', acao: () => abrirDevolucaoUniformes() }
-
-        ],
-        estoque: [
-            { texto: 'SEPARAÇÃO / REMESSAS', icon: '📦', acao: () => abrirFilaSeparacao() },
-            { texto: 'RECEBER DEVOLUÇÕES', icon: '📥', acao: () => abrirFilaRecebimentoDevolucao() },
-            { texto: 'ENTRADA DE ESTOQUE', icon: '➕', acao: () => abrirEntradaEstoque() }
-        ],
-        logistica: [
-            { texto: 'SOLICITAR MATERIAIS', icon: '🛠️', acao: () => abrirSolicitacaoMaterial() },
-            { texto: 'COLETAS PENDENTES', icon: '🚚', acao: () => abrirFilaColetas() },
-            { texto: 'MOVER PATRIMÔNIO', icon: '🔄', acao: () => abrirTransferenciaPatrimonio() }
-        ]
-    };
-
-    // 3. Injeção dos Botões no Grid
-    const listaAcoes = botoes[perfil] || [];
-    
-    // Regra Global: Adicionar "VER ESTOQUE" para todos, menos para escola
-    if (perfil !== 'escola') {
-        listaAcoes.push({ texto: 'INVENTÁRIO CENTRAL', icon: '📊', acao: () => abrirVisualizacaoEstoque() });
-    }
-
-    listaAcoes.forEach(btn => {
-        const card = document.createElement('div');
-        card.className = `card-btn-gamelizado ${perfil}-theme`;
-        card.innerHTML = `
-            <div class="icon-container">${btn.icon}</div>
-            <div class="title-container">
-                <h3>${btn.texto}</h3>
-            </div>
-        `;
-        card.onclick = btn.acao;
-        grid.appendChild(card);
-    });
-
-    // 4. Inicializa os Alertas e Badges (Notificações)
-    if (typeof atualizarAlertasDevolucao === 'function') {
-        atualizarAlertasDevolucao();
-    }
-}
-// No script.js, dentro da lógica de montagem do dashboard:
-
-function popularBotoesDashboard(perfil) {
-    const container = document.getElementById('app-content');
-    container.innerHTML = `<div class="dashboard-grid"></div>`;
-    const grid = container.querySelector('.dashboard-grid');
-
-    const botoes = {
-        admin: [
-            { texto: 'GESTÃO DE PEDIDOS', icon: '📋', acao: () => abrirGestaoPedidosAdmin() },
-            { texto: 'ENTRADA DE ESTOQUE', icon: '📥', acao: () => abrirEntradaEstoque() },
-            { texto: 'TRANSFERIR PATRIMÔNIO', icon: '🔄', acao: () => abrirTransferenciaPatrimonio() },
-            { texto: 'CADASTROS BÁSICOS', icon: '⚙️', acao: () => abrirModalCadastro() },
-            { texto: 'INTELIGÊNCIA DE DADOS', icon: '📊', acao: () => abrirDashboardRelatorios() }
-        ],
-        escola: [
-            { texto: 'SOLICITAR UNIFORMES', icon: '👕', acao: () => abrirSolicitacaoUniformes() },
-            { texto: 'DEVOLVER UNIFORMES', icon: '🔄', acao: () => abrirDevolucaoUniformes() }
-        ],
-        estoque: [
-            { texto: 'SEPARAÇÃO / REMESSAS', icon: '📦', acao: () => abrirFilaSeparacao() },
-            { texto: 'RECEBER DEVOLUÇÕES', icon: '📥', acao: () => abrirFilaRecebimentoDevolucao() },
-            { texto: 'ENTRADA DE ESTOQUE', icon: '➕', acao: () => abrirEntradaEstoque() }
-        ],
-        logistica: [
-            { texto: 'SOLICITAR MATERIAIS', icon: '🛠️', acao: () => abrirSolicitacaoMaterial() },
-            { texto: 'COLETAS PENDENTES', icon: '🚚', acao: () => abrirFilaColetas() },
-            { texto: 'MOVER PATRIMÔNIO', icon: '🔄', acao: () => abrirTransferenciaPatrimonio() }
-        ]
-    };
-
-    botoes[perfil]?.forEach(btn => {
-        const card = document.createElement('div');
-        card.className = 'card-btn-gamelizado';
-        card.innerHTML = `<span>${btn.icon}</span><h3>${btn.texto}</h3>`;
-        card.onclick = btn.acao;
-        grid.appendChild(card);
-    });
-}
-
-async function abrirSolicitacaoUniformes() {
-    const res = await fetch(`${API_URL}/pedidos/uniformes/grades`, {
-        headers: { 'Authorization': `Bearer ${TOKEN}` }
-    });
-    const listaProdutos = await res.json();
-
-    // Separamos os produtos: Tênis vs Outros
-    const tenis = listaProdutos.filter(p => p.nome.includes('TENIS'));
-    const vestuario = listaProdutos.filter(p => !p.nome.includes('TENIS'));
-
-    let html = `
-        <div class="modal-uniformes-container">
-            <h2 class="titulo-gamelizado">SOLICITAÇÃO DE MISSÃO: UNIFORMES</h2>
-            
-            ${renderizarBlocoGrade("VESTUÁRIO E ACESSÓRIOS", vestuario)}
-            
-            ${renderizarBlocoGrade("CALÇADOS (TÊNIS)", tenis)}
-
-            <div class="footer-modal">
-                <button class="btn-confirmar-missao" onclick="enviarSolicitacaoGeral()">ENVIAR SOLICITAÇÃO</button>
-            </div>
-        </div>
+    // --- 1. FERRAMENTAS COMUNS (Todos os perfis) ---
+    const menuComum = `
+        <div class="secao-titulo">FERRAMENTAS E CONTA</div>
+        <button class="btn-grande" onclick="abrirCalculadoraConversao()">
+            <i>🧮</i><span>CALCULADORA</span>
+        </button>
+        <button class="btn-grande" onclick="telaAlterarSenha()">
+            <i>🔑</i><span>ALTERAR MINHA SENHA</span>
+        </button>
     `;
 
-    abrirModalGamelizado(html);
-}
-
-function renderizarBlocoGrade(titulo, produtos) {
-    if (produtos.length === 0) return '';
-
-    // Pegamos todos os tamanhos únicos desta categoria para o cabeçalho
-    const todosTamanhos = [...new Set(produtos.flatMap(p => p.tamanhos))];
-
-    return `
-        <div class="bloco-grade">
-            <h3 class="subtitulo-grade">${titulo}</h3>
-            <div class="tabela-wrapper">
-                <table class="tabela-uniformes-horizontal">
-                    <thead>
-                        <tr>
-                            <th class="col-produto">PRODUTO</th>
-                            ${todosTamanhos.map(t => `<th>${t}</th>`).join('')}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${produtos.map(p => `
-                            <tr>
-                                <td class="nome-item">${p.nome}</td>
-                                ${todosTamanhos.map(t => {
-                                    const possuiTamanho = p.tamanhos.includes(t);
-                                    return `<td>
-                                        <input type="number" 
-                                            class="input-quantidade-grade" 
-                                            data-id="${p.id}" 
-                                            data-tamanho="${t}"
-                                            ${!possuiTamanho ? 'disabled style="background: #222;"' : 'placeholder="0"'}
-                                            min="0">
-                                    </td>`;
-                                }).join('')}
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    `;
-
-}
-
-async function enviarSolicitacaoGeral() {
-    const inputs = document.querySelectorAll('.input-quantidade-grade');
-    const itensParaEnviar = [];
-
-    inputs.forEach(input => {
-        const qtd = parseInt(input.value);
-        if (qtd > 0) {
-            itensParaEnviar.push({
-                produto_id: input.dataset.id,
-                tamanho: input.dataset.tamanho,
-                quantidade: qtd
-            });
-        }
-    });
-
-    if (itensParaEnviar.length === 0) {
-        return alert("POR FAVOR, INSIRA A QUANTIDADE DE PELO MENOS UM ITEM.");
-    }
-
-    if (!confirm(`CONFIRMAR ENVIO DE SOLICITAÇÃO COM ${itensParaEnviar.length} VARIAÇÕES DE TAMANHO?`)) return;
-
-    try {
-        const res = await fetch(`${API_URL}/pedidos/escola`, {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${TOKEN}`
-            },
-            body: JSON.stringify({ itens: itensParaEnviar })
-        });
-
-        if (res.ok) {
-            alert("SOLICITAÇÃO ENVIADA COM SUCESSO! AGUARDANDO AUTORIZAÇÃO DA ADMINISTRAÇÃO.");
-            fecharModalGamelizado(); // Fecha o modal da grade
-            carregarDashboard(); // Atualiza a tela principal
-        } else {
-            const erro = await res.json();
-            throw new Error(erro.error);
-        }
-    } catch (err) {
-        alert("FALHA NA MISSÃO: " + err.message);
-    }
-}
-
-// No script.js
-async function abrirGestaoPedidosAdmin() {
-    const res = await fetch(`${API_URL}/pedidos/pendentes-autorizacao`, {
-        headers: { 'Authorization': `Bearer ${TOKEN}` }
-    });
-    const pedidos = await res.json();
-
-    let html = `<div class="lista-admin-pedidos">`;
-    pedidos.forEach(p => {
+    // --- 2. PERFIL: SUPER (Gestão de Usuários) ---
+    if (perfil === 'super') {
         html += `
-            <div class="card-pedido-pendente" onclick="visualizarDetalheParaAutorizar(${p.id})">
-                <div class="info">
-                    <strong>${p.escola_nome}</strong>
-                    <span>SOLICITADO EM: ${new Date(p.data_criacao).toLocaleString()}</span>
-                </div>
-                <div class="status-badge">AGUARDANDO</div>
+            <div class="secao-titulo">ADMINISTRAÇÃO DO SISTEMA</div>
+            <button class="btn-grande" onclick="telaGerenciarUsuarios()">
+                <i>👥</i><span>GERENCIAR USUÁRIOS</span>
+            </button>
+            <button class="btn-grande" onclick="renderizarDashboardGeral()">
+                <i>📊</i><span>PAINEL DE PEDIDOS</span>
+            </button>            
+        `;
+    }
+
+    // --- 3. PERFIL: ESCOLA ---
+    if (perfil === 'escola') {
+        html += `
+            <div class="secao-titulo">MINHA UNIDADE (ESCOLA)</div>
+            <button class="btn-grande" onclick="listarPedidosEmCaminho()">
+                <i>🚚</i><span>CONFIRMAR RECEBIMENTO</span>
+            </button>
+            <button class="btn-grande" onclick="telaSolicitarUniforme()">
+                <i>👕</i><span>SOLICITAR UNIFORMES</span>
+            </button>
+            <button class="btn-grande" onclick="telaDevolucaoUniforme()">
+                <i>🔄</i><span>DEVOLVER UNIFORMES</span>
+            </button>
+        `;
+        // Chama alertas específicos da escola (Pedidos em transporte para o localId)
+        setTimeout(() => verificarAlertasEscola(), 500);
+    }
+
+    // --- 4. PERFIL: ADMIN ---
+    if (perfil === 'admin') {
+        html += `
+            <button class="btn-grande" onclick="telaCadastrosBase()">
+                <i>⚙️</i><span>CADASTROS BÁSICOS</span>
+            </button>
+            <button class="btn-grande" onclick="telaAdminGerenciarSolicitacoes()">
+                <i>⚖️</i><span>AUTORIZAR SOLICITAÇÕES</span>
+            </button>
+            <button class="btn-grande" onclick="telaAbastecerEstoque()">
+                <i>📥</i><span>ENTRADA ESTOQUE</span>
+            </button>
+            <button class="btn-grande" onclick="telaAdminCriarPedido()">
+                <i>➕</i><span>CRIAR PEDIDO GERAL</span>
+            </button>
+            <div class="secao-titulo">PAINEL</div>
+            <button class="btn-grande" onclick="telaVisualizarEstoque()">
+                <i>📊</i><span>VISUALIZAR ESTOQUE</span>
+            </button>
+            <div class="badge-container" onclick="renderizarDashboardGeral()" style="cursor:pointer;">
+                <span>📊 Dashboard</span>
+                <span id="badge-pendentes" class="badge-notificacao">0</span>
             </div>
         `;
-    });
-    html += `</div>`;
-
-    abrirModalGamelizado("CENTRAL DE AUTORIZAÇÕES", html);
-}
-
-async function visualizarDetalheParaAutorizar(idPedido) {
-    const res = await fetch(`${API_URL}/pedidos/detalhes/${idPedido}`, {
-        headers: { 'Authorization': `Bearer ${TOKEN}` }
-    });
-    const dados = await res.json(); // Retorna { escola, data, itens: [...] }
-
-    // Separar itens por categoria para manter a organização das grades
-    const tenis = dados.itens.filter(p => p.nome.includes('TENIS'));
-    const vestuario = dados.itens.filter(p => !p.nome.includes('TENIS'));
-
-    let html = `
-        <div class="modal-admin-gestao">
-            <h2 class="titulo-gamelizado">REVISÃO DE MISSÃO: #${idPedido}</h2>
-            <p class="info-escola">ORIGEM: <strong>${dados.escola}</strong></p>
-            
-            ${renderizarGradeEdicao("VESTUÁRIO", vestuario)}
-            ${renderizarGradeEdicao("CALÇADOS", tenis)}
-
-            <div class="painel-comando-admin">
-                <button class="btn-acao-gamelizado btn-aprovar" onclick="processarAutorizacao(${idPedido}, 'AUTORIZAR')">
-                    AUTORIZAR & BAIXAR ESTOQUE
-                </button>
-                <button class="btn-acao-gamelizado btn-recusar" onclick="processarAutorizacao(${idPedido}, 'RECUSAR')">
-                    ABORTAR MISSÃO
-                </button>
-            </div>
-        </div>
-    `;
-
-    abrirModalGamelizado(html);
-}
-
-function renderizarGradeEdicao(titulo, itens) {
-    if (itens.length === 0) return '';
-    const tamanhos = [...new Set(itens.map(i => i.tamanho))];
-
-    // Agrupar itens por produto para a linha horizontal
-    const produtosAgrupados = itens.reduce((acc, it) => {
-        if (!acc[it.produto_id]) acc[it.produto_id] = { nome: it.nome, id: it.produto_id, grades: {} };
-        acc[it.produto_id].grades[it.tamanho] = { qtd: it.quantidade_solicitada, id_item: it.id };
-        return acc;
-    }, {});
-
-    return `
-        <div class="bloco-grade-edicao">
-            <h3 class="neon-text-small">${titulo}</h3>
-            <div class="tabela-wrapper">
-                <table class="tabela-gestao-admin">
-                    <thead>
-                        <tr>
-                            <th class="sticky-col">PRODUTO</th>
-                            ${tamanhos.map(t => `<th>${t}</th>`).join('')}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${Object.values(produtosAgrupados).map(p => `
-                            <tr>
-                                <td class="sticky-col">${p.nome}</td>
-                                ${tamanhos.map(t => {
-                                    const info = p.grades[t];
-                                    return `<td>
-                                        <input type="number" 
-                                            class="input-edicao-admin" 
-                                            data-id-item="${info ? info.id_item : ''}"
-                                            value="${info ? info.qtd : 0}"
-                                            ${!info ? 'disabled' : ''}>
-                                    </td>`;
-                                }).join('')}
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    `;
-}
-
-async function processarAutorizacao(idPedido, acao) {
-    const confirmacao = confirm(`DESEJA ${acao} ESTA SOLICITAÇÃO?`);
-    if (!confirmacao) return;
-
-    let payload = { idPedido, acao, itensEditados: [] };
-
-    if (acao === 'AUTORIZAR') {
-        const inputs = document.querySelectorAll('.input-edicao-admin:not(:disabled)');
-        inputs.forEach(input => {
-            payload.itensEditados.push({
-                id_item: input.dataset.idItem,
-                quantidade: parseInt(input.value)
-            });
-        });
+        // Chama alertas de novas solicitações de Escolas e Logística
+        setTimeout(() => verificarSolicitacoesPendentes(), 500);
     }
+
+    // --- 5. PERFIL: ESTOQUE ---
+    if (perfil === 'estoque') {
+        html += `
+            <div class="secao-titulo">OPERAÇÕES DE ESTOQUE</div>
+            <button class="btn-grande" onclick="abrirPainelSeparacao()">
+                <i>📦</i><span>SEPARAÇÃO DE VOLUMES</span>
+            </button>
+            <button class="btn-grande" onclick="telaAbastecerEstoque()">
+                <i>📥</i><span>ENTRADA ESTOQUE</span>
+            </button>
+            <button class="btn-grande" onclick="telaReceberDevolucoes()">
+                <i>🔄</i><span>RECEBER DEVOLUÇÕES</span>
+            </button>
+            <div class="secao-titulo">PAINEL</div>
+            <button class="btn-grande" onclick="telaGerenciarPatrimonio()">
+                <i>🏷️</i><span>LANÇAR/MOVER PATRIMÔNIO</span>
+            </button>
+            <button class="btn-grande" onclick="telaVisualizarEstoque()">
+                <i>📊</i><span>VISUALIZAR ESTOQUE</span>
+            </button>
+            <button class="btn-grande" onclick="renderizarDashboardGeral()">
+                <i>📊</i><span>PAINEL DE PEDIDOS</span>
+            </button>
+        `;
+        // Chama alertas de pedidos aguardando separação
+        setTimeout(verificarPedidosParaSeparar, 500);
+    }
+
+    // --- 6. PERFIL: LOGÍSTICA ---
+    if (perfil === 'logistica') {
+        html += `
+            <div class="secao-titulo">LOGÍSTICA E TRANSPORTE</div>
+            <button class="btn-grande" onclick="listarColetaLogistica()">
+                <i>🚚</i><span>RECOLHER E TRANSPORTAR PEDIDO</span>
+            </button>
+            <button class="btn-grande" onclick="telaSolicitarPatrimonio()">
+                <i>🏷️</i><span>SOLICITAR PATRIMÔNIO</span>
+            </button>
+            <button class="btn-grande" onclick="renderizarDashboardGeral()">
+                <i>📊</i><span>PAINEL DE PEDIDOS</span>
+            </button>
+        `;
+        // Alertas de pedidos prontos para coleta no Estoque Central
+        setTimeout(verificarPedidosParaColeta, 500);
+    }
+
+    html += menuComum + `</div>`; // Fecha a grid e adiciona o menu comum no fim
+    container.innerHTML = html;
+
+    iniciarAlertaPedidos();
+}
+
+async function telaVisualizarEstoque() {
+    const container = document.getElementById('app-content');
+    container.innerHTML = '<div style="padding:20px;">CARREGANDO ESTOQUE GERAL...</div>';
 
     try {
-        const res = await fetch(`${API_URL}/pedidos/admin/autorizar`, {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${TOKEN}`
-            },
-            body: JSON.stringify(payload)
-        });
-
-        if (res.ok) {
-            alert(acao === 'AUTORIZAR' ? "ESTOQUE ATUALIZADO E PEDIDO ENVIADO AO ESTOQUE!" : "SOLICITAÇÃO RECUSADA.");
-            fecharModalGamelizado();
-            abrirGestaoPedidosAdmin(); // Recarrega a lista
-        }
-    } catch (err) {
-        alert("ERRO NO PROCESSAMENTO: " + err.message);
-    }
-}
-
-async function abrirEntradaEstoque() {
-    const res = await fetch(`${API_URL}/catalogo/produtos`, {
-        headers: { 'Authorization': `Bearer ${TOKEN}` }
-    });
-    const produtos = await res.json();
-
-    let html = `
-        <div class="modal-entrada">
-            <h2 class="neon-text">ABASTECER ESTOQUE CENTRAL</h2>
-            <select id="select-produto-entrada" onchange="renderizarCamposEntrada(this.value)" class="input-gamelizado">
-                <option value="">SELECIONE O PRODUTO...</option>
-                ${produtos.map(p => `<option value='${JSON.stringify(p)}'>${p.nome} (${p.tipo})</option>`).join('')}
-            </select>
-            <div id="campos-dinamicos-entrada"></div>
-            <button class="btn-acao-gamelizado" onclick="salvarEntradaEstoque()">EFETUAR ENTRADA</button>
-        </div>
-    `;
-    abrirModalGamelizado(html);
-}
-
-function renderizarCamposEntrada(produtoJson) {
-    const produto = JSON.parse(produtoJson);
-    const container = document.getElementById('campos-dinamicos-entrada');
-    container.innerHTML = ""; // Limpa anterior
-
-    if (produto.tipo === 'PATRIMONIO') {
-        container.innerHTML = `
-            <div class="alerta-gamelizado">MODO PATRIMÔNIO: INSIRA UM NÚMERO DE SÉRIE POR LINHA</div>
-            <textarea id="input-series-lote" class="textarea-gamelizado" 
-                placeholder="EXEMPLO:\nABC-123\nABC-124\nABC-125" rows="10"></textarea>
-        `;
-    } else if (produto.tipo === 'UNIFORMES') {
-        // Grade horizontal de uniformes (conforme regra anterior)
-        container.innerHTML = `<div id="grade-entrada-uniforme"></div>`;
-        gerarGradeEntradaUniforme(produto.id); 
-    } else {
-        // Material comum
-        container.innerHTML = `
-            <input type="number" id="qtd-simples" class="input-gamelizado" placeholder="QUANTIDADE TOTAL">
-        `;
-    }
-}
-
-async function salvarEntradaEstoque() {
-    const prodData = JSON.parse(document.getElementById('select-produto-entrada').value);
-    let payload = { produto_id: prodData.id };
-
-    if (prodData.tipo === 'PATRIMONIO') {
-        const texto = document.getElementById('input-series-lote').value;
-        payload.series = texto.split('\n').filter(s => s.trim() !== "");
-        if (payload.series.length === 0) return alert("INSIRA PELO MENOS UM NÚMERO DE SÉRIE");
-        
-        await fetch(`${API_URL}/api/cadastros/patrimonio/massa`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
-            body: JSON.stringify(payload)
-        });
-    }
-    // ... lógica para uniformes e material
-    alert("ENTRADA CONCLUÍDA!");
-    fecharModalGamelizado();
-}
-
-async function abrirVisualizacaoEstoque() {
-    try {
-        // Busca a lista geral de produtos e seus saldos totais
-        const res = await fetch(`${API_URL}/estoque/central`, {
+        const res = await fetch(`${API_URL}/estoque/geral`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
-        
-        if (!res.ok) throw new Error("Erro ao buscar dados do estoque.");
-        const estoque = await res.json();
+        const produtos = await res.json();
 
         let html = `
-            <div class="header-tarefa">
-                <button onclick="carregarDashboard()" class="btn-voltar">⬅ VOLTAR AO DASHBOARD</button>
-                <h2 class="neon-text">INVENTÁRIO DO ESTOQUE CENTRAL</h2>
-            </div>
-            
-            <div class="tabela-wrapper-vertical">
-                <table class="tabela-detalhes">
+            <div style="padding:20px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                    <h2 style="color:#1e3a8a;">📊 ESTOQUE ATUAL</h2>
+                    <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer;">⬅️ VOLTAR</button>
+                </div>
+
+                <table style="width:100%; border-collapse:collapse; background:white; border-radius:8px; overflow:hidden; box-shadow:0 2px 10px rgba(0,0,0,0.1);">
                     <thead>
-                        <tr>
-                            <th>PRODUTO</th>
-                            <th>TIPO</th>
-                            <th>SALDO TOTAL</th>
-                            <th>ESTADO</th>
-                            <th>AÇÕES</th>
+                        <tr style="background:#1e3a8a; color:white;">
+                            <th style="padding:12px; text-align:left;">PRODUTO</th>
+                            <th style="padding:12px; text-align:center;">CATEGORIA</th>
+                            <th style="padding:12px; text-align:center;">SALDO TOTAL</th>
+                            <th style="padding:12px; text-align:center;">STATUS</th>
                         </tr>
                     </thead>
                     <tbody>
-                        ${estoque.map(item => {
-                            // Lógica de Alerta de Estoque Baixo
-                            const isBaixo = (item.tipo === 'MATERIAL' && item.alerta_baixo) || 
-                                          (item.tipo === 'UNIFORMES' && item.quantidade_estoque < 20);
+                        ${produtos.map(p => {
+                            const isUniforme = p.tipo === 'UNIFORMES';
+                            const status = p.quantidade_estoque <= p.alerta_minimo ? '🔴 CRÍTICO' : '🟢 OK';
                             
                             return `
-                            <tr class="${isBaixo ? 'estoque-critico' : ''}">
-                                <td>${item.nome}</td>
-                                <td class="tipo-tag ${item.tipo.toLowerCase()}">${item.tipo}</td>
-                                <td style="font-weight:bold; font-size: 1.1em;">${item.quantidade_estoque}</td>
-                                <td>${isBaixo ? '⚠️ REPOR' : '✅ OK'}</td>
-                                <td>
-                                    ${item.tipo === 'UNIFORMES' ? 
-                                        `<button class="btn-tabela-neon" onclick="verGradeEstoqueDetalhada(${item.id}, '${item.nome}')">VER GRADE</button>` : 
-                                      item.tipo === 'PATRIMONIO' ? 
-                                        `<button class="btn-tabela-neon" onclick="verSeriesPatrimonio(${item.id}, '${item.nome}')">VER SÉRIES</button>` : 
-                                        '---'}
-                                </td>
-                            </tr>`;
+                                <tr style="border-bottom:1px solid #eee;">
+                                    <td style="padding:12px;">${p.nome}</td>
+                                    <td style="padding:12px; text-align:center;"><small>${p.tipo}</small></td>
+                                    <td style="padding:12px; text-align:center;">
+                                        ${isUniforme ? 
+                                            `<button onclick="abrirModalGrade(${p.id}, '${p.nome}')" style="background:#dbeafe; color:#1e40af; border:1px solid #1e40af; padding:4px 10px; border-radius:4px; cursor:pointer; font-weight:bold;">
+                                                ${p.quantidade_estoque} (VER GRADE)
+                                             </button>` : 
+                                            `<strong>${p.quantidade_estoque}</strong>`
+                                        }
+                                    </td>
+                                    <td style="padding:12px; text-align:center;">${status}</td>
+                                </tr>
+                            `;
                         }).join('')}
                     </tbody>
                 </table>
             </div>
+            <div id="modalGrade" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:9999; justify-content:center; align-items:center;">
+                <div style="background:white; padding:25px; border-radius:12px; width:90%; max-width:400px; box-shadow:0 10px 25px rgba(0,0,0,0.2);">
+                    <h3 id="modalTitulo" style="margin-top:0; color:#1e3a8a; border-bottom:2px solid #eee; padding-bottom:10px;"></h3>
+                    <div id="modalCorpo" style="margin:20px 0; display:grid; grid-template-columns:repeat(3, 1fr); gap:10px;"></div>
+                    <button onclick="document.getElementById('modalGrade').style.display='none'" style="width:100%; padding:10px; background:#ef4444; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:bold;">FECHAR</button>
+                </div>
+            </div>
         `;
-        
-        document.getElementById('app-content').innerHTML = html;
-        window.scrollTo(0, 0); // Garante que a tela comece no topo
-
+        container.innerHTML = html;
     } catch (err) {
-        alert("FALHA NA BUSCA DE INVENTÁRIO: " + err.message);
+        container.innerHTML = "Erro ao carregar estoque.";
     }
 }
 
-// --- FUNÇÕES DE DETALHAMENTO ---
-
-// 1. Visualizar Grade de Uniformes
-async function verGradeEstoqueDetalhada(produto_id, nome) {
-    const res = await fetch(`${API_URL}/estoque/grade-uniformes`, {
-        headers: { 'Authorization': `Bearer ${TOKEN}` }
-    });
-    const data = await res.json();
-    const grade = data[nome]; // O backend agrupa pelo nome do produto
-
-    if (!grade) return alert("Grade não encontrada para este uniforme.");
-
-    let html = `<div class="detalhe-popup"><h3>GRADE: ${nome}</h3><div class="grid-grade">`;
-    for (const [tamanho, qtd] of Object.entries(grade)) {
-        html += `<div class="grade-box"><span>${tamanho}</span><strong>${qtd}</strong></div>`;
-    }
-    html += `</div></div>`;
-    
-    // Usando seu sistema de modal/alerta gamificado
-    abrirModalGamelizado("DETALHE DE TAMANHOS", html);
-}
-
-// 2. Visualizar Números de Série de Patrimônio
-async function verSeriesPatrimonio(produto_id, nome) {
-    const res = await fetch(`${API_URL}/api/cadastros/patrimonio/listar/${produto_id}`, {
-        headers: { 'Authorization': `Bearer ${TOKEN}` }
-    });
-    const series = await res.json();
-
-    let html = `
-        <div class="detalhe-popup">
-            <h3>SÉRIES EM ESTOQUE: ${nome}</h3>
-            <div class="lista-series-scroll">
-                <ul>
-                    ${series.map(s => `<li><i class="fas fa-barcode"></i> ${s.numero_serie} <small>(${s.status})</small></li>`).join('')}
-                </ul>
-            </div>
-        </div>`;
-    
-    abrirModalGamelizado("LISTA DE PATRIMÔNIOS", html);
-}
-
-async function abrirFilaSeparacao() {
-    const res = await fetch(`${API_URL}/pedidos/para-separar`, {
-        headers: { 'Authorization': `Bearer ${TOKEN}` }
-    });
-    const pedidos = await res.json();
-
-    if (pedidos.length === 0) {
-        return alert("NENHUM PEDIDO AGUARDANDO SEPARAÇÃO NO MOMENTO.");
-    }
-
-    let html = `
-        <div class="modal-estoque-separacao">
-            <h2 class="neon-text">FILA DE SEPARAÇÃO (ESTOQUE)</h2>
-            <div class="grid-pedidos-separar">
-                ${pedidos.map(p => `
-                    <div class="card-separacao" onclick="prepararRemessa(${p.id})">
-                        <div class="card-header">PEDIDO #${p.id}</div>
-                        <div class="card-body">
-                            <p><strong>DESTINO:</strong> ${p.escola_nome}</p>
-                            <p><strong>ITENS:</strong> ${p.total_itens}</p>
-                        </div>
-                        <div class="card-footer">CLIQUE PARA SEPARAR</div>
-                    </div>
-                `).join('')}
-            </div>
-        </div>
-    `;
-    abrirModalGamelizado(html);
-}
-
-async function prepararRemessa(idPedido) {
-    const res = await fetch(`${API_URL}/pedidos/detalhes/${idPedido}`, {
-        headers: { 'Authorization': `Bearer ${TOKEN}` }
-    });
-    const dados = await res.json();
-
-    let html = `
-        <div class="modal-remessa">
-            <h2 class="neon-text">PREPARAR REMESSA: #${idPedido}</h2>
-            <div class="info-remessa-superior">
-                <label>VOLUMES (CAIXAS):</label>
-                <input type="number" id="volumes-remessa" class="input-gamelizado" value="1" min="1">
-            </div>
-            
-            <table class="tabela-separacao">
-                <thead>
-                    <tr>
-                        <th>PRODUTO</th>
-                        <th>TAMANHO</th>
-                        <th>AUTORIZADO</th>
-                        <th>JÁ ENVIADO</th>
-                        <th>NESTA REMESSA</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${dados.itens.map(it => {
-                        const falta = it.quantidade_solicitada - it.quantidade_enviada;
-                        return `
-                        <tr>
-                            <td>${it.nome}</td>
-                            <td>${it.tamanho || '-'}</td>
-                            <td>${it.quantidade_solicitada}</td>
-                            <td>${it.quantidade_enviada}</td>
-                            <td>
-                                <input type="number" 
-                                    class="input-qtd-remessa" 
-                                    data-id-item="${it.id}" 
-                                    max="${falta}" 
-                                    value="${falta}" 
-                                    min="0">
-                            </td>
-                        </tr>`;
-                    }).join('')}
-                </tbody>
-            </table>
-            
-            <button class="btn-acao-gamelizado" onclick="confirmarSaidaRemessa(${idPedido})">
-                LIBERAR PARA COLETA (LOGÍSTICA)
-            </button>
-        </div>
-    `;
-    abrirModalGamelizado(html);
-}
-
-async function prepararRemessa(idPedido) {
-    const res = await fetch(`${API_URL}/pedidos/detalhes/${idPedido}`, {
-        headers: { 'Authorization': `Bearer ${TOKEN}` }
-    });
-    const dados = await res.json();
-
-    let html = `
-        <div class="modal-remessa">
-            <h2 class="neon-text">PREPARAR REMESSA: #${idPedido}</h2>
-            <div class="info-remessa-superior">
-                <label>VOLUMES (CAIXAS):</label>
-                <input type="number" id="volumes-remessa" class="input-gamelizado" value="1" min="1">
-            </div>
-            
-            <table class="tabela-separacao">
-                <thead>
-                    <tr>
-                        <th>PRODUTO</th>
-                        <th>TAMANHO</th>
-                        <th>AUTORIZADO</th>
-                        <th>JÁ ENVIADO</th>
-                        <th>NESTA REMESSA</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${dados.itens.map(it => {
-                        const falta = it.quantidade_solicitada - it.quantidade_enviada;
-                        return `
-                        <tr>
-                            <td>${it.nome}</td>
-                            <td>${it.tamanho || '-'}</td>
-                            <td>${it.quantidade_solicitada}</td>
-                            <td>${it.quantidade_enviada}</td>
-                            <td>
-                                <input type="number" 
-                                    class="input-qtd-remessa" 
-                                    data-id-item="${it.id}" 
-                                    max="${falta}" 
-                                    value="${falta}" 
-                                    min="0">
-                            </td>
-                        </tr>`;
-                    }).join('')}
-                </tbody>
-            </table>
-            
-            <button class="btn-acao-gamelizado" onclick="confirmarSaidaRemessa(${idPedido})">
-                LIBERAR PARA COLETA (LOGÍSTICA)
-            </button>
-        </div>
-    `;
-    abrirModalGamelizado(html);
-}
-
-async function abrirFilaColetas() {
-    const res = await fetch(`${API_URL}/pedidos/logistica/liberados`, {
-        headers: { 'Authorization': `Bearer ${TOKEN}` }
-    });
-    const coletas = await res.json();
-
-    let html = `
-        <div class="modal-logistica">
-            <h2 class="neon-text">MISSÕES DE TRANSPORTE DISPONÍVEIS</h2>
-            <div class="lista-coletas">
-                ${coletas.map(c => `
-                    <div class="card-logistica">
-                        <p><strong>PEDIDO:</strong> #${c.id}</p>
-                        <p><strong>DESTINO:</strong> ${c.escola_nome}</p>
-                        <p><strong>VOLUMES:</strong> ${c.volumes}</p>
-                        <button class="btn-acao-gamelizado" onclick="iniciarTransporte(${c.id})">
-                            INICIAR COLETA 🚚
-                        </button>
-                    </div>
-                `).join('')}
-            </div>
-        </div>
-    `;
-    abrirModalGamelizado(html);
-}
-
-async function confirmarRecebimento(idPedido) {
-    if (!confirm("CONFIRMA QUE TODOS OS VOLUMES CHEGARAM À UNIDADE?")) return;
+async function abrirModalGrade(id, nome) {
+    const modal = document.getElementById('modalGrade');
+    const corpo = document.getElementById('modalCorpo');
+    document.getElementById('modalTitulo').innerText = nome;
+    corpo.innerHTML = "Carregando...";
+    modal.style.display = 'flex';
 
     try {
-        const res = await fetch(`${API_URL}/pedidos/escola/receber/${idPedido}`, {
-            method: 'POST',
+        const res = await fetch(`${API_URL}/estoque/grade/${id}`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const grade = await res.json();
+
+        if (grade.length === 0) {
+            corpo.innerHTML = "<p style='grid-column: span 3; text-align:center;'>Nenhum saldo por tamanho registrado.</p>";
+        } else {
+            corpo.innerHTML = grade.map(g => `
+                <div style="background:#f8fafc; border:1px solid #e2e8f0; padding:10px; text-align:center; border-radius:6px;">
+                    <div style="font-size:0.75rem; color:#64748b; font-weight:bold;">TAM ${g.tamanho}</div>
+                    <div style="font-size:1.1rem; font-weight:bold; color:#1e293b;">${g.quantidade}</div>
+                </div>
+            `).join('');
+        }
+    } catch (err) {
+        corpo.innerHTML = "Erro ao carregar grade.";
+    }
+}
+
+function gerarCamposProduto() {
+    return `
+        <label>NOME DO PRODUTO:</label>
+        <input type="text" id="cad_nome_produto" placeholder="Ex: CAMISETA POLO" required>
+        
+        <label>CATEGORIA (OBRIGATÓRIO):</label>
+        <select id="cad_tipo_produto" required>
+            <option value="" disabled selected>-- SELECIONE A CATEGORIA --</option>
+            <option value="MATERIAL">📦 MATERIAL / CONSUMO</option>
+            <option value="UNIFORMES">👕 UNIFORMES / VESTUÁRIO</option>
+            <option value="PATRIMONIO">🏷️ PATRIMÔNIO</option>
+        </select>
+
+        <label>ESTOQUE MÍNIMO (ALERTA):</label>
+        <input type="number" id="cad_alerta_minimo" value="10">
+    `;
+}
+
+async function telaAdminGerenciarSolicitacoes() {
+    const container = document.getElementById('app-content');
+    container.innerHTML = '<div style="padding:20px;">Buscando solicitações pendentes...</div>';
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/lista-geral`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        
+        const data = await res.json();
+
+        // VALIDAÇÃO: Se o backend mandou um erro, ele não será um Array
+        if (!Array.isArray(data)) {
+            throw new Error(data.error || "O servidor não retornou uma lista válida.");
+        }
+
+        const pendentes = data.filter(p => p.status === 'AGUARDANDO_AUTORIZACAO');
+
+        container.innerHTML = `
+            <div style="padding:20px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                    <h2 style="color:#1e3a8a; margin:0;">⚖️ AUTORIZAR SOLICITAÇÕES</h2>
+                    <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer; font-weight:bold;">⬅️ VOLTAR</button>
+                </div>
+                
+                ${pendentes.length === 0 ? '<p style="padding:20px; background:#f8fafc; border-radius:8px;">Nenhuma solicitação pendente.</p>' : ''}
+
+                <div style="display: grid; gap: 20px;">
+                    ${pendentes.map(p => `
+                        <div style="background:white; padding:20px; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.1);">
+                            <div style="display:flex; justify-content:space-between; align-items:start;">
+                                <div>
+                                    <strong style="font-size:1.1rem;">PEDIDO #${p.id}</strong><br>
+                                    <span style="color:#1e40af; font-weight:bold;">📍 DESTINO: ${p.escola_nome || 'NÃO IDENTIFICADO'}</span><br>
+                                    <small>Solicitado por: ${p.usuario_nome || 'N/A'}</small>
+                                </div>
+                                <button onclick="abrirEdicaoSolicitacao(${p.id})" style="background:#10b981; color:white; border:none; padding:10px 20px; border-radius:6px; cursor:pointer; font-weight:bold;">✏️ REVISAR E APROVAR</button>
+                            </div>
+                            <div id="area-edicao-${p.id}" style="margin-top:15px;"></div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    } catch (error) {
+        console.error("Erro na tela de autorização:", error);
+        alert("Erro ao carregar solicitações: " + error.message);
+        container.innerHTML = `<div style="padding:20px; color:red;">⚠️ Falha ao carregar: ${error.message}</div>`;
+    }
+}
+
+async function abrirEdicaoSolicitacao(pedidoId) {
+    const area = document.getElementById(`area-edicao-${pedidoId}`);
+    area.innerHTML = "Consultando estoque e carregando itens...";
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/${pedidoId}/itens-com-estoque`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        const itens = await res.json();
+        const itensOrdenados = ordenarTamanhos(itens);
+        let html = `
+            <div style="overflow-x:auto;">
+                <table style="width:100%; border-collapse:collapse; margin-bottom:20px; background:#fff;">
+                    <thead>
+                        <tr style="text-align:left; border-bottom:2px solid #e2e8f0; background:#f8fafc;">
+                            <th style="padding:12px;">Produto / Tipo</th>
+                            <th style="padding:12px;">Tam.</th>
+                            <th style="padding:12px; text-align:center;">Saldo Atual</th>
+                            <th style="padding:12px; width:120px;">Qtd. Autorizar</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${itensOrdenados.map(item => {
+                            const emFalta = item.qtd_solicitada > item.saldo_atual;
+                            return `
+                            <tr style="border-bottom:1px solid #f1f5f9; ${emFalta ? 'background:#fff5f5;' : ''}">
+                                <td style="padding:12px;">
+                                    <strong>${item.produto_nome}</strong><br>
+                                    <small style="color:#64748b;">${item.produto_tipo}</small>
+                                </td>
+                                <td style="padding:12px;">${item.tamanho || 'N/A'}</td>
+                                <td style="padding:12px; text-align:center;">
+                                    <span style="font-weight:bold; color: ${emFalta ? '#e53e3e' : '#2f855a'}">
+                                        ${item.saldo_atual}
+                                    </span>
+                                    ${emFalta ? '<br><small style="color:#e53e3e;">⚠️ Insuficiente</small>' : ''}
+                                </td>
+                                <td style="padding:12px;">
+                                    <input type="number" value="${item.qtd_solicitada}" 
+                                        onchange="atualizarQuantidadeItem(${item.item_id}, this.value)"
+                                        style="width:80px; padding:8px; border:2px solid ${emFalta ? '#fc8181' : '#cbd5e1'}; border-radius:6px; font-weight:bold;">
+                                </td>
+                            </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
+            
+            <div style="display:flex; gap:12px; padding-top:10px; border-top:1px solid #e2e8f0;">
+                <button onclick="finalizarAprovacao(${pedidoId})" 
+                    style="flex:1; background:#10b981; color:white; border:none; padding:15px; border-radius:8px; font-weight:bold; cursor:pointer;">
+                    ✅ APROVAR COM ESTAS QUANTIDADES
+                </button>
+                <button onclick="recusarPedido(${pedidoId})" 
+                    style="background:#f1f5f9; color:#4a5568; border:none; padding:15px; border-radius:8px; font-weight:bold; cursor:pointer;">
+                    ❌ RECUSAR TUDO
+                </button>
+            </div>
+        `;
+        area.innerHTML = html;
+    } catch (err) { 
+        area.innerHTML = '<p style="color:red;">Erro ao cruzar dados de estoque.</p>'; 
+    }
+}
+
+async function atualizarQuantidadeItem(itemId, novaQtd) {
+    try {
+        await fetch(`${API_URL}/pedidos/itens/${itemId}`, {
+            method: 'PUT',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}` 
+            },
+            body: JSON.stringify({ quantidade: novaQtd })
+        });
+        console.log(`Item ${itemId} atualizado para ${novaQtd}`);
+    } catch (err) { alert("Erro ao salvar alteração do item."); }
+}
+
+async function finalizarAprovacao(pedidoId) {
+    if (!confirm("Confirmar aprovação deste pedido com as quantidades atuais?")) return;
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/${pedidoId}/aprovar`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         });
 
         if (res.ok) {
-            const data = await res.json();
-            if (data.statusFinal === 'ENTREGUE') {
-                alert("MISSÃO CONCLUÍDA! PEDIDO FINALIZADO.");
-            } else {
-                alert("REMESSA PARCIAL RECEBIDA. O RESTANTE VOLTOU PARA A FILA DE SEPARAÇÃO.");
+            alert("🚀 Pedido APROVADO e enviado para o estoque!");
+            telaAdminGerenciarSolicitacoes(); // Recarrega a lista
+        }
+    } catch (err) { alert("Erro ao aprovar pedido."); }
+}
+
+async function atualizarStatusPedido(id, novoStatus) {
+    if (!confirm(`Deseja alterar o status do pedido #${id} para ${novoStatus}?`)) return;
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/${id}/status`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ status: novoStatus })
+        });
+
+        if (res.ok) {
+            alert("✅ STATUS ATUALIZADO!");
+            telaAdminGerenciarSolicitacoes(); // Recarrega a lista
+        }
+    } catch (err) { alert("Erro ao atualizar pedido."); }
+}
+
+async function recusarPedidoAdmin(id) {
+    const motivo = prompt("Informe o motivo da recusa:");
+    if (!motivo) return alert("É necessário informar um motivo para recusar.");
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/${id}/status`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ status: 'RECUSADO', motivo_recusa: motivo })
+        });
+
+        if (res.ok) {
+            alert("❌ SOLICITAÇÃO RECUSADA.");
+            telaAdminGerenciarSolicitacoes();
+        }
+    } catch (err) { alert("Erro ao processar recusa."); }
+}
+
+// 1. Busca os itens e mostra no console/tela para o admin
+async function carregarDetalhesParaAutorizar(pedidoId) {
+    try {
+        const res = await fetch(`${API_URL}/pedidos/${pedidoId}/itens`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        
+        if (!res.ok) throw new Error("Erro ao carregar itens");
+        const itens = await res.json();
+
+        // Criar uma lista simples de itens para mostrar ao Admin
+        let listaItens = itens.map(i => `- ${i.produto_nome} (Qtd: ${i.quantidade_solicitada})`).join('\n');
+
+        if (confirm(`ITENS DO PEDIDO #${pedidoId}:\n\n${listaItens}\n\nDESEJA AUTORIZAR ESTA SOLICITAÇÃO?`)) {
+            await processarSolicitacao(pedidoId, 'AUTORIZA');
+        } else {
+            if (confirm("DESEJA RECUSAR ESTA SOLICITAÇÃO?")) {
+                await processarSolicitacao(pedidoId, 'RECUSA');
             }
-            carregarDashboard();
         }
     } catch (err) {
-        alert("ERRO AO CONFIRMAR RECEBIMENTO: " + err.message);
+        alert("Erro ao carregar detalhes: " + err.message);
     }
 }
 
-async function abrirTransferenciaPatrimonio() {
-    const resLocais = await fetch(`${API_URL}/catalogo/locais`); // Rota que você já tem para listar escolas
-    const locais = await resLocais.json();
+// 2. Envia a decisão (Autorizar/Recusar) para o servidor
+async function processarSolicitacao(pedidoId, acao) {
+    let motivo = '';
+    let status = acao === 'AUTORIZA' ? 'AGUARDANDO_COLETA' : 'RECUSADO';
 
-    let html = `
-        <div class="modal-transferencia">
-            <h2 class="neon-text">TRANSFERÊNCIA DE PATRIMÔNIO</h2>
-            
-            <div class="busca-patrimonio">
-                <input type="text" id="busca-serie" placeholder="DIGITE O NÚMERO DE SÉRIE OU PLAQUETA" class="input-gamelizado">
-                <button onclick="buscarDadosPatrimonio()" class="btn-pequeno">BUSCAR</button>
-            </div>
+    if (acao === 'RECUSA') {
+        motivo = prompt("INFORME O MOTIVO DA RECUSA:");
+        if (!motivo) return; // Cancela se não der motivo
+    }
 
-            <div id="resultado-busca-patrimonio" style="margin-top:20px; display:none;">
-                <div class="card-info-patrimonio">
-                    <p><strong>ITEM:</strong> <span id="info-nome-prod"></span></p>
-                    <p><strong>LOCAL ATUAL:</strong> <span id="info-local-atual"></span></p>
-                </div>
+    try {
+        const res = await fetch(`${API_URL}/pedidos/${pedidoId}/status`, {
+            method: 'PATCH',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${TOKEN}` 
+            },
+            body: JSON.stringify({ status, motivo_recusa: motivo })
+        });
 
-                <label>DESTINO DA TRANSFERÊNCIA:</label>
-                <select id="select-destino-patrimonio" class="input-gamelizado">
-                    <option value="">SELECIONE O DESTINO...</option>
-                    ${locais.map(l => `<option value="${l.id}">${l.nome}</option>`).join('')}
-                </select>
-
-                <button class="btn-acao-gamelizado" id="btn-confirmar-transf">CONFIRMAR MOVIMENTAÇÃO</button>
-            </div>
-        </div>
-    `;
-    abrirModalGamelizado(html);
+        if (res.ok) {
+            alert(acao === 'AUTORIZA' ? "✅ SOLICITAÇÃO AUTORIZADA!" : "❌ SOLICITAÇÃO RECUSADA!");
+            telaAdminGerenciarSolicitacoes(); // Recarrega a lista
+        } else {
+            alert("Erro ao processar solicitação.");
+        }
+    } catch (err) {
+        alert("Erro de conexão com o servidor.");
+    }
 }
 
-let patrimonioSelecionadoId = null;
 
-async function buscarDadosPatrimonio() {
-    const serie = document.getElementById('busca-serie').value;
-    if (!serie) return;
 
-    const res = await fetch(`${API_URL}/api/cadastros/patrimonio/buscar?serie=${serie}`, {
-        headers: { 'Authorization': `Bearer ${TOKEN}` }
-    });
+async function telaDevolucaoUniforme() {
+    const container = document.getElementById('app-content');
+    container.innerHTML = '<div style="padding:20px;">Carregando produtos para devolução...</div>';
     
-    if (res.ok) {
-        const p = await res.json();
-        patrimonioSelecionadoId = p.id;
-        document.getElementById('info-nome-prod').innerText = p.produto_nome;
-        document.getElementById('info-local-atual').innerText = p.local_nome;
-        document.getElementById('resultado-busca-patrimonio').style.display = 'block';
-        
-        document.getElementById('btn-confirmar-transf').onclick = () => executarTransferencia();
-    } else {
-        alert("PATRIMÔNIO NÃO LOCALIZADO NO SISTEMA.");
-    }
-}
+    // Resetamos o carrinho ao abrir a tela
+    carrinhoSolicitacao = [];
 
-async function executarTransferencia() {
-    const destinoId = document.getElementById('select-destino-patrimonio').value;
-    if (!destinoId) return alert("SELECIONE O LOCAL DE DESTINO.");
+    try {
+        const res = await fetch(`${API_URL}/produtos/tipo/UNIFORMES`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const produtos = await res.json();
 
-    const res = await fetch(`${API_URL}/api/cadastros/patrimonio/transferir`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
-        body: JSON.stringify({ 
-            patrimonio_id: patrimonioSelecionadoId, 
-            local_destino_id: destinoId 
-        })
-    });
+        // DECLARAÇÃO DA VARIÁVEL QUE ESTAVA FALTANDO
+        const tituloTela = "🔄 DEVOLUÇÃO DE UNIFORMES";
 
-    if (res.ok) {
-        alert("MOVIMENTAÇÃO REGISTRADA NO SISTEMA!");
-        fecharModalGamelizado();
-    }
-}
+        container.innerHTML = `
+            <div style="padding:20px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1px solid #ddd; padding-bottom:10px;">
+                    <h2 style="color:#1e3a8a; margin:0;">${tituloTela}</h2>
+                    <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer; font-weight:bold;">⬅️ VOLTAR</button>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div style="background:white; padding:20px; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.1); height: fit-content;">
+                        <h3 style="margin-top:0;">Item para Devolver</h3>
+                        <label>PRODUTO:</label>
+                        <select id="solicitar_produto_id" style="width:100%; padding:10px; margin-bottom:15px;">
+                            ${produtos.map(p => `<option value="${p.id}">${p.nome}</option>`).join('')}
+                        </select>
 
-async function abrirSolicitacaoMaterial() {
-    const res = await fetch(`${API_URL}/catalogo/produtos`, {
-        headers: { 'Authorization': `Bearer ${TOKEN}` }
-    });
-    const produtos = await res.json();
-    const materiais = produtos.filter(p => p.tipo === 'MATERIAL');
+                        <label>TAMANHO:</label>
+                        <select id="solicitar_tamanho" style="width:100%; padding:10px; margin-bottom:15px;">
+                            <option>P</option><option>M</option><option>G</option><option>GG</option>
+                            <option>2</option><option>4</option><option>6</option><option>8</option>
+                            </select>
 
-    let html = `
-        <div class="modal-solicitacao-material">
-            <h2 class="neon-text">REQUISIÇÃO DE MATERIAIS</h2>
-            <div class="lista-materiais-vertical">
-                ${materiais.map(m => `
-                    <div class="item-material-card">
-                        <div class="info">
-                            <span class="nome">${m.nome}</span>
-                            <span class="estoque-disponivel">Disponível: ${m.quantidade_estoque}</span>
-                        </div>
-                        <div class="controlo-qtd">
-                            <input type="number" 
-                                class="input-material-qtd" 
-                                data-id="${m.id}" 
-                                placeholder="0" 
-                                min="0">
-                        </div>
+                        <label>QUANTIDADE:</label>
+                        <input type="number" id="solicitar_qtd" value="1" min="1" style="width:100%; padding:10px; margin-bottom:15px;">
+
+                        <button onclick="adicionarAoCarrinhoSolicitacao()" style="width:100%; padding:12px; background:#f59e0b; color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">
+                            ➕ ADICIONAR À LISTA DE DEVOLUÇÃO
+                        </button>
                     </div>
-                `).join('')}
+
+                    <div style="background:white; padding:20px; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.1);">
+                        <h3 style="margin-top:0;">Itens Separados</h3>
+                        <div id="lista_carrinho_solicitacao">
+                            <p style="color:#666;">Nenhum item para devolver ainda.</p>
+                        </div>
+                        <hr style="border:0; border-top:1px solid #eee; margin:20px 0;">
+                        <button id="btnEnviarSolicitacao" onclick="enviarPedidoEscola('DEVOLUCAO')" disabled style="width:100%; padding:15px; background:#1e3a8a; color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer; opacity:0.5;">
+                            🚀 ENVIAR DEVOLUÇÃO COMPLETA
+                        </button>
+                    </div>
+                </div>
             </div>
-            <button class="btn-acao-gamelizado" onclick="enviarSolicitacaoMaterial()">
-                ENVIAR PARA APROVAÇÃO ADMIN 🛡️
-            </button>
-        </div>
-    `;
-    abrirModalGamelizado(html);
+        `;
+    } catch (e) { 
+        console.error(e);
+        alert("Erro ao carregar produtos para devolução."); 
+    }
 }
 
-async function enviarSolicitacaoMaterial() {
-    const inputs = document.querySelectorAll('.input-material-qtd');
+
+
+function iniciarAlertaPedidos() {
+    // Usando 'perfil' para bater com o resto do seu script
+    const perfil = localStorage.getItem('perfil')?.toLowerCase();
+    if (!perfil) return;
+
+    // Função que executa a verificação
+    const verificar = async () => {
+        try {
+            const res = await fetch(`${API_URL}/pedidos/contagem/alertas`, {
+                headers: { 'Authorization': `Bearer ${TOKEN}` }
+            });
+            if (!res.ok) return;
+            const contagem = await res.json();
+            
+            const areaAlerta = document.getElementById('area-alertas');
+            if (!areaAlerta) return;
+
+            // Limpa o alerta se não houver nada
+            areaAlerta.innerHTML = '';
+            areaAlerta.style.display = 'none';
+
+            if (perfil === 'admin' && contagem.admin_pendente > 0) {
+                areaAlerta.innerHTML = `
+                    <div style="background: #fee2e2; color: #b91c1c; padding: 15px; border-radius: 8px; border: 1px solid #f87171; font-weight: bold; text-align: center; cursor: pointer; margin-bottom: 20px;" 
+                         onclick="listarSolicitacoesPendentes()">
+                        ⚠️ EXISTEM ${contagem.admin_pendente} SOLICITAÇÕES DE UNIFORME AGUARDANDO AUTORIZAÇÃO! (CLIQUE AQUI PARA VER)
+                    </div>`;
+                areaAlerta.style.display = 'block';
+            } else if (perfil === 'estoque' && contagem.estoque_pendente > 0) {
+                areaAlerta.innerHTML = `
+                    <div style="background: #dcfce7; color: #15803d; padding: 15px; border-radius: 8px; border: 1px solid #4ade80; font-weight: bold; text-align: center; cursor: pointer; margin-bottom: 20px;"
+                        onclick="listarFilaSeparacao()">
+                        📦 EXISTEM ${contagem.estoque_pendente} PEDIDOS AUTORIZADOS PARA SEPARAÇÃO! (CLIQUE AQUI PARA VER)
+                    </div>`;
+                areaAlerta.style.display = 'block';
+            } else if (perfil === 'logistica' && contagem.estoque_pendente > 0) {
+                areaAlerta.innerHTML = `
+                    <div class="alerta-pulsar" style="background:#eff6ff; color:#1e40af; cursor:pointer;" onclick="listarColetasLogistica()">
+                        🚚 EXISTEM ${contagem.logistica_pendente} COLETAS LIBERADAS PARA TRANSPORTE!
+                    </div>`;
+                areaAlerta.style.display = 'block';                
+            } else if (perfil === 'escola' && contagem.estoque_pendente > 0) {
+                areaAlerta.innerHTML = `
+                    <div class="alerta-pulsar" style="background:#fff7ed; color:#c2410c; cursor:pointer;" onclick="listarPedidosEmCaminho()">
+                        🚚 VOCÊ TEM ${contagem.escola_recebimento} PEDIDO(S) EM TRANSPORTE PARA SUA UNIDADE! (CLIQUE PARA CONFIRMAR RECEBIMENTO)
+                    </div>`;
+                areaAlerta.style.display = 'block';
+            }                
+        } catch (e) { console.error("Erro no alerta:", e); }
+    };
+
+    // Executa agora e depois a cada 30 segundos
+    verificar();
+    setInterval(verificar, 30000);
+}
+
+async function listarSolicitacoesPendentes() {
+    const container = document.getElementById('app-content');
+    container.innerHTML = '<div style="padding:20px;">CARREGANDO SOLICITAÇÕES...</div>';
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/pendentes`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const pedidos = await res.json();
+
+        let html = `
+            <div style="padding:20px;">
+                <button onclick="listarSolicitacoesPendentes()" style="margin-bottom:20px;">⬅ VOLTAR</button>
+                <h2 style="color: #1e3a8a; margin-bottom: 20px;">SOLICITAÇÕES AGUARDANDO AUTORIZAÇÃO</h2>
+                <table style="width:100%; border-collapse: collapse; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                    <thead>
+                        <tr style="background: #f1f5f9; text-align: left;">
+                            <th style="padding:15px; border-bottom: 2px solid #cbd5e1;">ID</th>
+                            <th style="padding:15px; border-bottom: 2px solid #cbd5e1;">ESCOLA</th>
+                            <th style="padding:15px; border-bottom: 2px solid #cbd5e1;">DATA</th>
+                            <th style="padding:15px; border-bottom: 2px solid #cbd5e1;">AÇÕES</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${pedidos.map(p => `
+                            <tr>
+                                <td style="padding:15px; border-bottom: 1px solid #e2e8f0;">#${p.id}</td>
+                                <td style="padding:15px; border-bottom: 1px solid #e2e8f0;">${p.escola}</td>
+                                <td style="padding:15px; border-bottom: 1px solid #e2e8f0;">${new Date(p.data_criacao).toLocaleString()}</td>
+                                <td style="padding:15px; border-bottom: 1px solid #e2e8f0;">
+                                    <button onclick="abrirDetalhesAutorizacao(${p.id})" style="padding:8px 15px; background:#2563eb; color:white; border:none; border-radius:4px; cursor:pointer;">ANALISAR</button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+        container.innerHTML = html;
+    } catch (err) {
+        alert("Erro ao carregar lista");
+    }
+}
+
+async function autorizarPedido(id) {
+    const inputs = document.querySelectorAll('.edit-qtd');
+    const itens_atualizados = [];
+    inputs.forEach(i => {
+        itens_atualizados.push({
+            produto_id: i.dataset.prodId,
+            tamanho: i.dataset.tamanho,
+            quantidade: parseInt(i.value)
+        });
+    });
+
+    if(!confirm("CONFIRMA A AUTORIZAÇÃO? O ESTOQUE SERÁ BAIXADO AGORA.")) return;
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/autorizar/${id}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ itens_atualizados })
+        });
+        const data = await res.json();
+        if(res.ok) {
+            alert("✅ " + data.message);
+            carregarDashboard();
+        } else {
+            alert("❌ ERRO: " + data.error);
+        }
+    } catch(e) { alert("Erro na autorização"); }
+}
+
+function logout() {
+    localStorage.clear();
+    window.location.reload();
+}
+
+// Função para Admin autorizar pedido ou recusar com motivo [cite: 10, 24]
+async function processarSolicitacao(pedidoId, acao) {
+    let motivo = '';
+    let status = acao === 'AUTORIZA' ? 'PEDIDO AUTORIZADO' : 'RECUSADO';
+
+    if (acao === 'RECUSA') {
+        motivo = prompt("INFORME O MOTIVO DA RECUSA:");
+        if (!motivo) return;
+    }
+
+    const res = await fetch(`${API_URL}/pedidos/${pedidoId}/status`, {
+        method: 'PATCH',
+        headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${TOKEN}`
+        },
+        body: JSON.stringify({ status, motivo_recusa: motivo.toUpperCase() })
+    });
+
+    if (res.ok) {
+        alert("SOLICITAÇÃO ATUALIZADA");
+        carregarDashboard();
+    }
+}
+
+// Função para Escola confirmar recebimento [cite: 16, 51, 52]
+async function confirmarRecebimento(pedidoId) {
+    if (!confirm("CONFIRMA O RECEBIMENTO DESTE PEDIDO?")) return;
+
+    const res = await fetch(`${API_URL}/pedidos/${pedidoId}/status`, {
+        method: 'PATCH',
+        headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${TOKEN}`
+        },
+        body: JSON.stringify({ status: 'ENTREGUE' })
+    });
+
+    if (res.ok) {
+        alert("RECEBIMENTO CONFIRMADO!");
+        carregarDashboard();
+    }
+}
+
+// Função para Estoque definir volumes e liberar [cite: 18, 20, 21]
+async function liberarParaLogistica(pedidoId) {
+    const volumes = document.getElementById(`volumes_${pedidoId}`).value;
+    if (!volumes) return alert("INFORME A QTD DE VOLUMES");
+
+    const res = await fetch(`${API_URL}/pedidos/${pedidoId}/status`, {
+        method: 'PATCH',
+        headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${TOKEN}`
+        },
+        body: JSON.stringify({ status: 'RETIRADA AUTORIZADA', volumes })
+    });
+
+    if (res.ok) {
+        alert("PEDIDO LIBERADO PARA LOGÍSTICA");
+        carregarDashboard();
+    }
+}
+
+// Função para Gerar Relatório PDF (jsPDF) [cite: 6, 38, 39, 40]
+function imprimirRelatorioEstoque(dados) {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+        
+    doc.text("RELATÓRIO DE ESTOQUE CENTRAL - SEMED", 10, 10);
+    
+    const colunas = ["PRODUTO", "TIPO", "QTD", "STATUS"];
+    const linhas = dados.map(p => [
+        p.nome, 
+        p.tipo, 
+        p.quantidade_estoque, 
+        p.alerta_baixo ? "ESTOQUE BAIXO" : "OK"
+    ]);
+
+    doc.autoTable({
+        head: [colunas],
+        body: linhas,
+        startY: 20
+    });
+
+    doc.save(`relatorio_estoque_${new Date().getTime()}.pdf`);
+}
+
+async function enviarPedidoGrade() {
+    // 1. Captura todos os inputs da tabela de uniformes
+    const inputs = document.querySelectorAll('.input-qtd-uniforme');
     const itens = [];
+    let totalItens = 0;
 
     inputs.forEach(input => {
         const qtd = parseInt(input.value);
         if (qtd > 0) {
             itens.push({
-                produto_id: input.dataset.id,
+                produto_id: parseInt(input.getAttribute('data-prod')), // Pega o ID real do banco
+                tamanho: input.getAttribute('data-tam'),
                 quantidade: qtd
             });
+            totalItens += qtd;
         }
     });
 
-    if (itens.length === 0) return alert("INSIRA A QUANTIDADE DE PELO MENOS UM ITEM.");
+    if (itens.length === 0) {
+        return alert("POR FAVOR, PREENCHA A QUANTIDADE DE PELO MENOS UM ITEM.");
+    }
+
+    if (!confirm(`CONFIRMAR SOLICITAÇÃO DE ${totalItens} ITENS?`)) return;
 
     try {
-        const res = await fetch(`${API_URL}/pedidos/logistica`, {
+        const res = await fetch(`${API_URL}/pedidos/grade`, {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
@@ -939,188 +956,5508 @@ async function enviarSolicitacaoMaterial() {
             body: JSON.stringify({ itens })
         });
 
+        const data = await res.json();
         if (res.ok) {
-            alert("SOLICITAÇÃO DE MATERIAL ENVIADA COM SUCESSO!");
-            fecharModalGamelizado();
-            carregarDashboard();
+            alert("SOLICITAÇÃO REALIZADA COM SUCESSO!");
+            carregarDashboard(); // Volta para a tela inicial
+        } else {
+            alert("ERRO AO SALVAR: " + (data.error || "Verifique o console"));
         }
     } catch (err) {
-        alert("ERRO AO ENVIAR SOLICITAÇÃO: " + err.message);
+        alert("FALHA NA CONEXÃO COM O SERVIDOR");
     }
 }
 
-async function abrirDevolucaoUniformes() {
-    // Reutilizamos a rota de grades que criamos anteriormente
-    const res = await fetch(`${API_URL}/pedidos/uniformes/grades`, {
+// Abre o modal e carrega os locais para o select
+async function abrirModalCadastroUsuario() {
+    const modal = document.getElementById('modalCadastro'); // Reutilizando o seu container de modal
+    const formContainer = document.getElementById('formDinamico');
+    
+    try {
+        // Busca os locais disponíveis para vincular ao novo utilizador
+        const res = await fetch(`${API_URL}/cadastros/locais`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const locais = await res.json();
+
+        document.getElementById('selecionarTabela').style.display = 'none'; // Esconde o select de tabelas se existir
+        
+        formContainer.innerHTML = `
+            <h3 style="margin-top:0; color:#1e3a8a;">🆕 REGISTAR NOVO UTILIZADOR</h3>
+            
+            <label>NOME COMPLETO:</label>
+            <input type="text" id="user_nome" placeholder="Ex: JOÃO SILVA" style="width:100%; padding:10px; margin-bottom:10px;">
+
+            <label>NOME DE UTILIZADOR (LOGIN):</label>
+            <input type="text" id="user_login" placeholder="Ex: joao.silva" style="width:100%; padding:10px; margin-bottom:10px;">
+
+            <label>PALAVRA-PASSE (PROVISÓRIA):</label>
+            <input type="password" id="user_senha" placeholder="******" style="width:100%; padding:10px; margin-bottom:10px;">
+
+            <label>PERFIL DE ACESSO:</label>
+            <select id="user_perfil" style="width:100%; padding:10px; margin-bottom:10px;">
+                <option value="admin">ADMINISTRADOR</option>
+                <option value="estoque">ESTOQUE CENTRAL</option>
+                <option value="logistica">LOGÍSTICA / MOTORISTA</option>
+                <option value="escola">UNIDADE ESCOLAR</option>
+                <option value="super">SUPERVISOR (SUPER)</option>
+            </select>
+
+            <label>VINCULAR À UNIDADE (LOCAL):</label>
+            <select id="user_local" style="width:100%; padding:10px; margin-bottom:15px;">
+                <option value="">NENHUM (GERAL)</option>
+                ${locais.map(l => `<option value="${l.id}">${l.nome}</option>`).join('')}
+            </select>
+
+            <button onclick="salvarNovoUsuario()" style="width:100%; padding:12px; background:#10b981; color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">
+                GRAVAR UTILIZADOR
+            </button>
+            <button onclick="document.getElementById('modalCadastro').style.display='none'" style="width:100%; margin-top:10px; background:none; border:none; color:#666; cursor:pointer;">CANCELAR</button>
+        `;
+
+        modal.style.display = 'flex';
+    } catch (err) {
+        alert("Erro ao carregar lista de unidades.");
+    }
+}
+
+// Envia os dados para o backend
+async function salvarNovoUsuario() {
+    const payload = {
+        nome: document.getElementById('user_nome').value.toUpperCase(),
+        usuario: document.getElementById('user_login').value.toLowerCase().trim(),
+        senha: document.getElementById('user_senha').value,
+        perfil: document.getElementById('user_perfil').value,
+        local_id: document.getElementById('user_local').value || null,
+        status: 'ATIVO'
+    };
+
+    if (!payload.nome || !payload.usuario || !payload.senha) {
+        return alert("Por favor, preencha todos os campos obrigatórios.");
+    }
+
+    try {
+        const res = await fetch(`${API_URL}/usuarios/criar`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${TOKEN}`
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+            alert("✅ Utilizador registado com sucesso!");
+            document.getElementById('modalCadastro').style.display = 'none';
+            telaGerenciarUsuarios(); // Recarrega a tabela de utilizadores
+        } else {
+            const erro = await res.json();
+            alert("❌ Erro: " + (erro.error || "Não foi possível criar o utilizador."));
+        }
+    } catch (err) {
+        alert("Erro de ligação ao servidor.");
+    }
+}
+
+function toggleLocalSelect(perfil) {
+    const container = document.getElementById('containerLocal');
+    container.style.display = (perfil === 'escola') ? 'block' : 'none';
+}
+
+function salvarUsuario() {
+    const nome = document.getElementById('cadNome').value.trim();
+    const senha = document.getElementById('cadSenha').value.trim();
+    const perfil = document.getElementById('cadPerfil').value;
+    let local_id = null;
+
+    if (!nome || !senha || !perfil) {
+        return alert("ERRO: TODOS OS CAMPOS SÃO OBRIGATÓRIOS!");
+    }
+
+    // Atribuição automática de local_id baseada no perfil
+    if (perfil === 'admin') local_id = 36;
+    else if (perfil === 'estoque') local_id = 37;
+    else if (perfil === 'logistica') local_id = 38;
+    else if (perfil === 'super') local_id = 36;
+    else if (perfil === 'escola') {
+        local_id = document.getElementById('cadLocal').value;
+        if (!local_id) return alert("ERRO: SELECIONE UMA ESCOLA!");
+    }
+
+    const dados = { nome, senha, perfil, local_id: parseInt(local_id) };
+
+    fetch(`${API_URL}/api/usuarios`, {
+        method: 'POST',
+        headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${TOKEN}` 
+        },
+        body: JSON.stringify(dados)
+    })
+    .then(async res => {
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Erro ao cadastrar");
+        alert("USUÁRIO CADASTRADO COM SUCESSO!");
+        document.querySelector('.modal-overlay').remove();
+    })
+    .catch(err => alert(err.message));
+}
+
+async function telaGerenciarUsuarios() {
+    const container = document.getElementById('app-content');
+    container.innerHTML = '<div style="padding:20px;">Carregando usuários...</div>';
+
+    try {
+        const res = await fetch(`${API_URL}/usuarios/lista`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const usuarios = await res.json();
+
+        let html = `
+            <div style="padding:20px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                    <h2 style="color:#1e3a8a; margin:0;">👥 GERENCIAR USUÁRIOS</h2>
+                    <div style="display:flex; gap:10px;">
+                        <button onclick="abrirModalCadastroUsuario()" style="background:#10b981; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer; font-weight:bold;">+ NOVO USUÁRIO</button>
+                        <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer; font-weight:bold;">⬅️ VOLTAR</button>
+                    </div>
+                </div>
+
+                <table style="width:100%; border-collapse:collapse; background:white; border-radius:8px; overflow:hidden; box-shadow:0 2px 10px rgba(0,0,0,0.1);">
+                    <thead>
+                        <tr style="background:#1e3a8a; color:white; text-align:left;">
+                            <th style="padding:12px;">NOME</th>
+                            <th style="padding:12px;">LOGIN</th>
+                            <th style="padding:12px;">PERFIL</th>
+                            <th style="padding:12px;">UNIDADE/LOCAL</th>
+                            <th style="padding:12px; text-align:center;">STATUS</th>
+                            <th style="padding:12px; text-align:center;">AÇÃO</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${usuarios.map(u => `
+                            <tr style="border-bottom:1px solid #eee; background: ${u.status === 'INATIVO' ? '#fff1f2' : 'transparent'}">
+                                <td style="padding:12px;">${u.nome}</td>
+                                <td style="padding:12px;">${u.usuario}</td>
+                                <td style="padding:12px;"><strong>${u.perfil.toUpperCase()}</strong></td>
+                                <td style="padding:12px;">${u.local_nome || 'N/A'}</td>
+                                <td style="padding:12px; text-align:center;">
+                                    <span style="padding:4px 8px; border-radius:12px; font-size:0.75rem; font-weight:bold; background:${u.status === 'ATIVO' ? '#dcfce7' : '#fecaca'}; color:${u.status === 'ATIVO' ? '#166534' : '#991b1b'};">
+                                        ${u.status}
+                                    </span>
+                                </td>
+                                <td style="padding:12px; text-align:center;">
+                                    <button onclick="alternarStatusUsuario(${u.id}, '${u.status}')" style="background:none; border:1px solid #ddd; padding:5px 10px; cursor:pointer; border-radius:4px;">
+                                        ${u.status === 'ATIVO' ? '🚫 DESATIVAR' : '✅ ATIVAR'}
+                                    </button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+        container.innerHTML = html;
+    } catch (err) { alert("Erro ao carregar usuários."); }
+}
+
+async function salvarUsuario() {
+    const nome = document.getElementById('novo_nome').value;
+    const senha = document.getElementById('nova_senha').value;
+    const perfil = document.getElementById('novo_perfil').value;
+    const local_id = document.getElementById('novo_local').value;
+
+    const res = await fetch(`${API_URL}/auth/usuarios`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+        body: JSON.stringify({ nome, senha, perfil, local_id: local_id || null })
+    });
+
+    if (res.ok) {
+        alert("UTILIZADOR CRIADO!");
+        telaGerenciarUsuarios();
+    }
+}
+
+async function alternarStatusUsuario(id, statusAtual) {
+    const novoStatus = statusAtual === 'ATIVO' ? 'INATIVO' : 'ATIVO';
+    if (!confirm(`Deseja alterar o status do usuário para ${novoStatus}?`)) return;
+
+    try {
+        const res = await fetch(`${API_URL}/usuarios/${id}/status`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ status: novoStatus })
+        });
+        if (res.ok) {
+            telaGerenciarUsuarios(); // Recarrega a lista
+        }
+    } catch (err) { alert("Erro ao atualizar status."); }
+}
+
+async function telaPedidosAutorizados() {
+    const container = document.getElementById('app-content');
+    const res = await fetch(`${API_URL}/pedidos/status/PEDIDO AUTORIZADO`, {
         headers: { 'Authorization': `Bearer ${TOKEN}` }
     });
-    const listaProdutos = await res.json();
-
-    const tenis = listaProdutos.filter(p => p.nome.includes('TENIS'));
-    const vestuario = listaProdutos.filter(p => !p.nome.includes('TENIS'));
+    const pedidos = await res.json();
 
     let html = `
-        <div class="modal-uniformes-container">
-            <h2 class="neon-text">SOLICITAR DEVOLUÇÃO AO CENTRAL</h2>
-            <div class="alerta-gamelizado">INFORME OS ITENS QUE ESTÃO SAINDO DA ESCOLA</div>
-            
-            ${renderizarBlocoGrade("VESTUÁRIO", vestuario, "input-devolucao")}
-            ${renderizarBlocoGrade("CALÇADOS", tenis, "input-devolucao")}
+        <button onclick="carregarDashboard()" style="width: auto; background: #64748b; margin-bottom: 20px;">⬅ VOLTAR</button>
+        <div class="secao-titulo">PEDIDOS PARA SEPARAÇÃO</div>
+    `;
 
-            <div class="footer-modal">
-                <button class="btn-confirmar-missao" onclick="enviarDevolucaoGeral()">SOLICITAR COLETA DE DEVOLUÇÃO</button>
+    html += pedidos.map(p => `
+        <div class="item-estoque" style="flex-direction: column; align-items: flex-start;">
+            <div style="width: 100%; display: flex; justify-content: space-between;">
+                <span><strong>PEDIDO #${p.id}</strong> - ${p.local_nome}</span>
+                <button onclick="verDetalhesPedido(${p.id})" style="width: auto; padding: 5px 15px;">VER ITENS</button>
+            </div>
+            <div style="margin-top: 15px; width: 100%;">
+                <input type="number" id="volumes_${p.id}" placeholder="QTD VOLUMES" class="input-grade" style="width: 100px;">
+                <button onclick="liberarParaLogistica(${p.id})" style="width: auto; background: var(--success); padding: 10px 20px;">CONCLUIR SEPARAÇÃO</button>
+            </div>
+        </div>
+    `).join('') || '<p style="color: white;">NENHUM PEDIDO AGUARDANDO SEPARAÇÃO</p>';
+
+    container.innerHTML = html;
+}
+
+async function telaRetiradas() {
+    const container = document.getElementById('app-content');
+    const res = await fetch(`${API_URL}/pedidos/status/RETIRADA AUTORIZADA`, {
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+    const pedidos = await res.json();
+
+    let html = `
+        <button onclick="carregarDashboard()" style="width: auto; background: #64748b; margin-bottom: 20px;">⬅ VOLTAR</button>
+        <div class="secao-titulo">PEDIDOS PRONTOS PARA TRANSPORTE</div>
+    `;
+
+    html += pedidos.map(p => `
+        <div class="item-estoque">
+            <div>
+                <strong>PEDIDO #${p.id}</strong> - ${p.local_nome}<br>
+                <small>VOLUMES: ${p.volumes}</small>
+            </div>
+            <button onclick="confirmarSaidaTransporte(${p.id})" style="width: auto; background: var(--primary);">INICIAR TRANSPORTE</button>
+        </div>
+    `).join('') || '<p style="color: white;">NADA PARA RETIRAR NO MOMENTO</p>';
+
+    container.innerHTML = html;
+}
+
+async function verDetalhesPedido(id) {
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    
+    // Estrutura inicial do Modal com as Abas
+    modal.innerHTML = `
+        <div class="modal-box large">
+            <div class="modal-header-tabs">
+                <button onclick="alternarAbaPedido('itens', ${id})" id="tab-itens" class="tab-btn active">📦 ITENS E REMESSAS</button>
+                <button onclick="alternarAbaPedido('log', ${id})" id="tab-log" class="tab-btn">📜 HISTÓRICO LOG</button>
+            </div>
+            
+            <div id="container-aba-conteudo" class="tab-content">
+                <div class="loader">CARREGANDO...</div>
+            </div>
+
+            <div style="margin-top:20px; text-align:right;">
+                <button onclick="this.parentElement.parentElement.parentElement.remove()" class="btn-cancel">FECHAR</button>
             </div>
         </div>
     `;
-    abrirModalGamelizado(html);
+    document.body.appendChild(modal);
+    
+    // Inicia carregando a aba de itens
+    alternarAbaPedido('itens', id);
 }
 
-async function enviarDevolucaoGeral() {
-    const inputs = document.querySelectorAll('.input-devolucao');
+async function telaSolicitarMaterial() {
+    const container = document.getElementById('app-content');
+    const res = await fetch(`${API_URL}/estoque/central`, {
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+    const produtos = await res.json();
+    const materiais = produtos.filter(p => p.tipo === 'MATERIAL' || p.tipo === 'PATRIMONIO');
+
+    let html = `
+        <button onclick="carregarDashboard()" style="width: auto; background: #64748b; margin-bottom: 20px;">⬅ VOLTAR</button>
+        <h2 style="color: white; text-align: center;">SOLICITAR MATERIAIS / PATRIMÓNIO</h2>
+        <div id="lista-materiais" style="display: flex; flex-direction: column; gap: 15px;">
+    `;
+
+    materiais.forEach(m => {
+        html += `
+            <div class="item-estoque">
+                <div style="flex: 1;">
+                    <strong>${m.nome}</strong><br>
+                    <small>DISPONÍVEL: ${m.quantidade_estoque}</small>
+                </div>
+                <input type="number" class="input-grade input-material" 
+                       data-id="${m.id}" min="0" max="${m.quantidade_estoque}" 
+                       placeholder="0" style="width: 80px;">
+            </div>
+        `;
+    });
+
+    html += `
+        </div>
+        <button class="btn-grande btn-enviar-pedido" onclick="enviarPedidoMateriais()">
+            🚀 ENVIAR SOLICITAÇÃO
+        </button>
+    `;
+
+    container.innerHTML = html;
+}
+
+async function enviarPedidoMateriais() {
+    const inputs = document.querySelectorAll('.input-material');
     const itens = [];
 
     inputs.forEach(input => {
         const qtd = parseInt(input.value);
         if (qtd > 0) {
             itens.push({
-                produto_id: input.dataset.id,
-                tamanho: input.dataset.tamanho,
-                quantidade: qtd
+                produto_id: input.getAttribute('data-id'),
+                quantidade: qtd,
+                tamanho: null
             });
         }
     });
 
-    if (itens.length === 0) return alert("INSIRA A QUANTIDADE DOS ITENS PARA DEVOLVER.");
+    if (itens.length === 0) return alert("SELECIONE PELO MENOS UM ITEM");
 
-    const res = await fetch(`${API_URL}/pedidos/devolucao/solicitar`, {
+    const res = await fetch(`${API_URL}/pedidos/grade`, { // Reaproveita a rota de grade
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
         body: JSON.stringify({ itens })
     });
 
     if (res.ok) {
-        alert("SOLICITAÇÃO DE DEVOLUÇÃO REGISTRADA! AGUARDANDO AUTORIZAÇÃO DO ADMIN.");
-        fecharModalGamelizado();
-    }
-}
-
-// No script.js
-async function conferirRecebimentoDevolucao(idPedido) {
-    if (!confirm("CONFIRMA O RECEBIMENTO FÍSICO DESTES ITENS NO ESTOQUE CENTRAL?")) return;
-
-    const res = await fetch(`${API_URL}/pedidos/devolucao/receber/${idPedido}`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${TOKEN}` }
-    });
-
-    if (res.ok) {
-        alert("ESTOQUE CENTRAL ATUALIZADO COM OS ITENS DEVOLVIDOS!");
+        alert("SOLICITAÇÃO DE MATERIAL ENVIADA!");
         carregarDashboard();
     }
 }
 
-async function atualizarAlertasDevolucao() {
-    const res = await fetch(`${API_URL}/pedidos/alertas/devolucoes`, {
-        headers: { 'Authorization': `Bearer ${TOKEN}` }
-    });
-    const alertas = await res.json();
-
-    // 1. Alerta para o ADMIN (Pendentes de Autorização)
-    const pendentesAdmin = alertas.find(a => a.status === 'DEVOLUCAO_PENDENTE')?.total || 0;
-    exibirBadgeNoBotao('GESTÃO DE PEDIDOS', pendentesAdmin);
-
-    // 2. Alerta para a LOGÍSTICA (Aguardando Coleta na Escola)
-    const prontosColeta = alertas.find(a => a.status === 'DEVOLUCAO_AUTORIZADA')?.total || 0;
-    exibirBadgeNoBotao('COLETAS PENDENTES', prontosColeta);
-
-    // 3. Alerta para o ESTOQUE (Carga em Trânsito para o Central)
-    const emTransito = alertas.find(a => a.status === 'DEVOLUCAO_EM_TRANSITO')?.total || 0;
-    exibirBadgeNoBotao('SEPARAÇÃO / REMESSAS', emTransito);
+function telaAlterarSenha() {
+    const container = document.getElementById('app-content');
+    container.innerHTML = `
+        <button onclick="carregarDashboard()" style="width: auto; background: #64748b; margin-bottom: 20px;">⬅ VOLTAR</button>
+        <div class="card-login" style="max-width: 100%;">
+            <h2>ALTERAR MINHA SENHA</h2>
+            <input type="password" id="nova_senha_input" placeholder="DIGITE A NOVA SENHA">
+            <input type="password" id="confirma_senha_input" placeholder="CONFIRME A NOVA SENHA">
+            <button onclick="executarTrocaSenha()">ATUALIZAR SENHA</button>
+        </div>
+    `;
 }
 
-function exibirBadgeNoBotao(textoBotao, valor) {
-    const botoes = document.querySelectorAll('.card-btn-gamelizado');
-    botoes.forEach(btn => {
-        // Verifica se o texto do botão contém a funcionalidade alvo
-        if (btn.innerText.toUpperCase().includes(textoBotao.toUpperCase())) {
-            let badge = btn.querySelector('.badge-alerta');
+async function executarTrocaSenha() {
+    const nova = document.getElementById('nova_senha_input').value;
+    const confirma = document.getElementById('confirma_senha_input').value;
+
+    if (!nova || nova !== confirma) return alert("AS SENHAS NÃO CONFEREM!");
+
+    const res = await fetch(`${API_URL}/auth/alterar-senha`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+        body: JSON.stringify({ novaSenha: nova })
+    });
+
+    if (res.ok) {
+        alert("SENHA ALTERADA!");
+        carregarDashboard();
+    }
+}
+
+async function telaVerSolicitacoes() {
+    const container = document.getElementById('app-content');
+    const res = await fetch(`${API_URL}/pedidos/status/AGUARDANDO APROVACAO`, {
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+    const pedidos = await res.json();
+
+    let html = `
+        <button onclick="carregarDashboard()" style="width: auto; background: #64748b; margin-bottom: 20px;">⬅ VOLTAR</button>
+        <div class="secao-titulo">PEDIDOS AGUARDANDO APROVAÇÃO</div>
+    `;
+
+    if (pedidos.length === 0) {
+        html += '<p style="color: white; text-align: center;">NENHUMA SOLICITAÇÃO PENDENTE</p>';
+    }
+
+    pedidos.forEach(p => {
+        html += `
+            <div class="item-estoque" style="flex-direction: column; align-items: flex-start;">
+                <div style="width: 100%; display: flex; justify-content: space-between; border-bottom: 1px solid #ddd; padding-bottom: 10px;">
+                    <span><strong>PEDIDO #${p.id}</strong> - ${p.local_nome}</span>
+                    <button onclick="verDetalhesPedido(${p.id})" style="width: auto; padding: 5px 15px;">VER ITENS</button>
+                </div>
+                <div style="display: flex; gap: 10px; width: 100%; margin-top: 15px;">
+                    <button onclick="processarAprovacaoAdmin(${p.id}, 'AUTORIZA')" style="background: var(--success);">AUTORIZAR</button>
+                    <button onclick="processarAprovacaoAdmin(${p.id}, 'RECUSA')" style="background: var(--danger);">RECUSAR</button>
+                </div>
+            </div>
+        `;
+    });
+
+    container.innerHTML = html;
+}
+
+async function processarAprovacaoAdmin(pedidoId, acao) {
+    let status = acao === 'AUTORIZA' ? 'PEDIDO AUTORIZADO' : 'RECUSADO';
+    let motivo = '';
+
+    if (acao === 'RECUSA') {
+        motivo = prompt("MOTIVO DA RECUSA:");
+        if (!motivo) return;
+    }
+
+    const res = await fetch(`${API_URL}/pedidos/${pedidoId}/status`, {
+        method: 'PATCH',
+        headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${TOKEN}`
+        },
+        body: JSON.stringify({ status, motivo_recusa: motivo.toUpperCase() })
+    });
+
+    const data = await res.json();
+
+    if (res.ok) {
+        alert("SOLICITAÇÃO PROCESSADA!");
+        telaVerSolicitacoes();
+    } else {
+        // Exibe o erro de estoque negativo retornado pelo backend
+        alert("ATENÇÃO: " + (data.error || data.message));
+    }
+}
+
+// --- FUNÇÕES DE CADASTROS BÁSICOS (ADMIN) ---
+
+async function telaCadastrosBase() {
+    const container = document.getElementById('app-content');
+    
+    let html = `
+        <button onclick="carregarDashboard()" style="width: auto; background: #64748b; margin-bottom: 20px;">⬅ VOLTAR</button>
+        <h2 style="color: white; text-align: center;">CADASTROS BÁSICOS DO SISTEMA</h2>
+        
+        <div class="grid-menu">
+            <button class="btn-grande" onclick="formGenerico('categorias', 'CATEGORIA')">
+                <i>📁</i><span>CATEGORIAS</span>
+            </button>
+            <button class="btn-grande" onclick="formGenerico('locais', 'LOCAL')">
+                <i>📍</i><span>LOCAIS (ESCOLAS)</span>
+            </button>
+            <button class="btn-grande" onclick="formGenerico('setores', 'SETOR')">
+                <i>🏢</i><span>SETORES</span>
+            </button>
+            <button class="btn-grande" onclick="formProduto()">
+                <i>📦</i><span>PRODUTOS</span>
+            </button>
+            <button class="btn-grande" onclick="formPatrimonioLote()">
+                <i>🏷️</i><span>PATRIMÔNIOS (LOTE)</span>
+            </button>
+        </div>
+        <div id="area-formulario-cadastro" style="margin-top: 30px;"></div>
+    `;
+    container.innerHTML = html;
+}
+
+// Formulário para Categorias, Locais e Setores
+function formGenerico(tabela, label) {
+    const area = document.getElementById('area-formulario-cadastro');
+    area.innerHTML = `
+        <div class="card-login" style="max-width: 100%;">
+            <h3>NOVO CADASTRO: ${label}</h3>
+            <input type="text" id="nome_generico" placeholder="NOME DO(A) ${label}">
+            <button onclick="salvarGenerico('${tabela}')" style="background: var(--success); margin-top: 10px;">SALVAR REGISTRO</button>
+        </div>
+    `;
+}
+
+async function salvarGenerico(tabela) {
+    const nome = document.getElementById('nome_generico').value;
+    if(!nome) return alert("PREENCHA O NOME!");
+
+    const res = await fetch(`${API_URL}/api/cadastros/basico/${tabela}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+        body: JSON.stringify({ nome })
+    });
+
+    if(res.ok) {
+        alert("CADASTRADO COM SUCESSO!");
+        document.getElementById('nome_generico').value = '';
+    }
+}
+
+// Formulário de Produtos com lógica de Uniformes e Materiais
+async function formProduto() {
+    const area = document.getElementById('area-formulario-cadastro');
+    
+    // Busca categorias cadastradas para o Select
+    const resCat = await fetch(`${API_URL}/api/cadastros/categorias`, {
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+    const categorias = await resCat.json();
+
+    area.innerHTML = `
+        <div class="card-login" style="max-width: 100%;">
+            <h3>NOVO PRODUTO</h3>
+            <input type="text" id="prod_nome" placeholder="NOME DO PRODUTO" oninput="ajustarGradeUniforme()">
             
-            if (valor > 0) {
-                if (!badge) {
-                    badge = document.createElement('span');
-                    badge.className = 'badge-alerta';
-                    btn.appendChild(badge);
-                }
-                badge.innerText = valor;
-            } else if (badge) {
-                badge.remove(); // Remove se o contador chegar a zero
+            <label style="color: white; display: block; margin-top: 10px;">TIPO DE PRODUTO:</label>
+            <select id="prod_tipo" class="input-grade" style="width: 100%; height: 50px;" onchange="ajustarGradeUniforme()">
+                <option value="MATERIAL">MATERIAL</option>
+                <option value="UNIFORMES">UNIFORMES</option>
+            </select>
+
+            <label style="color: white; display: block; margin-top: 10px;">CATEGORIA:</label>
+            <select id="prod_categoria" class="input-grade" style="width: 100%; height: 50px;">
+                ${categorias.map(c => `<option value="${c.id}">${c.nome}</option>`).join('')}
+            </select>
+
+            <input type="number" id="prod_qtd" placeholder="ESTOQUE INICIAL" style="margin-top: 10px;">
+            
+            <div id="div_alerta_minimo">
+                <input type="number" id="prod_alerta" placeholder="ALERTA MÍNIMO (ESTOQUE)" style="margin-top: 10px;">
+            </div>
+
+            <div id="info_grade" style="display:none; background: #1e3a8a; color: white; padding: 10px; margin-top: 10px; border-radius: 5px; font-size: 0.9rem;">
+                <strong>GRADE DE TAMANHOS QUE SERÁ GERADA:</strong><br>
+                <span id="texto_grade"></span>
+            </div>
+
+            <button onclick="salvarProduto()" style="background: var(--success); margin-top: 20px;">CADASTRAR PRODUTO</button>
+        </div>
+    `;
+}
+
+function ajustarGradeUniforme() {
+    const tipo = document.getElementById('prod_tipo').value;
+    const nome = document.getElementById('prod_nome').value.toUpperCase();
+    const divAlerta = document.getElementById('div_alerta_minimo');
+    const infoGrade = document.getElementById('info_grade');
+    const textoGrade = document.getElementById('texto_grade');
+
+    if (tipo === 'UNIFORMES') {
+        divAlerta.style.display = 'none';
+        infoGrade.style.display = 'block';
+        if (nome.includes('TENIS')) {
+            textoGrade.innerText = "22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43";
+        } else {
+            textoGrade.innerText = "2, 4, 6, 8, 10, 12, 14, 16, PP, P, M, G, GG, EGG";
+        }
+    } else {
+        divAlerta.style.display = 'block';
+        infoGrade.style.display = 'none';
+    }
+}
+
+async function salvarProduto() {
+    const payload = {
+        nome: document.getElementById('prod_nome').value,
+        tipo: document.getElementById('prod_tipo').value,
+        categoria_id: document.getElementById('prod_categoria').value,
+        quantidade_estoque: document.getElementById('prod_qtd').value || 0,
+        alerta_minimo: document.getElementById('prod_tipo').value === 'MATERIAL' ? document.getElementById('prod_alerta').value : null
+    };
+
+    const res = await fetch(`${API_URL}/api/cadastros/produtos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+        body: JSON.stringify(payload)
+    });
+
+    if(res.ok) {
+        alert("PRODUTO CADASTRADO!");
+        formProduto();
+    }
+}
+
+async function renderizarFormPatrimonio() {
+    const conteudo = document.getElementById('conteudo-dinamico');
+    
+    // Busca produtos e locais para preencher os selects
+    const [resProdutos, resLocais] = await Promise.all([
+        fetch(`${API_URL}/api/catalogo/produtos`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } }),
+        fetch(`${API_URL}/api/catalogo/locais`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } })
+    ]);
+
+    const produtos = await resProdutos.json();
+    const locais = await resLocais.json();
+
+    conteudo.innerHTML = `
+        <div class="card-form">
+            <h2>CADASTRAR PATRIMÔNIO (ENTRADA)</h2>
+            
+            <label>PRODUTO:</label>
+            <select id="pat_prod_id" class="input-field">
+                <option value="">SELECIONE O PRODUTO</option>
+                ${produtos.filter(p => p.tipo === 'PATRIMONIO').map(p => `<option value="${p.id}">${p.nome}</option>`).join('')}
+            </select>
+
+            <label>LOCAL DE DESTINO (ENTRADA):</label>
+            <select id="pat_local_id" class="input-field">
+                ${locais.map(l => `<option value="${l.id}" ${l.nome.toUpperCase() === 'DEPÓSITO CENTRAL' ? 'selected' : ''}>${l.nome}</option>`).join('')}
+            </select>
+
+            <label>NÚMERO DA NOTA FISCAL:</label>
+            <input type="text" id="pat_nota_fiscal" class="input-field" placeholder="000.000.000">
+
+            <label>QUANTIDADE DE ITENS:</label>
+            <input type="number" id="pat_qtd" class="input-field" placeholder="EX: 5" min="1" oninput="gerarInputsPlaquetas()">
+
+            <div id="lista_plaquetas" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px;">
+                </div>
+
+            <button onclick="salvarPatrimonioLote()" id="btn_salvar_pat" style="background: var(--success); margin-top: 20px; display:none; width: 100%;">
+                CONCLUIR CADASTRO NO SISTEMA
+            </button>
+        </div>
+    `;
+}
+
+function gerarInputsPlaquetas() {
+    const qtd = document.getElementById('pat_qtd').value;
+    const container = document.getElementById('lista_plaquetas');
+    const btn = document.getElementById('btn_salvar_pat');
+    container.innerHTML = '';
+
+    if (qtd > 0 && qtd <= 100) { // Limite de 100 por vez para segurança
+        btn.style.display = 'block';
+        for (let i = 0; i < qtd; i++) {
+            container.innerHTML += `
+                <div class="input-group-plaqueta">
+                    <small>PLAQUETA ${i + 1}</small>
+                    <input type="text" class="input-plaqueta" placeholder="Nº SÉRIE" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                </div>
+            `;
+        }
+    } else {
+        btn.style.display = 'none';
+        if(qtd > 100) alert("POR FAVOR, CADASTRE NO MÁXIMO 100 ITENS POR VEZ.");
+    }
+}
+
+async function salvarPatrimonioLote() {
+    const produto_id = document.getElementById('pat_prod_id').value;
+    const local_id = document.getElementById('pat_local_id').value;
+    const nota_fiscal = document.getElementById('pat_nota_fiscal').value;
+    const inputs = document.querySelectorAll('.input-plaqueta');
+    
+    const numeros_serie = Array.from(inputs)
+        .map(i => i.value.trim())
+        .filter(v => v !== '');
+
+    if (!produto_id || !local_id || !nota_fiscal || numeros_serie.length === 0) {
+        return alert("POR FAVOR, PREENCHA TODOS OS CAMPOS E OS NÚMEROS DE SÉRIE!");
+    }
+
+    if (numeros_serie.length < document.getElementById('pat_qtd').value) {
+        return alert("EXISTEM CAMPOS DE PLAQUETA VAZIOS!");
+    }
+
+    try {
+        const res = await fetch(`${API_URL}/api/cadastros/patrimonio`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify({
+                produto_id,
+                local_id,
+                nota_fiscal,
+                numeros_serie
+            })
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+            alert(data.message);
+            renderizarFormPatrimonio(); // Limpa/Reseta o formulário
+        } else {
+            alert("ERRO: " + data.error);
+        }
+    } catch (error) {
+        console.error(error);
+        alert("FALHA AO COMUNICAR COM O SERVIDOR.");
+    }
+}
+
+// --- FUNÇÕES DE CADASTROS BÁSICOS ---
+
+async function telaCadastrosBase() {
+    const container = document.getElementById('app-content');
+    
+    let html = `
+        <button onclick="carregarDashboard()" style="width: auto; background: #64748b; margin-bottom: 20px;">⬅ VOLTAR</button>
+        <h2 style="color: white; text-align: center; margin-bottom: 20px;">CADASTROS BÁSICOS DO SISTEMA</h2>
+        
+        <div class="grid-menu">
+            <button class="btn-grande" onclick="formGenerico('categorias', 'CATEGORIA')">
+                <i>📁</i><span>CADASTRAR CATEGORIA</span>
+            </button>
+            <button class="btn-grande" onclick="formGenerico('locais', 'LOCAL')">
+                <i>📍</i><span>CADASTRAR LOCAL</span>
+            </button>
+            <button class="btn-grande" onclick="formGenerico('setores', 'SETOR')">
+                <i>🏢</i><span>CADASTRAR SETOR</span>
+            </button>
+            <button class="btn-grande" onclick="formProduto()">
+                <i>📦</i><span>CADASTRAR PRODUTO</span>
+            </button>
+            <button class="btn-grande" onclick="formPatrimonioLote()">
+                <i>🏷️</i><span>PATRIMÔNIOS (LOTE)</span>
+            </button>
+        </div>
+        <div id="area-formulario-cadastro" style="margin-top: 30px;"></div>
+    `;
+    container.innerHTML = html;
+}
+
+function formGenerico(tabela, label) {
+    const area = document.getElementById('area-formulario-cadastro');
+    area.innerHTML = `
+        <div class="card-login" style="max-width: 100%;">
+            <h3>NOVO CADASTRO: ${label}</h3>
+            <input type="text" id="nome_generico" placeholder="NOME DO(A) ${label}">
+            <button onclick="salvarGenerico('${tabela}')" style="background: var(--success); margin-top: 10px;">SALVAR</button>
+        </div>
+    `;
+}
+
+async function salvarGenerico(tabela) {
+    const nome = document.getElementById('nome_generico').value;
+    if(!nome) return alert("PREENCHA O NOME!");
+
+    const res = await fetch(`${API_URL}/api/cadastros/basico/${tabela}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+        body: JSON.stringify({ nome })
+    });
+
+    if(res.ok) {
+        alert("CADASTRADO COM SUCESSO!");
+        document.getElementById('nome_generico').value = '';
+    }
+}
+
+async function formProduto() {
+    const area = document.getElementById('area-formulario-cadastro');
+    const resCat = await fetch(`${API_URL}/api/cadastros/categorias`, {
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+    const categorias = await resCat.json();
+
+    // Filtramos para que a categoria 'UNIFORMES' não apareça na criação de novos produtos
+    const categoriasFiltradas = categorias.filter(c => c.nome !== 'UNIFORMES');
+
+    area.innerHTML = `
+        <div class="card-login" style="max-width: 100%;">
+            <h3>NOVO MATERIAL</h3>
+            <p style="font-size: 0.8rem; color: #64748b; margin-bottom: 15px;">
+                * Uniformes são itens fixos e não podem ser cadastrados manualmente.
+            </p>
+            
+            <input type="text" id="prod_nome" placeholder="NOME DO PRODUTO">
+            
+            <select id="prod_tipo" class="input-grade" style="width: 100%; height: 50px; margin-top:10px;">
+                <option value="MATERIAL">MATERIAL (LIMPEZA, ESCRITÓRIO, ETC)</option>
+                <option value="UNIFORMES" disabled>UNIFORME (BLOQUEADO - ITEM FIXO)</option>
+            </select>
+
+            <select id="prod_categoria" class="input-grade" style="width: 100%; height: 50px; margin-top:10px;">
+                <option value="">SELECIONE UMA CATEGORIA</option>
+                ${categoriasFiltradas.map(c => `<option value="${c.id}">${c.nome}</option>`).join('')}
+            </select>
+
+            <input type="number" id="prod_qtd" placeholder="ESTOQUE INICIAL" style="margin-top: 10px;">
+            
+            <div id="box_alerta">
+                <input type="number" id="prod_alerta" placeholder="ALERTA MÍNIMO" style="margin-top: 10px;">
+            </div>
+
+            <div style="margin-top:20px; text-align:right;">
+                <button onclick="salvarNovoProduto()" style="padding:10px 20px; background:green; color:#fff; border:none; border-radius:4px; cursor:pointer;">
+                    SALVAR MATERIAL
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+async function salvarNovoProduto(event) {
+    event.preventDefault();
+    
+    const dados = {
+        nome: document.getElementById('prod_nome').value,
+        tipo: document.getElementById('prod_tipo').value,
+        categoria: document.getElementById('prod_categoria').value,
+        descricao: document.getElementById('prod_descricao').value
+    };
+
+    try {
+        const res = await fetch(`${API_URL}/produtos/cadastrar`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify(dados)
+        });
+
+        if (res.ok) {
+            alert("✅ Produto cadastrado com sucesso no catálogo!");
+            carregarDashboard(); // Volta para a tela principal
+        } else {
+            const erro = await res.json();
+            alert("Erro: " + erro.error);
+        }
+    } catch (err) {
+        alert("Falha na conexão com o servidor.");
+    }
+}
+
+function monitorarTipoProduto() {
+    const tipo = document.getElementById('prod_tipo').value;
+    const nome = document.getElementById('prod_nome').value.toUpperCase();
+    const boxAlerta = document.getElementById('box_alerta');
+    const boxGrade = document.getElementById('box_grade');
+    const labelGrade = document.getElementById('label_grade');
+
+    if (tipo === 'UNIFORMES') {
+        boxAlerta.style.display = 'none';
+        boxGrade.style.display = 'block';
+        labelGrade.innerText = nome.includes('TENIS') ? "CALÇADOS (22 ao 43)" : "VESTUÁRIO (2 ao 16, PP ao XGG)";
+    } else {
+        boxAlerta.style.display = 'block';
+        boxGrade.style.display = 'none';
+    }
+}
+
+async function salvarProduto() {
+    const payload = {
+        nome: document.getElementById('prod_nome').value,
+        tipo: document.getElementById('prod_tipo').value,
+        categoria_id: document.getElementById('prod_categoria').value,
+        quantidade_estoque: document.getElementById('prod_qtd').value || 0,
+        alerta_minimo: document.getElementById('prod_tipo').value === 'MATERIAL' ? document.getElementById('prod_alerta').value : null
+    };
+
+    if(!payload.nome || !payload.categoria_id) return alert("PREENCHA NOME E CATEGORIA!");
+
+    const res = await fetch(`${API_URL}/api/cadastros/produtos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+        body: JSON.stringify(payload)
+    });
+
+    if(res.ok) {
+        alert("PRODUTO(S) CADASTRADO(S)!");
+        telaCadastrosBase();
+    }
+}
+
+function abrirDialogoEntrada() {
+    // Busca o perfil diretamente do localStorage
+    const perfil = localStorage.getItem('perfil');
+
+    // Verifica permissão
+    if (!perfil) {
+        alert("Sessão expirada. Por favor, faça login novamente.");
+        return;
+    }
+
+    if (['escola', 'logistica'].includes(perfil.toLowerCase())) {
+        return alert("ACESSO NEGADO: SEU PERFIL NÃO POSSUI PERMISSÃO PARA ENTRADA DE ESTOQUE.");
+    }
+
+    // Criação do modal de escolha
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); display:flex; justify-content:center; align-items:center; z-index:1000;";
+    
+    modal.innerHTML = `
+        <div class="modal-box" style="background:white; padding:30px; border-radius:8px; text-align:center; min-width:300px;">
+            <h3 style="margin-top:0;">TIPO DE ENTRADA</h3>
+            <p>Selecione como deseja registrar a entrada:</p>
+            <div style="display: flex; flex-direction: column; gap: 15px; margin-top: 20px;">
+                <button onclick="this.closest('.modal-overlay').remove(); telaEntradaManual();" 
+                        style="padding:15px; background:#2196F3; color:white; border:none; border-radius:5px; cursor:pointer; font-weight:bold;">
+                    📥 ENTRADA MANUAL (ITEM POR ITEM)
+                </button>
+                <button onclick="this.closest('.modal-overlay').remove(); alert('Função via arquivo em desenvolvimento');" 
+                        style="padding:15px; background:#4CAF50; color:white; border:none; border-radius:5px; cursor:pointer; font-weight:bold;">
+                    📄 IMPORTAR VIA ARQUIVO (CSV/EXCEL)
+                </button>
+                <button onclick="this.closest('.modal-overlay').remove()" 
+                        style="padding:10px; background:#f44336; color:white; border:none; border-radius:5px; cursor:pointer;">
+                    CANCELAR
+                </button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
+async function telaEntradaManual() {
+    const appContent = document.getElementById('app-content');
+    
+    try {
+        // Busca produtos e categorias para o formulário
+        const resProd = await fetch(`${API_URL}/catalogo/produtos`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+        const produtos = await resProd.json();
+
+        appContent.innerHTML = `
+            <div class="container-entrada">
+                <h2>📦 ENTRADA MANUAL DE ESTOQUE</h2>
+                <div class="card" style="padding:20px; background:#f9f9f9; border-radius:8px;">
+                    <div style="margin-bottom:15px;">
+                        <label>Observações/Motivo:</label>
+                        <input type="text" id="ent_obs" placeholder="Ex: Compra direta, Doação, etc." style="width:100%; padding:10px;">
+                    </div>
+                    
+                    <div id="lista-itens-entrada">
+                        <div class="item-linha" style="display:flex; gap:10px; margin-bottom:10px;">
+                            <select class="ent_produto" style="flex:2; padding:8px;">
+                                <option value="">Selecione o Produto...</option>
+                                ${produtos.map(p => `<option value="${p.id}">${p.nome}</option>`).join('')}
+                            </select>
+                            <input type="text" class="ent_tamanho" placeholder="TAM" style="width:60px; padding:8px;">
+                            <input type="number" class="ent_qtd" placeholder="QTD" style="width:80px; padding:8px;">
+                        </div>
+                    </div>
+                    
+                    <button onclick="adicionarLinhaEntrada()" style="background:#666; color:white; padding:5px 10px; margin-bottom:20px;">+ ADICIONAR OUTRO ITEM</button>
+                    
+                    <div style="text-align:right;">
+                        <button onclick="renderizarMenu()" style="background:#ccc; padding:10px 20px;">VOLTAR</button>
+                        <button onclick="processarEntradaEstoque()" style="background:green; color:white; padding:10px 30px; font-weight:bold;">FINALIZAR ENTRADA</button>
+                    </div>
+                </div>
+            </div>
+        `;
+    } catch (err) {
+        alert("Erro ao carregar dados para entrada.");
+    }
+}
+
+function adicionarLinhaEntrada() {
+    const container = document.getElementById('lista-itens-entrada');
+    const primeiraLinha = container.querySelector('.item-linha');
+    const novaLinha = primeiraLinha.cloneNode(true);
+    novaLinha.querySelectorAll('input').forEach(i => i.value = '');
+    container.appendChild(novaLinha);
+}
+
+async function processarEntradaEstoque() {
+    const obs = document.getElementById('ent_obs').value;
+    const linhas = document.querySelectorAll('.item-linha');
+    const itens = [];
+
+    linhas.forEach(linha => {
+        const produto_id = linha.querySelector('.ent_produto').value;
+        const tamanho = linha.querySelector('.ent_tamanho').value;
+        const quantidade = linha.querySelector('.ent_qtd').value;
+
+        if (produto_id && quantidade) {
+            itens.push({ produto_id: parseInt(produto_id), tamanho, quantidade: parseInt(quantidade) });
+        }
+    });
+
+    if (itens.length === 0) return alert("Adicione pelo menos um item!");
+
+    const payload = {
+        local_id: parseInt(localStorage.getItem('local_id')), // ID 36, 37 ou 38 automático do login
+        tipo_historico: 'ENTRADA',
+        observacoes: obs,
+        itens: itens
+    };
+
+    try {
+        const res = await fetch(`${API_URL}/estoque/entrada`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) throw new Error("Erro ao processar entrada");
+        
+        alert("ESTOQUE ATUALIZADO COM SUCESSO!");
+        renderizarMenu();
+    } catch (err) {
+        alert(err.message);
+    }
+}
+
+async function renderizarGradeUniformes() {
+    document.querySelector('.modal-overlay')?.remove();
+    const conteudo = document.getElementById('conteudo-dinamico');
+    
+    const [resProd, resLoc] = await Promise.all([
+        fetch(`${API_URL}/api/catalogo/produtos`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } }),
+        fetch(`${API_URL}/api/catalogo/locais`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } })
+    ]);
+    
+    const produtos = (await resProd.json()).filter(p => p.tipo === 'UNIFORME');
+    const locais = await resLoc.json();
+
+    // Separar Tênis para ser a última coluna
+    const listaProdutos = [...produtos.filter(p => !p.nome.includes('TENIS')), ...produtos.filter(p => p.nome.includes('TENIS'))];
+    const tamanhos = ["02", "04", "06", "08", "10", "12", "14", "P", "M", "G", "GG", "28", "30", "32", "34", "36", "38", "40", "42"];
+
+    let html = `
+        <div class="card-entrada">
+            <h2>ENTRADA DE UNIFORMES</h2>
+            <div class="form-header-estoque">
+                <input type="text" id="ent_nf" placeholder="Nº NOTA FISCAL" class="input-field">
+                <select id="ent_local" class="input-field">
+                    ${locais.map(l => `<option value="${l.id}" ${l.nome === 'DEPÓSITO CENTRAL' ? 'selected' : ''}>${l.nome}</option>`).join('')}
+                </select>
+            </div>
+            
+            <div class="table-container-fixed">
+                <table class="grid-uniformes">
+                    <thead>
+                        <tr>
+                            <th class="sticky-col">TAMANHO</th>
+                            ${listaProdutos.map(p => `<th>${p.nome}</th>`).join('')}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${tamanhos.map(tam => `
+                            <tr>
+                                <td class="sticky-col"><strong>${tam}</strong></td>
+                                ${listaProdutos.map(p => {
+                                    // Bloquear tamanhos de roupa para tênis e vice-versa
+                                    const isSapato = p.nome.includes('TENIS');
+                                    const tamNum = parseInt(tam);
+                                    const disabled = (isSapato && isNaN(tamNum)) || (!isSapato && !isNaN(tamNum) && tamNum > 20) ? 'disabled' : '';
+                                    return `<td><input type="number" class="input-grid" data-prod="${p.id}" data-tam="${tam}" min="0" ${disabled}></td>`;
+                                }).join('')}
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+            <button onclick="salvarEntradaLote('UNIFORME')" class="btn-success">CONFIRMAR ENTRADA NO ESTOQUE</button>
+        </div>
+    `;
+    conteudo.innerHTML = html;
+}
+
+async function renderizarListaMaterial() {
+    document.querySelector('.modal-overlay')?.remove();
+    const conteudo = document.getElementById('conteudo-dinamico');
+    
+    const [resProd, resLoc] = await Promise.all([
+        fetch(`${API_URL}/api/catalogo/produtos`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } }),
+        fetch(`${API_URL}/api/catalogo/locais`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } })
+    ]);
+    
+    const produtos = (await resProd.json()).filter(p => p.tipo === 'MATERIAL').sort((a,b) => a.nome.localeCompare(b.nome));
+    const locais = await resLoc.json();
+
+    conteudo.innerHTML = `
+        <div class="card-entrada">
+            <h2>ENTRADA DE MATERIAIS</h2>
+            <div class="form-header-estoque">
+                <input type="text" id="ent_nf" placeholder="Nº NOTA FISCAL" class="input-field">
+                <select id="ent_local" class="input-field">
+                    ${locais.map(l => `<option value="${l.id}" ${l.nome === 'DEPÓSITO CENTRAL' ? 'selected' : ''}>${l.nome}</option>`).join('')}
+                </select>
+            </div>
+            <div class="lista-material-scroll">
+                ${produtos.map(p => `
+                    <div class="item-material-entrada">
+                        <input type="checkbox" onchange="toggleInputMaterial(this)">
+                        <span>${p.nome}</span>
+                        <input type="number" class="input-material-qtd" data-prod="${p.id}" placeholder="QTD" disabled>
+                    </div>
+                `).join('')}
+            </div>
+            <button onclick="salvarEntradaLote('MATERIAL')" class="btn-success">CONFIRMAR ENTRADA NO ESTOQUE</button>
+        </div>
+    `;
+}
+
+function toggleInputMaterial(cb) {
+    const input = cb.parentElement.querySelector('.input-material-qtd');
+    input.disabled = !cb.checked;
+    if(cb.checked) input.focus();
+}
+
+async function renderizarHistorico() {
+    const conteudo = document.getElementById('conteudo-dinamico');
+    const res = await fetch(`${API_URL}/api/cadastros/historico`, { 
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } 
+    });
+    const dados = await res.json();
+
+    conteudo.innerHTML = `
+        <div class="card-historico">
+            <h2>AUDITORIA DE MOVIMENTAÇÕES (HISTÓRICO)</h2>
+            <p><small>* Duplo clique em um registro para ver o detalhamento dos itens.</small></p>
+            <table class="tabela-estilizada">
+                <thead>
+                    <tr>
+                        <th>DATA/HORA</th>
+                        <th>USUÁRIO</th>
+                        <th>TIPO</th>
+                        <th>QTD TOTAL</th>
+                        <th>OBSERVAÇÕES</th>
+                        <th>LOCAL</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${dados.map(h => `
+                        <tr ondblclick="verDetalhesHistorico(${h.id})" title="Duplo clique para detalhes">
+                            <td>${new Date(h.data).toLocaleString()}</td>
+                            <td>${h.usuario_nome}</td>
+                            <td><span class="badge-${h.acao.toLowerCase()}">${h.acao}</span></td>
+                            <td>${h.quantidade_total}</td>
+                            <td>${h.observacoes || '-'}</td>
+                            <td>${h.local_nome || '-'}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+}
+
+async function verDetalhesHistorico(id) {
+    const res = await fetch(`${API_URL}/api/cadastros/historico/${id}/detalhes`, { 
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } 
+    });
+    const detalhes = await res.json();
+
+    let listagem = detalhes.map(d => `
+        <tr>
+            <td>${d.produto_nome}</td>
+            <td>${d.tamanho || 'N/A'}</td>
+            <td>${d.quantidade}</td>
+        </tr>
+    `).join('');
+
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `
+        <div class="modal-box large">
+            <h3>DETALHAMENTO DA MOVIMENTAÇÃO #${id}</h3>
+            <table class="tabela-estilizada">
+                <thead><tr><th>PRODUTO</th><th>TAMANHO</th><th>QTD</th></tr></thead>
+                <tbody>${listagem}</tbody>
+            </table>
+            <button onclick="this.parentElement.parentElement.remove()" class="btn-block">FECHAR</button>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
+async function renderizarFormSolicitacao() {
+    const usuario = JSON.parse(localStorage.getItem('usuario'));
+    const conteudo = document.getElementById('conteudo-dinamico');
+    
+    // Filtro de tipos baseado no perfil
+    let tipoPermitido = '';
+    if (usuario.perfil === 'escola') tipoPermitido = 'UNIFORME';
+    if (usuario.perfil === 'logistica') tipoPermitido = 'PATRIMONIO';
+    if (usuario.perfil === 'admin') tipoPermitido = 'MATERIAL'; // Admin pode tudo, mas aqui focamos em Material
+
+    const resProd = await fetch(`${API_URL}/api/catalogo/produtos`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
+    const produtos = (await resProd.json()).filter(p => p.tipo === tipoPermitido);
+
+    conteudo.innerHTML = `
+        <div class="card-entrada">
+            <h2>SOLICITAR ${tipoPermitido}S</h2>
+            <p>Selecione os itens e quantidades abaixo:</p>
+            
+            <div class="lista-solicitacao">
+                ${produtos.map(p => `
+                    <div class="item-material-entrada">
+                        <input type="checkbox" onchange="toggleInputMaterial(this)">
+                        <span>${p.nome} ${tipoPermitido === 'PATRIMONIO' ? '(UNITÁRIO)' : ''}</span>
+                        <input type="number" class="input-solicitacao-qtd" 
+                               data-prod="${p.id}" 
+                               value="${tipoPermitido === 'PATRIMONIO' ? 1 : ''}" 
+                               ${tipoPermitido === 'PATRIMONIO' ? 'readonly' : 'disabled'} 
+                               placeholder="QTD">
+                    </div>
+                `).join('')}
+            </div>
+            
+            <button onclick="enviarSolicitacao('${tipoPermitido}')" class="btn-block" style="margin-top:20px">
+                ENVIAR SOLICITAÇÃO PARA ANÁLISE
+            </button>
+        </div>
+    `;
+}
+
+async function enviarSolicitacao(tipo) {
+    const usuario = JSON.parse(localStorage.getItem('usuario'));
+    const itens = [];
+    document.querySelectorAll('.item-material-entrada').forEach(div => {
+        const cb = div.querySelector('input[type="checkbox"]');
+        const input = div.querySelector('.input-solicitacao-qtd');
+        if (cb.checked) {
+            itens.push({
+                produto_id: input.dataset.prod,
+                quantidade: parseInt(input.value)
+            });
+        }
+    });
+
+    if (itens.length === 0) return alert("SELECIONE AO MENOS UM ITEM.");
+
+    const res = await fetch(`${API_URL}/api/pedidos/solicitar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+        body: JSON.stringify({ 
+            local_destino_id: usuario.local_id, // Local vinculado ao usuário (escola/setor)
+            itens: itens 
+        })
+    });
+
+    if (res.ok) {
+        alert("SOLICITAÇÃO ENVIADA! AGUARDE A AUTORIZAÇÃO DO ADMIN.");
+        renderizarHome();
+    }
+}
+
+async function renderizarFormSolicitacao() {
+    const usuario = JSON.parse(localStorage.getItem('usuario'));
+    const conteudo = document.getElementById('conteudo-dinamico');
+    
+    // Filtro de tipos baseado no perfil
+    let tipoPermitido = '';
+    if (usuario.perfil === 'escola') tipoPermitido = 'UNIFORME';
+    if (usuario.perfil === 'logistica') tipoPermitido = 'PATRIMONIO';
+    if (usuario.perfil === 'admin') tipoPermitido = 'MATERIAL'; // Admin pode tudo, mas aqui focamos em Material
+
+    const resProd = await fetch(`${API_URL}/api/catalogo/produtos`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
+    const produtos = (await resProd.json()).filter(p => p.tipo === tipoPermitido);
+
+    conteudo.innerHTML = `
+        <div class="card-entrada">
+            <h2>SOLICITAR ${tipoPermitido}S</h2>
+            <p>Selecione os itens e quantidades abaixo:</p>
+            
+            <div class="lista-solicitacao">
+                ${produtos.map(p => `
+                    <div class="item-material-entrada">
+                        <input type="checkbox" onchange="toggleInputMaterial(this)">
+                        <span>${p.nome} ${tipoPermitido === 'PATRIMONIO' ? '(UNITÁRIO)' : ''}</span>
+                        <input type="number" class="input-solicitacao-qtd" 
+                               data-prod="${p.id}" 
+                               value="${tipoPermitido === 'PATRIMONIO' ? 1 : ''}" 
+                               ${tipoPermitido === 'PATRIMONIO' ? 'readonly' : 'disabled'} 
+                               placeholder="QTD">
+                    </div>
+                `).join('')}
+            </div>
+            
+            <button onclick="enviarSolicitacao('${tipoPermitido}')" class="btn-block" style="margin-top:20px">
+                ENVIAR SOLICITAÇÃO PARA ANÁLISE
+            </button>
+        </div>
+    `;
+}
+
+async function enviarSolicitacao(tipo) {
+    const usuario = JSON.parse(localStorage.getItem('usuario'));
+    const itens = [];
+    document.querySelectorAll('.item-material-entrada').forEach(div => {
+        const cb = div.querySelector('input[type="checkbox"]');
+        const input = div.querySelector('.input-solicitacao-qtd');
+        if (cb.checked) {
+            itens.push({
+                produto_id: input.dataset.prod,
+                quantidade: parseInt(input.value)
+            });
+        }
+    });
+
+    if (itens.length === 0) return alert("SELECIONE AO MENOS UM ITEM.");
+
+    const res = await fetch(`${API_URL}/api/pedidos/solicitar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+        body: JSON.stringify({ 
+            local_destino_id: usuario.local_id, // Local vinculado ao usuário (escola/setor)
+            itens: itens 
+        })
+    });
+
+    if (res.ok) {
+        alert("SOLICITAÇÃO ENVIADA! AGUARDE A AUTORIZAÇÃO DO ADMIN.");
+        renderizarHome();
+    }
+}
+
+async function renderizarGestaoPedidos() {
+    const conteudo = document.getElementById('conteudo-dinamico');
+    const res = await fetch(`${API_URL}/api/pedidos/status/PENDENTE`, { 
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } 
+    });
+    const pedidos = await res.json();
+
+    conteudo.innerHTML = `
+        <div class="card-historico">
+            <h2>PEDIDOS AGUARDANDO AUTORIZAÇÃO</h2>
+            <table class="tabela-estilizada">
+                <thead>
+                    <tr>
+                        <th>DATA</th>
+                        <th>SOLICITANTE</th>
+                        <th>DESTINO</th>
+                        <th>AÇÕES</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${pedidos.map(p => `
+                        <tr>
+                            <td>${new Date(p.data_criacao).toLocaleDateString()}</td>
+                            <td>${p.solicitante}</td>
+                            <td>${p.local_nome}</td>
+                            <td>
+                                <button onclick="verDetalhesPedido(${p.id})" class="btn-info">VER ITENS</button>
+                                <button onclick="autorizarPedido(${p.id})" class="btn-success">AUTORIZAR SAÍDA</button>
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+}
+
+async function renderizarSeletorPlaquetas(produtoId, qtdNecessaria) {
+    const res = await fetch(`${API_URL}/api/catalogo/patrimonios/disponiveis/${produtoId}`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+    });
+    const disponiveis = await res.json();
+
+    if (disponiveis.length < qtdNecessaria) {
+        return `<p style="color:red">⚠️ ESTOQUE INSUFICIENTE (DISPONÍVEL: ${disponiveis.length})</p>`;
+    }
+
+    return `
+        <div class="seletor-plaquetas">
+            <p><small>Selecione ${qtdNecessaria} plaqueta(s):</small></p>
+            <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:5px;">
+                ${disponiveis.map(p => `
+                    <label style="font-size:12px; border:1px solid #ccc; padding:2px; display:block">
+                        <input type="checkbox" class="chk-patrimonio" data-id="${p.id}" onchange="validarLimiteSelecao(this, ${qtdNecessaria})"> 
+                        ${p.numero_serie}
+                    </label>
+                `).join('')}
+            </div>
+        </div>
+    `;
+}
+
+function validarLimiteSelecao(el, max) {
+    const container = el.closest('.seletor-plaquetas');
+    const marcados = container.querySelectorAll('input:checked').length;
+    if (marcados > max) {
+        el.checked = false;
+        alert(`VOCÊ SÓ PODE SELECIONAR ${max} PLAQUETAS PARA ESTE ITEM.`);
+    }
+}
+
+async function autorizarRealocarPatrimonio(id) {
+    const selecionados = Array.from(document.querySelectorAll('.chk-patrimonio:checked')).map(cb => parseInt(cb.dataset.id));
+    
+    // Validação: verificar se todos os itens de patrimônio tiveram suas plaquetas selecionadas
+    const totalNecessario = Array.from(document.querySelectorAll('.seletor-plaquetas')).length; // (Simp. lógica)
+    
+    try {
+        const res = await fetch(`${API_URL}/api/pedidos/autorizar/${id}`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}` 
+            },
+            body: JSON.stringify({ patrimonios_selecionados: selecionados })
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+            alert(data.message);
+            document.querySelector('.modal-overlay').remove();
+            renderizarGestaoPedidos(); // Atualiza a lista principal
+        } else {
+            alert("ERRO: " + data.error);
+        }
+    } catch (error) {
+        alert("FALHA AO PROCESSAR AUTORIZAÇÃO.");
+    }
+}
+
+async function renderizarPedidosEmAndamento() {
+    const usuario = JSON.parse(localStorage.getItem('usuario'));
+    const conteudo = document.getElementById('conteudo-dinamico');
+    
+    const res = await fetch(`${API_URL}/api/pedidos/em-andamento`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+    });
+    const pedidos = await res.json();
+
+    // Filtro adicional para Escola: só vê o que está EM TRANSITO para ela
+    let pedidosFiltrados = pedidos;
+    if (usuario.perfil === 'escola') {
+        pedidosFiltrados = pedidos.filter(p => p.status === 'EM TRANSITO' && p.local_destino_id === usuario.local_id);
+    }
+
+    conteudo.innerHTML = `
+        <div class="card-historico">
+            <h2>🚚 PEDIDOS EM ANDAMENTO</h2>
+            <table class="tabela-estilizada">
+                <thead>
+                    <tr>
+                        <th>DATA</th><th>PEDIDO</th><th>DESTINO</th><th>STATUS</th><th>AÇÃO</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${pedidosFiltrados.map(p => `
+                        <tr>
+                            <td>${new Date(p.data_criacao).toLocaleDateString()}</td>
+                            <td>#${p.id}</td>
+                            <td>${p.local_nome}</td>
+                            <td><span class="badge-${p.status.toLowerCase().replace(/ /g, '-')}">${p.status}</span></td>
+                            <td>${gerarBotaoAcao(p, usuario)}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+}
+
+function gerarBotaoAcao(pedido, usuario) {
+    const p = pedido.status;
+    const u = usuario.perfil.toLowerCase();
+
+    // Lógica do ESTOQUE
+    if (u === 'estoque' || u === 'admin') {
+        if (p === 'AUTORIZADO') return `<button onclick="alterarStatusPedido(${pedido.id}, 'iniciar-separacao')" class="btn-info">INICIAR SEPARAÇÃO</button>`;
+        if (p === 'EM SEPARAÇÃO') return `<button onclick="abrirModalRemessa(${pedido.id})" class="btn-success">FINALIZAR REMESSA</button>`;
+    }
+
+    // Lógica da LOGÍSTICA
+    if (u === 'logistica' || u === 'admin') {
+        if (p === 'PRONTO PARA COLETA' || p === 'REMESSA PRONTA PARA COLETA') {
+            return `<button onclick="alterarStatusPedido(${pedido.id}, 'coletar')" class="btn-warning">COLETAR / EM TRÂNSITO</button>`;
+        }
+    }
+
+    // Lógica da ESCOLA
+    if (u === 'escola') {
+        if (p === 'EM TRANSITO') return `<button onclick="alterarStatusPedido(${pedido.id}, 'confirmar-entrega')" class="btn-success">CONFIRMAR RECEBIMENTO</button>`;
+    }
+
+    return `<button onclick="verLogPedido(${pedido.id})" class="btn-log">VER LOG</button>`;
+}
+
+async function alterarStatusPedido(id, rota) {
+    if (!confirm("DESEJA ATUALIZAR O STATUS DESTE PEDIDO?")) return;
+    const res = await fetch(`${API_URL}/api/pedidos/${id}/${rota}`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+    });
+    if (res.ok) {
+        alert("STATUS ATUALIZADO!");
+        renderizarPedidosEmAndamento();
+    }
+}
+
+async function abrirModalRemessa(pedidoId) {
+    const res = await fetch(`${API_URL}/api/pedidos/${pedidoId}/itens`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+    });
+    const itens = await res.json();
+
+    let html = `
+        <div class="modal-overlay">
+            <div class="modal-box large">
+                <h3>CONFERÊNCIA DE REMESSA - PEDIDO #${pedidoId}</h3>
+                <p>Informe as quantidades que estão saindo agora:</p>
+                <table class="tabela-estilizada">
+                    <thead><tr><th>PRODUTO</th><th>PEDIDO</th><th>JÁ ENVIADO</th><th>NESTA REMESSA</th></tr></thead>
+                    <tbody>
+                        ${itens.map(i => {
+                            const faltante = i.quantidade_solicitada - (i.quantidade_total_enviada || 0);
+                            return `
+                            <tr>
+                                <td>${i.produto_nome} ${i.tamanho || ''}</td>
+                                <td>${i.quantidade_solicitada}</td>
+                                <td>${i.quantidade_total_enviada || 0}</td>
+                                <td><input type="number" class="input-remessa" data-prod="${i.produto_id}" data-tam="${i.tamanho || ''}" max="${faltante}" value="${faltante}" style="width:60px"></td>
+                            </tr>`;
+                        }).join('')}
+                    </tbody>
+                </table>
+                <button onclick="finalizarRemessaEstoque(${pedidoId})" class="btn-success">GERAR REMESSA E ATUALIZAR STATUS</button>
+                <button onclick="document.querySelector('.modal-overlay').remove()" class="btn-cancel">CANCELAR</button>
+            </div>
+        </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', html);
+}
+
+async function finalizarRemessaEstoque(pedidoId) {
+    const inputs = document.querySelectorAll('.input-remessa');
+    const itens_remessa = Array.from(inputs).map(inp => ({
+        produto_id: inp.dataset.prod,
+        tamanho: inp.dataset.tam || null,
+        qtd_enviada: parseInt(inp.value) || 0
+    })).filter(i => i.qtd_enviada > 0);
+
+    const res = await fetch(`${API_URL}/api/pedidos/${pedidoId}/finalizar-remessa`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+        body: JSON.stringify({ itens_remessa })
+    });
+
+    if (res.ok) {
+        document.querySelector('.modal-overlay').remove();
+        renderizarPedidosEmAndamento();
+    }
+}
+
+async function alternarAbaPedido(aba, id) {
+    const container = document.getElementById('container-aba-conteudo');
+    const tabs = document.querySelectorAll('.tab-btn');
+    tabs.forEach(t => t.classList.remove('active'));
+    document.getElementById(`tab-${aba}`).classList.add('active');
+
+    if (aba === 'itens') {
+        const res = await fetch(`${API_URL}/api/pedidos/${id}/itens`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        const itens = await res.json();
+        
+        container.innerHTML = `
+            <table class="tabela-estilizada">
+                <thead>
+                    <tr><th>PRODUTO</th><th>SOLICITADO</th><th>JÁ ENVIADO</th></tr>
+                </thead>
+                <tbody>
+                    ${itens.map(i => `
+                        <tr>
+                            <td>${i.produto_nome} ${i.tamanho || ''}</td>
+                            <td>${i.quantidade_solicitada}</td>
+                            <td>${i.quantidade_total_enviada || 0}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+    } else {
+        // ABA DE LOG
+        const res = await fetch(`${API_URL}/api/pedidos/${id}/log`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        const logs = await res.json();
+
+        if (logs.length === 0) {
+            container.innerHTML = "<p style='padding:20px'>NENHUM REGISTRO DE MUDANÇA ENCONTRADO.</p>";
+            return;
+        }
+
+        container.innerHTML = `
+            <div class="timeline-log">
+                ${logs.map(l => `
+                    <div class="log-entry">
+                        <div class="log-date">${new Date(l.data_hora).toLocaleString()}</div>
+                        <div class="log-content">
+                            <strong>${l.usuario_nome} (${l.usuario_perfil})</strong> alterou de 
+                            <span class="status-old">${l.status_anterior || 'INÍCIO'}</span> para 
+                            <span class="status-new">${l.status_novo}</span>
+                            ${l.observacao ? `<br><small>Obs: ${l.observacao}</small>` : ''}
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    }
+}
+
+async function renderizarDashboardAdmin() {
+    const containerDashboard = document.getElementById('dashboard-estatisticas');
+    if (!containerDashboard) return; // Garante que só executa se o elemento existir
+
+    try {
+        const res = await fetch(`${API_URL}/api/pedidos/dashboard/resumo`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        const dados = await res.json();
+
+        containerDashboard.innerHTML = `
+            <div class="dashboard-grid">
+                <div class="card-dash dash-autorizado" onclick="filtrarPedidosPorStatus('AUTORIZADO')">
+                    <span class="dash-num">${dados.AUTORIZADO}</span>
+                    <span class="dash-label">AGUARDANDO ESTOQUE</span>
+                </div>
+                <div class="card-dash dash-separacao" onclick="filtrarPedidosPorStatus('EM SEPARAÇÃO')">
+                    <span class="dash-num">${dados.SEPARACAO}</span>
+                    <span class="dash-label">EM SEPARAÇÃO</span>
+                </div>
+                <div class="card-dash dash-coleta" onclick="filtrarPedidosPorStatus('COLETA')">
+                    <span class="dash-num">${dados.PRONTO_COLETA}</span>
+                    <span class="dash-label">PRONTOS P/ COLETA</span>
+                </div>
+                <div class="card-dash dash-transito" onclick="filtrarPedidosPorStatus('EM TRANSITO')">
+                    <span class="dash-num">${dados.EM_TRANSITO}</span>
+                    <span class="dash-label">EM TRÂNSITO (RUA)</span>
+                </div>
+            </div>
+        `;
+    } catch (error) {
+        console.error("Erro ao carregar dashboard:", error);
+    }
+}
+
+// Função para chamar ao carregar a tela de Pedidos em Andamento
+async function renderizarPedidosEmAndamentoComDash() {
+    const conteudo = document.getElementById('conteudo-dinamico');
+    
+    // Cria o esqueleto da página com o local para o dashboard e para a tabela
+    conteudo.innerHTML = `
+        <div id="dashboard-estatisticas"></div>
+        <div id="lista-pedidos-andamento">
+            <div class="loader">CARREGANDO LISTAGEM...</div>
+        </div>
+    `;
+
+    // Carrega os dois componentes
+    await renderizarDashboardAdmin();
+    await atualizarTabelaPedidos();
+}
+
+function renderizarTelaRelatorios() {
+    const conteudo = document.getElementById('conteudo-dinamico');
+    
+    // Define datas padrão (início do mês atual até hoje)
+    const hoje = new Date().toISOString().split('T')[0];
+    const primeiroDia = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
+
+    conteudo.innerHTML = `
+        <div class="card-entrada">
+            <h2>📊 RELATÓRIO DE MOVIMENTAÇÃO DE SAÍDAS</h2>
+            <div class="filtro-relatorio">
+                <div class="campo-filtro">
+                    <label>DATA INICIAL:</label>
+                    <input type="date" id="rel_inicio" value="${primeiroDia}" class="input-field">
+                </div>
+                <div class="campo-filtro">
+                    <label>DATA FINAL:</label>
+                    <input type="date" id="rel_fim" value="${hoje}" class="input-field">
+                </div>
+                <button onclick="gerarRelatorioSaida()" class="btn-success" style="margin-top:20px">🔍 GERAR RELATÓRIO</button>
+            </div>
+            
+            <div id="resultado-relatorio" style="margin-top:30px;">
+                </div>
+        </div>
+    `;
+}
+
+async function gerarRelatorioSaida() {
+    const inicio = document.getElementById('rel_inicio').value;
+    const fim = document.getElementById('rel_fim').value;
+    const container = document.getElementById('resultado-relatorio');
+
+    if (!inicio || !fim) return alert("SELECIONE O PERÍODO!");
+
+    container.innerHTML = '<div class="loader">PROCESSANDO DADOS...</div>';
+
+    const res = await fetch(`${API_URL}/api/pedidos/relatorios/saidas?inicio=${inicio}&fim=${fim}`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+    });
+    const dados = await res.json();
+
+    if (dados.length === 0) {
+        container.innerHTML = "<p>NENHUMA MOVIMENTAÇÃO ENCONTRADA NESTE PERÍODO.</p>";
+        return;
+    }
+
+    let tabelaHtml = `
+        <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+            <span><strong>ITENS ENCONTRADOS:</strong> ${dados.length}</span>
+            <button onclick="exportarPDFRelatorio()" class="btn-info-sm" style="background:#e74c3c">📥 BAIXAR PDF</button>
+        </div>
+        <table class="tabela-estilizada" id="tabela-relatorio-dados">
+            <thead>
+                <tr>
+                    <th>DATA</th>
+                    <th>PEDIDO</th>
+                    <th>DESTINO</th>
+                    <th>PRODUTO</th>
+                    <th>TAM</th>
+                    <th>QTD</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${dados.map(d => `
+                    <tr>
+                        <td>${new Date(d.data).toLocaleDateString()}</td>
+                        <td>#${d.pedido_id}</td>
+                        <td>${d.destino}</td>
+                        <td>${d.produto}</td>
+                        <td>${d.tamanho || '-'}</td>
+                        <td>${d.quantidade}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
+    container.innerHTML = tabelaHtml;
+    // Salva os dados globalmente para o exportador de PDF
+    window.dadosUltimoRelatorio = dados;
+}
+
+function exportarPDFRelatorio() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    const dados = window.dadosUltimoRelatorio;
+    const inicio = document.getElementById('rel_inicio').value;
+    const fim = document.getElementById('rel_fim').value;
+
+    // Cabeçalho do PDF
+    doc.setFontSize(18);
+    doc.text("Relatório de Saída de Estoque - SEMED", 14, 20);
+    doc.setFontSize(11);
+    doc.text(`Período: ${new Date(inicio).toLocaleDateString()} até ${new Date(fim).toLocaleDateString()}`, 14, 30);
+    doc.text(`Gerado em: ${new Date().toLocaleString()}`, 14, 36);
+
+    // Gerar Tabela
+    const colunas = ["DATA", "PEDIDO", "DESTINO", "PRODUTO", "TAM", "QTD"];
+    const linhas = dados.map(d => [
+        new Date(d.data).toLocaleDateString(),
+        `#${d.pedido_id}`,
+        d.destino,
+        d.produto,
+        d.tamanho || '-',
+        d.quantidade
+    ]);
+
+    doc.autoTable({
+        head: [colunas],
+        body: linhas,
+        startY: 45,
+        theme: 'grid',
+        headStyles: { fillStyle: [44, 62, 80] } // Cor azul escuro
+    });
+
+    doc.save(`relatorio_saidas_${inicio}_a_${fim}.pdf`);
+}
+
+// FUNÇÃO PARA SOLICITAR UNIFORMES (ESPECÍFICO ESCOLA)
+async function renderizarFormSolicitacaoUniforme() {
+    const conteudo = document.getElementById('conteudo-dinamico');
+    
+    // Busca apenas produtos do tipo UNIFORME
+    const resProd = await fetch(`${API_URL}/api/catalogo/produtos`, { 
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } 
+    });
+    const produtos = (await resProd.json()).filter(p => p.tipo === 'UNIFORME');
+    const tamanhos = ["02", "04", "06", "08", "10", "12", "14", "P", "M", "G", "GG"];
+
+    conteudo.innerHTML = `
+        <div class="card-entrada">
+            <button onclick="renderizarMenuEscola()" class="btn-voltar">⬅ VOLTAR</button>
+            <h2>NOVA SOLICITAÇÃO DE UNIFORMES</h2>
+            
+            <div class="form-item-solicitacao">
+                <label>PRODUTO:</label>
+                <select id="sol_prod" class="input-field">
+                    ${produtos.map(p => `<option value="${p.id}">${p.nome}</option>`).join('')}
+                </select>
+                
+                <label>TAMANHO:</label>
+                <select id="sol_tam" class="input-field">
+                    ${tamanhos.map(t => `<option value="${t}">${t}</option>`).join('')}
+                </select>
+
+                <label>QUANTIDADE:</label>
+                <input type="number" id="sol_qtd" class="input-field" min="1">
+                
+                <button onclick="adicionarItemListaSolicitacao()" class="btn-info" style="width:100%">ADICIONAR À LISTA</button>
+            </div>
+
+            <div id="lista-temporaria-itens" style="margin-top:20px">
+                <table class="tabela-estilizada" id="tabela-itens-pedido">
+                    <thead><tr><th>PRODUTO</th><th>TAM</th><th>QTD</th><th>AÇÃO</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+
+            <button onclick="enviarPedidoEscolaFinal()" class="btn-success" style="width:100%; margin-top:20px; display:none;" id="btn-enviar-pedido">
+                ENVIAR SOLICITAÇÃO PARA ADMINISTRAÇÃO
+            </button>
+        </div>
+    `;
+}
+
+async function enviarPedidoEscola(tipo) {
+    const localId = localStorage.getItem('local_id');
+
+    if (carrinhoSolicitacao.length === 0) return alert("Sua lista está vazia!");
+    
+    if (!localId || localId === "null") {
+        alert("⚠️ ERRO: Usuário sem escola vinculada. Faça login novamente ou contate o Admin.");
+        return;
+    }
+
+    const dados = {
+        local_destino_id: parseInt(localId),
+        tipo_pedido: tipo,
+        itens: carrinhoSolicitacao
+    };
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/escola/solicitar`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify(dados)
+        });
+
+        if (res.ok) {
+            alert("✅ Pedido enviado com sucesso!");
+            carrinhoSolicitacao = [];
+            carregarDashboard();
+        }
+    } catch (err) { alert("Erro de conexão."); }
+}
+
+function ordenarTamanhos(lista) {
+    const ordemLetras = { 'PP': 1, 'P': 2, 'M': 3, 'G': 4, 'GG': 5, 'EXG': 6, 'UNICO': 7 };
+    return lista.sort((a, b) => {
+        const tA = String(a.tamanho || a);
+        const tB = String(b.tamanho || b);
+        if (!isNaN(tA) && !isNaN(tB)) return parseInt(tA) - parseInt(tB);
+        if (ordemLetras[tA] && ordemLetras[tB]) return ordemLetras[tA] - ordemLetras[tB];
+        return tA.localeCompare(tB);
+    });
+}
+
+// FUNÇÃO PARA DEVOLUÇÃO
+function renderizarFormDevolucao() {
+    // Lógica similar à solicitação, mas mudando o cabeçalho e a rota final
+    renderizarFormSolicitacaoUniforme();
+    const titulo = document.querySelector('h2');
+    titulo.innerText = "SOLICITAR DEVOLUÇÃO PARA O ESTOQUE CENTRAL";
+    titulo.style.color = "#e67e22";
+    
+    const btnFinal = document.getElementById('btn-enviar-pedido');
+    btnFinal.onclick = () => enviarDevolucaoFinal();
+    btnFinal.innerText = "ENVIAR SOLICITAÇÃO DE DEVOLUÇÃO";
+}
+
+async function renderizarGerenciamentoDevolucoes() {
+    const conteudo = document.getElementById('conteudo-dinamico');
+    const res = await fetch(`${API_URL}/api/pedidos/status/DEVOLUÇÃO PENDENTE`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+    });
+    const devolucoes = await res.json();
+
+    conteudo.innerHTML = `
+        <div class="card-historico">
+            <h2>📦 RECEBIMENTO DE DEVOLUÇÕES (CONFERÊNCIA)</h2>
+            <p>Os itens abaixo foram enviados pelas escolas e aguardam conferência física.</p>
+            <table class="tabela-estilizada">
+                <thead>
+                    <tr>
+                        <th>DATA</th>
+                        <th>ESCOLA SOLICITANTE</th>
+                        <th>MOTIVO/OBS</th>
+                        <th>AÇÃO</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${devolucoes.map(d => `
+                        <tr>
+                            <td>${new Date(d.data_criacao).toLocaleDateString()}</td>
+                            <td>${d.solicitante} (${d.local_nome})</td>
+                            <td><em>${d.motivo_recusa || 'Não informado'}</em></td>
+                            <td>
+                                <button onclick="abrirModalConferenciaDevolucao(${d.id})" class="btn-success">CONFERIR ITENS</button>
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+}
+
+async function abrirModalConferenciaDevolucao(id) {
+    const res = await fetch(`${API_URL}/api/pedidos/${id}/itens`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+    });
+    const itens = await res.json();
+
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `
+        <div class="modal-box">
+            <h3>CONFERIR DEVOLUÇÃO #${id}</h3>
+            <p>Verifique se as quantidades abaixo conferem com o que chegou fisicamente:</p>
+            <ul style="text-align:left; margin: 20px 0;">
+                ${itens.map(i => `<li><strong>${i.quantidade_solicitada}x</strong> ${i.produto_nome} (Tam: ${i.tamanho || 'N/A'})</li>`).join('')}
+            </ul>
+            <div style="background:#fff3cd; padding:10px; border-radius:4px; margin-bottom:20px; font-size:13px;">
+                ⚠️ Ao confirmar, estas quantidades serão somadas ao saldo atual do estoque.
+            </div>
+            <button onclick="confirmarRecebimentoFinal(${id})" class="btn-block">CONFIRMAR RECEBIMENTO E INTEGRAR ESTOQUE</button>
+            <button onclick="this.parentElement.parentElement.remove()" class="btn-cancel" style="width:100%; margin-top:10px;">FECHAR</button>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
+async function confirmarRecebimentoFinal(id) {
+    if(!confirm("CONFIRMA QUE OS ITENS CHEGARAM E ESTÃO EM BOM ESTADO?")) return;
+
+    const res = await fetch(`${API_URL}/api/pedidos/devolucao/confirmar/${id}`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+    });
+
+    if(res.ok) {
+        alert("ESTOQUE ATUALIZADO COM SUCESSO!");
+        document.querySelector('.modal-overlay').remove();
+        renderizarGerenciamentoDevolucoes();
+    }
+}
+
+async function renderizarInventarioAtual() {
+    const conteudo = document.getElementById('conteudo-dinamico');
+    conteudo.innerHTML = '<div class="loader">CARREGANDO POSIÇÃO DE ESTOQUE...</div>';
+
+    try {
+        const res = await fetch(`${API_URL}/api/pedidos/relatorios/inventario-atual`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        const dados = await res.json();
+
+        let html = `
+            <div class="card-entrada">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                    <h2>📋 INVENTÁRIO ATUAL (POSIÇÃO DE ESTOQUE)</h2>
+                    <button onclick="exportarPDFInventario()" class="btn-info" style="background:#e74c3c">📥 BAIXAR PDF</button>
+                </div>
+
+                <div class="filtro-local-inventario" style="margin-bottom:20px;">
+                    <input type="text" id="filtro_inventario" placeholder="Filtrar por Local ou Produto..." 
+                           onkeyup="filtrarTabelaInventario()" class="input-field">
+                </div>
+
+                <table class="tabela-estilizada" id="tabela-inventario">
+                    <thead>
+                        <tr>
+                            <th>LOCAL / UNIDADE</th>
+                            <th>PRODUTO</th>
+                            <th>TIPO</th>
+                            <th>QUANTIDADE</th>
+                            <th>DETALHES (SÉRIES)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${dados.map(d => `
+                            <tr>
+                                <td><strong>${d.local_nome}</strong></td>
+                                <td>${d.produto}</td>
+                                <td><span class="badge-tipo">${d.tipo}</span></td>
+                                <td style="text-align:center"><strong>${d.quantidade}</strong></td>
+                                <td style="font-size:10px; max-width:300px;">${d.detalhes}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+        conteudo.innerHTML = html;
+        window.dadosInventario = dados; // Salva para o PDF
+
+    } catch (error) {
+        conteudo.innerHTML = '<div class="error-msg">FALHA AO OBTER DADOS DO INVENTÁRIO.</div>';
+    }
+}
+
+function filtrarTabelaInventario() {
+    const input = document.getElementById('filtro_inventario').value.toUpperCase();
+    const rows = document.querySelectorAll('#tabela-inventario tbody tr');
+    
+    rows.forEach(row => {
+        const text = row.innerText.toUpperCase();
+        row.style.display = text.includes(input) ? '' : 'none';
+    });
+}
+
+function exportarPDFInventario() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF('l', 'mm', 'a4'); // 'l' para modo paisagem (landscape)
+    const dados = window.dadosInventario;
+
+    doc.setFontSize(16);
+    doc.text("INVENTÁRIO GERAL DE BENS E CONSUMÍVEIS - SEMED", 14, 15);
+    doc.setFontSize(10);
+    doc.text(`Data do Levantamento: ${new Date().toLocaleString()}`, 14, 22);
+
+    const colunas = ["LOCAL / UNIDADE", "PRODUTO", "TIPO", "QTD", "DETALHES/PLAQUETAS"];
+    const linhas = dados.map(d => [
+        d.local_nome,
+        d.produto,
+        d.tipo,
+        d.quantidade,
+        d.detalhes
+    ]);
+
+    doc.autoTable({
+        head: [colunas],
+        body: linhas,
+        startY: 30,
+        theme: 'striped',
+        styles: { fontSize: 8 },
+        columnStyles: {
+            4: { cellWidth: 80 } // Coluna de detalhes mais larga
+        },
+        headStyles: { fillStyle: [52, 73, 94] }
+    });
+
+    doc.save(`inventario_atual_${new Date().toISOString().split('T')[0]}.pdf`);
+}
+
+async function renderizarTelaTermoResponsabilidade() {
+    const conteudo = document.getElementById('conteudo-dinamico');
+    
+    // Busca a lista de locais para preencher o Select
+    const resLocais = await fetch(`${API_URL}/api/catalogo/locais`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+    });
+    const locais = await resLocais.json();
+
+    conteudo.innerHTML = `
+        <div class="card-entrada">
+            <h2>📜 EMISSÃO DE TERMO DE RESPONSABILIDADE</h2>
+            <p>Selecione a Unidade para gerar o documento de cautela dos bens patrimoniais:</p>
+            
+            <div style="margin: 20px 0;">
+                <label><strong>SELECIONE O LOCAL:</strong></label>
+                <select id="termo_local_id" class="input-field">
+                    <option value="">-- SELECIONE UMA UNIDADE --</option>
+                    ${locais.map(l => `<option value="${l.id}">${l.nome}</option>`).join('')}
+                </select>
+            </div>
+
+            <button onclick="gerarPDFTermo()" class="btn-success" style="width: 100%;">
+                📄 GERAR TERMO EM PDF
+            </button>
+        </div>
+    `;
+}
+
+async function gerarPDFTermo() {
+    const localId = document.getElementById('termo_local_id').value;
+    if (!localId) return alert("POR FAVOR, SELECIONE UM LOCAL.");
+
+    const res = await fetch(`${API_URL}/api/pedidos/relatorios/termo/${localId}`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+    });
+    const dados = await res.json();
+
+    if (dados.itens.length === 0) {
+        return alert("ESTA UNIDADE NÃO POSSUI ITENS PATRIMONIADOS VINCULADOS.");
+    }
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    const margem = 14;
+
+    // Cabeçalho Oficial
+    doc.setFontSize(14);
+    doc.text("PREFEITURA MUNICIPAL - SECRETARIA DE EDUCAÇÃO", 105, 20, { align: "center" });
+    doc.setFontSize(12);
+    doc.text("TERMO DE RESPONSABILIDADE PATRIMONIAL", 105, 28, { align: "center" });
+    
+    doc.setFontSize(10);
+    doc.text(`UNIDADE: ${dados.local.nome.toUpperCase()}`, margem, 45);
+    doc.text(`DATA DE EMISSÃO: ${new Date().toLocaleDateString()}`, margem, 51);
+
+    // Texto do Termo
+    const textoTermo = `Pelo presente Termo de Responsabilidade, a unidade acima identificada declara estar de posse dos bens abaixo relacionados, assumindo total responsabilidade pela guarda, conservação e uso adequado dos mesmos, conforme as normas vigentes de administração pública.`;
+    const textLines = doc.splitTextToSize(textoTermo, 180);
+    doc.text(textLines, margem, 60);
+
+    // Tabela de Itens
+    doc.autoTable({
+        head: [['ITEM', 'DESCRIÇÃO DO PRODUTO', 'Nº DE SÉRIE / PLAQUETA']],
+        body: dados.itens.map((it, index) => [index + 1, it.produto, it.numero_serie]),
+        startY: 75,
+        theme: 'grid',
+        headStyles: { fill: [44, 62, 80] },
+        styles: { fontSize: 9 }
+    });
+
+    // Espaço para Assinaturas
+    const finalY = doc.lastAutoTable.finalY + 30;
+    doc.line(margem, finalY, 90, finalY);
+    doc.text("ASSINATURA DO RESPONSÁVEL", margem + 10, finalY + 5);
+    
+    doc.line(110, finalY, 190, finalY);
+    doc.text("DIRETORIA DE PATRIMÔNIO", 125, finalY + 5);
+
+    doc.save(`termo_responsabilidade_${dados.local.nome.replace(/ /g, '_')}.pdf`);
+}
+
+async function renderizarMenuLogistica() {
+    const conteudo = document.getElementById('conteudo-dinamico');
+    const usuario = JSON.parse(localStorage.getItem('usuario'));
+
+    conteudo.innerHTML = `
+        <div class="welcome-banner" style="background: #2980b9;">
+            <h2>BEM-VINDO(A), ${usuario.nome.toUpperCase()}</h2>
+            <p>PAINEL DE LOGÍSTICA E TRANSPORTE</p>
+        </div>
+
+        <div class="dashboard-escola-grid">
+            <div class="card-menu-escola" onclick="renderizarFormTransferenciaPatrimonio()">
+                <div class="icon-escola">🏗️</div>
+                <h3>SOLICITAR TRANSFERÊNCIA</h3>
+                <p>Mover patrimônio para outra Unidade</p>
+            </div>
+
+            <div class="card-menu-escola" onclick="renderizarPedidosEmAndamento()">
+                <div class="icon-escola">🚛</div>
+                <h3>COLETAS PENDENTES</h3>
+                <p>Ver itens prontos para transporte</p>
+            </div>
+            
+            <div class="card-menu-escola" onclick="renderizarInventarioAtual()">
+                <div class="icon-escola">📊</div>
+                <h3>CONSULTAR LOCALIZAÇÃO</h3>
+                <p>Ver onde estão os bens</p>
+            </div>
+        </div>
+    `;
+}
+
+async function renderizarFormTransferenciaPatrimonio() {
+    const conteudo = document.getElementById('conteudo-dinamico');
+    
+    // Busca dados necessários (Produtos tipo Patrimônio e Locais)
+    const [resProd, resLoc] = await Promise.all([
+        fetch(`${API_URL}/api/catalogo/produtos`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } }),
+        fetch(`${API_URL}/api/catalogo/locais`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } })
+    ]);
+    
+    const produtos = (await resProd.json()).filter(p => p.tipo === 'PATRIMONIO');
+    const locais = await resLoc.json();
+
+    conteudo.innerHTML = `
+        <div class="card-entrada">
+            <button onclick="renderizarMenuLogistica()" class="btn-voltar">⬅ VOLTAR</button>
+            <h2>🏗️ SOLICITAÇÃO DE MOVIMENTAÇÃO DE PATRIMÔNIO</h2>
+            
+            <div class="form-item-solicitacao">
+                <label><strong>1. DESTINO DA CARGA:</strong></label>
+                <select id="transf_local_id" class="input-field">
+                    <option value="">-- SELECIONE A ESCOLA DESTINO --</option>
+                    ${locais.map(l => `<option value="${l.id}">${l.nome}</option>`).join('')}
+                </select>
+
+                <hr style="margin:20px 0; opacity:0.2">
+
+                <label><strong>2. ADICIONAR ITEM:</strong></label>
+                <select id="transf_prod_id" class="input-field">
+                    ${produtos.map(p => `<option value="${p.id}">${p.nome}</option>`).join('')}
+                </select>
+                
+                <label>QUANTIDADE:</label>
+                <input type="number" id="transf_qtd" class="input-field" value="1" min="1">
+                
+                <button onclick="adicionarItemTransferencia()" class="btn-info" style="width:100%">INCLUIR NO ROMANEIO</button>
+            </div>
+
+            <div id="lista-transf" style="margin-top:20px">
+                <table class="tabela-estilizada" id="tabela-transf">
+                    <thead><tr><th>PRODUTO</th><th>QTD</th><th>AÇÃO</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+
+            <button onclick="enviarTransferenciaFinal()" class="btn-success" style="width:100%; margin-top:20px; display:none;" id="btn-enviar-transf">
+                ENVIAR PARA APROVAÇÃO DO ADMIN
+            </button>
+        </div>
+    `;
+}
+
+let itensTransferencia = [];
+
+function adicionarItemTransferencia() {
+    const prodSelect = document.getElementById('transf_prod_id');
+    const qtd = document.getElementById('transf_qtd').value;
+    
+    if(!qtd || qtd < 1) return alert("INFORME UMA QUANTIDADE VÁLIDA");
+
+    const item = {
+        produto_id: prodSelect.value,
+        nome: prodSelect.options[prodSelect.selectedIndex].text,
+        quantidade: parseInt(qtd)
+    };
+
+    itensTransferencia.push(item);
+    atualizarTabelaTransferencia();
+}
+
+function atualizarTabelaTransferencia() {
+    const tbody = document.querySelector('#tabela-transf tbody');
+    const btn = document.getElementById('btn-enviar-transf');
+    tbody.innerHTML = '';
+
+    itensTransferencia.forEach((it, index) => {
+        tbody.innerHTML += `
+            <tr>
+                <td>${it.nome}</td>
+                <td>${it.quantidade}</td>
+                <td><button onclick="itensTransferencia.splice(${index},1); atualizarTabelaTransferencia()" class="btn-cancel" style="padding:2px 5px">❌</button></td>
+            </tr>
+        `;
+    });
+
+    btn.style.display = itensTransferencia.length > 0 ? 'block' : 'none';
+}
+
+async function enviarTransferenciaFinal() {
+    const local_id = document.getElementById('transf_local_id').value;
+    if(!local_id) return alert("POR FAVOR, SELECIONE O DESTINO!");
+
+    const res = await fetch(`${API_URL}/api/pedidos/patrimonio/solicitar-transferencia`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+        body: JSON.stringify({
+            local_destino_id: local_id,
+            itens: itensTransferencia,
+            observacao: "Solicitado via painel de logística"
+        })
+    });
+
+    if(res.ok) {
+        alert("SOLICITAÇÃO ENVIADA! AGUARDE A AUTORIZAÇÃO DO ADMIN.");
+        itensTransferencia = [];
+        renderizarMenuLogistica();
+    }
+}
+
+// Função para buscar e exibir notificações
+async function atualizarBadgesNotificacao() {
+    try {
+        const res = await fetch(`${API_URL}/pedidos/contagem/alertas`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        
+        // Se não for um JSON (ex: erro 500 enviando HTML), interrompe sem dar erro no console
+        const contentType = res.headers.get("content-type");
+        if (!contentType || !contentType.includes("application/json")) return;
+
+        const data = await res.json();
+        // ... restante da sua lógica
+    } catch (error) {
+        // Silencia o erro para não travar o restante do script
+    }
+}
+
+// Iniciar a verificação automática a cada 2 minutos (120000ms)
+setInterval(atualizarBadgesNotificacao, 120000);
+
+async function renderizarRelatorioEstatisticoUniformes() {
+    const conteudo = document.getElementById('conteudo-dinamico');
+    conteudo.innerHTML = '<div class="loader">GERANDO ESTATÍSTICAS...</div>';
+
+    try {
+        const res = await fetch(`${API_URL}/api/pedidos/relatorios/entregas-uniformes`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        const dados = await res.json();
+
+        const jaReceberam = dados.filter(d => d.situacao === 'RECEBEU');
+        const faltamReceber = dados.filter(d => d.situacao === 'PENDENTE');
+
+        conteudo.innerHTML = `
+            <div class="card-entrada">
+                <h2>📊 BALANÇO DE ENTREGAS DE UNIFORMES</h2>
+                <button onclick="exportarPDFEstatisticoUniformes()" class="btn-info" style="background:#e74c3c">
+                    📥 BAIXAR RELATÓRIO COMPLETO (PDF)
+                </button>
+                <div class="dashboard-resumo-mini">
+                    <div class="mini-card verde"><strong>${jaReceberam.length}</strong> Escolas Atendidas</div>
+                    <div class="mini-card vermelho"><strong>${faltamReceber.length}</strong> Escolas Pendentes</div>
+                </div>
+
+                <div class="grafico-container" style="margin: 30px 0; background: #fff; padding: 15px; border-radius: 8px; border: 1px solid #ddd;">
+                    <canvas id="graficoUniformes"></canvas>
+                </div>
+
+                <div class="listas-setores" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div>
+                        <h3 style="color: #27ae60;">✅ UNIDADES ATENDIDAS</h3>
+                        <table class="tabela-estilizada-mini">
+                            <thead><tr><th>ESCOLA</th><th>TOTAL PEÇAS</th></tr></thead>
+                            <tbody>
+                                ${jaReceberam.map(d => `<tr><td>${d.escola}</td><td>${d.total_recebido}</td></tr>`).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div>
+                        <h3 style="color: #c0392b;">⏳ AGUARDANDO ENTREGA</h3>
+                        <table class="tabela-estilizada-mini">
+                            <thead><tr><th>ESCOLA</th></tr></thead>
+                            <tbody>
+                                ${faltamReceber.map(d => `<tr><td>${d.escola}</td></tr>`).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Renderiza o Gráfico
+        renderizarGrafico(jaReceberam);
+
+    } catch (error) {
+        console.error(error);
+        conteudo.innerHTML = '<p class="error">Erro ao carregar relatório.</p>';
+    }
+}
+
+function renderizarGrafico(dados) {
+    const ctx = document.getElementById('graficoUniformes').getContext('2d');
+    
+    // Pegar apenas o top 10 ou todas se forem poucas para o gráfico não ficar poluído
+    const labels = dados.map(d => d.escola);
+    const valores = dados.map(d => d.total_recebido);
+
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Total de Peças Entregues',
+                data: valores,
+                backgroundColor: '#3498db',
+                borderColor: '#2980b9',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            indexAxis: 'y', // Gráfico horizontal para melhor leitura dos nomes das escolas
+            responsive: true,
+            plugins: {
+                legend: { display: false },
+                title: { display: true, text: 'RANKING DE RECEBIMENTO POR UNIDADE' }
             }
         }
     });
 }
 
-async function abrirDashboardRelatorios() {
-    const res = await fetch(`${API_URL}/pedidos/relatorios/estatisticas`, {
-        headers: { 'Authorization': `Bearer ${TOKEN}` }
+async function exportarPDFEstatisticoUniformes() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF('p', 'mm', 'a4');
+    const canvas = document.getElementById('graficoUniformes');
+    
+    // 1. Configurações de Cabeçalho
+    doc.setFontSize(18);
+    doc.setTextColor(44, 62, 80);
+    doc.text("BALANÇO GERAL: DISTRIBUIÇÃO DE UNIFORMES", 105, 20, { align: "center" });
+    
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text(`Secretaria Municipal de Educação - Gerado em: ${new Date().toLocaleString()}`, 105, 28, { align: "center" });
+
+    // 2. Inserir a imagem do Gráfico no PDF
+    if (canvas) {
+        const imgData = canvas.toDataURL('image/png');
+        // Adiciona a imagem (x, y, largura, altura)
+        doc.addImage(imgData, 'PNG', 15, 35, 180, 80);
+    }
+
+    // 3. Tabela de Unidades Atendidas (Verde)
+    const res = await fetch(`${API_URL}/api/pedidos/relatorios/entregas-uniformes`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
     });
     const dados = await res.json();
+    const atendidas = dados.filter(d => d.situacao === 'RECEBEU');
+    const pendentes = dados.filter(d => d.situacao === 'PENDENTE');
 
-    let html = `
-        <div class="dashboard-relatorios">
-            <h2 class="neon-text">DATA CENTER: ESTATÍSTICAS DA MISSÃO</h2>
+    doc.setFontSize(12);
+    doc.setTextColor(39, 174, 96);
+    doc.text("✅ UNIDADES COM ENTREGA CONFIRMADA", 14, 125);
+
+    doc.autoTable({
+        head: [['UNIDADE ESCOLAR', 'TOTAL DE PEÇAS', 'ÚLTIMA ENTREGA']],
+        body: atendidas.map(d => [
+            d.escola, 
+            d.total_recebido, 
+            d.ultima_entrega ? new Date(d.ultima_entrega).toLocaleDateString() : '-'
+        ]),
+        startY: 130,
+        theme: 'grid',
+        headStyles: { fillStyle: [39, 174, 96] },
+        styles: { fontSize: 8 }
+    });
+
+    // 4. Tabela de Unidades Pendentes (Vermelho)
+    const nextY = doc.lastAutoTable.finalY + 15;
+    
+    // Verifica se precisa de nova página
+    let targetY = nextY;
+    if (targetY > 250) {
+        doc.addPage();
+        targetY = 20;
+    }
+
+    doc.setFontSize(12);
+    doc.setTextColor(192, 57, 43);
+    doc.text("⏳ UNIDADES AGUARDANDO CRONOGRAMA", 14, targetY);
+
+    doc.autoTable({
+        head: [['UNIDADE ESCOLAR PENDENTE']],
+        body: pendentes.map(d => [d.escola]),
+        startY: targetY + 5,
+        theme: 'grid',
+        headStyles: { fillStyle: [192, 57, 43] },
+        styles: { fontSize: 8 }
+    });
+
+    // Rodapé
+    const pageCount = doc.internal.getNumberOfPages();
+    for(let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.text(`Página ${i} de ${pageCount} - Sistema de Gestão de Estoque SEMED`, 105, 290, { align: "center" });
+    }
+
+    doc.save(`balanco_uniformes_${new Date().toISOString().split('T')[0]}.pdf`);
+}
+
+function abrirCalculadoraConversao() {
+    // Remove modal anterior se existir
+    const modalAntigo = document.querySelector('.modal-overlay');
+    if (modalAntigo) modalAntigo.remove();
+
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `
+        <div class="modal-box" style="max-width: 400px; border-top: 5px solid #3498db;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                <h3 style="margin:0;">🧮 CALCULADORA DE UNIDADES</h3>
+                <button onclick="this.parentElement.parentElement.parentElement.remove()" style="background:none; border:none; font-size:20px; cursor:pointer;">&times;</button>
+            </div>
             
-            <div class="resumo-cards">
-                <div class="mini-card">
-                    <span class="label">UNIFORMES (MÊS)</span>
-                    <span class="valor-neon">${dados.totalUniformes}</span>
+            <p style="font-size: 13px; color: #666; margin-bottom:20px;">Converta quantidades totais em embalagens fechadas + unidades avulsas.</p>
+
+            <label>QUANTIDADE QUE PRECISO (TOTAL):</label>
+            <input type="number" id="calc_total" class="input-field" placeholder="Ex: 10" oninput="calcularConversao()">
+
+            <label>QUANTIDADE POR EMBALAGEM (UNIDADES):</label>
+            <input type="number" id="calc_embalagem" class="input-field" placeholder="Ex: 4" oninput="calcularConversao()">
+
+            <label>NOME DA EMBALAGEM:</label>
+            <input type="text" id="calc_nome_emb" class="input-field" value="LATA" placeholder="Ex: CAIXA, FARDO, LATA" oninput="calcularConversao()">
+
+            <hr style="margin: 20px 0; opacity: 0.2;">
+
+            <div id="resultado_calculadora" style="background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #e0e0e0; min-height: 60px; display: flex; align-items: center; justify-content: center; text-align: center; font-weight: bold; color: #2c3e50;">
+                Aguardando dados...
+            </div>
+            
+            <button onclick="this.parentElement.parentElement.remove()" class="btn-block" style="margin-top: 15px; background: #7f8c8d;">FECHAR</button>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
+function calcularConversao() {
+    const total = parseInt(document.getElementById('calc_total').value);
+    const unidadesPorEmb = parseInt(document.getElementById('calc_embalagem').value);
+    const nomeEmb = document.getElementById('calc_nome_emb').value.toUpperCase() || "EMBALAGEM";
+    const display = document.getElementById('resultado_calculadora');
+
+    if (!total || !unidadesPorEmb || unidadesPorEmb <= 0) {
+        display.innerHTML = "Informe os valores acima.";
+        return;
+    }
+
+    const embalagensFechadas = Math.floor(total / unidadesPorEmb);
+    const avulsas = total % unidadesPorEmb;
+
+    let resultadoText = `VOCÊ PRECISA DE:<br><span style="color:#2980b9; font-size:18px;">`;
+    
+    if (embalagensFechadas > 0) {
+        resultadoText += `${embalagensFechadas} ${nomeEmb}${embalagensFechadas > 1 ? 'S' : ''}`;
+    }
+
+    if (avulsas > 0) {
+        if (embalagensFechadas > 0) resultadoText += ` e `;
+        resultadoText += `${avulsas} UNIDADE${avulsas > 1 ? 'S' : ''} AVULSA${avulsas > 1 ? 'S' : ''}`;
+    }
+
+    if (total === 0) resultadoText = "Quantidade zerada.";
+
+    resultadoText += `</span>`;
+    display.innerHTML = resultadoText;
+}
+
+async function renderizarRelatorioEstoqueBaixo() {
+    const conteudo = document.getElementById('conteudo-dinamico');
+    conteudo.innerHTML = '<div class="loader">ANALISANDO ESTOQUE...</div>';
+
+    try {
+        const res = await fetch(`${API_URL}/api/catalogo/relatorios/estoque-baixo-material`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        const dados = await res.json();
+
+        if (dados.length === 0) {
+            conteudo.innerHTML = `
+                <div class="card-entrada" style="text-align:center;">
+                    <img src="assets/logo.png" style="width:50px; margin-bottom:10px;">
+                    <h2>✅ ESTOQUE EM DIA</h2>
+                    <p>Todos os materiais estão com níveis acima do limite de segurança.</p>
+                    <button onclick="renderizarHome()" class="btn-block">VOLTAR</button>
+                </div>`;
+            return;
+        }
+
+        conteudo.innerHTML = `
+            <div class="card-entrada">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                    <div style="display:flex; align-items:center; gap:15px;">
+                        <img src="assets/logo.png" style="width:40px;">
+                        <h2 style="margin:0; color:#c0392b;">⚠️ ALERTA DE REPOSIÇÃO (MATERIAL)</h2>
+                    </div>
+                    <button onclick="exportarPDFEstoqueBaixo()" class="btn-info" style="background:#e74c3c">📥 BAIXAR LISTA DE COMPRAS</button>
                 </div>
+
+                <p>Os itens abaixo estão abaixo do limite mínimo (10 unidades) e precisam de atenção.</p>
+
+                <table class="tabela-estilizada" id="tabela-estoque-baixo">
+                    <thead>
+                        <tr>
+                            <th>PRODUTO MATERIAL</th>
+                            <th>QTD ATUAL</th>
+                            <th>STATUS</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${dados.map(d => `
+                            <tr style="background: ${d.status_estoque === 'ESGOTADO' ? '#fff0f0' : 'white'}">
+                                <td><strong>${d.nome}</strong></td>
+                                <td style="text-align:center;">${d.quantidade_estoque}</td>
+                                <td>
+                                    <span class="badge-status-${d.status_estoque.toLowerCase()}">
+                                        ${d.status_estoque}
+                                    </span>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+        window.dadosEstoqueBaixo = dados;
+
+    } catch (error) {
+        conteudo.innerHTML = '<p class="error">FALHA AO GERAR RELATÓRIO.</p>';
+    }
+}
+
+async function exportarPDFEstoqueBaixo() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    const dados = window.dadosEstoqueBaixo;
+
+    // Logo e Cabeçalho
+    doc.addImage(LOGO_BASE64, 'PNG', 14, 10, 20, 20);
+    doc.setFontSize(16);
+    doc.setTextColor(192, 57, 43);
+    doc.text("RELATÓRIO DE NECESSIDADE DE REPOSIÇÃO", 40, 18);
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text(`SEMED - Emitido em: ${new Date().toLocaleString()}`, 40, 24);
+
+    doc.autoTable({
+        head: [['PRODUTO', 'QUANTIDADE EM ESTOQUE', 'SITUAÇÃO']],
+        body: dados.map(d => [d.nome, d.quantidade_estoque, d.status_estoque]),
+        startY: 35,
+        theme: 'grid',
+        headStyles: { fillStyle: [192, 57, 43] },
+        styles: { fontSize: 10 }
+    });
+
+    doc.save(`necessidade_compra_material_${new Date().toISOString().split('T')[0]}.pdf`);
+}
+
+function renderizarGaleriaRelatorios() {
+    const conteudo = document.getElementById('conteudo-dinamico');
+    
+    conteudo.innerHTML = `
+        <div class="header-com-voltar">
+            <button onclick="renderizarHome()" class="btn-voltar">⬅ VOLTAR AO MENU</button>
+            <h2 style="margin-top:10px;">📊 CENTRO DE RELATÓRIOS E AUDITORIA</h2>
+        </div>
+
+        <div class="grid-menu-principal" style="margin-top:20px;">
+            
+            <button onclick="renderizarRelatorioEstoqueBaixo()" class="btn-menu">
+                <span class="icon">📉</span> ESTOQUE BAIXO (MATERIAL)
+            </button>
+
+            <button onclick="renderizarRelatorioEstatisticoUniformes()" class="btn-menu">
+                <span class="icon">👕</span> BALANÇO DE UNIFORMES
+            </button>
+
+            <button onclick="renderizarInventarioAtual()" class="btn-menu">
+                <span class="icon">📋</span> INVENTÁRIO GERAL (ATUAL)
+            </button>
+
+            <button onclick="renderizarTelaTermoResponsabilidade()" class="btn-menu">
+                <span class="icon">📜</span> TERMO DE RESPONSABILIDADE
+            </button>
+
+            <button onclick="renderizarTelaRelatorios()" class="btn-menu">
+                <span class="icon">📅</span> SAÍDAS POR PERÍODO
+            </button>
+
+            <button onclick="renderizarHistorico()" class="btn-menu">
+                <span class="icon">🕵️</span> HISTÓRICO / AUDITORIA
+            </button>
+
+        </div>
+    `;
+}
+
+// ==========================================
+// MÓDULO DE MOVIMENTAÇÃO DE ESTOQUE (ADMIN)
+// ==========================================
+
+// 1. RENDERIZAR FORMULÁRIO DE ENTRADA
+async function renderizarEntradaEstoque() {
+    const conteudo = document.getElementById('conteudo-dinamico');
+    
+    try {
+        const [resProdutos, resLocais] = await Promise.all([
+            fetch(`${API_URL}/api/cadastros/produtos`, { headers: { 'Authorization': `Bearer ${TOKEN}` } }),
+            fetch(`${API_URL}/api/cadastros/locais`, { headers: { 'Authorization': `Bearer ${TOKEN}` } })
+        ]);
+
+        const produtos = await resProdutos.json();
+        const locais = await resLocais.json();
+
+        conteudo.innerHTML = `
+            <div class="header-com-voltar">
+                <button onclick="renderizarHome()" class="btn-voltar">⬅ VOLTAR</button>
+                <h2>➕ ENTRADA DE MATERIAL NO ESTOQUE</h2>
             </div>
 
-            <div class="charts-grid">
-                <div class="chart-container">
-                    <h3>RANKING DE DEMANDA (ESCOLAS)</h3>
-                    <canvas id="chartRanking"></canvas>
+            <div class="card-form">
+                <form id="form-entrada">
+                    <label>TIPO DE MATERIAL:</label>
+                    <select id="entrada_tipo" required>
+                        <option value="MATERIAL">MATERIAL (PAPELARIA/LIMPEZA)</option>
+                        <option value="UNIFORME">UNIFORME</option>
+                    </select>
+
+                    <label>LOCAL DE DESTINO (DEPÓSITO):</label>
+                    <select id="entrada_local_id" required>
+                        <option value="">SELECIONE O LOCAL...</option>
+                        ${locais.map(l => `<option value="${l.id}">${l.nome}</option>`).join('')}
+                    </select>
+
+                    <label>PRODUTO:</label>
+                    <select id="entrada_produto_id" required>
+                        <option value="">SELECIONE O PRODUTO...</option>
+                        ${produtos.map(p => `<option value="${p.id}">${p.nome}</option>`).join('')}
+                    </select>
+
+                    <label>QUANTIDADE:</label>
+                    <input type="number" id="entrada_quantidade" min="1" required>
+
+                    <label>NOTA FISCAL / DOCUMENTO:</label>
+                    <input type="text" id="entrada_nota_fiscal">
+
+                    <button type="submit" class="btn-salvar">REGISTRAR ENTRADA</button>
+                </form>
+            </div>
+        `;
+
+        document.getElementById('form-entrada').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const payload = {
+                tipo: document.getElementById('entrada_tipo').value,
+                nota_fiscal: document.getElementById('entrada_nota_fiscal').value,
+                local_id: document.getElementById('entrada_local_id').value,
+                itens: [{
+                    produto_id: document.getElementById('entrada_produto_id').value,
+                    quantidade: parseInt(document.getElementById('entrada_quantidade').value)
+                }]
+            };
+
+            const response = await fetch(`${API_URL}/estoque/entrada`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+                body: JSON.stringify(payload)
+            });
+
+            if (response.ok) {
+                alert('Entrada registada com sucesso!');
+                renderizarHome();
+            } else {
+                const erro = await response.json();
+                alert('Erro: ' + erro.error);
+            }
+        });
+    } catch (err) { alert('Erro ao carregar dados do servidor.'); }
+}
+
+// 2. RENDERIZAR HISTÓRICO GERAL
+async function renderizarHistoricoGeral() {
+    const conteudo = document.getElementById('conteudo-dinamico');
+    try {
+        const res = await fetch(`${API_URL}/historico_geral`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+        const historico = await res.json();
+
+        conteudo.innerHTML = `
+            <div class="header-com-voltar">
+                <button onclick="renderizarHome()" class="btn-voltar">⬅ VOLTAR</button>
+                <h2>📜 HISTÓRICO DE MOVIMENTAÇÕES</h2>
+            </div>
+            <div class="tabela-container">
+                <table class="tabela-estilizada">
+                    <thead>
+                        <tr>
+                            <th>DATA</th>
+                            <th>TIPO</th>
+                            <th>LOCAL</th>
+                            <th>USUÁRIO</th>
+                            <th>AÇÕES</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${historico.map(h => `
+                            <tr>
+                                <td>${new Date(h.data).toLocaleString('pt-PT')}</td>
+                                <td><span class="badge-${h.tipo_movimentacao.toLowerCase()}">${h.tipo_movimentacao}</span></td>
+                                <td>${h.local_nome || 'GERAL'}</td>
+                                <td>${h.usuario_nome}</td>
+                                <td><button class="btn-detalhes" onclick="verDetalhesHistorico(${h.id})">🔍 ITENS</button></td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    } catch (err) { alert('Erro ao carregar histórico.'); }
+}
+
+// 3. VER DETALHES DE UMA MOVIMENTAÇÃO
+async function verDetalhesHistorico(id) {
+    try {
+        const res = await fetch(`${API_URL}/historico/${id}/detalhes`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+        const detalhes = await res.json();
+        const lista = detalhes.map(d => `- ${d.produto_nome}: ${d.quantidade} un.`).join('\n');
+        alert(`ITENS DA MOVIMENTAÇÃO:\n\n${lista}`);
+    } catch (err) { alert('Erro ao carregar detalhes.'); }
+}
+
+// --- FUNÇÕES DE BUSCA E EXIBIÇÃO DE ALERTAS ---
+
+async function verificarAlertasEscola() {
+    // Só executa se o perfil for escola
+    if (localStorage.getItem('userRole') !== 'escola') return;
+
+    try {
+        // Rota correta: /pedidos (prefixo no server.js) + /alertas-escola (no pedidos.routes.js)
+        const res = await fetch(`${API_URL}/pedidos/alertas-escola`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+
+        if (!res.ok) return;
+
+        const pedidos = await res.json();
+        const alertContainer = document.getElementById('alertas-container');
+
+        if (alertContainer && pedidos.length > 0) {
+            alertContainer.innerHTML = `
+                <div style="background: #fffbeb; color: #b45309; padding: 15px; border-radius: 8px; border: 1px solid #fde68a; margin-bottom: 20px; font-weight: bold; text-align: center;">
+                    🚚 ATENÇÃO: VOCÊ POSSUI ${pedidos.length} PEDIDO(S) EM TRANSPORTE PARA ESTA UNIDADE!
+                </div>`;
+        } else if (alertContainer) {
+            alertContainer.innerHTML = '';
+        }
+    } catch (err) {
+        console.error("Erro ao carregar alertas da escola:", err);
+    }
+}
+
+async function verificarSolicitacoesPendentes() {
+    const role = localStorage.getItem('userRole');
+    if (role !== 'admin' && role !== 'super') return;
+
+    try {
+        // Rota global que conta tudo que está com status AGUARDANDO_AUTORIZACAO
+        const res = await fetch(`${API_URL}/api/pedidos/notificacoes/contagem`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const data = await res.json();
+
+        const alertaContainer = document.getElementById('alertas-container');
+        if (alertaContainer && data.total > 0) {
+            alertaContainer.innerHTML = `
+                <div onclick="telaHistoricoSolicitacoes()" style="background:#fff7ed; color:#c2410c; padding:15px; border:1px solid #fdba74; border-radius:8px; cursor:pointer; font-weight:bold; text-align:center; margin-bottom:15px;">
+                    🚨 ATENÇÃO: EXISTEM ${data.total} SOLICITAÇÕES AGUARDANDO SUA AUTORIZAÇÃO!
+                </div>`;
+        }
+    } catch (err) { console.error("Erro no alerta admin:", err); }
+}
+
+async function verificarPedidosParaSeparar() {
+    // Só executa se o perfil for estoque
+    if (localStorage.getItem('userRole') !== 'estoque') return;
+
+    try {
+        // Rota definida no seu server.js
+        const res = await fetch(`${API_URL}/api/alertas/estoque/aprovados`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+
+        if (!res.ok) return;
+
+        const data = await res.json();
+        const alertContainer = document.getElementById('alertas-container');
+
+        // Se houver pedidos aprovados (total > 0), exibe o alerta
+        if (alertContainer && data.total > 0) {
+            alertContainer.innerHTML = `
+                <div style="background: #ecfdf5; color: #059669; padding: 15px; border-radius: 8px; border: 1px solid #a7f3d0; margin-bottom: 20px; font-weight: bold; text-align: center;">
+                    📦 EXISTEM ${data.total} PEDIDO(S) APROVADO(S) AGUARDANDO SEPARAÇÃO!
+                </div>`;
+        } else if (alertContainer) {
+            alertContainer.innerHTML = '';
+        }
+    } catch (err) {
+        console.error("Erro ao carregar alertas do estoque:", err);
+    }
+}
+
+async function verificarPedidosParaColeta() {
+    // Só executa se o perfil for logistica
+    if (localStorage.getItem('userRole') !== 'logistica') return;
+
+    try {
+        // Rota exata definida no seu server.js para a logística
+        const res = await fetch(`${API_URL}/api/alertas/logistica/coleta`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+
+        if (!res.ok) return;
+
+        const data = await res.json();
+        const alertContainer = document.getElementById('alertas-container');
+
+        // Se houver pedidos prontos para coleta (total > 0), exibe o alerta
+        if (alertContainer && data.total > 0) {
+            alertContainer.innerHTML = `
+                <div style="background: #eff6ff; color: #1d4ed8; padding: 15px; border-radius: 8px; border: 1px solid #bfdbfe; margin-bottom: 20px; font-weight: bold; text-align: center;">
+                    🚚 ATENÇÃO: EXISTEM ${data.total} PEDIDO(S) AGUARDANDO COLETA E TRANSPORTE!
+                </div>`;
+        } else if (alertContainer) {
+            alertContainer.innerHTML = '';
+        }
+    } catch (err) {
+        console.error("Erro ao carregar alertas da logística:", err);
+    }
+}
+
+// Função auxiliar para inserir o HTML na div de alertas
+function renderizarAlertaNoPainel(mensagem) {
+    const area = document.getElementById('area-alertas');
+    if (area) {
+        const div = document.createElement('div');
+        div.style = "background: #fff3cd; color: #856404; padding: 12px; margin-bottom: 10px; border-left: 6px solid #ffc107; font-weight: bold; border-radius: 4px; display: flex; justify-content: space-between;";
+        div.innerHTML = `<span>${mensagem}</span><button onclick="this.parentElement.remove()" style="background:none; border:none; cursor:pointer; font-weight:bold;">✕</button>`;
+        area.appendChild(div);
+    }
+}
+
+// ================================================================
+// BLOCO DE CORREÇÃO PARA PERFIL ADMIN (BOTÕES EM FALTA OU ERRADOS)
+// ================================================================
+async function renderizarDashboardGeral() {
+    const perfil = localStorage.getItem('perfil');
+    if (perfil === 'escola') return;
+
+    const container = document.getElementById('app-content');
+    container.innerHTML = '<div style="padding:20px;">📊 A carregar painel estratégico...</div>';
+
+    try {
+        const token = localStorage.getItem('token');
+        const [resStats, resEvolucao] = await Promise.all([
+            fetch(`${API_URL}/dashboard/estatisticas`, { headers: { 'Authorization': `Bearer ${token}` } }),
+            fetch(`${API_URL}/dashboard/evolucao-semanal`, { headers: { 'Authorization': `Bearer ${token}` } })
+        ]);
+
+        const stats = await resStats.json();
+        const evolucao = await resEvolucao.json();
+
+        const getCount = (status) => stats.find(s => s.status === status)?.total || 0;
+
+        container.innerHTML = `
+            <div style="padding:20px; animation: fadeIn 0.5s;">
+                <h2 style="color:#1e3a8a; margin-bottom:20px; display:flex; align-items:center; gap:10px;">
+                    <span>📊 Dashboard Executivo</span>
+                    <small style="font-size:0.9rem; color:#64748b; font-weight:normal;">(Atualizado em tempo real)</small>
+                </h2>
+
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom:30px;">
+                    ${renderizarCardInfo('⚖️ PENDENTES', getCount('AGUARDANDO_AUTORIZACAO'), '#fbbf24', 'AGUARDANDO_AUTORIZACAO')}
+                    ${renderizarCardInfo('📦 SEPARAÇÃO', getCount('APROVADO'), '#3b82f6', 'APROVADO')}
+                    ${renderizarCardInfo('🚛 COLETA', getCount('COLETA_LIBERADA'), '#8b5cf6', 'COLETA_LIBERADA')}
+                    ${renderizarCardInfo('🛣️ EM TRÂNSITO', getCount('EM_TRANSPORTE'), '#f97316', 'EM_TRANSPORTE')}
                 </div>
-                <div class="chart-container">
-                    <h3>STOCK CRÍTICO (ALERTA)</h3>
-                    <canvas id="chartEstoque"></canvas>
+
+                <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
+                    <div style="background:white; padding:20px; border-radius:12px; box-shadow:0 4px 6px rgba(0,0,0,0.05);">
+                        <h4 style="margin:0 0 15px 0;">📈 Evolução de Entregas (Últimos 7 dias)</h4>
+                        <canvas id="chartEvolucao" height="100"></canvas>
+                    </div>
+                    <div style="background:white; padding:20px; border-radius:12px; box-shadow:0 4px 6px rgba(0,0,0,0.05);">
+                        <h4 style="margin:0 0 15px 0;">🍕 Distribuição de Carga</h4>
+                        <canvas id="chartPizza"></canvas>
+                    </div>
                 </div>
+            </div>
+        `;
+
+        // Inicializar Gráficos após o HTML ser inserido
+        inicializarGraficos(evolucao, stats);
+
+    } catch (err) {
+        container.innerHTML = `<div style="padding:20px; color:red;">Erro ao processar dashboard: ${err.message}</div>`;
+    }
+}
+
+function inicializarGraficos(dadosEvolucao, dadosStats) {
+    // 1. Gráfico de Linhas/Barras (Evolução)
+    const ctxBarra = document.getElementById('chartEvolucao').getContext('2d');
+    new Chart(ctxBarra, {
+        type: 'line',
+        data: {
+            labels: dadosEvolucao.map(d => d.data),
+            datasets: [{
+                label: 'Pedidos Entregues',
+                data: dadosEvolucao.map(d => d.total),
+                borderColor: '#10b981',
+                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                fill: true,
+                tension: 0.4
+            }]
+        },
+        options: { responsive: true, plugins: { legend: { display: false } } }
+    });
+
+    // 2. Gráfico de Pizza (Status)
+    const ctxPizza = document.getElementById('chartPizza').getContext('2d');
+    new Chart(ctxPizza, {
+        type: 'doughnut',
+        data: {
+            labels: dadosStats.map(s => s.status.replace('_', ' ')),
+            datasets: [{
+                data: dadosStats.map(s => s.total),
+                backgroundColor: ['#fbbf24', '#3b82f6', '#8b5cf6', '#f97316', '#10b981', '#ef4444']
+            }]
+        },
+        options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+    });
+}
+
+// Função para atualizar a badge no menu
+async function atualizarBadgeNotificacao() {
+    const perfil = localStorage.getItem('perfil');
+    // Apenas Admin e Estoque veem notificações de novos pedidos
+    if (perfil === 'escola') return;
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/notificacoes/contagem`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        const data = await res.json();
+        
+        const badge = document.getElementById('badge-pendentes');
+        if (data.total > 0) {
+            badge.innerText = data.total > 99 ? '99+' : data.total;
+            badge.style.display = 'block';
+        } else {
+            badge.style.display = 'none';
+        }
+    } catch (err) {
+        console.error("Erro ao buscar notificações");
+    }
+}
+
+// Iniciar o monitoramento (Verifica a cada 30 segundos)
+function iniciarMonitoramentoPedidos() {
+    atualizarBadgeNotificacao(); // Verifica logo ao carregar
+    setInterval(atualizarBadgeNotificacao, 30000); // 30000ms = 30 segundos
+}
+
+// Função auxiliar para criar os cards
+function renderizarCardInfo(label, total, cor, status) {
+    return `
+        <div onclick="verListaPorStatus('${status}', '${label}')" 
+             style="background:white; padding:15px; border-radius:12px; box-shadow:0 2px 4px rgba(0,0,0,0.05); border-left:6px solid ${cor}; cursor:pointer; transition:all 0.2s;"
+             onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
+            <div style="color:#64748b; font-size:0.75rem; font-weight:bold; letter-spacing:0.5px;">${label}</div>
+            <div style="font-size:1.8rem; font-weight:bold; color:#1e293b; margin-top:5px;">${total}</div>
+        </div>
+    `;
+}
+
+async function verListaPorStatus(status, label) {
+    const container = document.getElementById('app-content');
+    container.innerHTML = '<div>Buscando pedidos...</div>';
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/lista-geral`, { // Use sua rota de lista geral
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        const todos = await res.json();
+        const filtrados = todos.filter(p => p.status === status);
+
+        container.innerHTML = `
+            <div style="padding:20px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                    <h3 style="color:#1e3a8a;">📌 ${label}</h3>
+                    <button onclick="renderizarDashboardGeral()" style="background:#64748b; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer;">⬅️ VOLTAR</button>
+                </div>
+                
+                <div style="background:white; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.05);">
+                    <table style="width:100%; border-collapse:collapse;">
+                        <thead>
+                            <tr style="background:#f8fafc; border-bottom:1px solid #e2e8f0; text-align:left;">
+                                <th style="padding:12px;">ID</th>
+                                <th style="padding:12px;">Destino</th>
+                                <th style="padding:12px;">Data</th>
+                                <th style="padding:12px;">Ação</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${filtrados.map(p => `
+                                <tr style="border-bottom:1px solid #f1f5f9;">
+                                    <td style="padding:12px;">#${p.id}</td>
+                                    <td style="padding:12px;">${p.escola_nome}</td>
+                                    <td style="padding:12px;">${new Date(p.data_criacao).toLocaleDateString()}</td>
+                                    <td style="padding:12px;">
+                                        <button onclick="verDetalhesPedidoCompleto(${p.id}, '${status}', '${label}')" style="background:#1e40af; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer;">VER TUDO</button>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+    } catch (err) { alert("Erro ao carregar lista."); }
+}
+
+async function verDetalhesPedidoCompleto(id, statusOrigem, labelOrigem) {
+    const container = document.getElementById('app-content');
+    
+    try {
+        const res = await fetch(`${API_URL}/pedidos/${id}/detalhes-gerais`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        const data = await res.json();
+        const info = data.info;
+
+        container.innerHTML = `
+            <div style="padding:20px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                    <h2 style="color:#1e3a8a;">📄 DETALHES DO PEDIDO #${id}</h2>
+                    <button onclick="verListaPorStatus('${statusOrigem}', '${labelOrigem}')" style="background:#64748b; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer;">⬅️ VOLTAR</button>
+                </div>
+
+                <div style="display:grid; grid-template-columns: 1fr 2fr; gap:20px;">
+                    <div style="background:#f8fafc; padding:20px; border-radius:8px;">
+                        <h4>INFORMAÇÕES GERAIS</h4>
+                        <p><strong>Destino:</strong> ${info.escola_nome}</p>
+                        <p><strong>Solicitante:</strong> ${info.solicitante_nome}</p>
+                        <p><strong>Data Criação:</strong> ${new Date(info.data_criacao).toLocaleString()}</p>
+                        <p><strong>Status Atual:</strong> <span style="background:#dcfce7; padding:4px 8px; border-radius:4px;">${info.status}</span></p>
+                    </div>
+
+                    <div style="background:white; padding:20px; border-radius:8px; border:1px solid #e2e8f0;">
+                        <h4>ITENS SOLICITADOS</h4>
+                        <table style="width:100%; border-collapse:collapse;">
+                            <tr style="text-align:left; border-bottom:2px solid #eee;">
+                                <th style="padding:8px;">Produto</th>
+                                <th style="padding:8px;">Tamanho</th>
+                                <th style="padding:8px;">Qtd</th>
+                            </tr>
+                            ${data.itens.map(i => `
+                                <tr style="border-bottom:1px solid #f9f9f9;">
+                                    <td style="padding:8px;">${i.produto_nome}</td>
+                                    <td style="padding:8px;">${i.tamanho || '-'}</td>
+                                    <td style="padding:8px;">${i.quantidade}</td>
+                                </tr>
+                            `).join('')}
+                        </table>
+                    </div>
+                </div>
+            </div>
+        `;
+    } catch (err) { alert("Erro ao carregar detalhes."); }
+}
+
+// 2. Corrigir Autorizar Solicitações (Nome estava diferente na Parte 3)
+async function telaAutorizarSolicitacoes() {
+    if (typeof telaVerSolicitacoes === "function") {
+        telaVerSolicitacoes();
+    } else {
+        alert("Erro: Função telaVerSolicitacoes não encontrada.");
+    }
+}
+
+// 3. Criar Tela de Visualização de Estoque (Estava em falta)
+
+
+// Função auxiliar para agrupar uniformes por nome na visualização
+function renderizarEstoqueUniformes(dados) {
+    const agrupado = {};
+    dados.forEach(item => {
+        if (!agrupado[item.produto]) agrupado[item.produto] = [];
+        agrupado[item.produto].push(item);
+    });
+
+    return Object.keys(agrupado).map(produto => `
+        <div style="background:white; padding:15px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.1); border-top:4px solid #3b82f6;">
+            <strong style="display:block; margin-bottom:10px; font-size:1.1rem;">${produto}</strong>
+            <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:5px;">
+                ${agrupado[produto].map(t => `
+                    <div style="background:#f9fafb; padding:5px; border-radius:4px; text-align:center; border:1px solid #eee;">
+                        <div style="font-size:0.7rem; color:#666;">TAM ${t.tamanho}</div>
+                        <div style="font-weight:bold;">${t.quantidade}</div>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `).join('');
+}
+
+// 4. Corrigir Histórico (Nome e Rota)
+async function renderizarHistoricoGeral() {
+    // Chama a função existente mas corrige a lógica de rota internamente
+    if (typeof renderizarHistorico === "function") {
+        renderizarHistorico();
+    } else {
+        alert("Função de histórico não encontrada.");
+    }
+}
+
+// 5. Redirecionar Relatórios (Mapeando para o relatório estatístico da Parte 8)
+function renderizarRelatorios() {
+    if (typeof renderizarRelatorioEstatisticoUniformes === "function") {
+        renderizarRelatorioEstatisticoUniformes();
+    } else {
+        alert("Módulo de relatórios não disponível.");
+    }
+}
+
+// 6. Criar função para "CRIAR PEDIDO" (Admin criando sem solicitação prévia)
+function telaCriarPedidoDireto() {
+    // Reutiliza a lógica de solicitação de material mas para o admin
+    if (typeof telaSolicitarMaterial === "function") {
+        telaSolicitarMaterial();
+    } else {
+        alert("Módulo de criação de pedidos não localizado.");
+    }
+}
+
+// ================================================================
+// 🛠️ CORREÇÃO DEFINITIVA (COLE AO FINAL DO ARQUIVO)
+// ================================================================
+
+// Usamos funções de embrulho (wrappers) para evitar erros de inicialização
+function telaAutorizarSolicitacoes() { 
+    if (typeof telaVerSolicitacoes === "function") telaVerSolicitacoes(); 
+    else console.error("Função não encontrada");
+}
+
+function renderizarRelatorios() { 
+    if (typeof renderizarRelatorioEstatisticoUniformes === "function") renderizarRelatorioEstatisticoUniformes(); 
+    else console.error("Função não encontrada");
+}
+
+function renderizarHistoricoGeral() { 
+    if (typeof renderizarHistorico === "function") {
+        renderizarHistorico();
+    } else {
+        alert("Erro: Módulo de histórico não localizado.");
+    }
+}
+
+// Sobrescrevendo a função de entrada para corrigir as URLs (removendo /api)
+async function abrirDialogoEntrada() {
+    const conteudo = document.getElementById('conteudo-dinamico');
+    if (!conteudo) return;
+    conteudo.innerHTML = '<div class="loader">Carregando dados...</div>';
+    
+    try {
+        const [resProd, resLoc] = await Promise.all([
+            fetch(`${API_URL}/catalogo/produtos`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } }),
+            fetch(`${API_URL}/catalogo/locais`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } })
+        ]);
+        
+        const produtos = (await resProd.json()).filter(p => p.tipo === 'MATERIAL');
+        const locais = await resLoc.json();
+
+        conteudo.innerHTML = `
+            <div class="card-entrada">
+                <h2>ENTRADA DE MATERIAIS</h2>
+                <select id="ent_local" class="input-field">
+                    ${locais.map(l => `<option value="${l.id}">${l.nome}</option>`).join('')}
+                </select>
+                <div class="lista-material-scroll" style="max-height:300px; overflow-y:auto;">
+                    ${produtos.map(p => `
+                        <div style="display:flex; justify-content:space-between; margin: 10px 0;">
+                            <span>${p.nome}</span>
+                            <input type="number" class="input-material-qtd" data-prod="${p.id}" style="width:60px" placeholder="0">
+                        </div>
+                    `).join('')}
+                </div>
+                <button onclick="processarEntradaManual()" class="btn-success">SALVAR ENTRADA</button>
+            </div>
+        `;
+    } catch (err) {
+        alert("Erro ao conectar com o servidor. Verifique o CMD.");
+    }
+}
+
+// ================================================================
+// 🩹 PATCH DE COMPATIBILIDADE - ADMIN & ESTOQUE (VERSÃO SEGURA)
+// ================================================================
+
+// Funções de redirecionamento para botões que não funcionam
+window.telaAutorizarSolicitacoes = function() {
+    if (typeof telaVerSolicitacoes === "function") telaVerSolicitacoes();
+};
+
+window.renderizarRelatorios = function() {
+    if (typeof renderizarRelatorioEstatisticoUniformes === "function") renderizarRelatorioEstatisticoUniformes();
+};
+
+window.renderizarHistoricoGeral = function() {
+    if (typeof renderizarHistorico === "function") renderizarHistorico();
+};
+
+// --- CORREÇÃO DA ENTRADA DE ESTOQUE ---
+window.abrirDialogoEntrada = async function() {
+    const conteudo = document.getElementById('conteudo-dinamico');
+    if (!conteudo) return;
+    conteudo.innerHTML = '<div class="loader">Carregando formulário...</div>';
+    
+    try {
+        // Ajuste de rotas conforme o server.js (sem o prefixo /api onde não existe)
+        const [resProd, resLoc] = await Promise.all([
+            fetch(`${API_URL}/catalogo/produtos`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } }),
+            fetch(`${API_URL}/catalogo/locais`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } })
+        ]);
+        
+        const produtos = (await resProd.json()).filter(p => p.tipo === 'MATERIAL');
+        const locais = await resLoc.json();
+
+        conteudo.innerHTML = `
+            <div class="card-entrada">
+                <h2>📦 ENTRADA DE ESTOQUE (MATERIAIS)</h2>
+                <div style="margin-bottom:20px;">
+                    <label>LOCAL DE DESTINO:</label>
+                    <select id="ent_local" class="input-field">
+                        ${locais.map(l => `<option value="${l.id}">${l.nome}</option>`).join('')}
+                    </select>
+                </div>
+                <div style="max-height:300px; overflow-y:auto; border:1px solid #ddd; padding:10px;">
+                    ${produtos.map(p => `
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; border-bottom:1px solid #eee; padding-bottom:5px;">
+                            <span>${p.nome}</span>
+                            <input type="number" class="input-material-qtd" data-prod="${p.id}" style="width:80px;" placeholder="QTD">
+                        </div>
+                    `).join('')}
+                </div>
+                <button onclick="processarEntradaManual()" class="btn-success" style="margin-top:20px; width:100%;">REGISTRAR ENTRADA</button>
+            </div>
+        `;
+    } catch (err) {
+        alert("Erro ao carregar dados do catálogo. Verifique a conexão com o servidor.");
+    }
+};
+
+// --- FUNÇÃO PARA LANÇAR PATRIMÔNIO ---
+window.telaMovimentarPatrimonio = function() {
+    const conteudo = document.getElementById('conteudo-dinamico');
+    conteudo.innerHTML = `
+        <div class="card-entrada">
+            <h2>🏷️ LANÇAR / MOVER PATRIMÔNIO</h2>
+            <p>Insira o número de série ou plaqueta para registrar a movimentação.</p>
+            <input type="text" placeholder="Nº DE SÉRIE" class="input-field" id="pat_serie">
+            <button class="btn-info" onclick="alert('Funcionalidade sendo integrada ao Banco de Dados...')">LOCALIZAR ITEM</button>
+        </div>
+    `;
+};
+
+// Variável global temporária para o carrinho
+let carrinhoSolicitacao = [];
+
+async function telaSolicitarUniforme() {
+    const container = document.getElementById('app-content');
+    container.innerHTML = '<div style="padding:20px;">Carregando produtos...</div>';
+    
+    carrinhoSolicitacao = [];
+
+    try {
+        const res = await fetch(`${API_URL}/produtos/tipo/UNIFORMES`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        const produtos = await res.json();
+
+        const tituloTela = "👕 NOVA SOLICITAÇÃO DE UNIFORMES";
+
+        container.innerHTML = `
+            <div style="padding:20px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1px solid #ddd; padding-bottom:10px;">
+                    <h2 style="color:#1e3a8a; margin:0;">${tituloTela}</h2>
+                    <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer; font-weight:bold;">⬅️ VOLTAR</button>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div style="background:white; padding:20px; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.1); height: fit-content;">
+                        <h3 style="margin-top:0;">Adicionar Item</h3>
+                        <label>PRODUTO:</label>
+                        <select id="solicitar_produto_id" onchange="configurarGradeTamanhosDinamicamente()" style="width:100%; padding:10px; margin-bottom:15px;">
+                            ${produtos.map(p => `<option value="${p.id}">${p.nome}</option>`).join('')}
+                        </select>
+
+                        <label>TAMANHO:</label>
+                        <select id="solicitar_tamanho" style="width:100%; padding:10px; margin-bottom:15px;">
+                            <option>P</option><option>M</option><option>G</option><option>GG</option>
+                        </select>
+
+                        <label>QUANTIDADE:</label>
+                        <input type="number" id="solicitar_qtd" value="1" min="1" style="width:100%; padding:10px; margin-bottom:15px;">
+
+                        <button onclick="adicionarAoCarrinhoSolicitacao()" style="width:100%; padding:12px; background:#10b981; color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">
+                            ➕ ADICIONAR À LISTA
+                        </button>
+                    </div>
+
+                    <div style="background:white; padding:20px; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.1);">
+                        <h3 style="margin-top:0;">Itens na Solicitação</h3>
+                        <div id="lista_carrinho_solicitacao">
+                            <p style="color:#666;">Nenhum item adicionado ainda.</p>
+                        </div>
+                        <hr style="border:0; border-top:1px solid #eee; margin:20px 0;">
+                        <button id="btnEnviarSolicitacao" onclick="enviarPedidoEscola('SOLICITACAO')" disabled style="width:100%; padding:15px; background:#1e40af; color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer; opacity:0.5;">
+                            🚀 ENVIAR SOLICITAÇÃO COMPLETA
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // ADICIONADO: Chama a função uma vez logo após carregar a tela para o primeiro item da lista
+        configurarGradeTamanhosDinamicamente();
+
+    } catch (e) { 
+        console.error(e);
+        alert("Erro ao carregar formulário de solicitação."); 
+    }
+}
+
+
+
+function configurarGradeTamanhosDinamicamente() {
+    const selectProd = document.getElementById('solicitar_produto_id');
+    const selectTam = document.getElementById('solicitar_tamanho');
+    
+    if (!selectProd || !selectTam) return;
+
+    // Pega o nome do produto selecionado no momento
+    const nomeProduto = selectProd.options[selectProd.selectedIndex].text.toUpperCase();
+
+    let htmlTamanhos = "";
+
+    // Verifica se o produto é TÊNIS
+    if (nomeProduto.includes('TENIS') || nomeProduto.includes('TÊNIS')) {
+        // Grade Numérica para Calçados
+        const gradeCalcado = ['22', '23', '24', '25', '26', '27', '28', '29', '30', '31', '32', '33', '34', '35', '36', '37', '38', '39', '40', '41', '42', '43'];
+        htmlTamanhos = gradeCalcado.map(t => `<option>${t}</option>`).join('');
+    } else {
+        // Grade Padrão de Vestuário (Roupas)
+        const gradeVestuario = ['PP', 'P', 'M', 'G', 'GG', '2', '4', '6', '8', '10', '12', '14', '16'];
+        htmlTamanhos = gradeVestuario.map(t => `<option>${t}</option>`).join('');
+    }
+
+    // Aplica a nova lista de opções ao select de tamanhos
+    selectTam.innerHTML = htmlTamanhos;
+}
+
+function configurarGradeAdmin(produtoId) {
+    const selectProd = document.getElementById('solicitar_produto_id');
+    const selectTam = document.getElementById('solicitar_tamanho');
+    
+    if (!selectProd || !selectTam) return;
+
+    const opcaoSelecionada = selectProd.options[selectProd.selectedIndex];
+    const tipoProduto = opcaoSelecionada ? opcaoSelecionada.getAttribute('data-tipo') : '';
+    const nomeProduto = opcaoSelecionada ? opcaoSelecionada.text.toUpperCase() : '';
+
+    let htmlTamanhos = "";
+
+    if (tipoProduto !== 'UNIFORMES' || !produtoId) {
+        htmlTamanhos = '<option value="UNICO">ÚNICO</option>';
+    } else if (nomeProduto.includes('TENIS') || nomeProduto.includes('TÊNIS')) {
+        const gradeCalcado = [
+            '22', '23', '24', '25', '26', '27', '28', '29', '30', 
+            '31', '32', '33', '34', '35', '36', '37', '38', '39', 
+            '40', '41', '42', '43'
+        ];
+        htmlTamanhos = gradeCalcado.map(t => `<option value="${t}">${t}</option>`).join('');
+    } else {
+        const gradeVestuario = ['P', 'M', 'G', 'GG', '2', '4', '6', '8', '10', '12', '14', '16'];
+        htmlTamanhos = gradeVestuario.map(t => `<option value="${t}">${t}</option>`).join('');
+    }
+
+    selectTam.innerHTML = htmlTamanhos;
+}
+
+function adicionarAoCarrinhoSolicitacao() {
+    const selectProd = document.getElementById('solicitar_produto_id');
+    const produto_id = selectProd.value;
+    const nome = selectProd.options[selectProd.selectedIndex].text;
+    const tamanho = document.getElementById('solicitar_tamanho').value;
+    const quantidade = parseInt(document.getElementById('solicitar_qtd').value);
+
+    if (quantidade <= 0) return alert("Informe uma quantidade válida.");
+
+    carrinhoSolicitacao.push({ produto_id, nome, tamanho, quantidade });
+    renderizarCarrinhoSolicitacao();
+}
+
+function removerDoCarrinho(index) {
+    carrinhoSolicitacao.splice(index, 1);
+    renderizarCarrinhoSolicitacao();
+}
+
+function renderizarCarrinhoSolicitacao() {
+    const container = document.getElementById('lista_carrinho_solicitacao');
+    const btn = document.getElementById('btnEnviarSolicitacao');
+    
+    if (carrinhoSolicitacao.length === 0) {
+        container.innerHTML = '<p style="color:#666;">Nenhum item adicionado ainda.</p>';
+        btn.disabled = true;
+        btn.style.opacity = "0.5";
+        return;
+    }
+
+    btn.disabled = false;
+    btn.style.opacity = "1";
+    
+    container.innerHTML = `
+        <table style="width:100%; border-collapse:collapse;">
+            ${carrinhoSolicitacao.map((item, index) => `
+                <tr style="border-bottom:1px solid #eee;">
+                    <td style="padding:10px 0;"><strong>${item.nome}</strong><br><small>TAM: ${item.tamanho} | QTD: ${item.quantidade}</small></td>
+                    <td style="text-align:right;"><button onclick="removerDoCarrinho(${index})" style="background:none; border:none; color:red; cursor:pointer;">🗑️</button></td>
+                </tr>
+            `).join('')}
+        </table>
+    `;
+}
+
+function renderizarTabelaSolicitacao(produtos) {
+    const container = document.getElementById('container_solicitacao');
+    let html = `
+        <table class="tabela-sistema">
+            <thead>
+                <tr>
+                    <th>PRODUTO</th>
+                    <th>TAMANHOS / QUANTIDADES DESEJADAS</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${produtos.map(p => `
+                    <tr>
+                        <td>${p.nome}</td>
+                        <td>
+                            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                                ${['P', 'M', 'G', 'GG', 'XG', '38', '40', '42', '44'].map(tam => `
+                                    <div style="border: 1px solid #ccc; padding: 5px; text-align: center;">
+                                        <label style="display:block; font-size:10px;">${tam}</label>
+                                        <input type="number" 
+                                               class="qtd-solicitacao" 
+                                               data-prod-id="${p.id}" 
+                                               data-tamanho="${tam}" 
+                                               min="0" value="0" 
+                                               style="width: 50px; text-align: center;">
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+        <button onclick="enviarSolicitacaoUniforme()" class="btn-concluir">CONCLUIR SOLICITAÇÃO</button>
+    `;
+    container.innerHTML = html;
+}
+
+async function enviarSolicitacaoUniforme() {
+    const itens = [];
+    let totalGeral = 0; // Inicializar a variável aqui
+    
+    // CORREÇÃO: O seletor deve ser .input-qtd-grade (o mesmo da tela)
+    const inputs = document.querySelectorAll('.input-qtd-grade');
+    
+    inputs.forEach(input => {
+        const val = input.value.trim();
+        const qtd = parseInt(val);
+        
+        if (!isNaN(qtd) && qtd > 0) {
+            itens.push({
+                produto_id: input.dataset.prodId,
+                tamanho: input.dataset.tamanho,
+                quantidade: qtd
+            });
+            totalGeral += qtd;
+        }
+    });
+
+    if (itens.length === 0) {
+        alert("POR FAVOR, INSIRA PELO MENOS UMA QUANTIDADE.");
+        return;
+    }
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/escola`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${TOKEN}` // Use a variável TOKEN global
+            },
+            body: JSON.stringify({ itens })
+        });
+
+        if (res.ok) {
+            alert("✅ SOLICITAÇÃO GRAVADA COM SUCESSO! AGUARDANDO AUTORIZAÇÃO.");
+            carregarDashboard(); // Volta para a tela inicial
+        } else {
+            const erro = await res.json();
+            alert("❌ ERRO: " + erro.error);
+        }
+    } catch (err) {
+        console.error(err);
+        alert("❌ ERRO DE CONEXÃO COM O SERVIDOR.");
+    }
+}
+
+window.enviarSolicitacaoEscola = async function() {
+    const inputs = document.querySelectorAll('.input-qtd-uniforme');
+    const itens = [];
+    let totalItens = 0;
+
+    inputs.forEach(input => {
+        const qtd = parseInt(input.value);
+        if (qtd > 0) {
+            itens.push({
+                produto_id: parseInt(input.getAttribute('data-prod')), // ID correto do banco
+                tamanho: input.getAttribute('data-tam'),
+                quantidade: qtd
+            });
+            totalItens += qtd;
+        }
+    });
+
+    if (itens.length === 0) return alert("PREENCHA AS QUANTIDADES!");
+
+    if (!confirm(`CONFIRMAR SOLICITAÇÃO DE ${totalItens} ITENS?`)) return;
+
+    try {
+        const payload = {
+            usuario_origem_id: USUARIO_LOGADO.id, // ID de quem está pedindo
+            local_destino_id: USUARIO_LOGADO.local_id, // ID da escola
+            itens: itens,
+            status: 'AGUARDANDO_AUTORIZACAO' // Status que o Admin vai buscar
+        };
+
+        const res = await fetch(`${API_URL}/pedidos/solicitar`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+            alert("SOLICITAÇÃO ENVIADA! AGUARDE AUTORIZAÇÃO.");
+            carregarDashboard();
+        } else {
+            alert("ERRO AO ENVIAR");
+        }
+    } catch (err) {
+        alert("ERRO DE CONEXÃO");
+    }
+};
+
+window.detalharSolicitacao = async function(pedidoId) {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    
+    try {
+        // Busca os itens do pedido e dados da escola
+        const res = await fetch(`${API_URL}/pedidos/${pedidoId}/detalhes`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const dados = await res.json(); 
+
+        overlay.innerHTML = `
+            <div class="modal-content">
+                <div style="display:flex; justify-content:space-between; margin-bottom:20px;">
+                    <h3>DETALHES DA SOLICITAÇÃO #${pedidoId}</h3>
+                    <button onclick="this.parentElement.parentElement.parentElement.remove()" style="cursor:pointer; background:none; border:none; font-size:20px;">✕</button>
+                </div>
+                
+                <p><strong>Escola:</strong> ${dados.escola_nome} | <strong>Solicitante:</strong> ${dados.usuario_nome}</p>
+
+                <table class="tabela-detalhes">
+                    ${gerarGradeSomenteLeitura(dados.itens)}
+                </table>
+
+                <div style="margin-top:30px; display:flex; gap:15px; justify-content:flex-end;">
+                    <button onclick="decidirPedido(${pedidoId}, 'RECUSADO')" style="background:#ef4444; color:white; padding:10px 20px; border:none; border-radius:5px; cursor:pointer;">RECUSAR</button>
+                    <button onclick="decidirPedido(${pedidoId}, 'AUTORIZADO')" style="background:#22c55e; color:white; padding:10px 20px; border:none; border-radius:5px; cursor:pointer;">AUTORIZAR E BAIXAR ESTOQUE</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+    } catch (err) {
+        alert("Erro ao abrir detalhes da solicitação.");
+    }
+};
+
+async function decidirPedido(pedidoId, novoStatus) {
+    // ... (lógica do prompt e confirm que já fizemos)
+
+    const btn = event.target; // Captura o botão clicado
+    const textoOriginal = btn.innerText;
+    
+    try {
+        btn.disabled = true;
+        btn.innerText = "PROCESSANDO..."; // Feedback visual
+
+        const res = await fetch(`${API_URL}/pedidos/${pedidoId}/status`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ status: novoStatus, autorizado_por: USUARIO_LOGADO.id })
+        });
+
+        if (res.ok) {
+            alert(`PEDIDO ${novoStatus} E STOCK ATUALIZADO!`);
+            location.reload();
+        } else {
+            const erro = await res.json();
+            alert("ERRO: " + erro.error);
+            btn.disabled = false;
+            btn.innerText = textoOriginal;
+        }
+    } catch (err) {
+        alert("FALHA NA CONEXÃO");
+        btn.disabled = false;
+        btn.innerText = textoOriginal;
+    }
+}
+
+function gerarGradeSomenteLeitura(itens) {
+    // Agrupa itens por nome de produto para montar a linha da tabela
+    const agrupado = {};
+    itens.forEach(i => {
+        if (!agrupado[i.nome]) agrupado[i.nome] = {};
+        agrupado[i.nome][i.tamanho] = i.quantidade;
+    });
+
+    const tamanhos = [...new Set(itens.map(i => i.tamanho))].sort();
+
+    return `
+        <thead>
+            <tr style="background:#f1f5f9;">
+                <th style="text-align:left; padding:10px; border:1px solid #ddd;">PRODUTO</th>
+                ${tamanhos.map(t => `<th style="padding:10px; border:1px solid #ddd;">${t}</th>`).join('')}
+            </tr>
+        </thead>
+        <tbody>
+            ${Object.keys(agrupado).map(nomeProd => `
+                <tr>
+                    <td style="padding:10px; border:1px solid #ddd; font-weight:bold;">${nomeProd}</td>
+                    ${tamanhos.map(t => `
+                        <td style="padding:10px; border:1px solid #ddd; text-align:center;">
+                            ${agrupado[nomeProd][t] || '-'}
+                        </td>
+                    `).join('')}
+                </tr>
+            `).join('')}
+        </tbody>
+    `;
+}
+
+async function visualizarDetalhesPedido(id) {
+    try {
+        const res = await fetch(`${API_URL}/pedidos/${id}/itens`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        const itens = await res.json();
+
+        let tabelaHtml = `
+            <div style="margin-top:15px; background:#f8fafc; padding:15px; border-radius:8px; border:1px solid #e2e8f0;">
+                <h4 style="margin:0 0 10px 0; color:#1e3a8a;">📋 ITENS DO PEDIDO #${id}</h4>
+                <table style="width:100%; border-collapse:collapse; font-size:0.9rem;">
+                    <thead>
+                        <tr style="border-bottom:1px solid #cbd5e1; text-align:left;">
+                            <th style="padding:5px;">Produto</th>
+                            <th style="padding:5px;">Tam.</th>
+                            <th style="padding:5px;">Qtd.</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${itens.map(i => `
+                            <tr style="border-bottom:1px solid #f1f5f9;">
+                                <td style="padding:5px;">${i.nome} <small>(${i.tipo})</small></td>
+                                <td style="padding:5px;">${i.tamanho || '-'}</td>
+                                <td style="padding:5px;">${i.quantidade}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+        
+        // Exibe em um modal ou injeta em algum lugar da tela
+        // Exemplo: alert ou criar um modal flutuante simples
+        document.getElementById(`detalhes-pedido-${id}`).innerHTML = tabelaHtml;
+        
+    } catch (err) {
+        alert("Erro ao carregar detalhes.");
+    }
+}
+
+async function verificarPendenciasAdmin() {
+    if (USUARIO_LOGADO.perfil !== 'admin') return;
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos?status=AGUARDANDO_AUTORIZACAO`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const pedidos = await res.json();
+
+        const containerAlerta = document.getElementById('area-alertas-admin');
+        if (pedidos.length > 0) {
+            containerAlerta.innerHTML = `
+                <div class="banner-alerta-admin" onclick="abrirListaSolicitacoes()">
+                    🚨 ATENÇÃO: EXISTEM ${pedidos.length} SOLICITAÇÕES DE UNIFORME AGUARDANDO AUTORIZAÇÃO!
+                </div>
+            `;
+        } else {
+            containerAlerta.innerHTML = '';
+        }
+    } catch (err) {
+        console.error("Erro ao verificar pendências", err);
+    }
+}
+
+// --- MODAL DE DETALHES (TELA POR CIMA) ---
+window.abrirDetalheHistorico = async function(historicoId) {
+    try {
+        const res = await fetch(`${API_URL}/historico/${historicoId}/detalhes`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const itens = await res.json();
+
+        // Criar o overlay (fundo escuro)
+        const overlay = document.createElement('div');
+        overlay.className = 'overlay-detalhe';
+        
+        overlay.innerHTML = `
+            <div class="modal-detalhe-conteudo">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:2px solid #eee; padding-bottom:10px;">
+                    <h3 style="margin:0; color:#1e40af;">📋 DETALHES DA SOLICITAÇÃO #${historicoId}</h3>
+                    <button class="btn-fechar-detalhe" style="margin:0;" onclick="this.closest('.overlay-detalhe').remove()">❌ FECHAR</button>
+                </div>
+                
+                <div style="overflow-x: auto; background: #fff;">
+                    <table class="tabela-solicitacao-uniforme">
+                        ${gerarTabelaSomenteLeitura(itens)}
+                    </table>
+                </div>
+                
+                <div style="margin-top:15px; text-align:right; font-size:0.9rem; color:#666;">
+                    * Valores exibidos conforme registro original no banco de dados.
+                </div>
+            </div>
+        `;
+
+        // Adiciona ao corpo da página
+        document.body.appendChild(overlay);
+
+        // Fechar ao apertar ESC
+        const fecharEsc = (e) => {
+            if (e.key === 'Escape') {
+                overlay.remove();
+                document.removeEventListener('keydown', fecharEsc);
+            }
+        };
+        document.addEventListener('keydown', fecharEsc);
+
+    } catch (err) {
+        console.error(err);
+        alert("Erro ao carregar detalhes do histórico.");
+    }
+};
+
+// Função que transforma a lista do banco na grade visual da "Imagem 2"
+window.gerarTabelaSomenteLeitura = function(itensDB) {
+    const gradeRoupa = ["02", "04", "06", "08", "10", "12", "14", "P", "M", "G", "GG"];
+    const gradeTenis = ["25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40"];
+    const roupas = ["BLUSA", "CALÇA", "REGATA", "BERMUDA"];
+
+    const buscarQtd = (prod, tam) => {
+        const item = itensDB.find(i => i.produto === prod && i.tamanho === tam);
+        return item ? item.quantidade : '';
+    };
+
+    return `
+        <thead>
+            <tr>
+                <th style="text-align:left; padding-left:10px;">VESTUÁRIO</th>
+                ${gradeRoupa.map(t => `<th>${t}</th>`).join('')}
+            </tr>
+        </thead>
+        <tbody>
+            ${roupas.map(nome => `
+                <tr>
+                    <td class="col-produto">${nome}</td>
+                    ${gradeRoupa.map(t => `<td style="font-weight:bold; color:#2563eb;">${buscarQtd(nome, t)}</td>`).join('')}
+                </tr>
+            `).join('')}
+        </tbody>
+        <thead class="header-calcados">
+            <tr>
+                <th style="text-align:left; padding-left:10px;">CALÇADOS</th>
+                ${gradeTenis.map(t => `<th>${t}</th>`).join('')}
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td class="col-produto">TÊNIS</td>
+                ${gradeTenis.map(t => `<td class="grade-tenis" style="font-weight:bold; color:#d35400;">${buscarQtd("TENIS", t)}</td>`).join('')}
+            </tr>
+        </tbody>
+    `;
+};
+
+window.verLogsSistema = async function(pedidoIdFiltro = '', escolaFiltro = '') {
+    const container = document.getElementById('app-content');
+    
+    try {
+        const url = new URL(`${API_URL}/pedidos/logs/historico`);
+        if (pedidoIdFiltro) url.searchParams.append('pedido_id', pedidoIdFiltro);
+        if (escolaFiltro) url.searchParams.append('escola', escolaFiltro);
+
+        const res = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const logs = await res.json();
+
+        let html = `
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <h2 style="color:#1e293b; margin:0;">📋 AUDITORIA DE SOLICITAÇÕES</h2>
+                <button onclick="carregarDashboard()" style="background:#64748b; color:white; padding:8px 15px; border-radius:5px; cursor:pointer; border:none;">⬅ VOLTAR</button>
+            </div>
+
+            <div style="background:#f1f5f9; padding:15px; border-radius:8px; margin-bottom:20px; display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
+                <div style="display:flex; flex-direction:column; gap:5px;">
+                    <label style="font-size:0.75rem; font-weight:bold; color:#475569;">PEDIDO #</label>
+                    <input type="number" id="filtro-pedido-id" value="${pedidoIdFiltro}" placeholder="Ex: 123" style="padding:8px; border:1px solid #cbd5e1; border-radius:4px; width:100px;">
+                </div>
+                <div style="display:flex; flex-direction:column; gap:5px;">
+                    <label style="font-size:0.75rem; font-weight:bold; color:#475569;">ESCOLA</label>
+                    <input type="text" id="filtro-escola-nome" value="${escolaFiltro}" placeholder="Nome da unidade..." style="padding:8px; border:1px solid #cbd5e1; border-radius:4px; width:250px;">
+                </div>
+                <button onclick="aplicarFiltroLogs()" style="background:#2563eb; color:white; padding:9px 20px; border-radius:4px; cursor:pointer; border:none; font-weight:bold;">BUSCAR</button>
+                <button onclick="verLogsSistema()" style="background:#94a3b8; color:white; padding:9px 15px; border-radius:4px; cursor:pointer; border:none;">LIMPAR</button>
+            </div>
+            
+            <div class="card-solicitacao" style="padding:0; overflow:hidden; background:white; border-radius:8px; box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+                <table style="width:100%; border-collapse:collapse; font-size:0.9rem;">
+                    <thead style="background:#f8fafc; border-bottom:2px solid #e2e8f0;">
+                        <tr>
+                            <th style="padding:15px; text-align:left;">DATA/HORA</th>
+                            <th style="padding:15px; text-align:left;">ADMINISTRADOR</th>
+                            <th style="padding:15px; text-align:left;">PEDIDO</th>
+                            <th style="padding:15px; text-align:left;">ESCOLA</th>
+                            <th style="padding:15px; text-align:center;">MUDANÇA DE STATUS</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${logs.map(log => `
+                            <tr style="border-bottom:1px solid #f1f5f9;">
+                                <td style="padding:12px;">${new Date(log.data).toLocaleString('pt-BR')}</td>
+                                <td style="padding:12px; font-weight:500;">${log.usuario_nome}</td>
+                                <td style="padding:12px;">
+                                    <a href="#" onclick="event.preventDefault(); detalharSolicitacao(${log.pedido_id})" 
+                                       style="color: #2563eb; font-weight: bold; text-decoration: underline;">
+                                       #${log.pedido_id}
+                                    </a>
+                                </td>
+                                <td style="padding:12px;">${log.escola_nome}</td>
+                                <td style="padding:12px; text-align:center;">
+                                    <span style="background:#f1f5f9; padding:3px 8px; border-radius:4px; color:#64748b; font-size:0.75rem;">${log.status_anterior}</span> 
+                                    <span style="margin:0 5px; color:#94a3b8;">➡</span> 
+                                    <span style="background:${log.status_novo === 'AUTORIZADO' ? '#dcfce7' : '#fee2e2'}; 
+                                                 color:${log.status_novo === 'AUTORIZADO' ? '#16a34a' : '#dc2626'}; 
+                                                 padding:3px 8px; border-radius:4px; font-weight:bold; font-size:0.75rem;">
+                                        ${log.status_novo}
+                                    </span>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+        container.innerHTML = html;
+    } catch (err) {
+        container.innerHTML = `<div style="color:red; padding:20px;">Erro ao carregar logs: ${err.message}</div>`;
+    }
+};
+
+// Função auxiliar para capturar os inputs e recarregar a tela
+window.aplicarFiltroLogs = function() {
+    const id = document.getElementById('filtro-pedido-id').value;
+    const escola = document.getElementById('filtro-escola-nome').value;
+    verLogsSistema(id, escola);
+};
+
+async function salvarCadastro() {
+    const tabela = document.getElementById('selecionarTabela').value;
+    if (!tabela) return alert("POR FAVOR, SELECIONE UMA TABELA.");
+
+    let payload = {};
+    // Ajuste o endpoint conforme a sua rota unificada (geralmente /cadastros/nome_tabela)
+    let endpoint = `${API_URL}/cadastros/${tabela}`; 
+
+    try {
+        if (tabela === 'categorias') {
+            payload = { nome: document.getElementById('cad_nome_categoria').value.toUpperCase() };
+        } 
+        else if (tabela === 'locais') {
+            payload = { 
+                nome: document.getElementById('cad_nome_local').value.toUpperCase(),
+                tipo_local: document.getElementById('cad_tipo_local').value 
+            };
+        } 
+        else if (tabela === 'setores') {
+            payload = { 
+                nome: document.getElementById('cad_nome_setor').value.toUpperCase(),
+                local_id: document.getElementById('cad_local_id_setor').value 
+            };
+        } 
+        else if (tabela === 'produtos') {
+            const nome = document.getElementById('cad_nome_produto').value;
+            const tipo = document.getElementById('cad_tipo_produto').value;
+            const alerta = document.getElementById('cad_alerta_minimo').value;
+
+            if (!nome || !tipo) return alert("NOME E CATEGORIA SÃO OBRIGATÓRIOS!");
+
+            payload = { 
+                nome: nome.toUpperCase(), 
+                tipo: tipo, 
+                alerta_minimo: parseInt(alerta) || 0 
+            };
+        }
+
+        if (Object.keys(payload).length === 0) return alert("PREENCHA OS CAMPOS!");
+
+        const res = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${TOKEN}`
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+            alert("✅ REGISTO SALVO COM SUCESSO!");
+            document.getElementById('modalCadastro').style.display = 'none';
+            carregarDashboard();
+        } else {
+            const erro = await res.json();
+            alert("❌ ERRO: " + (erro.error || "Falha ao salvar"));
+        }
+    } catch (f) {
+        alert("Erro de ligação ao servidor.");
+    }
+}
+
+// 1. LISTAGEM DE SOLICITAÇÕES
+async function telaHistoricoSolicitacoes() {
+    const role = localStorage.getItem('userRole');
+    if (!['admin', 'super', 'estoque'].includes(role)) return;
+
+    const container = document.getElementById('app-content');
+    container.innerHTML = 'carregando...';
+
+    try {
+        // Buscamos os pedidos com status de AGUARDANDO_AUTORIZACAO ou todos
+        const res = await fetch(`${API_URL}/pedidos`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const pedidos = await res.json();
+
+        let html = `
+            <div class="secao-header">
+                <h2>SOLICITAÇÕES DE UNIFORMES RECEBIDAS</h2>
+                <button class="btn-voltar" onclick="carregarDashboard()">VOLTAR</button>
+            </div>
+            <p style="padding:10px; color:#666;">* Dê um <b>duplo clique</b> na linha para ver os tamanhos solicitados.</p>
+            <table class="tabela-logs">
+                <thead>
+                    <tr>
+                        <th>DATA/HORA</th>
+                        <th>ESCOLA (LOCAL)</th>
+                        <th>SOLICITANTE</th>
+                        <th>TOTAL ITENS</th>
+                        <th>STATUS</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${pedidos.map(p => `
+                        <tr ondblclick="verDetalhesPedidoGrade(${p.id})" tabindex="0" onkeydown="if(event.key==='Enter') verDetalhesPedidoGrade(${p.id})" style="cursor:pointer;">
+                            <td>${new Date(p.data_criacao).toLocaleString()}</td>
+                            <td>${p.escola_nome}</td>
+                            <td>${p.usuario_nome}</td>
+                            <td>${p.total_itens || 0}</td>
+                            <td><span class="badge-${p.status}">${p.status}</span></td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+        container.innerHTML = html;
+    } catch (err) { console.error(err); }
+}
+
+// 2. VISUALIZAÇÃO DETALHADA EM GRADE (MODAL OU TELA)
+async function verDetalhesPedidoGrade(pedidoId) {
+    try {
+        const res = await fetch(`${API_URL}/pedidos/${pedidoId}/itens`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const itens = await res.json();
+
+        // Organizar itens por produto para montar a grade
+        const produtosAgrupados = {};
+        itens.forEach(it => {
+            if (!produtosAgrupados[it.produto_nome]) produtosAgrupados[it.produto_nome] = [];
+            produtosAgrupados[it.produto_nome].push(it);
+        });
+
+        let htmlModal = `
+            <div style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:2000; display:flex; align-items:center; justify-content:center;">
+                <div style="background:white; width:90%; max-height:90%; overflow-y:auto; padding:20px; border-radius:8px;">
+                    <h3>DETALHES DA SOLICITAÇÃO #${pedidoId}</h3>
+                    <table class="tabela-grade">
+                        <thead><tr><th>PRODUTO</th><th>TAMANHOS REQUISITADOS</th></tr></thead>
+                        <tbody>
+                            ${Object.keys(produtosAgrupados).map(nome => `
+                                <tr>
+                                    <td><b>${nome}</b></td>
+                                    <td>
+                                        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                                            ${produtosAgrupados[nome].map(i => `
+                                                <div style="background:#f1f5f9; padding:5px 10px; border-radius:4px; border:1px solid #cbd5e1;">
+                                                    <b>${i.tamanho}:</b> ${i.quantidade_solicitada}
+                                                </div>
+                                            `).join('')}
+                                        </div>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                    <div style="margin-top:20px; text-align:right;">
+                        <button onclick="this.parentElement.parentElement.parentElement.remove()" style="padding:10px 20px; cursor:pointer;">FECHAR</button>
+                        <button onclick="autorizarPedido(${pedidoId})" style="background:green; color:white; padding:10px 20px; border:none; margin-left:10px; cursor:pointer;">AUTORIZAR AGORA</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', htmlModal);
+    } catch (err) { alert("Erro ao carregar detalhes"); }
+}
+
+async function telaEntradaEstoque() {
+    const container = document.getElementById('app-content');
+    
+    let html = `
+        <div style="padding:20px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <h2 style="color:#1e3a8a;">📥 ENTRADA DE ESTOQUE</h2>
+                <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer;">⬅️ VOLTAR</button>
+            </div>
+
+            <div style="background:white; padding:20px; border-radius:8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); max-width:600px;">
+                <label>TIPO DE PRODUTO:</label>
+                <select id="tipo_entrada" onchange="carregarProdutosEntrada(this.value)" style="width:100%; padding:10px; margin-bottom:15px; border-radius:4px;">
+                    <option value="">Selecione...</option>
+                    <option value="MATERIAL">📦 MATERIAL / CONSUMO</option>
+                    <option value="UNIFORMES">👕 UNIFORMES / VESTUÁRIO</option>
+                </select>
+
+                <label>PRODUTO:</label>
+                <select id="produto_entrada" style="width:100%; padding:10px; margin-bottom:15px; border-radius:4px;">
+                    <option value="">Selecione o tipo primeiro...</option>
+                </select>
+
+                <div id="campos_dinamicos_entrada"></div>
+
+                <button onclick="salvarEntradaEstoque()" style="width:100%; padding:12px; background:#10b981; color:white; border:none; border-radius:4px; cursor:pointer; font-weight:bold; margin-top:10px;">
+                    CONFIRMAR ENTRADA
+                </button>
             </div>
         </div>
     `;
-
-    abrirModalGamelizado(html);
-
-    // Inicializar Gráficos após o modal abrir
-    setTimeout(() => {
-        renderizarGraficos(dados);
-    }, 100);
+    container.innerHTML = html;
 }
 
-function renderizarGraficos(dados) {
-    // Gráfico de Ranking (Barras)
-    new Chart(document.getElementById('chartRanking'), {
-        type: 'bar',
-        data: {
-            labels: dados.ranking.map(r => r.nome),
-            datasets: [{
-                label: 'Total de Pedidos',
-                data: dados.ranking.map(r => r.total),
-                backgroundColor: '#00f2ff'
-            }]
-        },
-        options: { plugins: { legend: { display: false } } }
-    });
+async function salvarEntradaEstoque() {
+    const produto_id = document.getElementById('produto_entrada').value;
+    const tipo = document.getElementById('tipo_entrada').value;
+    let grade = [];
+    let quantidade_total = 0;
 
-    // Gráfico de Stock Crítico (Pizza/Doughnut)
-    new Chart(document.getElementById('chartEstoque'), {
-        type: 'doughnut',
-        data: {
-            labels: dados.criticos.map(c => c.nome),
-            datasets: [{
-                data: dados.criticos.map(c => c.quantidade_estoque),
-                backgroundColor: ['#ff0055', '#ffaa00', '#ff00ff', '#00ff88']
-            }]
+    if (tipo === 'UNIFORMES') {
+        const inputs = document.querySelectorAll('.qtd-grade');
+        inputs.forEach(i => {
+            const qtd = parseInt(i.value) || 0;
+            if (qtd > 0) {
+                grade.push({ tamanho: i.dataset.tamanho, quantidade: qtd });
+                quantidade_total += qtd;
+            }
+        });
+    } else {
+        quantidade_total = parseInt(document.getElementById('qtd_total_material').value) || 0;
+    }
+
+    if (quantidade_total <= 0) return alert("Informe uma quantidade válida!");
+
+    try {
+        const res = await fetch(`${API_URL}/estoque/entrada`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ produto_id, tipo, grade, quantidade_total })
+        });
+
+        if (res.ok) {
+            alert("✅ ESTOQUE ATUALIZADO!");
+            telaEntradaEstoque();
+        } else {
+            alert("❌ Erro ao salvar entrada.");
+        }
+    } catch (err) { alert("Erro de conexão."); }
+}
+
+// Carrega os produtos dinamicamente ao mudar o tipo
+async function carregarProdutosEntrada(tipo) {
+    const select = document.getElementById('produto_entrada');
+    const camposExtras = document.getElementById('campos_dinamicos_entrada');
+    camposExtras.innerHTML = '';
+
+    try {
+        const res = await fetch(`${API_URL}/produtos/tipo/${tipo}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const produtos = await res.json();
+        
+        select.innerHTML = '<option value="">Selecione o produto...</option>' + 
+                          produtos.map(p => `<option value="${p.id}">${p.nome}</option>`).join('');
+
+        select.onchange = () => {
+            const nomeProduto = select.options[select.selectedIndex].text;
+            camposExtras.innerHTML = '';
+
+            if (tipo === 'UNIFORMES') {
+                let tamanhos = [];
+                // Lógica para Tênis (Grade 22-43)
+                if (nomeProduto.includes('TENIS') || nomeProduto.includes('CALCADO')) {
+                    for (let i = 22; i <= 43; i++) tamanhos.push(i.toString());
+                } else {
+                    tamanhos = ['2', '4', '6', '8', '10', '12', '14', '16', 'P', 'M', 'G', 'GG', 'XG'];
+                }
+
+                camposExtras.innerHTML = `
+                    <div style="display:grid; grid-template-columns: repeat(5, 1fr); gap:10px; margin-top:15px;">
+                        ${tamanhos.map(t => `
+                            <div>
+                                <label style="font-size:0.7rem;">TAM ${t}</label>
+                                <input type="number" class="qtd-grade" data-tamanho="${t}" value="0" min="0" style="width:100%;">
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            } else {
+                camposExtras.innerHTML = `<label>QTD TOTAL:</label><input type="number" id="qtd_total_material" value="0" style="width:100%; padding:10px;">`;
+            }
+        };
+    } catch (err) { alert("Erro ao carregar lista de produtos."); }
+}
+
+function renderizarGradeTamanhos(tipo, nomeProduto) {
+    const camposExtras = document.getElementById('campos_dinamicos_entrada');
+    camposExtras.innerHTML = '';
+
+    if (tipo.toUpperCase() === 'UNIFORMES') {
+        let tamanhos = [];
+        
+        // Verifica se é Tênis (agora aceita variações com ou sem acento)
+        const eTenis = nomeProduto.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes('TENIS');
+
+        if (eTenis) {
+            for (let i = 22; i <= 43; i++) tamanhos.push(i.toString());
+        } else {
+            tamanhos = ['2', '4', '6', '8', '10', '12', '14', '16', 'P', 'M', 'G', 'GG', 'XG'];
+        }
+
+        camposExtras.innerHTML = `
+            <p style="margin-top:10px;"><strong>GRADE DE QUANTIDADES:</strong></p>
+            <div style="display:grid; grid-template-columns: repeat(5, 1fr); gap:5px; padding:10px; background:#f1f5f9; border-radius:5px;">
+                ${tamanhos.map(t => `
+                    <div style="text-align:center;">
+                        <label style="display:block; font-size:0.7rem;">${t}</label>
+                        <input type="number" class="qtd-grade" data-tamanho="${t}" value="0" min="0" style="width:45px;">
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    } else {
+        camposExtras.innerHTML = `
+            <label style="display:block; margin-top:10px;">QUANTIDADE TOTAL:</label>
+            <input type="number" id="qtd_total_material" value="0" min="1" style="width:100%; padding:8px;">
+        `;
+    }
+}
+
+async function telaEntradaEstoqueUniforme() {
+    const container = document.getElementById('app-content');
+    container.innerHTML = 'CARREGANDO...';
+    
+    // 1. Busca os produtos de uniformes
+    const res = await fetch(`${API_URL}/catalogo/produtos/categoria/UNIFORMES`, {
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+    const produtos = await res.json();
+
+    let html = `
+        <div class="secao-header">
+            <h2>ENTRADA DE MERCADORIA (ABASTECER GRADE)</h2>
+            <button onclick="carregarDashboard()">VOLTAR</button>
+        </div>
+        <div style="padding:20px;">
+            <p>Selecione o produto e digite a quantidade que está CHEGANDO ao estoque central.</p>
+            <table style="width:100%; border-collapse: collapse; background: white;">
+                ${produtos.map(p => `
+                    <tr style="border-bottom: 1px solid #ddd;">
+                        <td style="padding:15px; font-weight:bold;">${p.nome}</td>
+                        <td>
+                            <div class="grade-container" style="display:flex; flex-wrap:wrap; gap:5px;">
+                                ${(p.nome.includes('TENIS') ? 
+                                    ['22','23','24','25','26','27','28','29','30','31','32','33','34','35','36','37','38','39','40','41','42','43'] : 
+                                    ['2','4','6','8','10','12','14','16','PP','P','M','G','GG','EGG']
+                                ).map(t => `
+                                    <div style="text-align:center;">
+                                        <span style="font-size:0.7rem;">${t}</span>
+                                        <input type="number" class="input-abastecer" data-prod-id="${p.id}" data-tamanho="${t}" style="width:50px; text-align:center;">
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </td>
+                        <td>
+                            <button onclick="salvarAbastecimento(${p.id}, this)" style="background:blue; color:white; border:none; padding:10px; cursor:pointer;">SALVAR ENTRADA</button>
+                        </td>
+                    </tr>
+                `).join('')}
+            </table>
+        </div>
+    `;
+    container.innerHTML = html;
+}
+
+// Função para listar os pedidos na fila do estoque
+async function listarFilaSeparacao() {
+    const container = document.getElementById('app-content');
+    container.innerHTML = '<div style="padding:20px;">CARREGANDO FILA DE SEPARAÇÃO...</div>';
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/fila-separacao`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const pedidos = await res.json();
+
+        let html = `
+            <div style="padding:20px;">
+                <h2 style="color: #1e3a8a; margin-bottom: 20px;">📦 FILA DE SEPARAÇÃO DE UNIFORMES</h2>
+                <div style="display: grid; gap: 15px;">
+                    ${pedidos.length === 0 ? '<p>NENHUM PEDIDO AGUARDANDO NO MOMENTO.</p>' : ''}
+                    ${pedidos.map(p => `
+                        <div style="background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; border-left: 5px solid ${p.status === 'SEPARACAO_INICIADA' ? '#f59e0b' : '#10b981'};">
+                            <div>
+                                <span style="font-size: 0.8rem; color: #64748b;">PEDIDO #${p.id}</span>
+                                <div style="font-size: 1.1rem; font-weight: bold; color: #1e293b;">${p.escola}</div>
+                                <div style="font-size: 0.85rem; color: #475569;">Autorizado em: ${new Date(p.data_autorizacao).toLocaleString()}</div>
+                                <div style="margin-top: 5px;">
+                                    <span style="background: ${p.status === 'SEPARACAO_INICIADA' ? '#fef3c7' : '#dcfce7'}; color: ${p.status === 'SEPARACAO_INICIADA' ? '#92400e' : '#166534'}; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold;">
+                                        ${p.status.replace('_', ' ')}
+                                    </span>
+                                </div>
+                            </div>
+                            <div>
+                                ${p.status === 'AUTORIZADO_SEPARACAO' ? 
+                                    `<button onclick="iniciarProcessoSeparacao(${p.id})" style="padding: 10px 20px; background: #2563eb; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer;">INICIAR SEPARAÇÃO</button>` :
+                                    `<button onclick="abrirPainelSeparacao(${p.id})" style="padding: 10px 20px; background: #f59e0b; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer;">CONTINUAR SEPARANDO</button>`
+                                }
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+        container.innerHTML = html;
+    } catch (err) {
+        alert("ERRO AO CARREGAR FILA");
+    }
+}
+
+// Muda o status para SEPARACAO_INICIADA
+async function iniciarProcessoSeparacao(id) {
+    try {
+        const res = await fetch(`${API_URL}/pedidos/${id}/iniciar-separacao`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        
+        if (res.ok) {
+            alert("🚀 SEPARAÇÃO INICIADA COM SUCESSO!");
+            listarFilaSeparacao(); // Recarrega a lista
+        } else {
+            alert("ERRO AO INICIAR SEPARAÇÃO");
+        }
+    } catch (err) {
+        alert("ERRO DE CONEXÃO");
+    }
+}
+
+async function telaAbastecerEstoque() {
+    const container = document.getElementById('app-content');
+    
+    container.innerHTML = `
+        <div style="padding:20px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <h2 style="color:#1e3a8a;">📥 ENTRADA DE ESTOQUE</h2>
+                <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer;">⬅️ VOLTAR</button>
+            </div>
+
+            <div style="background:white; padding:20px; border-radius:8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); max-width:600px;">
+                <label>TIPO DE PRODUTO:</label>
+                <select id="tipo_entrada" onchange="carregarProdutosEntrada(this.value)" style="width:100%; padding:10px; margin-bottom:15px; border-radius:4px;">
+                    <option value="">Selecione...</option>
+                    <option value="MATERIAL">📦 MATERIAL / CONSUMO</option>
+                    <option value="UNIFORMES">👕 UNIFORMES / VESTUÁRIO</option>
+                </select>
+
+                <label>PRODUTO:</label>
+                <select id="produto_entrada" style="width:100%; padding:10px; margin-bottom:15px; border-radius:4px;">
+                    <option value="">Selecione o tipo primeiro...</option>
+                </select>
+
+                <div id="campos_dinamicos_entrada"></div>
+
+                <button onclick="salvarEntradaEstoque()" style="width:100%; padding:12px; background:#10b981; color:white; border:none; border-radius:4px; cursor:pointer; font-weight:bold; margin-top:10px;">
+                    CONFIRMAR ENTRADA
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+async function enviarEntradaEstoque() {
+    const inputs = document.querySelectorAll('.input-entrada-estoque');
+    const itens = [];
+
+    inputs.forEach(input => {
+        const qtd = parseInt(input.value);
+        if (qtd > 0) {
+            itens.push({
+                produto_id: input.dataset.prodId,
+                tamanho: input.dataset.tamanho,
+                quantidade: qtd
+            });
         }
     });
+
+    if (itens.length === 0) return alert("INSIRA AO MENOS UMA QUANTIDADE PARA ENTRADA!");
+
+    if (!confirm("CONFIRMA A ENTRADA DESTAS QUANTIDADES NO ESTOQUE CENTRAL?")) return;
+
+    try {
+        const res = await fetch(`${API_URL}/estoque/entrada-uniforme`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${TOKEN}` 
+            },
+            body: JSON.stringify({ itens })
+        });
+
+        if (res.ok) {
+            alert("✅ ESTOQUE ATUALIZADO!");
+            carregarDashboard();
+        } else {
+            const erro = await res.json();
+            alert("❌ ERRO: " + erro.error);
+        }
+    } catch (err) {
+        alert("Erro na conexão com o servidor.");
+    }
 }
+
+async function salvarAbastecimento(produtoId) {
+    const inputs = document.querySelectorAll(`.input-abastecer-${produtoId}`);
+    const itens = [];
+    inputs.forEach(i => {
+        const qtd = parseInt(i.value);
+        if (qtd > 0) itens.push({ tamanho: i.dataset.tamanho, quantidade: qtd });
+    });
+
+    if (itens.length === 0) return alert("INSIRA AO MENOS UMA QUANTIDADE!");
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/abastecer`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ produto_id: produtoId, itens })
+        });
+        if (res.ok) {
+            alert("✅ ESTOQUE ATUALIZADO!");
+            // Limpa os inputs desta linha
+            inputs.forEach(i => i.value = '');
+        }
+    } catch (err) { alert("Erro ao salvar"); }
+}
+
+let carrinhoAdmin = [];
+
+async function telaAdminCriarPedido() {
+    const container = document.getElementById('app-content');
+    container.innerHTML = '<div style="padding:20px; font-weight:bold;">Carregando formulário de pedido...</div>';
+
+    try {
+        const tokenAtual = localStorage.getItem('token');
+        
+        // 1. Buscamos as duas listas necessárias em paralelo
+        const [resLocais, resProdutos] = await Promise.all([
+            fetch(`${API_URL}/locais`, { headers: { 'Authorization': `Bearer ${tokenAtual}` } }),
+            fetch(`${API_URL}/produtos`, { headers: { 'Authorization': `Bearer ${tokenAtual}` } })
+        ]);
+
+        if (!resLocais.ok || !resProdutos.ok) {
+            throw new Error("Falha na comunicação com o servidor ao buscar listas.");
+        }
+
+        const locais = await resLocais.json();
+        const produtos = await resProdutos.json();
+
+        // 2. Definimos o título para evitar o erro de ReferenceError
+        const tituloTela = "➕ CRIAR NOVO PEDIDO GERAL (ADMIN)";
+        
+        // Resetamos o carrinho para este novo pedido
+        carrinhoSolicitacao = [];
+
+        container.innerHTML = `
+            <div style="padding:20px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1px solid #ddd; padding-bottom:10px;">
+                    <h2 style="color:#1e3a8a; margin:0;">${tituloTela}</h2>
+                    <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer; font-weight:bold;">⬅️ VOLTAR</button>
+                </div>
+
+                <div style="background:#f1f5f9; padding:15px; border-radius:8px; margin-bottom:20px; border:1px solid #cbd5e1;">
+                    <label style="font-weight:bold; display:block; margin-bottom:5px;">UNIDADE DE DESTINO:</label>
+                    <select id="pedido_local_id" style="width:100%; max-width:400px; padding:10px; border-radius:6px; border:1px solid #94a3b8;">
+                        <option value="">-- SELECIONE A ESCOLA/SETOR --</option>
+                        ${locais.map(l => `<option value="${l.id}">${l.nome}</option>`).join('')}
+                    </select>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div style="background:white; padding:20px; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.1);">
+                        <h3 style="margin-top:0;">Adicionar Itens</h3>
+                        
+                        <label>PRODUTO:</label>
+                        <select id="solicitar_produto_id" style="width:100%; padding:10px; margin-bottom:15px;">
+                            ${produtos.map(p => `<option value="${p.id}">${p.nome} (${p.tipo})</option>`).join('')}
+                        </select>
+
+                        <div style="display:flex; gap:10px;">
+                            <div style="flex:1;">
+                                <label>TAMANHO:</label>
+                                <select id="solicitar_tamanho" style="width:100%; padding:10px;">
+                                    <option value="UNICO">ÚNICO</option>
+                                    <option>P</option><option>M</option><option>G</option><option>GG</option>
+                                    <option>2</option><option>4</option><option>6</option><option>8</option>
+                                    <option>34</option><option>36</option><option>38</option><option>40</option>
+                                </select>
+                            </div>
+                            <div style="flex:1;">
+                                <label>QTD:</label>
+                                <input type="number" id="solicitar_qtd" value="1" min="1" style="width:100%; padding:10px;">
+                            </div>
+                        </div>
+
+                        <button onclick="adicionarAoCarrinhoSolicitacao()" style="width:100%; margin-top:15px; padding:12px; background:#10b981; color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">
+                            ➕ INCLUIR NO PEDIDO
+                        </button>
+                    </div>
+
+                    <div style="background:white; padding:20px; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.1);">
+                        <h3 style="margin-top:0;">Itens Selecionados</h3>
+                        <div id="lista_carrinho_solicitacao">
+                            <p style="color:#666;">Nenhum item incluído.</p>
+                        </div>
+                        <hr style="margin:20px 0; border:0; border-top:1px solid #eee;">
+                        <button id="btnEnviarSolicitacao" onclick="enviarPedidoGeralAdmin()" disabled style="width:100%; padding:15px; background:#1e40af; color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer; opacity:0.5;">
+                            🚀 FINALIZAR E ENVIAR PARA ESTOQUE
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+    } catch (err) {
+        // Agora o erro aparecerá no console se algo der errado
+        console.error("Erro detalhado:", err);
+        alert("Erro ao carregar dados: " + err.message);
+    }
+}
+
+async function enviarPedidoGeralAdmin() {
+    const localId = document.getElementById('pedido_local_id').value;
+    if (!localId) return alert("Selecione a Unidade de Destino!");
+    if (carrinhoSolicitacao.length === 0) return alert("Adicione itens ao pedido!");
+
+    const dados = {
+        local_destino_id: localId,
+        tipo_pedido: 'PEDIDO_ADMIN',
+        itens: carrinhoSolicitacao
+    };
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/admin/direto`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify(dados)
+        });
+
+        if (res.ok) {
+            alert("🚀 Pedido criado e enviado diretamente para SEPARAÇÃO no estoque!");
+            carregarDashboard();
+        } else {
+            const erro = await res.json();
+            alert("Erro: " + erro.error);
+        }
+    } catch (err) {
+        alert("Erro de conexão.");
+    }
+}
+
+async function carregarProdutosAdmin(tipo) {
+    const select = document.getElementById('admin_produto_id');
+    const campos = document.getElementById('campos_especificos_admin');
+    campos.innerHTML = '';
+    
+    const res = await fetch(`${API_URL}/produtos/tipo/${tipo}`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+    const produtos = await res.json();
+    select.innerHTML = produtos.map(p => `<option value="${p.id}">${p.nome}</option>`).join('');
+
+    if (tipo === 'UNIFORMES') {
+        campos.innerHTML = `
+            <label>TAMANHO:</label>
+            <select id="admin_tamanho" style="width:100%; padding:10px; margin-bottom:15px;">
+                <option>P</option><option>M</option><option>G</option><option>GG</option><option>2</option><option>4</option>
+                </select>
+            <label>QUANTIDADE:</label>
+            <input type="number" id="admin_qtd" value="1" min="1" style="width:100%; padding:10px; margin-bottom:15px;">
+        `;
+    } else {
+        campos.innerHTML = `
+            <label>QUANTIDADE:</label>
+            <input type="number" id="admin_qtd" value="1" min="1" style="width:100%; padding:10px; margin-bottom:15px;">
+        `;
+    }
+}
+
+async function enviarPedidoDiretoAdmin() {
+    const local_destino_id = document.getElementById('admin_local_destino').value;
+    if (!local_destino_id) return alert("Selecione o local de destino!");
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/admin/criar`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ local_destino_id, itens: carrinhoAdmin })
+        });
+
+        if (res.ok) {
+            alert("✅ PEDIDO CRIADO! O estoque já pode visualizar para separação.");
+            carregarDashboard();
+        }
+    } catch (e) { alert("Erro ao enviar pedido."); }
+}
+
+async function abrirPainelSeparacao() {
+    const container = document.getElementById('app-content');
+    container.innerHTML = '<div style="padding:20px; font-weight:bold;">Buscando pedidos aprovados...</div>';
+
+    try {
+        const tokenAtual = localStorage.getItem('token'); 
+        const res = await fetch(`${API_URL}/pedidos/estoque/autorizados`, {
+            headers: { 'Authorization': `Bearer ${tokenAtual}` }
+        });
+
+        if (!res.ok) throw new Error("Erro ao acessar o servidor.");
+
+        const pedidos = await res.json();
+        const tituloTela = "📦 SEPARAÇÃO DE VOLUMES";
+
+        // Montagem do HTML - O Cabeçalho com VOLTAR sempre aparece primeiro
+        let html = `
+            <div style="padding:20px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1px solid #ddd; padding-bottom:10px;">
+                    <h2 style="color:#1e3a8a; margin:0;">${tituloTela}</h2>
+                    <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer; font-weight:bold;">⬅️ VOLTAR</button>
+                </div>
+        `;
+
+        // Lógica condicional: Se a lista estiver vazia ou se houver pedidos
+        if (pedidos.length === 0) {
+            html += `
+                <div style="text-align:center; padding:50px; background:#f8fafc; border-radius:12px; border:2px dashed #cbd5e1; color:#64748b; margin-top:20px;">
+                    <div style="font-size:4rem; margin-bottom:15px;">📋</div>
+                    <h3 style="margin:0; color:#1e3a8a;">NENHUM PEDIDO AUTORIZADO</h3>
+                    <p style="margin-top:10px;">No momento, não existem pedidos aguardando separação no estoque central.</p>
+                </div>
+            `;
+        } else {
+            html += `
+                <p style="margin-bottom:20px; color:#475569;">Os pedidos abaixo foram <strong>APROVADOS</strong> e aguardam a separação física dos itens:</p>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px;">
+                    ${pedidos.map(p => `
+                        <div style="background:white; padding:20px; border-radius:10px; box-shadow:0 4px 6px -1px rgba(0,0,0,0.1); border-top:5px solid #3b82f6;">
+                            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:15px;">
+                                <div>
+                                    <span style="display:inline-block; background:#dbeafe; color:#1e40af; padding:2px 8px; border-radius:4px; font-size:0.75rem; font-weight:bold; margin-bottom:5px;">PEDIDO #${p.id}</span>
+                                    <h4 style="margin:0; color:#1e293b;">${p.escola_nome}</h4>
+                                </div>
+                                <small style="color:#94a3b8;">${new Date(p.data_criacao).toLocaleDateString()}</small>
+                            </div>
+                            
+                            <button onclick="iniciarConferenciaPedido(${p.id})" style="width:100%; padding:12px; background:#2563eb; color:white; border:none; border-radius:6px; font-weight:bold; cursor:pointer; transition: background 0.2s;">
+                                📦 INICIAR SEPARAÇÃO
+                            </button>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        html += `</div>`; // Fecha a div principal
+        container.innerHTML = html;
+
+    } catch (err) {
+        console.error(err);
+        container.innerHTML = `
+            <div style="padding:20px; text-align:center;">
+                <p style="color:#b91c1c; font-weight:bold;">⚠️ Falha ao carregar os dados de separação.</p>
+                <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:10px 20px; border-radius:4px; cursor:pointer; margin-top:10px;">VOLTAR AO DASHBOARD</button>
+            </div>
+        `;
+    }
+}
+
+async function telaGerarRemessa(pedidoId) {
+    const container = document.getElementById('app-content');
+    
+    // Busca os itens do pedido com o saldo já enviado (precisamos criar essa rota ou adaptar a existente)
+    const res = await fetch(`${API_URL}/pedidos/${pedidoId}/itens`, {
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+    const itens = await res.json();
+
+    container.innerHTML = `
+        <div style="padding:20px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <h2>🚚 GERAR REMESSA - PEDIDO #${pedidoId}</h2>
+                <button onclick="abrirPainelSeparacao()" style="padding:8px 15px; cursor:pointer;">⬅️ VOLTAR</button>
+            </div>
+
+            <div style="background:white; padding:20px; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.1);">
+                <label>Informação do Veículo / Motorista:</label>
+                <input type="text" id="veiculo_info" placeholder="Ex: Caminhão Placa ABC-1234" style="width:100%; padding:10px; margin-bottom:20px;">
+
+                <table style="width:100%; border-collapse:collapse;">
+                    <thead>
+                        <tr style="text-align:left; background:#f8fafc;">
+                            <th style="padding:10px;">PRODUTO</th>
+                            <th style="padding:10px; text-align:center;">AUTORIZADO</th>
+                            <th style="padding:10px; text-align:center;">RESTANTE</th>
+                            <th style="padding:10px; text-align:center; background:#fef3c7;">ENVIAR AGORA</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${itens.map(item => {
+                            const restante = item.quantidade_solicitada - (item.quantidade_enviada || 0);
+                            return `
+                            <tr style="border-bottom:1px solid #eee;">
+                                <td style="padding:10px;">${item.produto_nome} (TAM: ${item.tamanho})</td>
+                                <td style="padding:10px; text-align:center;">${item.quantidade_solicitada}</td>
+                                <td style="padding:10px; text-align:center; color:${restante > 0 ? 'red' : 'green'};"><strong>${restante}</strong></td>
+                                <td style="padding:10px; text-align:center; background:#fffbeb;">
+                                    <input type="number" class="qtd-enviar" 
+                                           data-prod="${item.produto_id}" 
+                                           data-tam="${item.tamanho}" 
+                                           value="${restante}" max="${restante}" min="0" 
+                                           style="width:60px; padding:5px; text-align:center; font-weight:bold; border:1px solid #f59e0b;">
+                                </td>
+                            </tr>`;
+                        }).join('')}
+                    </tbody>
+                </table>
+
+                <button onclick="finalizarSaidaEstoque(${pedidoId})" style="width:100%; margin-top:20px; padding:15px; background:#10b981; color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">
+                    CONFIRMAR SAÍDA DESTE CARREGAMENTO
+                </button>
+            </div>
+        </div>`;
+}
+
+async function finalizarSaidaEstoque(pedidoId) {
+    const inputs = document.querySelectorAll('.qtd-enviar');
+    const veiculo = document.getElementById('veiculo_info').value;
+    const itens = Array.from(inputs).map(i => ({
+        produto_id: i.dataset.prod,
+        tamanho: i.dataset.tam,
+        qtd_enviar: parseInt(i.value) || 0
+    })).filter(item => item.qtd_enviar > 0);
+
+    if (itens.length === 0) return alert("Nenhuma quantidade informada para saída!");
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/${pedidoId}/remessa`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ itens, veiculo })
+        });
+
+        if (res.ok) {
+            alert("✅ REMESSA REGISTRADA E ESTOQUE ATUALIZADO!");
+            abrirPainelSeparacao();
+        }
+    } catch (e) { alert("Erro ao processar saída."); }
+}
+
+async function antigoabrirPainelSeparacao(id) {
+    const container = document.getElementById('app-content');
+    container.innerHTML = '<div style="padding:20px;">ABRINDO PAINEL DE CONFERÊNCIA...</div>';
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/${id}/detalhes`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const itens = await res.json();
+
+        let html = `
+            <div style="padding:20px;">
+                <button onclick="listarFilaSeparacao()" style="margin-bottom:20px; cursor:pointer;">⬅ VOLTAR À FILA</button>
+                <h2 style="color: #1e3a8a;">📦 CONFERÊNCIA DE ITENS - PEDIDO #${id}</h2>
+                <p style="color: #64748b; margin-bottom:20px;">Informe as quantidades que estão sendo enviadas nesta remessa.</p>
+
+                <table style="width:100%; border-collapse: collapse; background: white; border: 1px solid #e2e8f0;">
+                    <thead>
+                        <tr style="background: #f8fafc;">
+                            <th style="padding:12px; text-align:left;">PRODUTO</th>
+                            <th style="padding:12px;">TAMANHO</th>
+                            <th style="padding:12px;">AUTORIZADO</th>
+                            <th style="padding:12px; width:150px;">A ENVIAR (CONFERIDO)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${itens.map(item => `
+                            <tr>
+                                <td style="padding:12px; border-bottom:1px solid #eee;">${item.produto_nome}</td>
+                                <td style="padding:12px; border-bottom:1px solid #eee; text-align:center;">${item.tamanho}</td>
+                                <td style="padding:12px; border-bottom:1px solid #eee; text-align:center; font-weight:bold;">${item.quantidade_solicitada}</td>
+                                <td style="padding:12px; border-bottom:1px solid #eee; text-align:center;">
+                                    <input type="number" 
+                                           class="input-conferencia" 
+                                           data-prod-id="${item.produto_id}" 
+                                           data-tamanho="${item.tamanho}" 
+                                           data-max="${item.quantidade_solicitada}"
+                                           value="${item.quantidade_solicitada}" 
+                                           style="width:70px; padding:5px; text-align:center; border: 1px solid #1e40af; border-radius:4px; font-weight:bold;">
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+
+                <div style="margin-top:25px; background: #eff6ff; padding:20px; border-radius:8px; border: 1px solid #bfdbfe;">
+                    <label style="font-weight:bold; display:block; margin-bottom:10px;">QUANTIDADE TOTAL DE VOLUMES (CAIXAS/PACOTES):</label>
+                    <input type="number" id="qtd-volumes" min="1" value="1" style="width:100px; padding:10px; font-size:1.2rem; text-align:center; border-radius:4px; border:1px solid #3b82f6;">
+                </div>
+
+                <div style="margin-top:20px;">
+                    <button onclick="finalizarConferencia(${id})" style="width:100%; padding:20px; background:#1e40af; color:white; font-weight:bold; border:none; border-radius:8px; cursor:pointer; font-size:1.1rem;">
+                        CONCLUIR CONFERÊNCIA E LIBERAR PARA COLETA
+                    </button>
+                </div>
+            </div>
+        `;
+        container.innerHTML = html;
+    } catch (err) { alert("Erro ao carregar itens para conferência"); }
+}
+
+async function finalizarConferencia(id) {
+    const inputs = document.querySelectorAll('.input-conferencia');
+    const volumes = document.getElementById('qtd-volumes').value;
+    const itens_conferidos = [];
+
+    // Validação no front antes de enviar
+    for (let input of inputs) {
+        const qtd = parseInt(input.value);
+        const max = parseInt(input.dataset.max);
+        if (qtd > max) {
+            alert(`ALERTA: Você está tentando enviar ${qtd} unidades, mas o autorizado são apenas ${max}! Corrija antes de prosseguir.`);
+            input.focus();
+            return;
+        }
+        if (qtd > 0) {
+            itens_conferidos.push({
+                produto_id: input.dataset.prodId,
+                tamanho: input.dataset.tamanho,
+                quantidade_conferida: qtd
+            });
+        }
+    }
+
+    if (volumes < 1) return alert("INFORME A QUANTIDADE DE VOLUMES!");
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/${id}/concluir-separacao`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ itens_conferidos, volumes })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            alert("✅ " + data.message);
+            listarFilaSeparacao();
+        } else {
+            alert("❌ ERRO: " + data.error);
+        }
+    } catch (err) { alert("Erro na requisição"); }
+}
+
+async function listarColetasLogistica() {
+    const container = document.getElementById('app-content');
+    container.innerHTML = '<div style="padding:20px;">BUSCANDO COLETAS...</div>';
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/fila-coleta`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const pedidos = await res.json();
+
+        let html = `
+            <div style="padding:20px;">
+                <h2 style="color: #1e3a8a; margin-bottom: 20px;">🚚 COLETAS LIBERADAS (LOGÍSTICA)</h2>
+                ${pedidos.map(p => `
+                    <div style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; border-left: 5px solid #3b82f6;">
+                        <div>
+                            <span style="font-weight: bold; color: #1e40af;">PEDIDO #${p.id}</span>
+                            <div style="font-size: 1.2rem; font-weight: bold;">DESTINO: ${p.escola}</div>
+                            <div style="color: #ef4444; font-weight: bold;">📦 VOLUMES: ${p.volumes}</div>
+                        </div>
+                        <button onclick="confirmarSaidaTransporte(${p.id})" style="padding: 12px 25px; background: #059669; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer;">
+                            INICIAR TRANSPORTE
+                        </button>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+        container.innerHTML = html || '<p style="padding:20px;">NENHUMA COLETA AGUARDANDO.</p>';
+    } catch (err) { alert("Erro ao carregar coletas"); }
+}
+
+async function confirmarSaidaTransporte(id) {
+    if (!confirm("CONFIRMA QUE OS VOLUMES FORAM COLETADOS E O TRANSPORTE FOI INICIADO?")) return;
+    try {
+        const res = await fetch(`${API_URL}/pedidos/${id}/iniciar-transporte`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        if (res.ok) {
+            alert("✅ TRANSPORTE INICIADO!");
+            listarColetasLogistica();
+        }
+    } catch (err) { alert("Erro ao processar"); }
+}
+
+async function listarPedidosEmCaminho() {
+    const container = document.getElementById('app-content');
+    container.innerHTML = '<div style="padding:20px;">VERIFICANDO ENTREGAS...</div>';
+
+    try {
+        const tokenAtual = localStorage.getItem('token');
+        const res = await fetch(`${API_URL}/pedidos/alertas-escola`, { 
+            headers: { 'Authorization': `Bearer ${tokenAtual}` }
+        });
+
+        // PROTEÇÃO: Se a resposta não for OK (200), pegamos o texto do erro
+        if (!res.ok) {
+            const erroTexto = await res.text(); // Lê como texto para ver o HTML de erro
+            console.error("Erro do servidor:", erroTexto);
+            throw new Error("O servidor retornou um erro. Verifique o console.");
+        }
+
+        const pedidos = await res.json();
+        const tituloTela = "🚚 PEDIDOS EM TRANSPORTE";
+
+        let html = `
+            <div style="padding:20px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1px solid #ddd; padding-bottom:10px;">
+                    <h2 style="color: #1e3a8a; margin:0;">${tituloTela}</h2>
+                    <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer; font-weight:bold;">⬅️ VOLTAR</button>
+                </div>
+                
+                ${pedidos.length === 0 ? '<p style="text-align:center; color:#666; padding:20px;">Nenhum pedido em transporte para sua unidade no momento.</p>' : ''}
+                
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px;">
+                    ${pedidos.map(p => `
+                        <div style="background:white; padding:15px; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.1); border-left:5px solid #3b82f6;">
+                            <div style="margin-bottom:10px;">
+                                <strong style="color:#1e3a8a;">PEDIDO #${p.id}</strong><br>
+                                <small style="color:#666;">Data: ${new Date(p.data_criacao).toLocaleDateString()}</small>
+                            </div>
+                            <button onclick="confirmarEntregaEscola(${p.id})" style="width:100%; padding:10px; background:#10b981; color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">
+                                ✅ CONFIRMAR RECEBIMENTO
+                            </button>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+        
+        container.innerHTML = html;
+    } catch (err) { 
+        console.error(err);
+        alert("Erro ao buscar entregas: " + err.message); 
+    }
+}
+
+async function confirmarEntregaEscola(id) {
+    if (!confirm("CONFIRMA O RECEBIMENTO DESTA ENTREGA NA SUA UNIDADE?")) return;
+    
+    try {
+        const res = await fetch(`${API_URL}/pedidos/${id}/confirmar-recebimento`, {
+            method: 'POST',
+            headers: { 
+                'Authorization': `Bearer ${localStorage.getItem('token')}` 
+            }
+        });
+
+        if (res.ok) {
+            alert("✅ RECEBIMENTO REGISTRADO! O estoque da unidade será atualizado.");
+            listarPedidosEmCaminho(); // Recarrega a lista
+        } else {
+            const erro = await res.json();
+            alert("Erro: " + (erro.error || "Falha ao confirmar."));
+        }
+    } catch (err) { 
+        alert("Erro de conexão com o servidor."); 
+    }
+}
+
+// --- 1. LISTAR COLETAS PENDENTES ---
+async function listarColetaLogistica() {
+    const container = document.getElementById('app-content');
+    container.innerHTML = '<div style="padding:20px;">Verificando cargas prontas no estoque...</div>';
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/logistica/aguardando-coleta`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const pedidos = await res.json();
+
+        let html = `
+            <div style="padding:20px;">
+                <h2 style="color:#1e3a8a;">🚚 PEDIDOS PRONTOS PARA COLETA</h2>
+                <div class="grid-logistica">
+                    ${pedidos.map(p => `
+                        <div style="background:white; padding:20px; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.1); margin-bottom:15px; border-left:5px solid #3b82f6;">
+                            <div style="font-weight:bold; font-size:1.1rem; color:#1e3a8a;">PEDIDO #${p.id}</div>
+                            <p><strong>DESTINO:</strong> ${p.escola_nome}</p>
+                            <p style="font-size:0.9rem; color:#666;">Este pedido possui ${p.total_remessas} volume(s) preparado(s).</p>
+                            
+                            <button onclick="confirmarColetaLogistica(${p.id})" style="width:100%; margin-top:10px; padding:12px; background:#1e40af; color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">
+                                🚛 CONFIRMAR QUE COLETEI / INICIAR TRANSPORTE
+                            </button>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>`;
+        container.innerHTML = html || '<p style="padding:20px;">Nenhuma carga pronta para coleta no momento.</p>';
+    } catch (e) { alert("Erro ao carregar coletas."); }
+}
+
+async function confirmarColetaLogistica(id) {
+    if (!confirm(`Confirma que está retirando o Pedido #${id} para transporte?`)) return;
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/${id}/coletar`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+
+        if (res.ok) {
+            alert("✅ TRANSPORTE INICIADO! A escola de destino já pode visualizar o status.");
+            listarColetaLogistica();
+        }
+    } catch (e) { alert("Erro ao confirmar coleta."); }
+}
+
+// --- 2. SOLICITAR PATRIMÔNIO (LOGÍSTICA) ---
+async function telaSolicitarPatrimonio() {
+    // Reutilizamos a lógica da escola, mas filtramos apenas por PATRIMONIO
+    const container = document.getElementById('app-content');
+    container.innerHTML = '<div style="padding:20px;">Carregando catálogo de patrimônio...</div>';
+
+    try {
+        const res = await fetch(`${API_URL}/produtos/tipo/PATRIMONIO`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const produtos = await res.json();
+
+        container.innerHTML = `
+            <div style="padding:20px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1px solid #ddd; padding-bottom:10px;">
+                    <h2 style="color:#1e3a8a; margin:0;">🏷️ SOLICITAR MOVIMENTAÇÃO DE PATRIMÔNIO</h2>
+                    <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer; font-weight:bold;">⬅️ VOLTAR</button>
+                </div>
+
+                <div style="background:white; padding:20px; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.1); max-width:500px;">
+                    <label>PRODUTO (MODELO):</label>
+                    <select id="solic_pat_id" style="width:100%; padding:10px; margin-bottom:15px;">
+                        ${produtos.map(p => `<option value="${p.id}">${p.nome}</option>`).join('')}
+                    </select>
+                    
+                    <label>QUANTIDADE DE ITENS:</label>
+                    <input type="number" id="solic_pat_qtd" value="1" min="1" style="width:100%; padding:10px; margin-bottom:15px;">
+
+                    <button onclick="enviarSolicitacaoPatrimonioLog()" style="width:100%; padding:12px; background:#1e40af; color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">
+                        SOLICITAR AO ADMIN
+                    </button>
+                </div>
+            </div>`;
+    } catch (e) { 
+        alert("Erro ao carregar produtos de patrimônio."); 
+    }
+}
+
+async function atualizarGradeTamanhos(produtoId) {
+    const selectTamanho = document.getElementById('solicitar_tamanho');
+    if (!selectTamanho) return;
+
+    selectTamanho.innerHTML = '<option>Carregando...</option>';
+
+    try {
+        const res = await fetch(`${API_URL}/produtos/${produtoId}/grade`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        const grade = await res.json();
+
+        selectTamanho.innerHTML = ''; // Limpa o "Carregando"
+
+        if (grade.length === 0) {
+            selectTamanho.innerHTML = '<option value="UNICO">ÚNICO</option>';
+        } else {
+            grade.forEach(item => {
+                const opt = document.createElement('option');
+                opt.value = item.tamanho;
+                opt.textContent = item.tamanho;
+                selectTamanho.appendChild(opt);
+            });
+        }
+    } catch (err) {
+        selectTamanho.innerHTML = '<option value="UNICO">ERRO AO CARREGAR</option>';
+    }
+}
+
+async function enviarSolicitacaoPatrimonioLog() {
+    const produto_id = document.getElementById('solic_pat_id').value;
+    const quantidade = parseInt(document.getElementById('solic_pat_qtd').value);
+
+    if (!produto_id || quantidade <= 0) {
+        return alert("POR FAVOR, SELECIONE O PRODUTO E A QUANTIDADE.");
+    }
+
+    // Criamos o array de itens no padrão que a rota /pedidos/escola/solicitar espera
+    const itens = [{
+        produto_id: produto_id,
+        tamanho: 'N/A', // Padrão para itens que não são uniformes
+        quantidade: quantidade
+    }];
+
+    try {
+        // Reutilizamos a rota de solicitação que identifica automaticamente o local_id do utilizador
+        const res = await fetch(`${API_URL}/pedidos/escola/solicitar`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify({ itens })
+        });
+
+        if (res.ok) {
+            alert("✅ SOLICITAÇÃO DE PATRIMÓNIO ENVIADA COM SUCESSO!");
+            carregarDashboard();
+        } else {
+            const erro = await res.json();
+            alert("❌ ERRO AO SOLICITAR: " + (erro.error || "Verifique os dados."));
+        }
+    } catch (err) {
+        console.error("Erro na solicitação de património:", err);
+        alert("Erro de ligação ao servidor.");
+    }
+}
+
+// Função para abrir o histórico de remessas de um pedido
+async function telaRelatorioRemessas(pedidoId) {
+    const container = document.getElementById('app-content');
+    container.innerHTML = '<div style="padding:20px;">A carregar histórico de transporte...</div>';
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/${pedidoId}/remessas`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const remessas = await res.json();
+
+        let html = `
+            <div style="padding:20px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                    <h2 style="color:#1e3a8a;">📜 HISTÓRICO DE REMESSAS - PEDIDO #${pedidoId}</h2>
+                    <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer;">⬅️ VOLTAR</button>
+                </div>`;
+
+        if (remessas.length === 0) {
+            html += `<p>Nenhuma remessa (viagem) registada para este pedido até ao momento.</p>`;
+        } else {
+            for (const r of remessas) {
+                // Para cada remessa, buscamos os itens dela
+                const resItens = await fetch(`${API_URL}/remessas/${r.id}/itens`, {
+                    headers: { 'Authorization': `Bearer ${TOKEN}` }
+                });
+                const itens = await resItens.json();
+
+                html += `
+                    <div style="background:white; padding:20px; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.1); margin-bottom:20px; border-top:4px solid #3b82f6;">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:15px;">
+                            <div>
+                                <strong>DATA DE SAÍDA:</strong> ${new Date(r.data_saida).toLocaleString()}<br>
+                                <strong>VEÍCULO:</strong> ${r.veiculo_info || 'Não informado'}
+                            </div>
+                            <div style="text-align:right;">
+                                <small>Despachado por: ${r.usuario_nome}</small>
+                            </div>
+                        </div>
+
+                        <table style="width:100%; border-collapse:collapse; background:#f8fafc;">
+                            <thead>
+                                <tr style="text-align:left; font-size:0.85rem; border-bottom:1px solid #ddd;">
+                                    <th style="padding:8px;">PRODUTO</th>
+                                    <th style="padding:8px; text-align:center;">TAMANHO</th>
+                                    <th style="padding:8px; text-align:center;">QTD ENVIADA</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${itens.map(item => `
+                                    <tr>
+                                        <td style="padding:8px;">${item.produto_nome}</td>
+                                        <td style="padding:8px; text-align:center;">${item.tamanho}</td>
+                                        <td style="padding:8px; text-align:center; font-weight:bold;">${item.quantidade_enviada}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            }
+        }
+
+        html += `</div>`;
+        container.innerHTML = html;
+    } catch (err) {
+        alert("Erro ao carregar o relatório.");
+    }
+}
+
+async function telaReceberDevolucoes() {
+    const container = document.getElementById('app-content');
+    container.innerHTML = '<div style="padding:20px;">A procurar devoluções pendentes...</div>';
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/estoque/devolucoes-pendentes`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const pedidos = await res.json();
+
+        let html = `
+            <div style="padding:20px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1px solid #ddd; padding-bottom:10px;">
+                    <h2 style="color:#1e3a8a; margin:0;">🔄 RECEBER DEVOLUÇÕES (CONFERÊNCIA)</h2>
+                    <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer; font-weight:bold;">⬅️ VOLTAR</button>
+                </div>
+        `;
+
+        if (pedidos.length === 0) {
+            html += `<p style="background:#f3f4f6; padding:20px; border-radius:8px; text-align:center;">Nenhuma devolução pendente para conferência.</p>`;
+        } else {
+            for (const p of pedidos) {
+                const resItens = await fetch(`${API_URL}/pedidos/${p.id}/itens`, {
+                    headers: { 'Authorization': `Bearer ${TOKEN}` }
+                });
+                const itens = await resItens.json();
+
+                html += `
+                    <div style="background:white; padding:20px; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.1); margin-bottom:20px; border-left:5px solid #6366f1;">
+                        <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:15px;">
+                            <div>
+                                <strong>DEVOLUÇÃO #${p.id} - ${p.escola_nome}</strong><br>
+                                <small>Enviada em: ${new Date(p.data_criacao).toLocaleString()}</small>
+                            </div>
+                            <button onclick="confirmarRecebimentoDevolucao(${p.id})" style="background:#10b981; color:white; border:none; padding:10px 15px; border-radius:4px; cursor:pointer; font-weight:bold;">
+                                ✅ CONFIRMAR CHEGADA NO STOCK
+                            </button>
+                        </div>
+                        
+                        <table style="width:100%; border-collapse:collapse; font-size:0.9rem;">
+                            <tr style="background:#f8fafc; text-align:left;">
+                                <th style="padding:8px; border-bottom:1px solid #eee;">PRODUTO</th>
+                                <th style="padding:8px; border-bottom:1px solid #eee; text-align:center;">TAMANHO</th>
+                                <th style="padding:8px; border-bottom:1px solid #eee; text-align:center;">QTD A RECEBER</th>
+                            </tr>
+                            ${itens.map(item => `
+                                <tr>
+                                    <td style="padding:8px; border-bottom:1px solid #eee;">${item.produto_nome}</td>
+                                    <td style="padding:8px; border-bottom:1px solid #eee; text-align:center;">${item.tamanho}</td>
+                                    <td style="padding:8px; border-bottom:1px solid #eee; text-align:center; font-weight:bold;">${item.quantidade_solicitada}</td>
+                                </tr>
+                            `).join('')}
+                        </table>
+                    </div>
+                `;
+            }
+        }
+        html += `</div>`;
+        container.innerHTML = html;
+    } catch (err) { alert("Erro ao carregar devoluções."); }
+}
+
+async function confirmarRecebimentoDevolucao(id) {
+    if (!confirm("Confirma que todos os itens desta lista chegaram fisicamente ao stock central?")) return;
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/${id}/confirmar-devolucao`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+
+        if (res.ok) {
+            alert("✅ STOCK ATUALIZADO COM SUCESSO!");
+            telaReceberDevolucoes();
+        } else {
+            alert("Erro ao processar a devolução no servidor.");
+        }
+    } catch (err) { alert("Erro ao processar."); }
+}
+
+async function telaAcompanhamentoGeral() {
+    const container = document.getElementById('app-content');
+    container.innerHTML = '<div style="padding:20px;">Carregando histórico de pedidos...</div>';
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/lista-geral`, { // Certifique-se que esta rota existe no backend
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        const pedidos = await res.json();
+
+        container.innerHTML = `
+            <div style="padding:20px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                    <h2 style="color:#1e3a8a; margin:0;">📋 ACOMPANHAMENTO DE PEDIDOS E REMESSAS</h2>
+                    <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer; font-weight:bold;">⬅️ VOLTAR</button>
+                </div>
+
+                <div style="background:white; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.1); overflow:hidden;">
+                    <table style="width:100%; border-collapse:collapse;">
+                        <thead>
+                            <tr style="background:#f8fafc; border-bottom:2px solid #e2e8f0; text-align:left;">
+                                <th style="padding:15px;">ID</th>
+                                <th style="padding:15px;">DESTINO</th>
+                                <th style="padding:15px;">STATUS</th>
+                                <th style="padding:15px;">DATA</th>
+                                <th style="padding:15px; text-align:center;">AÇÕES</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${pedidos.map(p => `
+                                <tr style="border-bottom:1px solid #eee;">
+                                    <td style="padding:15px;">#${p.id}</td>
+                                    <td style="padding:15px;">${p.escola_nome || 'N/A'}</td>
+                                    <td style="padding:15px;">
+                                        <span style="padding:4px 8px; border-radius:12px; font-size:0.8rem; font-weight:bold; 
+                                            background:${p.status === 'ENTREGUE' ? '#dcfce7' : '#fef3c7'}; 
+                                            color:${p.status === 'ENTREGUE' ? '#166534' : '#92400e'};">
+                                            ${p.status}
+                                        </span>
+                                    </td>
+                                    <td style="padding:15px;">${new Date(p.data_criacao).toLocaleDateString()}</td>
+                                    <td style="padding:15px; text-align:center;">
+                                        <button onclick="telaRelatorioRemessas(${p.id})" style="background:#1e40af; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:0.85rem;">
+                                            🔍 VER DETALHES / REMESSAS
+                                        </button>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+    } catch (err) {
+        alert("Erro ao carregar lista de acompanhamento.");
+    }
+}
+
+async function telaGerenciarPatrimonio() {
+    const container = document.getElementById('app-content');
+    container.innerHTML = `
+        <div style="padding:20px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1px solid #ddd; padding-bottom:10px;">
+                <h2 style="color:#1e3a8a; margin:0;">🏷️ GERENCIAR PATRIMÔNIO</h2>
+                <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer; font-weight:bold;">⬅️ VOLTAR</button>
+            </div>
+            
+            <div style="background:white; padding:20px; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.1);">
+                <p>Aqui você pode gerenciar os números de série e movimentações de itens permanentes.</p>
+                <button class="btn-grande" onclick="abrirModalCadastro('produtos')" style="padding:15px; background:#10b981; color:white; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">
+                    + CADASTRAR NOVO ITEM DE PATRIMÔNIO
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+function abrirModalCadastro(tipoCadastro) {
+    if (tipoCadastro !== 'produtos') return;
+
+    const container = document.getElementById('app-content');
+    const tituloTela = "📦 CADASTRO DE NOVO PRODUTO";
+
+    container.innerHTML = `
+        <div style="padding:20px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1px solid #ddd; padding-bottom:10px;">
+                <h2 style="color:#1e3a8a; margin:0;">${tituloTela}</h2>
+                <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer; font-weight:bold;">⬅️ VOLTAR</button>
+            </div>
+
+            <div style="background:white; max-width:600px; margin: 0 auto; padding:30px; border-radius:12px; box-shadow:0 10px 15px -3px rgba(0,0,0,0.1);">
+                <form id="formCadastroProduto" onsubmit="salvarNovoProduto(event)">
+                    <div style="margin-bottom:15px;">
+                        <label style="display:block; font-weight:bold; margin-bottom:5px;">NOME DO PRODUTO:</label>
+                        <input type="text" id="prod_nome" required style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:6px;">
+                    </div>
+
+                    <div style="margin-bottom:15px;">
+                        <label style="display:block; font-weight:bold; margin-bottom:5px;">TIPO DE ITEM:</label>
+                        <select id="prod_tipo" required style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:6px;">
+                            <option value="MATERIAL">MATERIAL (Consumo/Expediente)</option>
+                            <option value="PATRIMÔNIO">PATRIMÔNIO (Item Permanente)</option>
+                            <option value="UNIFORMES">UNIFORMES</option>
+                        </select>
+                    </div>
+
+                    <div style="margin-bottom:15px;">
+                        <label style="display:block; font-weight:bold; margin-bottom:5px;">CATEGORIA / GRUPO:</label>
+                        <input type="text" id="prod_categoria" placeholder="Ex: Limpeza, Papelaria, Móveis..." style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:6px;">
+                    </div>
+
+                    <div style="margin-bottom:20px;">
+                        <label style="display:block; font-weight:bold; margin-bottom:5px;">DESCRIÇÃO ADICIONAL:</label>
+                        <textarea id="prod_descricao" rows="3" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:6px;"></textarea>
+                    </div>
+
+                    <button type="submit" style="width:100%; padding:15px; background:#1e40af; color:white; border:none; border-radius:6px; font-weight:bold; font-size:1rem; cursor:pointer;">
+                        💾 SALVAR CADASTRO
+                    </button>
+                </form>
+            </div>
+        </div>
+    `;
+}
+
+// Isso garante que o onclick="funcao()" funcione sempre
+window.telaVisualizarEstoque = telaVisualizarEstoque;
+window.telaAbastecerEstoque = telaAbastecerEstoque;
+window.telaAdminGerenciarSolicitacoes = telaAdminGerenciarSolicitacoes;

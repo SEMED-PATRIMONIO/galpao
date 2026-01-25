@@ -141,26 +141,26 @@ router.put('/pedidos/itens/:itemId', verificarToken, async (req, res) => {
 router.post('/auth/login', async (req, res) => {
     const { usuario, senha } = req.body;
     try {
+        // Certifique-se de que o SELECT inclui a coluna local_id
         const result = await db.query(
-            "SELECT id, nome, perfil, local_id FROM usuarios WHERE usuario = $1 AND senha = $2",
+            "SELECT id, nome, perfil, local_id FROM usuarios WHERE nome = $1 AND senha = $2",
             [usuario, senha]
         );
 
         if (result.rows.length > 0) {
             const user = result.rows[0];
-            // Token de exemplo (use sua lógica atual de geração)
-            const token = "TOKEN_" + user.id + "_" + Math.random().toString(36).substr(2);
-
             res.json({
-                token: token,
+                token: "SEU_TOKEN_AQUI",
                 perfil: user.perfil,
                 nome: user.nome,
-                local_id: user.local_id // Retorna o ID da escola vinculada
+                local_id: user.local_id // 🟢 ESSENCIAL: O servidor envia o ID do local
             });
         } else {
             res.status(401).json({ message: "Usuário ou senha inválidos." });
         }
-    } catch (err) { res.status(500).json({ error: err.message }); }
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // 2. Rota de Aprovação com Baixa no Estoque (Grade e Geral)

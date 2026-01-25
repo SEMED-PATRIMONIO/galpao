@@ -55,14 +55,15 @@ document.getElementById('form-login')?.addEventListener('submit', async (e) => {
         const data = await res.json();
 
         if (res.ok) {
-            // 🔍 ALERTA DE TESTE: Para confirmar se os dados chegaram do servidor
-            alert(`DEBUG LOGIN:\nID Local: ${data.local_id}\nNome Local: ${data.local_nome}`);
+            // Limpa qualquer dado antigo antes de salvar o novo
+            localStorage.clear();
 
             localStorage.setItem('token', data.token);
             localStorage.setItem('perfil', data.perfil);
             localStorage.setItem('nome', data.nome);
             
-            // 📍 SALVAMENTO DOS DADOS DO LOCAL
+            // SALVA OS DADOS DA ESCOLA
+            // Usamos o nome exato 'local_id' para bater com sua função de envio
             localStorage.setItem('local_id', data.local_id || ""); 
             localStorage.setItem('local_nome', data.local_nome || "Sede/Geral");
 

@@ -55,14 +55,19 @@ document.getElementById('form-login')?.addEventListener('submit', async (e) => {
         const data = await res.json();
 
         if (res.ok) {
-            // --- INÍCIO DO TRECHO QUE VOCÊ PERGUNTOU ---
+            // 🔍 ALERTA DE TESTE: Para confirmar se os dados chegaram do servidor
+            alert(`DEBUG LOGIN:\nID Local: ${data.local_id}\nNome Local: ${data.local_nome}`);
+
             localStorage.setItem('token', data.token);
             localStorage.setItem('perfil', data.perfil);
             localStorage.setItem('nome', data.nome);
-            localStorage.setItem('local_id', data.local_id || ""); // Salva o ID da Escola no navegador
+            
+            // 📍 SALVAMENTO DOS DADOS DO LOCAL
+            localStorage.setItem('local_id', data.local_id || ""); 
+            localStorage.setItem('local_nome', data.local_nome || "Sede/Geral");
+
             TOKEN = data.token;
             carregarDashboard();
-            // --- FIM DO TRECHO ---
         } else {
             alert('ERRO: ' + (data.message || 'Falha no login'));
         }
@@ -4452,8 +4457,6 @@ async function telaSolicitarUniforme() {
         alert("Erro ao carregar formulário de solicitação."); 
     }
 }
-
-
 
 function configurarGradeTamanhosDinamicamente() {
     const selectProd = document.getElementById('solicitar_produto_id');

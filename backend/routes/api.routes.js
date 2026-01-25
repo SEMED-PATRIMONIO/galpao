@@ -141,24 +141,29 @@ router.put('/pedidos/itens/:itemId', verificarToken, async (req, res) => {
 router.post('/auth/login', async (req, res) => {
     const { usuario, senha } = req.body;
     try {
-        // Certifique-se de que o SELECT inclui a coluna local_id
-        const result = await db.query(
-            "SELECT id, nome, perfil, local_id FROM usuarios WHERE nome = $1 AND senha = $2",
+        // Agora fazemos um LEFT JOIN para buscar o NOME da escola também
+        const result = await db.query(`
+            SELECT u.id, u.nome, u.perfil, u.local_id, l.nome as local_nome 
+            FROM usuarios u 
+            LEFT JOIN locais l ON u.local_id = l.id 
+            WHERE u.nome = $1 AND u.senha = $2`, 
             [usuario, senha]
         );
 
         if (result.rows.length > 0) {
             const user = result.rows[0];
             res.json({
-                token: "SEU_TOKEN_AQUI",
+                token: "TOKEN_DE_SESSAO_GERADO_" + user.id, // Use sua lógica de token
                 perfil: user.perfil,
                 nome: user.nome,
-                local_id: user.local_id // 🟢 ESSENCIAL: O servidor envia o ID do local
+                local_id: user.local_id,
+                local_nome: user.local_nome // 🟢 Enviando o nome para o topo da tela
             });
         } else {
             res.status(401).json({ message: "Usuário ou senha inválidos." });
         }
     } catch (err) {
+        console.error("Erro no login:", err.message);
         res.status(500).json({ error: err.message });
     }
 });
@@ -381,19 +386,17 @@ router.get('/pedidos/lista-geral', verificarToken, async (req, res) => {
                 p.status, 
                 p.tipo_pedido, 
                 p.data_criacao,
-                l.nome as escola_nome, 
+                l.nome as escola_nome, -- Aqui buscamos o nome da escola
                 u.nome as usuario_nome
             FROM pedidos p
+            -- O LEFT JOIN garante que o nome da escola apareça baseado no ID gravado
             LEFT JOIN locais l ON p.local_destino_id = l.id
             LEFT JOIN usuarios u ON p.usuario_origem_id = u.id
             ORDER BY p.data_criacao DESC
         `);
-        
-        // Retorna sempre um array, mesmo que vazio
         res.json(result.rows);
     } catch (err) {
-        console.error("ERRO SQL EM LISTA-GERAL:", err.message);
-        res.status(500).json({ error: "Erro no banco de dados: " + err.message });
+        res.status(500).json({ error: err.message });
     }
 });
 

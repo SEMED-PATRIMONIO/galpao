@@ -6555,8 +6555,9 @@ async function telaAdminCriarUsuario() {
                 <label>PERFIL DE ACESSO:</label>
                 <select id="novo_perfil" required style="width:100%; margin-bottom:15px; padding:10px;">
                     <option value="escola">ESCOLA (Acesso Restrito)</option>
+                    <option value="logistica">INFRA (Acesso Restrito)</option>
                     <option value="admin">ADMINISTRADOR</option>
-                    <option value="estoque">ESTOQUE / LOGÍSTICA</option>
+                    <option value="estoque">ESTOQUE</option>
                     <option value="super">SUPER (Total)</option>
                 </select>
 

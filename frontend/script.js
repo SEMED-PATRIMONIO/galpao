@@ -51,14 +51,16 @@ document.getElementById('form-login')?.addEventListener('submit', async (e) => {
         const data = await res.json();
 
         if (res.ok) {
+            // Limpa lixo antigo e salva os novos dados
+            localStorage.clear();
             localStorage.setItem('token', data.token);
             localStorage.setItem('perfil', data.perfil);
             localStorage.setItem('nome', data.nome);
             localStorage.setItem('local_id', data.local_id || "");
             localStorage.setItem('local_nome', data.local_nome || "SEDE/GERAL");
-            
+
             TOKEN = data.token;
-            carregarDashboard();
+            carregarDashboard(); // Chama a função corrigida abaixo
         } else {
             alert('ERRO: ' + (data.message || 'Falha no login'));
         }
@@ -66,22 +68,24 @@ document.getElementById('form-login')?.addEventListener('submit', async (e) => {
         console.error("Erro na conexão de login:", err);
         alert("Erro ao conectar com o servidor.");
     }
-})
+});
 
 function carregarDashboard() {
+    // 1. Captura os elementos da tela
     const app = document.getElementById('app-content');
     const loginContainer = document.getElementById('login-container');
-    
-    // Recuperar dados do localStorage para evitar ReferenceError
+
+    // 2. Captura os dados salvos no login (Evita o ReferenceError)
     const nome = localStorage.getItem('nome');
     const perfil = localStorage.getItem('perfil');
     const localNome = localStorage.getItem('local_nome') || "Não Identificado";
 
-    // Ocultar tela de login e exibir app
+    // 3. Gerencia a visibilidade das telas
     if (loginContainer) loginContainer.style.display = 'none';
-    
     if (app) {
         app.style.display = 'block';
+        
+        // 4. Monta o cabeçalho com os dados validados
         app.innerHTML = `
             <div class="header-app">
                 <span class="logo-texto">📦 PATRIMÔNIO SEMED</span>
@@ -97,7 +101,7 @@ function carregarDashboard() {
         `;
     }
 
-    // Executar a renderização do menu conforme o perfil logado
+    // 5. Renderiza os botões do menu conforme o perfil
     if (typeof renderizarMenuPrincipal === 'function') {
         renderizarMenuPrincipal();
     }

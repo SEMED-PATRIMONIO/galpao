@@ -22,6 +22,109 @@ router.get('/locais/lista-simples', verificarToken, async (req, res) => {
     }
 });
 
+router.post('/antigopedidos/uniformes/criar', verificarToken, async (req, res) => {
+    const { local_destino_id, itens, operacao } = req.body;
+    const usuario_origem_id = req.userId; // ID do usuário que está logado (vem do token)
+
+    try {
+        await db.query('BEGIN');
+
+        // Insere o cabeçalho do pedido com o local_destino_id automático
+        const pedidoRes = await db.query(
+            `INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, tipo_pedido, data_criacao) 
+             VALUES ($1, $2, 'AGUARDANDO_AUTORIZACAO', $3, NOW()) RETURNING id`,
+            [usuario_origem_id, local_destino_id, operacao]
+        );
+
+        const pedidoId = pedidoRes.rows[0].id;
+
+        // Loop para inserir os itens (tamanhos e quantidades)
+        for (const item of itens) {
+            await db.query(
+                "INSERT INTO itens_pedido (pedido_id, produto_id, tamanho, quantidade) VALUES ($1, $2, $3, $4)",
+                [pedidoId, item.produto_id, item.tamanho, item.quantidade]
+            );
+        }
+
+        await db.query('COMMIT');
+        res.status(201).json({ message: "Pedido registrado com sucesso!" });
+
+    } catch (err) {
+        await db.query('ROLLBACK');
+        console.error("Erro no SQL:", err.message);
+        res.status(500).json({ error: "Erro ao gravar pedido no banco." });
+    }
+});
+
+router.post('/pedidos/uniformes/criar', verificarToken, async (req, res) => {
+    const { local_destino_id, itens, operacao } = req.body;
+    const usuario_id = req.userId; // Capturado automaticamente pelo middleware verificarToken
+
+    try {
+        await db.query('BEGIN');
+
+        // Criamos o cabeçalho do pedido
+        // Note que o local_destino_id vem do frontend (local_id do usuário)
+        const pedidoRes = await db.query(
+            `INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, tipo_pedido, data_criacao) 
+             VALUES ($1, $2, 'AGUARDANDO_AUTORIZACAO', $3, NOW()) RETURNING id`,
+            [usuario_id, local_destino_id, operacao]
+        );
+
+        const pedidoId = pedidoRes.rows[0].id;
+
+        // Inserimos os itens do carrinho (Produto e Quantidade)
+        for (const item of itens) {
+            await db.query(
+                "INSERT INTO itens_pedido (pedido_id, produto_id, quantidade) VALUES ($1, $2, $3)",
+                [pedidoId, item.id, item.quantidade]
+            );
+        }
+
+        await db.query('COMMIT');
+        res.status(201).json({ message: "Pedido registrado!" });
+
+    } catch (err) {
+        await db.query('ROLLBACK');
+        console.error(err);
+        res.status(500).json({ error: "Erro ao processar pedido no banco de dados." });
+    }
+});
+
+router.get('/produtos/lista-por-tipo', verificarToken, async (req, res) => {
+    const { tipo } = req.query;
+    try {
+        const result = await db.query(
+            "SELECT id, nome FROM produtos WHERE tipo = $1 ORDER BY nome ASC",
+            [tipo]
+        );
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.get('/pedidos/lista-adm', verificarToken, async (req, res) => {
+    try {
+        const result = await db.query(`
+            SELECT 
+                p.id, 
+                p.data_criacao, 
+                p.status, 
+                p.tipo_pedido,
+                u.nome as quem_pediu,
+                l.nome as escola_destino
+            FROM pedidos p
+            LEFT JOIN usuarios u ON p.usuario_origem_id = u.id
+            LEFT JOIN locais l ON p.local_destino_id = l.id
+            ORDER BY p.data_criacao DESC
+        `);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 router.get('/pedidos/meus-pedidos', verificarToken, async (req, res) => {
     try {
         let query = "SELECT p.*, l.nome as escola_nome FROM pedidos p LEFT JOIN locais l ON p.local_destino_id = l.id";
@@ -910,6 +1013,51 @@ router.get('/produtos/tipo/:tipo', verificarToken, async (req, res) => {
 });
 
 // Rota para cadastrar apenas a definição do produto
+router.get('/produtos/lista', verificarToken, async (req, res) => {
+    const { tipo } = req.query;
+    try {
+        const query = tipo 
+            ? "SELECT id, nome FROM produtos WHERE tipo = $1 ORDER BY nome ASC"
+            : "SELECT id, nome, tipo FROM produtos ORDER BY nome ASC";
+        const result = await db.query(query, tipo ? [tipo] : []);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/cadastros/produtos', verificarToken, async (req, res) => {
+    const { nome, tipo, categoria_id, alerta_minimo } = req.body;
+    try {
+        await db.query(
+            "INSERT INTO produtos (nome, tipo, categoria_id, alerta_minimo) VALUES ($1, $2, $3, $4)",
+            [nome.toUpperCase(), tipo, categoria_id, alerta_minimo || 0]
+        );
+        res.status(201).json({ message: "Produto cadastrado" });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/estoque/entrada-patrimonio-lote', verificarToken, async (req, res) => {
+    const { produto_id, series, local_id } = req.body;
+
+    try {
+        await db.query('BEGIN');
+        for (const serie of series) {
+            await db.query(
+                "INSERT INTO estoque_individual (produto_id, local_id, numero_serie, status) VALUES ($1, $2, $3, 'DISPONIVEL')",
+                [produto_id, local_id, serie.toUpperCase()]
+            );
+        }
+        await db.query('COMMIT');
+        res.status(201).json({ message: "Itens registrados com sucesso!" });
+    } catch (err) {
+        await db.query('ROLLBACK');
+        res.status(500).json({ error: "Erro ao inserir: " + err.message });
+    }
+});
+
 router.post('/produtos/cadastrar', verificarToken, async (req, res) => {
     const { nome, tipo, descricao, categoria } = req.body;
 

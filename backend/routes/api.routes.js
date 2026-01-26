@@ -22,6 +22,100 @@ router.get('/locais/lista-simples', verificarToken, async (req, res) => {
     }
 });
 
+router.get('/pedidos/admin/lista', verificarToken, async (req, res) => {
+    try {
+        const result = await db.query(`
+            SELECT 
+                p.id, 
+                p.data_criacao, 
+                p.status, 
+                p.tipo_pedido,
+                u.nome as solicitante,
+                l.nome as nome_escola -- 👈 BUSCA O NOME REAL DA ESCOLA
+            FROM pedidos p
+            LEFT JOIN usuarios u ON p.usuario_origem_id = u.id
+            LEFT JOIN locais l ON p.local_destino_id = l.id -- 👈 O VÍNCULO QUE FALTAVA NA TELA
+            ORDER BY p.data_criacao DESC
+        `);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao listar: " + err.message });
+    }
+});
+
+// ROTA 1: Para a função telaAdminVerPedidos (Lista Geral)
+router.get('/pedidos/admin/lista-geral', verificarToken, async (req, res) => {
+    try {
+        const result = await db.query(`
+            SELECT 
+                p.id, 
+                p.data_criacao, 
+                p.status, 
+                p.tipo_pedido,
+                u.nome as solicitante,      -- Nome do Usuário
+                l.nome as escola_destino    -- Nome da Escola
+            FROM pedidos p
+            LEFT JOIN usuarios u ON p.usuario_origem_id = u.id
+            LEFT JOIN locais l ON p.local_destino_id = l.id
+            ORDER BY p.data_criacao DESC
+        `);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ROTA 2: Para a função telaAdminGerenciarSolicitacoes (Apenas Pendentes)
+router.get('/pedidos/admin/pendentes', verificarToken, async (req, res) => {
+    try {
+        const result = await db.query(`
+            SELECT p.id, p.data_criacao, p.tipo_pedido, u.nome as solicitante, l.nome as local_nome
+            FROM pedidos p
+            INNER JOIN usuarios u ON p.usuario_origem_id = u.id
+            INNER JOIN locais l ON p.local_destino_id = l.id
+            WHERE p.status = 'AGUARDANDO_AUTORIZACAO'
+            ORDER BY p.data_criacao ASC`);
+        res.json(result.rows);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// DETALHES DO PEDIDO VS ESTOQUE ATUAL
+router.get('/pedidos/detalhes-estoque/:id', verificarToken, async (req, res) => {
+    try {
+        const result = await db.query(`
+            SELECT 
+                ip.id as item_id, pr.nome as produto, ip.tamanho, ip.quantidade as solicitado,
+                COALESCE(eg.quantidade, 0) as em_estoque
+            FROM itens_pedido ip
+            JOIN produtos pr ON ip.produto_id = pr.id
+            LEFT JOIN estoque_grades eg ON (ip.produto_id = eg.produto_id AND ip.tamanho = eg.tamanho)
+            WHERE ip.pedido_id = $1`, [req.params.id]);
+        res.json(result.rows);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.put('/pedidos/itens/atualizar', verificarToken, async (req, res) => {
+    const { itens } = req.body; // Array de { item_id, nova_qtd }
+
+    try {
+        await db.query('BEGIN');
+
+        for (const item of itens) {
+            await db.query(
+                "UPDATE itens_pedido SET quantidade = $1 WHERE id = $2",
+                [item.nova_qtd, item.item_id]
+            );
+        }
+
+        await db.query('COMMIT');
+        res.json({ message: "Quantidades atualizadas com sucesso!" });
+    } catch (err) {
+        await db.query('ROLLBACK');
+        console.error("Erro ao atualizar itens:", err.message);
+        res.status(500).json({ error: "Erro ao atualizar quantidades." });
+    }
+});
+
 router.post('/antigopedidos/uniformes/criar', verificarToken, async (req, res) => {
     const { local_destino_id, itens, operacao } = req.body;
     const usuario_origem_id = req.userId; // ID do usuário que está logado (vem do token)
@@ -57,37 +151,43 @@ router.post('/antigopedidos/uniformes/criar', verificarToken, async (req, res) =
 });
 
 router.post('/pedidos/uniformes/criar', verificarToken, async (req, res) => {
-    const { local_destino_id, itens, operacao } = req.body;
-    const usuario_id = req.userId; // Capturado automaticamente pelo middleware verificarToken
+    const { itens, operacao } = req.body;
+    const usuario_id = req.userId; // Vem do Token de Login
 
     try {
         await db.query('BEGIN');
 
-        // Criamos o cabeçalho do pedido
-        // Note que o local_destino_id vem do frontend (local_id do usuário)
+        // 🟢 AQUI ESTÁ A CHAVE: O banco busca o local_id do usuário logado e insere no pedido
         const pedidoRes = await db.query(
             `INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, tipo_pedido, data_criacao) 
-             VALUES ($1, $2, 'AGUARDANDO_AUTORIZACAO', $3, NOW()) RETURNING id`,
-            [usuario_id, local_destino_id, operacao]
+             VALUES ($1, (SELECT local_id FROM usuarios WHERE id = $1), 'AGUARDANDO_AUTORIZACAO', $2, NOW()) 
+             RETURNING id, local_destino_id`,
+            [usuario_id, operacao]
         );
 
         const pedidoId = pedidoRes.rows[0].id;
+        const localDestino = pedidoRes.rows[0].local_destino_id;
 
-        // Inserimos os itens do carrinho (Produto e Quantidade)
+        // Se o usuário não tiver local_id, o banco vai retornar erro ou nulo aqui
+        if (!localDestino) {
+            throw new Error("Usuário sem local vinculado no cadastro.");
+        }
+
+        // Gravação dos itens
         for (const item of itens) {
             await db.query(
-                "INSERT INTO itens_pedido (pedido_id, produto_id, quantidade) VALUES ($1, $2, $3)",
-                [pedidoId, item.id, item.quantidade]
+                "INSERT INTO itens_pedido (pedido_id, produto_id, tamanho, quantidade) VALUES ($1, $2, $3, $4)",
+                [pedidoId, item.id, item.tamanho, item.quantidade]
             );
         }
 
         await db.query('COMMIT');
-        res.status(201).json({ message: "Pedido registrado!" });
+        res.status(201).json({ message: "Pedido gravado com sucesso!", id: pedidoId });
 
     } catch (err) {
         await db.query('ROLLBACK');
-        console.error(err);
-        res.status(500).json({ error: "Erro ao processar pedido no banco de dados." });
+        console.error("ERRO NO PEDIDO:", err.message);
+        res.status(500).json({ error: "Falha técnica: " + err.message });
     }
 });
 
@@ -508,22 +608,21 @@ router.get('/pedidos/lista-geral', verificarToken, async (req, res) => {
         const result = await db.query(`
             SELECT 
                 p.id, 
+                p.data_criacao, 
                 p.status, 
-                p.tipo_pedido, 
-                p.data_criacao,
-                l.nome as escola_nome, 
-                u.nome as usuario_nome
+                p.tipo_pedido,
+                u.nome as solicitante,
+                l.nome as escola_destino
             FROM pedidos p
-            LEFT JOIN locais l ON p.local_destino_id = l.id
             LEFT JOIN usuarios u ON p.usuario_origem_id = u.id
+            LEFT JOIN locais l ON p.local_destino_id = l.id
             ORDER BY p.data_criacao DESC
         `);
         
-        // Retorna sempre um array, mesmo que vazio
         res.json(result.rows);
     } catch (err) {
-        console.error("ERRO SQL EM LISTA-GERAL:", err.message);
-        res.status(500).json({ error: "Erro no banco de dados: " + err.message });
+        console.error("Erro ao listar pedidos:", err.message);
+        res.status(500).json({ error: "Erro interno no servidor" });
     }
 });
 
@@ -650,27 +749,30 @@ router.post('/pedidos/escola/devolver', verificarToken, async (req, res) => {
 
 // Criar Pedido Direto (Admin) - Para qualquer categoria
 router.post('/pedidos/admin/criar', verificarToken, async (req, res) => {
-    const { local_destino_id, itens } = req.body; // itens: [{produto_id, tamanho, quantidade}]
-    
+    const { local_destino_id, itens, tipo_pedido } = req.body;
+    const usuario_id = req.userId;
+
     try {
         await db.query('BEGIN');
 
-        // Cria o pedido já liberado para o estoque
-        const pedido = await db.query(
-            `INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, data_criacao, data_autorizacao, tipo_pedido) 
-             VALUES ($1, $2, 'COLETA_LIBERADA', NOW(), NOW(), 'SOLICITACAO') RETURNING id`,
-            [req.userId, local_destino_id]
+        // Note o status: já nasce em 'APROVADO' ou 'EM_SEPARACAO'
+        const pedidoRes = await db.query(
+            `INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, tipo_pedido, data_criacao) 
+             VALUES ($1, $2, 'APROVADO', $3, NOW()) RETURNING id`,
+            [usuario_id, local_destino_id, tipo_pedido]
         );
+
+        const pedidoId = pedidoRes.rows[0].id;
 
         for (const item of itens) {
             await db.query(
-                "INSERT INTO pedido_itens (pedido_id, produto_id, tamanho, quantidade_solicitada) VALUES ($1, $2, $3, $4)",
-                [pedido.rows[0].id, item.produto_id, item.tamanho || 'N/A', item.quantidade]
+                "INSERT INTO itens_pedido (pedido_id, produto_id, quantidade, tamanho) VALUES ($1, $2, $3, $4)",
+                [pedidoId, item.id, item.quantidade, item.tamanho || null]
             );
         }
 
         await db.query('COMMIT');
-        res.status(201).json({ message: "Pedido criado e enviado ao estoque!", id: pedido.rows[0].id });
+        res.status(201).json({ message: "Pedido Admin criado com sucesso!" });
     } catch (err) {
         await db.query('ROLLBACK');
         res.status(500).json({ error: err.message });
@@ -1026,19 +1128,6 @@ router.get('/produtos/lista', verificarToken, async (req, res) => {
     }
 });
 
-router.post('/cadastros/produtos', verificarToken, async (req, res) => {
-    const { nome, tipo, categoria_id, alerta_minimo } = req.body;
-    try {
-        await db.query(
-            "INSERT INTO produtos (nome, tipo, categoria_id, alerta_minimo) VALUES ($1, $2, $3, $4)",
-            [nome.toUpperCase(), tipo, categoria_id, alerta_minimo || 0]
-        );
-        res.status(201).json({ message: "Produto cadastrado" });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
 router.post('/estoque/entrada-patrimonio-lote', verificarToken, async (req, res) => {
     const { produto_id, series, local_id } = req.body;
 
@@ -1082,6 +1171,27 @@ router.post('/produtos/cadastrar', verificarToken, async (req, res) => {
     } catch (err) {
         console.error("Erro ao cadastrar produto:", err.message);
         res.status(500).json({ error: "Erro interno ao salvar produto." });
+    }
+});
+
+router.post('/cadastros/produtos', verificarToken, async (req, res) => {
+    const { nome, tipo, alerta_minimo, categoria_id } = req.body;
+
+    try {
+        // Usamos toUpperCase() para padronizar e COALESCE ou || 0 para evitar erros de valor nulo
+        await db.query(
+            "INSERT INTO produtos (nome, tipo, alerta_minimo, categoria_id) VALUES ($1, $2, $3, $4)",
+            [
+                nome.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase(), 
+                tipo, 
+                alerta_minimo || 0, 
+                categoria_id || null
+            ]
+        );
+        res.status(201).json({ message: "Produto cadastrado com sucesso!" });
+    } catch (err) {
+        console.error("Erro ao cadastrar produto:", err.message);
+        res.status(500).json({ error: "Erro ao inserir no banco: " + err.message });
     }
 });
 

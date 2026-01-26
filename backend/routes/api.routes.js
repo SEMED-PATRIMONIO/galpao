@@ -151,11 +151,11 @@ router.post('/auth/login', async (req, res) => {
         if (result.rows.length > 0) {
             const user = result.rows[0];
             res.json({
-                token: "TOKEN_DE_SESSAO_" + user.id, // Mantenha sua lógica de geração de token aqui
+                token: "TOKEN_SESSAO_" + user.id, // Aqui vai sua lógica de JWT ou Token
                 perfil: user.perfil,
                 nome: user.nome,
                 local_id: user.local_id,
-                local_nome: user.local_nome
+                local_nome: user.local_nome // Agora o nome da escola viaja para o frontend
             });
         } else {
             res.status(401).json({ message: "Usuário ou senha inválidos." });

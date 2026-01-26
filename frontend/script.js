@@ -36,9 +36,6 @@ function gerarCamposSerie() {
     }
 }
 
-// Login simplificado (sem e-mail)
-// Localize este bloco no seu script.js e substitua por este:
-// Localize este bloco no seu script.js e substitua por este:
 document.getElementById('form-login')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const usuario = document.getElementById('usuario').value;
@@ -57,7 +54,6 @@ document.getElementById('form-login')?.addEventListener('submit', async (e) => {
             localStorage.setItem('token', data.token);
             localStorage.setItem('perfil', data.perfil);
             localStorage.setItem('nome', data.nome);
-            // Salva os dados da escola
             localStorage.setItem('local_id', data.local_id || "");
             localStorage.setItem('local_nome', data.local_nome || "SEDE/GERAL");
             
@@ -70,18 +66,20 @@ document.getElementById('form-login')?.addEventListener('submit', async (e) => {
         console.error("Erro na conexão de login:", err);
         alert("Erro ao conectar com o servidor.");
     }
-});
+})
+
 function carregarDashboard() {
     const app = document.getElementById('app-content');
     const loginContainer = document.getElementById('login-container');
     
-    // Define as variáveis necessárias para o cabeçalho
+    // Recuperar dados do localStorage para evitar ReferenceError
     const nome = localStorage.getItem('nome');
     const perfil = localStorage.getItem('perfil');
     const localNome = localStorage.getItem('local_nome') || "Não Identificado";
 
-    // O erro "container is not defined" ocorria aqui. Usamos "app".
+    // Ocultar tela de login e exibir app
     if (loginContainer) loginContainer.style.display = 'none';
+    
     if (app) {
         app.style.display = 'block';
         app.innerHTML = `
@@ -89,19 +87,22 @@ function carregarDashboard() {
                 <span class="logo-texto">📦 PATRIMÔNIO SEMED</span>
                 <div style="text-align: right;">
                     <div style="font-size: 0.9rem; font-weight: bold; color: #1e40af;">
-                        👤 ${nome} (${perfil.toUpperCase()}) | 📍 ${localNome}
+                        👤 ${nome} (${perfil ? perfil.toUpperCase() : ''}) | 📍 ${localNome}
                     </div>
                     <button onclick="logout()" class="btn-sair">SAIR</button>
                 </div>
             </div>
             <div id="dashboard-content" class="container-principal">
-            </div>
+                </div>
         `;
     }
 
-    // Chama a renderização do menu baseada no perfil
-    renderizarMenuPrincipal();
+    // Executar a renderização do menu conforme o perfil logado
+    if (typeof renderizarMenuPrincipal === 'function') {
+        renderizarMenuPrincipal();
+    }
 }
+
 function mostrarLogin() {
     const app = document.getElementById('app-content');
     const loginContainer = document.getElementById('login-container');

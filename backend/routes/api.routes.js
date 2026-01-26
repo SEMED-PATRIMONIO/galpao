@@ -7,39 +7,13 @@ const { verificarToken, verificarPerfil } = require('../auth/auth.middleware');
 router.get('/usuarios/lista', verificarToken, async (req, res) => {
     try {
         const result = await db.query(`
-            SELECT u.id, u.nome, u.perfil, u.status, u.local_id, l.nome as local_nome 
+            SELECT u.id, u.nome, u.usuario, u.perfil, u.status, l.nome as local_nome 
             FROM usuarios u 
             LEFT JOIN locais l ON u.local_id = l.id 
             ORDER BY u.nome ASC
         `);
         res.json(result.rows);
-    } catch (err) { 
-        console.error("Erro na lista de usuários:", err.message);
-        res.status(500).json({ error: "Erro interno: " + err.message }); 
-    }
-});
-
-router.get('/locais/lista-simples', verificarToken, async (req, res) => {
-    try {
-        const result = await db.query("SELECT id, nome FROM locais ORDER BY nome ASC");
-        res.json(result.rows);
-    } catch (err) {
-        res.status(500).json({ error: "Erro ao buscar locais: " + err.message });
-    }
-});
-
-router.post('/usuarios/criar', verificarToken, async (req, res) => {
-    const { nome, senha, perfil, local_id, status } = req.body;
-    try {
-        await db.query(
-            "INSERT INTO usuarios (nome, senha, perfil, local_id, status) VALUES ($1, $2, $3, $4, $5)",
-            [nome, senha, perfil, local_id, status || 'ativo']
-        );
-        res.status(201).json({ message: "Usuário criado!" });
-    } catch (err) {
-        console.error("Erro SQL no cadastro:", err.message);
-        res.status(500).json({ error: "Erro ao inserir no banco de dados." });
-    }
+    } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // ALTERAR STATUS DO USUÁRIO (Ativar/Inativar)
@@ -52,13 +26,60 @@ router.patch('/usuarios/:id/status', verificarToken, async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ==========================================
-// 1. ROTAS DE PEDIDOS / SOLICITAÇÕES
-// ==========================================
+router.get('/locais/lista-simples', verificarToken, async (req, res) => {
+    try {
+        const result = await db.query("SELECT id, nome FROM locais ORDER BY nome ASC");
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao buscar locais: " + err.message });
+    }
+});
+
+// ROTA: Criar Novo Utilizador (Apenas SUPER)
+router.post('/usuarios/criar', verificarToken, async (req, res) => {
+    const { nome, usuario, senha, perfil, local_id, status } = req.body;
+
+    try {
+        // Verifica se o login já existe
+        const check = await db.query("SELECT id FROM usuarios WHERE usuario = $1", [usuario]);
+        if (check.rowCount > 0) {
+            return res.status(400).json({ error: "Este nome de utilizador já está em uso." });
+        }
+
+        // Insere o novo utilizador
+        // Nota: Se usar bcrypt, deve fazer o hash da senha antes deste passo
+        await db.query(
+            `INSERT INTO usuarios (nome, usuario, senha, perfil, local_id, status) 
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+            [nome, usuario, senha, perfil, local_id, status]
+        );
+
+        res.status(201).json({ message: "Utilizador criado com sucesso!" });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Erro interno ao criar utilizador." });
+    }
+});
+
+router.patch('/usuarios/:id/status', verificarToken, async (req, res) => {
+    const { id } = req.params;
+    const { status } = req.body; // 'ATIVO' ou 'INATIVO'
+    try {
+        await db.query("UPDATE usuarios SET status = $1 WHERE id = $2", [status, id]);
+        res.json({ message: `Usuário ${status === 'ATIVO' ? 'ativado' : 'desativado'} com sucesso.` });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 router.get('/locais/dropdown', verificarToken, async (req, res) => {
     const result = await db.query("SELECT id, nome FROM locais ORDER BY nome ASC");
     res.json(result.rows);
 });
+
+
+
+// ==========================================
+// 1. ROTAS DE PEDIDOS / SOLICITAÇÕES
+// ==========================================
 
 // Listar pedidos pendentes (Admin)
 router.get('/pedidos/aguardando-autorizacao', verificarToken, async (req, res) => {
@@ -141,29 +162,26 @@ router.put('/pedidos/itens/:itemId', verificarToken, async (req, res) => {
 router.post('/auth/login', async (req, res) => {
     const { usuario, senha } = req.body;
     try {
-        const result = await db.query(`
-            SELECT u.id, u.nome, u.perfil, u.local_id, l.nome as local_nome 
-            FROM usuarios u 
-            LEFT JOIN locais l ON u.local_id = l.id 
-            WHERE u.nome = $1 AND u.senha = $2
-        `, [usuario, senha]);
+        const result = await db.query(
+            "SELECT id, nome, perfil, local_id FROM usuarios WHERE usuario = $1 AND senha = $2",
+            [usuario, senha]
+        );
 
         if (result.rows.length > 0) {
             const user = result.rows[0];
+            // Token de exemplo (use sua lógica atual de geração)
+            const token = "TOKEN_" + user.id + "_" + Math.random().toString(36).substr(2);
+
             res.json({
-                token: "TOKEN_SESSAO_" + user.id, // Aqui vai sua lógica de JWT ou Token
+                token: token,
                 perfil: user.perfil,
                 nome: user.nome,
-                local_id: user.local_id,
-                local_nome: user.local_nome // Agora o nome da escola viaja para o frontend
+                local_id: user.local_id // Retorna o ID da escola vinculada
             });
         } else {
             res.status(401).json({ message: "Usuário ou senha inválidos." });
         }
-    } catch (err) {
-        console.error("Erro no login:", err.message);
-        res.status(500).json({ error: "Erro interno no servidor" });
-    }
+    } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // 2. Rota de Aprovação com Baixa no Estoque (Grade e Geral)
@@ -384,17 +402,19 @@ router.get('/pedidos/lista-geral', verificarToken, async (req, res) => {
                 p.status, 
                 p.tipo_pedido, 
                 p.data_criacao,
-                l.nome as escola_nome, -- Aqui buscamos o nome da escola
+                l.nome as escola_nome, 
                 u.nome as usuario_nome
             FROM pedidos p
-            -- O LEFT JOIN garante que o nome da escola apareça baseado no ID gravado
             LEFT JOIN locais l ON p.local_destino_id = l.id
             LEFT JOIN usuarios u ON p.usuario_origem_id = u.id
             ORDER BY p.data_criacao DESC
         `);
+        
+        // Retorna sempre um array, mesmo que vazio
         res.json(result.rows);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        console.error("ERRO SQL EM LISTA-GERAL:", err.message);
+        res.status(500).json({ error: "Erro no banco de dados: " + err.message });
     }
 });
 

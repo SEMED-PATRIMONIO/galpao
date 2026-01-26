@@ -41,7 +41,6 @@ function gerarCamposSerie() {
 // Localize este bloco no seu script.js e substitua por este:
 document.getElementById('form-login')?.addEventListener('submit', async (e) => {
     e.preventDefault();
-    
     const usuario = document.getElementById('usuario').value;
     const senha = document.getElementById('senha').value;
 
@@ -58,13 +57,12 @@ document.getElementById('form-login')?.addEventListener('submit', async (e) => {
             localStorage.setItem('token', data.token);
             localStorage.setItem('perfil', data.perfil);
             localStorage.setItem('nome', data.nome);
-            
-            // 🟢 IMPORTANTE: Salva o ID e o NOME que vem do banco
-            localStorage.setItem('local_id', data.local_id || ""); 
+            // Salva os dados da escola
+            localStorage.setItem('local_id', data.local_id || "");
             localStorage.setItem('local_nome', data.local_nome || "SEDE/GERAL");
-
+            
             TOKEN = data.token;
-            carregarDashboard(); // Aqui ele chama a função que deu erro
+            carregarDashboard();
         } else {
             alert('ERRO: ' + (data.message || 'Falha no login'));
         }
@@ -73,7 +71,37 @@ document.getElementById('form-login')?.addEventListener('submit', async (e) => {
         alert("Erro ao conectar com o servidor.");
     }
 });
+function carregarDashboard() {
+    const app = document.getElementById('app-content');
+    const loginContainer = document.getElementById('login-container');
+    
+    // Define as variáveis necessárias para o cabeçalho
+    const nome = localStorage.getItem('nome');
+    const perfil = localStorage.getItem('perfil');
+    const localNome = localStorage.getItem('local_nome') || "Não Identificado";
 
+    // O erro "container is not defined" ocorria aqui. Usamos "app".
+    if (loginContainer) loginContainer.style.display = 'none';
+    if (app) {
+        app.style.display = 'block';
+        app.innerHTML = `
+            <div class="header-app">
+                <span class="logo-texto">📦 PATRIMÔNIO SEMED</span>
+                <div style="text-align: right;">
+                    <div style="font-size: 0.9rem; font-weight: bold; color: #1e40af;">
+                        👤 ${nome} (${perfil.toUpperCase()}) | 📍 ${localNome}
+                    </div>
+                    <button onclick="logout()" class="btn-sair">SAIR</button>
+                </div>
+            </div>
+            <div id="dashboard-content" class="container-principal">
+            </div>
+        `;
+    }
+
+    // Chama a renderização do menu baseada no perfil
+    renderizarMenuPrincipal();
+}
 function mostrarLogin() {
     const app = document.getElementById('app-content');
     const loginContainer = document.getElementById('login-container');
@@ -135,7 +163,7 @@ async function renderizarEstoqueCentral() {
 }
 
 // --- FUNÇÃO DASHBOARD REVISADA COM REGRAS DE PERFIS ESPECÍFICAS ---
-function carregarDashboard() {
+function renderizarMenuPrincipal() {
     const app = document.getElementById('app-content');
     const loginContainer = document.getElementById('login-container');
     const nome = localStorage.getItem('nome');

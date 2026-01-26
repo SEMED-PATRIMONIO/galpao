@@ -491,37 +491,72 @@ function gerarCamposProduto() {
 
 async function telaAdminGerenciarSolicitacoes() {
     const app = document.getElementById('app-content');
-    app.style.background = "#f8fafc"; // Fundo claro para leitura
-    
-    try {
-        const res = await fetch(`${API_URL}/pedidos/admin/pendentes`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
-        const pedidos = await res.json();
+    const res = await fetch(`${API_URL}/pedidos/admin/pendentes`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+    const pedidos = await res.json();
 
-        app.innerHTML = `
-            <div style="padding:30px; font-family: sans-serif;">
-                <div style="display:flex; justify-content:space-between; margin-bottom:30px;">
-                    <h2 style="color:#1e3a8a; margin:0; font-size: 1.8rem;">🔓 AUTORIZAR SOLICITAÇÕES</h2>
-                    <button onclick="carregarDashboard()" style="background:#475569; color:white; border:none; padding:10px 20px; border-radius:8px; cursor:pointer;">VOLTAR</button>
-                </div>
-
-                <div style="display:grid; gap:15px;">
-                    ${pedidos.map(p => `
-                        <div style="background:white; border:1px solid #e2e8f0; padding:20px; border-radius:12px; display:flex; justify-content:space-between; align-items:center; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
-                            <div>
-                                <div style="color:#1e40af; font-weight:bold; font-size:1.1rem; margin-bottom:5px;">📍 ${p.local_nome}</div>
-                                <div style="color:#64748b; font-size:0.9rem;">Solicitante: <b>${p.solicitante}</b> | Data: ${new Date(p.data_criacao).toLocaleDateString()}</div>
-                            </div>
-                            <div style="display:flex; gap:10px;">
-                                <button onclick="analisarPedido(${p.id})" style="background:#2563eb; color:white; border:none; padding:12px 20px; border-radius:8px; font-weight:bold; cursor:pointer;">ANALISAR ITENS</button>
-                                <button onclick="recusarPedido(${p.id})" style="background:#dc2626; color:white; border:none; padding:12px 20px; border-radius:8px; font-weight:bold; cursor:pointer;">RECUSAR</button>
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>
+    app.innerHTML = `
+        <div style="padding:20px; background:#f1f5f9; min-height:100vh;">
+            <div style="display:flex; justify-content:space-between; margin-bottom:20px;">
+                <h2 style="color:#1e3a8a;">🔓 AUTORIZAR SOLICITAÇÕES</h2>
+                <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:10px 20px; border-radius:8px; cursor:pointer;">VOLTAR</button>
             </div>
-            <div id="modal-analise" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:999;"></div>
+
+            <div style="display:grid; gap:10px;">
+                ${pedidos.map(p => `
+                    <div style="background:white; padding:20px; border-radius:10px; border-left: 6px solid #1e40af; display:flex; justify-content:space-between; align-items:center; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+                        <div>
+                            <div style="font-weight:bold; color:#1e3a8a; font-size:1.2rem;">📍 ${p.escola_nome}</div>
+                            <div style="color:#475569;">Por: ${p.solicitante} | ${new Date(p.data_criacao).toLocaleDateString()}</div>
+                        </div>
+                        <button onclick="analisarPedidoEstoque(${p.id})" style="background:#1e40af; color:white; border:none; padding:12px 25px; border-radius:8px; font-weight:bold; cursor:pointer;">ANALISAR PEDIDO</button>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+        <div id="modal-analise" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:1000; justify-content:center; align-items:center; padding:20px;"></div>
+    `;
+}
+
+async function analisarPedidoEstoque(pedidoId) {
+    const modal = document.getElementById('modal-analise');
+    const res = await fetch(`${API_URL}/pedidos/detalhes-estoque/${pedidoId}`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+    const itens = await res.json();
+
+    let saldoSuficiente = true;
+    const linhas = itens.map(i => {
+        const falta = i.solicitado > i.em_estoque;
+        if (falta) saldoSuficiente = false;
+        return `
+            <tr style="border-bottom: 1px solid #eee; background: ${falta ? '#fff1f2' : 'transparent'}">
+                <td style="padding:15px; color:#1e3a8a; font-weight:bold;">${i.produto} (${i.tamanho})</td>
+                <td style="padding:15px; text-align:center;">${i.solicitado}</td>
+                <td style="padding:15px; text-align:center; color:${falta ? '#e11d48' : '#16a34a'}; font-weight:bold;">${i.em_estoque}</td>
+                <td style="padding:15px; text-align:right;">${falta ? '❌ SEM SALDO' : '✅ OK'}</td>
+            </tr>
         `;
-    } catch (err) { alert("Erro ao carregar dados."); }
+    }).join('');
+
+    modal.style.display = 'flex';
+    modal.innerHTML = `
+        <div style="background:white; padding:30px; border-radius:15px; width:100%; max-width:800px; box-shadow: 0 20px 25px rgba(0,0,0,0.2);">
+            <h3 style="color:#1e3a8a; margin-top:0;">📋 Comparação Pedido vs Estoque</h3>
+            <table style="width:100%; border-collapse:collapse; margin:20px 0;">
+                <thead style="background:#f1f5f9; color:#1e3a8a;">
+                    <tr><th style="text-align:left; padding:15px;">PRODUTO</th><th>PEDIDO</th><th>ESTOQUE</th><th>STATUS</th></tr>
+                </thead>
+                <tbody>${linhas}</tbody>
+            </table>
+            <div style="display:flex; gap:15px;">
+                <button onclick="editarQuantidades(${pedidoId})" style="flex:1; background:#f59e0b; color:white; border:none; padding:15px; border-radius:8px; font-weight:bold; cursor:pointer;">✏️ EDITAR QUANTIDADES</button>
+                <button ${!saldoSuficiente ? 'disabled style="opacity:0.4; cursor:not-allowed;"' : ''} 
+                        onclick="finalizarPedido(${pedidoId})" 
+                        style="flex:1; background:#16a34a; color:white; border:none; padding:15px; border-radius:8px; font-weight:bold; cursor:pointer;">
+                    ✅ AUTORIZAR SAÍDA
+                </button>
+                <button onclick="document.getElementById('modal-analise').style.display='none'" style="flex:1; background:#64748b; color:white; border:none; padding:15px; border-radius:8px; font-weight:bold; cursor:pointer;">FECHAR</button>
+            </div>
+        </div>
+    `;
 }
 
 async function analisarPedido(id) {

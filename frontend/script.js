@@ -20,6 +20,23 @@ document.addEventListener('input', (e) => {
     }
 });
 
+async function abrirFormularioUsuario() {
+    // Busca a lista de locais para o dropdown
+    const res = await fetch(`${API_URL}/locais/dropdown`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+    });
+    const locais = await res.json();
+
+    const formHTML = `
+        <label>VINCULAR À UNIDADE (ESCOLA/SETOR):</label>
+        <select id="novo_local_id" style="width:100%; padding:10px; margin-bottom:15px; border-radius:4px;">
+            <option value="">-- SELECIONE O LOCAL --</option>
+            ${locais.map(l => `<option value="${l.id}">${l.nome}</option>`).join('')}
+        </select>
+    `;
+    // Insira este formHTML dentro do seu modal/container de cadastro
+}
+
 // Função para gerar campos de Patrimônio dinamicamente
 function gerarCamposSerie() {
     const qtd = document.getElementById('qtd_patrimonio').value;
@@ -6518,6 +6535,45 @@ function abrirModalCadastro(tipoCadastro) {
         </div>
     `;
 }
+
+async function telaAdminCriarUsuario() {
+    const container = document.getElementById('app-content');
+    
+    // 1. Busca os locais cadastrados
+    const res = await fetch(`${API_URL}/locais/lista-simples`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+    });
+    const locais = await res.json();
+
+    container.innerHTML = `
+        <div style="padding:20px;">
+            <h2>👤 CADASTRAR NOVO FUNCIONÁRIO</h2>
+            <form id="form-criar-usuario" style="max-width:400px; background:white; padding:20px; border-radius:8px;">
+                <label>NOME COMPLETO:</label>
+                <input type="text" id="novo_nome" required style="width:100%; margin-bottom:15px; padding:10px;">
+
+                <label>PERFIL DE ACESSO:</label>
+                <select id="novo_perfil" required style="width:100%; margin-bottom:15px; padding:10px;">
+                    <option value="escola">ESCOLA (Acesso Restrito)</option>
+                    <option value="admin">ADMINISTRADOR</option>
+                    <option value="estoque">ESTOQUE / LOGÍSTICA</option>
+                    <option value="super">SUPER (Total)</option>
+                </select>
+
+                <label>VINCULAR A UM LOCAL (ESCOLA/SETOR):</label>
+                <select id="novo_local_id" required style="width:100%; margin-bottom:15px; padding:10px;">
+                    <option value="">-- SELECIONE O LOCAL --</option>
+                    ${locais.map(l => `<option value="${l.id}">${l.nome}</option>`).join('')}
+                </select>
+
+                <button type="submit" style="width:100%; background:#10b981; color:white; padding:15px; border:none; border-radius:4px; font-weight:bold;">
+                    SALVAR USUÁRIO
+                </button>
+            </form>
+        </div>
+    `;
+}
+
 
 // Isso garante que o onclick="funcao()" funcione sempre
 window.telaVisualizarEstoque = telaVisualizarEstoque;

@@ -141,23 +141,21 @@ router.put('/pedidos/itens/:itemId', verificarToken, async (req, res) => {
 router.post('/auth/login', async (req, res) => {
     const { usuario, senha } = req.body;
     try {
-        // Busca o usuário e o nome do local vinculado na tabela locais
         const result = await db.query(`
             SELECT u.id, u.nome, u.perfil, u.local_id, l.nome as local_nome 
             FROM usuarios u 
             LEFT JOIN locais l ON u.local_id = l.id 
-            WHERE u.nome = $1 AND u.senha = $2`, 
-            [usuario, senha]
-        );
+            WHERE u.nome = $1 AND u.senha = $2
+        `, [usuario, senha]);
 
         if (result.rows.length > 0) {
             const user = result.rows[0];
             res.json({
-                token: "TOKEN_GERADO_AQUI", // Mantenha sua lógica de token
+                token: "TOKEN_DE_SESSAO_" + user.id, // Mantenha sua lógica de geração de token aqui
                 perfil: user.perfil,
                 nome: user.nome,
                 local_id: user.local_id,
-                local_nome: user.local_nome // Envia o nome da escola para o frontend
+                local_nome: user.local_nome
             });
         } else {
             res.status(401).json({ message: "Usuário ou senha inválidos." });

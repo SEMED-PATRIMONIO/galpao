@@ -20,119 +20,6 @@ document.addEventListener('input', (e) => {
     }
 });
 
-async function enviarPedidoUniforme(operacao) {
-    if (carrinhoUniforme.length === 0) return alert("Carrinho vazio!");
-
-    const payload = {
-        operacao: operacao, // 'SOLICITACAO' ou 'DEVOLUCAO'
-        itens: carrinhoUniforme 
-    };
-
-    try {
-        const res = await fetch(`${API_URL}/pedidos/uniformes/criar`, {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${TOKEN}`
-            },
-            body: JSON.stringify(payload)
-        });
-
-        if (res.ok) {
-            alert("✅ Enviado com sucesso!");
-            carrinhoUniforme = [];
-            carregarDashboard();
-        } else {
-            const erro = await res.json();
-            alert("❌ Erro: " + erro.error);
-        }
-    } catch (err) {
-        alert("Erro de conexão.");
-    }
-}
-
-async function abrirFormularioUsuario() {
-    // Busca a lista de locais para o dropdown
-    const res = await fetch(`${API_URL}/locais/dropdown`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-    });
-    const locais = await res.json();
-
-    const formHTML = `
-        <label>VINCULAR À UNIDADE (ESCOLA/SETOR):</label>
-        <select id="novo_local_id" style="width:100%; padding:10px; margin-bottom:15px; border-radius:4px;">
-            <option value="">-- SELECIONE O LOCAL --</option>
-            ${locais.map(l => `<option value="${l.id}">${l.nome}</option>`).join('')}
-        </select>
-    `;
-    // Insira este formHTML dentro do seu modal/container de cadastro
-}
-
-// Função para gerar campos de Patrimônio dinamicamente
-function gerarCamposSerie() {
-    const qtd = document.getElementById('qtd_patrimonio').value;
-    const container = document.getElementById('container_series');
-    container.innerHTML = ''; // Limpa campos anteriores
-
-    for (let i = 0; i < qtd; i++) {
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.placeholder = `NÚMERO DE SÉRIE / PLAQUETA ${i + 1}`;
-        input.className = 'input-serie';
-        input.required = true;
-        container.appendChild(input);
-    }
-}
-
-async function finalizarPedidoUniforme(tipoMovimentacao) {
-    // 1. Lemos o ID do local que o sistema 'aprendeu' no login
-    const localIdLogado = localStorage.getItem('local_id');
-
-    // Segurança: Se não houver local_id, o usuário não pode pedir nada
-    if (!localIdLogado || localIdLogado === "" || localIdLogado === "null") {
-        return alert("⚠️ ERRO: Seu usuário não possui um local vinculado. Saia e entre novamente no sistema.");
-    }
-
-    if (carrinhoUniforme.length === 0) {
-        return alert("Seu carrinho está vazio!");
-    }
-
-    // 2. Montamos o objeto que será enviado ao banco
-    const dadosPedido = {
-        // O local_id do usuário logado torna-se o DESTINO da solicitação
-        local_destino_id: parseInt(localIdLogado), 
-        tipo_movimentacao: 'UNIFORMES',
-        status: 'AGUARDANDO_AUTORIZACAO',
-        itens: carrinhoUniforme, // Array com os itens selecionados
-        operacao: tipoMovimentacao // 'SOLICITACAO' ou 'DEVOLUCAO'
-    };
-
-    try {
-        const res = await fetch(`${API_URL}/pedidos/uniformes/criar`, {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
-            },
-            body: JSON.stringify(dadosPedido)
-        });
-
-        if (res.ok) {
-            alert("✨ Pedido realizado com sucesso para sua unidade!");
-            carrinhoUniforme = []; // Limpa o carrinho
-            carregarDashboard();
-        } else {
-            alert("Erro ao processar pedido no servidor.");
-        }
-    } catch (err) {
-        console.error("Erro no envio:", err);
-        alert("Falha na conexão com o servidor.");
-    }
-}
-
-// Login simplificado (sem e-mail)
-// Localize este bloco no seu script.js e substitua por este:
-// Localize este bloco no seu script.js e substitua por este:
 document.getElementById('form-login')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     
@@ -209,6 +96,24 @@ async function verificarAlertasEscola() { // Removi o localId daqui
     }
 }
 
+async function inicializarSessaoUsuario() {
+    try {
+        const res = await fetch(`${API_URL}/auth/quem-sou-eu`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        const usuario = await res.json();
+
+        if (res.ok) {
+            // Guarda as informações na "variável permanente" do navegador
+            localStorage.setItem('minha_unidade_id', usuario.local_id);
+            localStorage.setItem('minha_unidade_nome', usuario.local_nome || "Sede/Admin");
+            console.log("Sessão inicializada: " + usuario.local_nome);
+        }
+    } catch (err) {
+        console.error("Erro ao carregar dados da sessão:", err);
+    }
+}
+
 // Renderizar estoque com Alerta Visual de nível baixo
 async function renderizarEstoqueCentral() {
     const res = await fetch(`${API_URL}/estoque/central`, {
@@ -227,12 +132,14 @@ async function renderizarEstoqueCentral() {
 }
 
 // --- FUNÇÃO DASHBOARD REVISADA COM REGRAS DE PERFIS ESPECÍFICAS ---
-function carregarDashboard() {
+async function carregarDashboard() {
+    await inicializarSessaoUsuario();
     const perfil = localStorage.getItem('perfil') ? localStorage.getItem('perfil').toLowerCase() : null;
     const nome = localStorage.getItem('nome');
     const localId = localStorage.getItem('local_id');
     const container = document.getElementById('app-content');
     const loginContainer = document.getElementById('login-container');
+
 
     if (!perfil) {
         if (loginContainer) loginContainer.style.display = 'block';
@@ -440,6 +347,121 @@ async function telaVisualizarEstoque() {
         container.innerHTML = html;
     } catch (err) {
         container.innerHTML = "Erro ao carregar estoque.";
+    }
+}
+
+async function enviarPedidoUniforme(operacao) {
+    const localId = localStorage.getItem('minha_unidade_id');
+    
+    if (!localId || localId === "null") {
+        return alert("Erro: Seu usuário não está vinculado a nenhuma escola no cadastro.");
+    }
+
+    const payload = {
+        local_destino_id: parseInt(localId),
+        operacao: operacao, // 'SOLICITACAO' ou 'DEVOLUCAO'
+        itens: carrinhoUniforme
+    };
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/uniformes/criar`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${TOKEN}`
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+            alert("✅ Enviado com sucesso!");
+            carrinhoUniforme = [];
+            carregarDashboard();
+        } else {
+            const erro = await res.json();
+            alert("❌ Erro: " + erro.error);
+        }
+    } catch (err) {
+        alert("Erro de conexão.");
+    }
+}
+
+async function abrirFormularioUsuario() {
+    // Busca a lista de locais para o dropdown
+    const res = await fetch(`${API_URL}/locais/dropdown`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+    });
+    const locais = await res.json();
+
+    const formHTML = `
+        <label>VINCULAR À UNIDADE (ESCOLA/SETOR):</label>
+        <select id="novo_local_id" style="width:100%; padding:10px; margin-bottom:15px; border-radius:4px;">
+            <option value="">-- SELECIONE O LOCAL --</option>
+            ${locais.map(l => `<option value="${l.id}">${l.nome}</option>`).join('')}
+        </select>
+    `;
+    // Insira este formHTML dentro do seu modal/container de cadastro
+}
+
+// Função para gerar campos de Patrimônio dinamicamente
+function gerarCamposSerie() {
+    const qtd = document.getElementById('qtd_patrimonio').value;
+    const container = document.getElementById('container_series');
+    container.innerHTML = ''; // Limpa campos anteriores
+
+    for (let i = 0; i < qtd; i++) {
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.placeholder = `NÚMERO DE SÉRIE / PLAQUETA ${i + 1}`;
+        input.className = 'input-serie';
+        input.required = true;
+        container.appendChild(input);
+    }
+}
+
+async function finalizarPedidoUniforme(tipoMovimentacao) {
+    // 1. Lemos o ID do local que o sistema 'aprendeu' no login
+    const localIdLogado = localStorage.getItem('local_id');
+
+    // Segurança: Se não houver local_id, o usuário não pode pedir nada
+    if (!localIdLogado || localIdLogado === "" || localIdLogado === "null") {
+        return alert("⚠️ ERRO: Seu usuário não possui um local vinculado. Saia e entre novamente no sistema.");
+    }
+
+    if (carrinhoUniforme.length === 0) {
+        return alert("Seu carrinho está vazio!");
+    }
+
+    // 2. Montamos o objeto que será enviado ao banco
+    const dadosPedido = {
+        // O local_id do usuário logado torna-se o DESTINO da solicitação
+        local_destino_id: parseInt(localIdLogado), 
+        tipo_movimentacao: 'UNIFORMES',
+        status: 'AGUARDANDO_AUTORIZACAO',
+        itens: carrinhoUniforme, // Array com os itens selecionados
+        operacao: tipoMovimentacao // 'SOLICITACAO' ou 'DEVOLUCAO'
+    };
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/uniformes/criar`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify(dadosPedido)
+        });
+
+        if (res.ok) {
+            alert("✨ Pedido realizado com sucesso para sua unidade!");
+            carrinhoUniforme = []; // Limpa o carrinho
+            carregarDashboard();
+        } else {
+            alert("Erro ao processar pedido no servidor.");
+        }
+    } catch (err) {
+        console.error("Erro no envio:", err);
+        alert("Falha na conexão com o servidor.");
     }
 }
 

@@ -21,22 +21,9 @@ document.addEventListener('input', (e) => {
 });
 
 async function enviarPedidoUniforme(operacao) {
-    // 1. O sistema lê o local_id de quem está logado
-    const localIdLogado = localStorage.getItem('local_id');
+    if (carrinhoUniforme.length === 0) return alert("Carrinho vazio!");
 
-    // Validação de segurança
-    if (!localIdLogado || localIdLogado === "" || localIdLogado === "null") {
-        return alert("⚠️ ERRO: Usuário sem local vinculado. Faça logout e login novamente.");
-    }
-
-    if (carrinhoUniforme.length === 0) {
-        return alert("O carrinho está vazio!");
-    }
-
-    // 2. Montamos o pacote de dados para o banco
-    const dadosPedido = {
-        local_destino_id: parseInt(localIdLogado), // O local da escola logada
-        tipo_pedido: 'UNIFORMES',
+    const payload = {
         operacao: operacao, // 'SOLICITACAO' ou 'DEVOLUCAO'
         itens: carrinhoUniforme 
     };
@@ -48,19 +35,19 @@ async function enviarPedidoUniforme(operacao) {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${TOKEN}`
             },
-            body: JSON.stringify(dadosPedido)
+            body: JSON.stringify(payload)
         });
 
         if (res.ok) {
-            alert(`✅ ${operacao} de uniformes enviada com sucesso!`);
+            alert("✅ Enviado com sucesso!");
             carrinhoUniforme = [];
             carregarDashboard();
         } else {
             const erro = await res.json();
-            alert("Erro ao gravar pedido: " + erro.error);
+            alert("❌ Erro: " + erro.error);
         }
     } catch (err) {
-        alert("Erro de conexão com o servidor.");
+        alert("Erro de conexão.");
     }
 }
 
@@ -271,7 +258,6 @@ function carregarDashboard() {
 
     // --- 1. FERRAMENTAS COMUNS (Todos os perfis) ---
     const menuComum = `
-        <div class="secao-titulo">FERRAMENTAS E CONTA</div>
         <button class="btn-grande" onclick="abrirCalculadoraConversao()">
             <i>🧮</i><span>CALCULADORA</span>
         </button>
@@ -283,7 +269,6 @@ function carregarDashboard() {
     // --- 2. PERFIL: SUPER (Gestão de Usuários) ---
     if (perfil === 'super') {
         html += `
-            <div class="secao-titulo">ADMINISTRAÇÃO DO SISTEMA</div>
             <button class="btn-grande" onclick="telaGerenciarUsuarios()">
                 <i>👥</i><span>GERENCIAR USUÁRIOS</span>
             </button>
@@ -296,7 +281,6 @@ function carregarDashboard() {
     // --- 3. PERFIL: ESCOLA ---
     if (perfil === 'escola') {
         html += `
-            <div class="secao-titulo">MINHA UNIDADE (ESCOLA)</div>
             <button class="btn-grande" onclick="listarPedidosEmCaminho()">
                 <i>🚚</i><span>CONFIRMAR RECEBIMENTO</span>
             </button>
@@ -335,6 +319,9 @@ function carregarDashboard() {
             <button class="btn-grande" onclick="renderizarDashboardGeral()">
                 <i>📊</i><span>PAINEL DE PEDIDOS</span>
             </button>
+            <button onclick="telaAdminVerPedidos()" class="btn-quadrado">
+                📋<br>GESTÃO DE PEDIDOS
+            </button>            
         `;
         // Chama alertas de novas solicitações de Escolas e Logística
         setTimeout(() => verificarSolicitacoesPendentes(), 500);
@@ -346,6 +333,9 @@ function carregarDashboard() {
             <button class="btn-grande" onclick="abrirPainelSeparacao()">
                 <i>📦</i><span>SEPARAÇÃO DE VOLUMES</span>
             </button>
+            <button class="btn-grande" onclick="telaCadastrosBase()">
+                <i>⚙️</i><span>CADASTROS BÁSICOS</span>
+            </button>            
             <button class="btn-grande" onclick="telaAbastecerEstoque()">
                 <i>📥</i><span>ENTRADA ESTOQUE</span>
             </button>
@@ -369,7 +359,6 @@ function carregarDashboard() {
     // --- 6. PERFIL: LOGÍSTICA ---
     if (perfil === 'logistica') {
         html += `
-            <div class="secao-titulo">LOGÍSTICA E TRANSPORTE</div>
             <button class="btn-grande" onclick="listarColetaLogistica()">
                 <i>🚚</i><span>RECOLHER E TRANSPORTAR PEDIDO</span>
             </button>
@@ -501,53 +490,162 @@ function gerarCamposProduto() {
 }
 
 async function telaAdminGerenciarSolicitacoes() {
-    const container = document.getElementById('app-content');
-    container.innerHTML = '<div style="padding:20px;">Buscando solicitações pendentes...</div>';
-
+    const app = document.getElementById('app-content');
+    app.style.background = "#f8fafc"; // Fundo claro para leitura
+    
     try {
-        const res = await fetch(`${API_URL}/pedidos/lista-geral`, {
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-        });
-        
-        const data = await res.json();
+        const res = await fetch(`${API_URL}/pedidos/admin/pendentes`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+        const pedidos = await res.json();
 
-        // VALIDAÇÃO: Se o backend mandou um erro, ele não será um Array
-        if (!Array.isArray(data)) {
-            throw new Error(data.error || "O servidor não retornou uma lista válida.");
-        }
-
-        const pendentes = data.filter(p => p.status === 'AGUARDANDO_AUTORIZACAO');
-
-        container.innerHTML = `
-            <div style="padding:20px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                    <h2 style="color:#1e3a8a; margin:0;">⚖️ AUTORIZAR SOLICITAÇÕES</h2>
-                    <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer; font-weight:bold;">⬅️ VOLTAR</button>
+        app.innerHTML = `
+            <div style="padding:30px; font-family: sans-serif;">
+                <div style="display:flex; justify-content:space-between; margin-bottom:30px;">
+                    <h2 style="color:#1e3a8a; margin:0; font-size: 1.8rem;">🔓 AUTORIZAR SOLICITAÇÕES</h2>
+                    <button onclick="carregarDashboard()" style="background:#475569; color:white; border:none; padding:10px 20px; border-radius:8px; cursor:pointer;">VOLTAR</button>
                 </div>
-                
-                ${pendentes.length === 0 ? '<p style="padding:20px; background:#f8fafc; border-radius:8px;">Nenhuma solicitação pendente.</p>' : ''}
 
-                <div style="display: grid; gap: 20px;">
-                    ${pendentes.map(p => `
-                        <div style="background:white; padding:20px; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.1);">
-                            <div style="display:flex; justify-content:space-between; align-items:start;">
-                                <div>
-                                    <strong style="font-size:1.1rem;">PEDIDO #${p.id}</strong><br>
-                                    <span style="color:#1e40af; font-weight:bold;">📍 DESTINO: ${p.escola_nome || 'NÃO IDENTIFICADO'}</span><br>
-                                    <small>Solicitado por: ${p.usuario_nome || 'N/A'}</small>
-                                </div>
-                                <button onclick="abrirEdicaoSolicitacao(${p.id})" style="background:#10b981; color:white; border:none; padding:10px 20px; border-radius:6px; cursor:pointer; font-weight:bold;">✏️ REVISAR E APROVAR</button>
+                <div style="display:grid; gap:15px;">
+                    ${pedidos.map(p => `
+                        <div style="background:white; border:1px solid #e2e8f0; padding:20px; border-radius:12px; display:flex; justify-content:space-between; align-items:center; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+                            <div>
+                                <div style="color:#1e40af; font-weight:bold; font-size:1.1rem; margin-bottom:5px;">📍 ${p.local_nome}</div>
+                                <div style="color:#64748b; font-size:0.9rem;">Solicitante: <b>${p.solicitante}</b> | Data: ${new Date(p.data_criacao).toLocaleDateString()}</div>
                             </div>
-                            <div id="area-edicao-${p.id}" style="margin-top:15px;"></div>
+                            <div style="display:flex; gap:10px;">
+                                <button onclick="analisarPedido(${p.id})" style="background:#2563eb; color:white; border:none; padding:12px 20px; border-radius:8px; font-weight:bold; cursor:pointer;">ANALISAR ITENS</button>
+                                <button onclick="recusarPedido(${p.id})" style="background:#dc2626; color:white; border:none; padding:12px 20px; border-radius:8px; font-weight:bold; cursor:pointer;">RECUSAR</button>
+                            </div>
                         </div>
                     `).join('')}
                 </div>
             </div>
+            <div id="modal-analise" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:999;"></div>
         `;
-    } catch (error) {
-        console.error("Erro na tela de autorização:", error);
-        alert("Erro ao carregar solicitações: " + error.message);
-        container.innerHTML = `<div style="padding:20px; color:red;">⚠️ Falha ao carregar: ${error.message}</div>`;
+    } catch (err) { alert("Erro ao carregar dados."); }
+}
+
+async function analisarPedido(id) {
+    const modal = document.getElementById('modal-analise');
+    const res = await fetch(`${API_URL}/pedidos/detalhes-estoque/${id}`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+    const itens = await res.json();
+
+    let estoqueSuficiente = true;
+    let htmlItens = itens.map(i => {
+        const falta = i.solicitado > i.em_estoque;
+        if (falta) estoqueSuficiente = false;
+        return `
+            <tr style="border-bottom: 1px solid #eee; background: ${falta ? '#fff1f2' : 'transparent'}">
+                <td style="padding:10px;">${i.produto} (${i.tamanho})</td>
+                <td style="padding:10px; font-weight:bold;">${i.solicitado}</td>
+                <td style="padding:10px; color: ${falta ? '#e11d48' : '#16a34a'}; font-weight:bold;">${i.em_estoque}</td>
+                <td style="padding:10px;">${falta ? '❌ INSUFICIENTE' : '✅ OK'}</td>
+            </tr>
+        `;
+    }).join('');
+
+    modal.style.display = 'flex';
+    modal.style.alignItems = 'center';
+    modal.style.justifyContent = 'center';
+    modal.innerHTML = `
+        <div style="background:white; padding:30px; border-radius:15px; width:90%; max-width:700px; max-height:80vh; overflow-y:auto;">
+            <h3 style="color:#1e3a8a; margin-top:0;">📊 Análise de Saldo - Pedido #${id}</h3>
+            <table style="width:100%; border-collapse:collapse; margin-bottom:20px;">
+                <thead style="background:#f1f5f9;">
+                    <tr><th style="text-align:left; padding:10px;">PRODUTO</th><th>PEDIDO</th><th>ESTOQUE</th><th>STATUS</th></tr>
+                </thead>
+                <tbody>${htmlItens}</tbody>
+            </table>
+            
+            <div style="display:flex; gap:10px;">
+                <button onclick="editarQuantidades(${id})" style="flex:1; background:#f59e0b; color:white; border:none; padding:15px; border-radius:8px; font-weight:bold; cursor:pointer;">✏️ EDITAR QUANTIDADES</button>
+                <button ${!estoqueSuficiente ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''} 
+                        onclick="finalizarAutorizacao(${id}, 'APROVADO')" 
+                        style="flex:1; background:#16a34a; color:white; border:none; padding:15px; border-radius:8px; font-weight:bold; cursor:pointer;">
+                    ✅ AUTORIZAR SAÍDA
+                </button>
+                <button onclick="document.getElementById('modal-analise').style.display='none'" style="flex:1; background:#64748b; color:white; border:none; padding:15px; border-radius:8px; font-weight:bold; cursor:pointer;">FECHAR</button>
+            </div>
+        </div>
+    `;
+}
+
+async function editarQuantidades(pedidoId) {
+    const modal = document.getElementById('modal-analise');
+    // Buscamos os dados novamente para garantir que estamos editando a versão mais recente
+    const res = await fetch(`${API_URL}/pedidos/detalhes-estoque/${pedidoId}`, { 
+        headers: { 'Authorization': `Bearer ${TOKEN}` } 
+    });
+    const itens = await res.json();
+
+    modal.innerHTML = `
+        <div style="background:white; padding:30px; border-radius:15px; width:90%; max-width:750px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+            <h3 style="color:#1e3a8a; margin-top:0; border-bottom: 2px solid #e2e8f0; padding-bottom:10px;">✏️ EDITAR QUANTIDADES - PEDIDO #${pedidoId}</h3>
+            <p style="color:#64748b; margin-bottom:20px;">Ajuste as quantidades para que fiquem dentro do limite disponível em estoque.</p>
+            
+            <table style="width:100%; border-collapse:collapse; margin-bottom:25px;">
+                <thead style="background:#f1f5f9; color:#1e3a8a;">
+                    <tr>
+                        <th style="text-align:left; padding:12px;">PRODUTO / TAMANHO</th>
+                        <th style="padding:12px;">ESTOQUE</th>
+                        <th style="padding:12px; width:120px;">NOVA QTD</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${itens.map(i => `
+                        <tr style="border-bottom: 1px solid #eee;">
+                            <td style="padding:12px;">${i.produto} (Tam: ${i.tamanho || 'U'})</td>
+                            <td style="padding:12px; text-align:center; font-weight:bold; color:#16a34a;">${i.em_estoque}</td>
+                            <td style="padding:12px;">
+                                <input type="number" class="input-edicao-qtd" data-item-id="${i.item_id}" value="${i.solicitado}" min="0" 
+                                    style="width:100%; padding:8px; border:2px solid #cbd5e1; border-radius:6px; font-weight:bold; text-align:center;">
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+            
+            <div style="display:flex; gap:15px;">
+                <button onclick="salvarEdicaoPedido(${pedidoId})" style="flex:2; background:#1e40af; color:white; border:none; padding:15px; border-radius:8px; font-weight:bold; cursor:pointer; font-size:1rem;">
+                    💾 SALVAR ALTERAÇÕES
+                </button>
+                <button onclick="analisarPedido(${pedidoId})" style="flex:1; background:#94a3b8; color:white; border:none; padding:15px; border-radius:8px; font-weight:bold; cursor:pointer;">
+                    CANCELAR
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+async function salvarEdicaoPedido(pedidoId) {
+    const inputs = document.querySelectorAll('.input-edicao-qtd');
+    const itensAtualizados = [];
+
+    inputs.forEach(input => {
+        itensAtualizados.push({
+            item_id: input.getAttribute('data-item-id'),
+            nova_qtd: parseInt(input.value)
+        });
+    });
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/itens/atualizar`, {
+            method: 'PUT',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${TOKEN}`
+            },
+            body: JSON.stringify({ itens: itensAtualizados })
+        });
+
+        if (res.ok) {
+            alert("✅ Quantidades ajustadas com sucesso!");
+            // Após salvar, volta para a tela de análise para verificar se o botão "Autorizar" já pode ser liberado
+            analisarPedido(pedidoId);
+        } else {
+            alert("Erro ao salvar alterações.");
+        }
+    } catch (err) {
+        alert("Erro de conexão com o servidor.");
     }
 }
 
@@ -1721,24 +1819,43 @@ function ajustarGradeUniforme() {
     }
 }
 
-async function salvarProduto() {
+async function funantigassalvarProduto() {
+    const nome = document.getElementById('p_nome').value;
+    const tipo = document.getElementById('p_tipo').value;
+    const alerta_minimo = document.getElementById('p_alerta') ? document.getElementById('p_alerta').value : 0;
+
+    // Validação básica
+    if (!nome) {
+        return alert("Por favor, informe o nome do produto.");
+    }
+
     const payload = {
-        nome: document.getElementById('prod_nome').value,
-        tipo: document.getElementById('prod_tipo').value,
-        categoria_id: document.getElementById('prod_categoria').value,
-        quantidade_estoque: document.getElementById('prod_qtd').value || 0,
-        alerta_minimo: document.getElementById('prod_tipo').value === 'MATERIAL' ? document.getElementById('prod_alerta').value : null
+        nome: nome,
+        tipo: tipo,
+        alerta_minimo: alerta_minimo
     };
 
-    const res = await fetch(`${API_URL}/api/cadastros/produtos`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
-        body: JSON.stringify(payload)
-    });
+    try {
+        const res = await fetch(`${API_URL}/cadastros/produtos`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify(payload)
+        });
 
-    if(res.ok) {
-        alert("PRODUTO CADASTRADO!");
-        formProduto();
+        if (res.ok) {
+            alert("✅ Produto cadastrado com sucesso!");
+            // Limpa o campo de nome para o próximo cadastro
+            document.getElementById('p_nome').value = ''; 
+        } else {
+            const data = await res.json();
+            alert("❌ Erro ao salvar: " + (data.error || "Erro desconhecido"));
+        }
+    } catch (err) {
+        console.error("Erro na requisição:", err);
+        alert("🚨 Erro de conexão com o servidor.");
     }
 }
 
@@ -1953,7 +2070,7 @@ async function formProduto() {
                 <input type="number" id="p_alerta" value="0" style="width:100%; padding:10px; margin-bottom:15px; border:1px solid #ccc; border-radius:6px;">
             </div>
 
-            <button onclick="executarSalvarProduto()" style="width:100%; background:#1e40af; color:white; border:none; padding:12px; border-radius:6px; font-weight:bold; cursor:pointer;">SALVAR PRODUTO</button>
+            <button onclick="salvarProduto()" style="width:100%; background:#1e40af; color:white; border:none; padding:12px; border-radius:6px; font-weight:bold; cursor:pointer;">SALVAR PRODUTO</button>
         </div>
     `;
 }
@@ -2094,7 +2211,7 @@ function monitorarTipoProduto() {
     }
 }
 
-async function salvarProduto() {
+async function funoldsalvarProduto() {
     const payload = {
         nome: document.getElementById('prod_nome').value,
         tipo: document.getElementById('prod_tipo').value,
@@ -5744,94 +5861,84 @@ async function salvarAbastecimento(produtoId) {
 let carrinhoAdmin = [];
 
 async function telaAdminCriarPedido() {
-    const container = document.getElementById('app-content');
-    container.innerHTML = '<div style="padding:20px; font-weight:bold;">Carregando formulário de pedido...</div>';
-
+    const app = document.getElementById('app-content');
+    
     try {
-        const tokenAtual = localStorage.getItem('token');
-        
-        // 1. Buscamos as duas listas necessárias em paralelo
-        const [resLocais, resProdutos] = await Promise.all([
-            fetch(`${API_URL}/locais`, { headers: { 'Authorization': `Bearer ${tokenAtual}` } }),
-            fetch(`${API_URL}/produtos`, { headers: { 'Authorization': `Bearer ${tokenAtual}` } })
-        ]);
+        // 1. Busca os locais (aqui é onde dava o erro, verifique se a rota está correta)
+        const resLocais = await fetch(`${API_URL}/locais/lista-simples`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
 
-        if (!resLocais.ok || !resProdutos.ok) {
-            throw new Error("Falha na comunicação com o servidor ao buscar listas.");
-        }
-
+        // Verificação de segurança para evitar o erro de JSON
+        if (!resLocais.ok) throw new Error("Erro ao buscar lista de locais no servidor.");
         const locais = await resLocais.json();
-        const produtos = await resProdutos.json();
 
-        // 2. Definimos o título para evitar o erro de ReferenceError
-        const tituloTela = "➕ CRIAR NOVO PEDIDO GERAL (ADMIN)";
-        
-        // Resetamos o carrinho para este novo pedido
-        carrinhoSolicitacao = [];
-
-        container.innerHTML = `
+        app.innerHTML = `
             <div style="padding:20px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1px solid #ddd; padding-bottom:10px;">
-                    <h2 style="color:#1e3a8a; margin:0;">${tituloTela}</h2>
-                    <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer; font-weight:bold;">⬅️ VOLTAR</button>
-                </div>
-
-                <div style="background:#f1f5f9; padding:15px; border-radius:8px; margin-bottom:20px; border:1px solid #cbd5e1;">
-                    <label style="font-weight:bold; display:block; margin-bottom:5px;">UNIDADE DE DESTINO:</label>
-                    <select id="pedido_local_id" style="width:100%; max-width:400px; padding:10px; border-radius:6px; border:1px solid #94a3b8;">
-                        <option value="">-- SELECIONE A ESCOLA/SETOR --</option>
-                        ${locais.map(l => `<option value="${l.id}">${l.nome}</option>`).join('')}
-                    </select>
-                </div>
-
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                    <div style="background:white; padding:20px; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.1);">
-                        <h3 style="margin-top:0;">Adicionar Itens</h3>
-                        
-                        <label>PRODUTO:</label>
-                        <select id="solicitar_produto_id" style="width:100%; padding:10px; margin-bottom:15px;">
-                            ${produtos.map(p => `<option value="${p.id}">${p.nome} (${p.tipo})</option>`).join('')}
+                <button onclick="carregarDashboard()" class="btn-voltar">⬅ VOLTAR</button>
+                <div class="card-form" style="max-width: 900px; margin: auto;">
+                    <h2 style="color:#1e3a8a;">📝 CRIAR PEDIDO (MODO ADMIN)</h2>
+                    <p style="color: #64748b;">Este pedido será gerado como <b>APROVADO</b> automaticamente.</p>
+                    
+                    <div style="background: #f1f5f9; padding: 20px; border-radius: 10px; margin-bottom: 25px;">
+                        <label style="font-weight:bold; display:block; margin-bottom:10px;">1. SELECIONE O DESTINO DO PEDIDO:</label>
+                        <select id="admin_local_destino" style="width:100%; padding:12px; border-radius:8px; border:1px solid #cbd5e1; font-size:1rem;">
+                            <option value="">-- SELECIONE A ESCOLA OU SETOR --</option>
+                            ${locais.map(l => `<option value="${l.id}">${l.nome}</option>`).join('')}
                         </select>
-
-                        <div style="display:flex; gap:10px;">
-                            <div style="flex:1;">
-                                <label>TAMANHO:</label>
-                                <select id="solicitar_tamanho" style="width:100%; padding:10px;">
-                                    <option value="UNICO">ÚNICO</option>
-                                    <option>P</option><option>M</option><option>G</option><option>GG</option>
-                                    <option>2</option><option>4</option><option>6</option><option>8</option>
-                                    <option>34</option><option>36</option><option>38</option><option>40</option>
-                                </select>
-                            </div>
-                            <div style="flex:1;">
-                                <label>QTD:</label>
-                                <input type="number" id="solicitar_qtd" value="1" min="1" style="width:100%; padding:10px;">
-                            </div>
-                        </div>
-
-                        <button onclick="adicionarAoCarrinhoSolicitacao()" style="width:100%; margin-top:15px; padding:12px; background:#10b981; color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">
-                            ➕ INCLUIR NO PEDIDO
-                        </button>
                     </div>
 
-                    <div style="background:white; padding:20px; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.1);">
-                        <h3 style="margin-top:0;">Itens Selecionados</h3>
-                        <div id="lista_carrinho_solicitacao">
-                            <p style="color:#666;">Nenhum item incluído.</p>
+                    <div id="sessao-itens-pedido">
+                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                             <button onclick="prepararItensAdmin('UNIFORMES')" class="btn-quadrado">👕 UNIFORMES</button>
+                             <button onclick="prepararItensAdmin('MATERIAL')" class="btn-quadrado">📦 MATERIAIS</button>
                         </div>
-                        <hr style="margin:20px 0; border:0; border-top:1px solid #eee;">
-                        <button id="btnEnviarSolicitacao" onclick="enviarPedidoGeralAdmin()" disabled style="width:100%; padding:15px; background:#1e40af; color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer; opacity:0.5;">
-                            🚀 FINALIZAR E ENVIAR PARA ESTOQUE
-                        </button>
                     </div>
+
+                    <div id="lista-carrinho-admin" style="margin-top: 25px;"></div>
+
+                    <button id="btn-finalizar-admin" onclick="salvarPedidoDiretoAdmin()" style="display:none; width:100%; margin-top:30px; padding:18px; background:#10b981; color:white; border:none; border-radius:8px; font-weight:bold; font-size:1.1rem; cursor:pointer;">
+                        🚀 FINALIZAR E ENVIAR PARA ESTOQUE
+                    </button>
                 </div>
             </div>
         `;
-
     } catch (err) {
-        // Agora o erro aparecerá no console se algo der errado
         console.error("Erro detalhado:", err);
-        alert("Erro ao carregar dados: " + err.message);
+        alert("Erro ao carregar dados: Verifique se o servidor está online.");
+    }
+}
+
+async function salvarPedidoDiretoAdmin() {
+    const local_destino_id = document.getElementById('admin_local_destino').value;
+    
+    if (!local_destino_id) return alert("Selecione o destino do pedido!");
+    if (carrinhoAdmin.length === 0) return alert("O carrinho está vazio!");
+
+    const payload = {
+        local_destino_id: local_destino_id,
+        tipo_pedido: tipoPedidoAtual, // 'UNIFORMES' ou 'MATERIAL'
+        itens: carrinhoAdmin
+    };
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/admin/criar`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${TOKEN}`
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+            alert("✅ Pedido Admin gerado e enviado para o Estoque!");
+            carregarDashboard();
+        } else {
+            alert("Erro ao salvar pedido.");
+        }
+    } catch (err) {
+        alert("Erro de conexão.");
     }
 }
 
@@ -6753,6 +6860,102 @@ async function telaAdminCriarUsuario() {
     `;
 }
 
+async function salvarProduto() {
+    // 1. Captura os valores usando os IDs que estão no seu formulário
+    const nome = document.getElementById('p_nome').value.trim();
+    const tipo = document.getElementById('p_tipo').value;
+    const alerta_minimo = document.getElementById('p_alerta') ? document.getElementById('p_alerta').value : 0;
+    
+    // Se você tiver um select de categoria, capture o ID aqui. 
+    // Se for apenas texto por enquanto, pode deixar null ou ajustar conforme seu banco.
+    const categoria_id = document.getElementById('p_categoria_id') ? document.getElementById('p_categoria_id').value : null;
+
+    if (!nome) {
+        return alert("O nome do produto é obrigatório!");
+    }
+
+    const payload = {
+        nome: nome,
+        tipo: tipo,
+        alerta_minimo: parseInt(alerta_minimo) || 0,
+        categoria_id: categoria_id
+    };
+
+    try {
+        const res = await fetch(`${API_URL}/cadastros/produtos`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+            alert("✅ Produto cadastrado com sucesso!");
+            // Limpa o formulário para o próximo
+            document.getElementById('p_nome').value = '';
+            if (document.getElementById('p_alerta')) document.getElementById('p_alerta').value = '0';
+        } else {
+            const erro = await res.json();
+            alert("❌ Erro ao cadastrar: " + (erro.error || "Verifique os dados"));
+        }
+    } catch (err) {
+        console.error("Erro na conexão:", err);
+        alert("🚨 Falha ao conectar com o servidor.");
+    }
+}
+
+async function telaAdminVerPedidos() {
+    const app = document.getElementById('app-content');
+    
+    try {
+        const res = await fetch(`${API_URL}/pedidos/lista-geral`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const pedidos = await res.json();
+
+        app.innerHTML = `
+            <div style="padding:20px;">
+                <button onclick="carregarDashboard()" class="btn-voltar">⬅ VOLTAR</button>
+                <h2 style="color:#1e3a8a; margin-bottom:20px;">📋 GESTÃO DE PEDIDOS (ADMIN)</h2>
+                
+                <table style="width:100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                    <thead>
+                        <tr style="background: #1e40af; color: white; text-align: left;">
+                            <th style="padding: 12px;">ID</th>
+                            <th style="padding: 12px;">DATA</th>
+                            <th style="padding: 12px;">SOLICITANTE</th>
+                            <th style="padding: 12px;">DESTINO (ESCOLA)</th>
+                            <th style="padding: 12px;">TIPO</th>
+                            <th style="padding: 12px;">STATUS</th>
+                            <th style="padding: 12px;">AÇÃO</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${pedidos.map(p => `
+                            <tr style="border-bottom: 1px solid #eee;">
+                                <td style="padding: 12px;">#${p.id}</td>
+                                <td style="padding: 12px;">${new Date(p.data_criacao).toLocaleDateString('pt-BR')}</td>
+                                <td style="padding: 12px;">${p.solicitante}</td>
+                                <td style="padding: 12px; font-weight: bold; color: #1e40af;">📍 ${p.escola_destino || 'NÃO DEFINIDO'}</td>
+                                <td style="padding: 12px;">${p.tipo_pedido}</td>
+                                <td style="padding: 12px;">
+                                    <span class="status-badge ${p.status.toLowerCase()}">${p.status}</span>
+                                </td>
+                                <td style="padding: 12px;">
+                                    <button onclick="verDetalhesPedido(${p.id})" style="padding: 5px 10px; cursor: pointer;">👁️ VER</button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    } catch (err) {
+        alert("Erro ao carregar a lista de pedidos.");
+    }
+}
 
 // Isso garante que o onclick="funcao()" funcione sempre
 window.telaVisualizarEstoque = telaVisualizarEstoque;

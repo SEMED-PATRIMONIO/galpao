@@ -161,6 +161,7 @@ function carregarDashboard() {
             <span class="logo-texto">📦 PATRIMÔNIO SEMED</span>
             <div style="text-align: right;">
                 <div style="font-size: 0.9rem; font-weight: bold; color: #1e40af;">Olá, ${nome} (${perfil.toUpperCase()})</div>
+                    👤 ${nome} (${perfil.toUpperCase()}) | 📍 ${localNome}
                 <button onclick="logout()" style="width: auto; padding: 5px 15px; background: #dc2626; font-size: 0.8rem; margin-top: 5px; color:white; border:none; border-radius:4px; cursor:pointer;">SAIR</button>
             </div>
         </div>

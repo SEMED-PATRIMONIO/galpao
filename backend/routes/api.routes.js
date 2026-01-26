@@ -3,19 +3,6 @@ const router = express.Router();
 const db = require('../db');
 const { verificarToken, verificarPerfil } = require('../auth/auth.middleware');
 
-// LISTAR USUÁRIOS (Apenas para perfil SUPER)
-router.get('/usuarios/lista', verificarToken, async (req, res) => {
-    try {
-        const result = await db.query(`
-            SELECT u.id, u.nome, u.usuario, u.perfil, u.status, l.nome as local_nome 
-            FROM usuarios u 
-            LEFT JOIN locais l ON u.local_id = l.id 
-            ORDER BY u.nome ASC
-        `);
-        res.json(result.rows);
-    } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
 // ALTERAR STATUS DO USUÁRIO (Ativar/Inativar)
 router.patch('/usuarios/:id/status', verificarToken, async (req, res) => {
     const { id } = req.params;
@@ -31,34 +18,24 @@ router.get('/locais/lista-simples', verificarToken, async (req, res) => {
         const result = await db.query("SELECT id, nome FROM locais ORDER BY nome ASC");
         res.json(result.rows);
     } catch (err) {
-        res.status(500).json({ error: "Erro ao buscar locais: " + err.message });
+        res.status(500).json({ error: err.message });
     }
 });
 
-// ROTA: Criar Novo Utilizador (Apenas SUPER)
-router.post('/usuarios/criar', verificarToken, async (req, res) => {
-    const { nome, usuario, senha, perfil, local_id, status } = req.body;
-
+router.get('/pedidos/meus-pedidos', verificarToken, async (req, res) => {
     try {
-        // Verifica se o login já existe
-        const check = await db.query("SELECT id FROM usuarios WHERE usuario = $1", [usuario]);
-        if (check.rowCount > 0) {
-            return res.status(400).json({ error: "Este nome de utilizador já está em uso." });
+        let query = "SELECT p.*, l.nome as escola_nome FROM pedidos p LEFT JOIN locais l ON p.local_destino_id = l.id";
+        let params = [];
+
+        // RESTRIÇÃO: Se for perfil escola, filtra pelo local_id dele
+        if (req.userPerfil === 'escola') {
+            query += " WHERE p.local_destino_id = $1";
+            params.push(req.userLocalId); // Este ID vem do seu middleware de token
         }
 
-        // Insere o novo utilizador
-        // Nota: Se usar bcrypt, deve fazer o hash da senha antes deste passo
-        await db.query(
-            `INSERT INTO usuarios (nome, usuario, senha, perfil, local_id, status) 
-             VALUES ($1, $2, $3, $4, $5, $6)`,
-            [nome, usuario, senha, perfil, local_id, status]
-        );
-
-        res.status(201).json({ message: "Utilizador criado com sucesso!" });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: "Erro interno ao criar utilizador." });
-    }
+        const result = await db.query(query + " ORDER BY p.data_criacao DESC", params);
+        res.json(result.rows);
+    } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 router.patch('/usuarios/:id/status', verificarToken, async (req, res) => {
@@ -70,12 +47,41 @@ router.patch('/usuarios/:id/status', verificarToken, async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-router.get('/locais/dropdown', verificarToken, async (req, res) => {
-    const result = await db.query("SELECT id, nome FROM locais ORDER BY nome ASC");
-    res.json(result.rows);
+// 1. LISTAR USUÁRIOS (Corrigido: removido 'u.usuario' que não existe)
+router.get('/usuarios/lista', verificarToken, async (req, res) => {
+    try {
+        const result = await db.query(`
+            SELECT u.id, u.nome, u.perfil, u.status, u.local_id, l.nome as local_nome 
+            FROM usuarios u 
+            LEFT JOIN locais l ON u.local_id = l.id 
+            ORDER BY u.nome ASC
+        `);
+        res.json(result.rows);
+    } catch (err) { 
+        console.error("Erro na lista de usuários:", err.message);
+        res.status(500).json({ error: "Erro interno no servidor" }); 
+    }
 });
 
+// 2. ROTA SIMPLES PARA ALIMENTAR O DROPDOWN DE LOCAIS
+router.get('/locais/dropdown', verificarToken, async (req, res) => {
+    try {
+        const result = await db.query("SELECT id, nome FROM locais ORDER BY nome ASC");
+        res.json(result.rows);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
 
+// 3. CRIAR USUÁRIO (Ajustado para receber local_id)
+router.post('/usuarios/criar', verificarToken, async (req, res) => {
+    const { nome, senha, perfil, local_id, status } = req.body;
+    try {
+        await db.query(
+            "INSERT INTO usuarios (nome, senha, perfil, local_id, status) VALUES ($1, $2, $3, $4, $5)",
+            [nome, senha, perfil, local_id, status || 'ativo']
+        );
+        res.status(201).json({ message: "Usuário criado com sucesso!" });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
 
 // ==========================================
 // 1. ROTAS DE PEDIDOS / SOLICITAÇÕES

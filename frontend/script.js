@@ -36,8 +36,12 @@ function gerarCamposSerie() {
     }
 }
 
+// Login simplificado (sem e-mail)
+// Localize este bloco no seu script.js e substitua por este:
+// Localize este bloco no seu script.js e substitua por este:
 document.getElementById('form-login')?.addEventListener('submit', async (e) => {
     e.preventDefault();
+    
     const usuario = document.getElementById('usuario').value;
     const senha = document.getElementById('senha').value;
 
@@ -51,16 +55,14 @@ document.getElementById('form-login')?.addEventListener('submit', async (e) => {
         const data = await res.json();
 
         if (res.ok) {
-            // Limpa lixo antigo e salva os novos dados
-            localStorage.clear();
+            // --- INÍCIO DO TRECHO QUE VOCÊ PERGUNTOU ---
             localStorage.setItem('token', data.token);
             localStorage.setItem('perfil', data.perfil);
             localStorage.setItem('nome', data.nome);
-            localStorage.setItem('local_id', data.local_id || "");
-            localStorage.setItem('local_nome', data.local_nome || "SEDE/GERAL");
-
+            localStorage.setItem('local_id', data.local_id); // Salva o ID da Escola no navegador
             TOKEN = data.token;
-            carregarDashboard(); // Chama a função corrigida abaixo
+            carregarDashboard();
+            // --- FIM DO TRECHO ---
         } else {
             alert('ERRO: ' + (data.message || 'Falha no login'));
         }
@@ -69,43 +71,6 @@ document.getElementById('form-login')?.addEventListener('submit', async (e) => {
         alert("Erro ao conectar com o servidor.");
     }
 });
-
-function carregarDashboard() {
-    // 1. Captura os elementos da tela
-    const app = document.getElementById('app-content');
-    const loginContainer = document.getElementById('login-container');
-
-    // 2. Captura os dados salvos no login (Evita o ReferenceError)
-    const nome = localStorage.getItem('nome');
-    const perfil = localStorage.getItem('perfil');
-    const localNome = localStorage.getItem('local_nome') || "Não Identificado";
-
-    // 3. Gerencia a visibilidade das telas
-    if (loginContainer) loginContainer.style.display = 'none';
-    if (app) {
-        app.style.display = 'block';
-        
-        // 4. Monta o cabeçalho com os dados validados
-        app.innerHTML = `
-            <div class="header-app">
-                <span class="logo-texto">📦 PATRIMÔNIO SEMED</span>
-                <div style="text-align: right;">
-                    <div style="font-size: 0.9rem; font-weight: bold; color: #1e40af;">
-                        👤 ${nome} (${perfil ? perfil.toUpperCase() : ''}) | 📍 ${localNome}
-                    </div>
-                    <button onclick="logout()" class="btn-sair">SAIR</button>
-                </div>
-            </div>
-            <div id="dashboard-content" class="container-principal">
-                </div>
-        `;
-    }
-
-    // 5. Renderiza os botões do menu conforme o perfil
-    if (typeof renderizarMenuPrincipal === 'function') {
-        renderizarMenuPrincipal();
-    }
-}
 
 function mostrarLogin() {
     const app = document.getElementById('app-content');
@@ -168,15 +133,12 @@ async function renderizarEstoqueCentral() {
 }
 
 // --- FUNÇÃO DASHBOARD REVISADA COM REGRAS DE PERFIS ESPECÍFICAS ---
-function renderizarMenuPrincipal() {
-    const app = document.getElementById('app-content');
-    const loginContainer = document.getElementById('login-container');
+function carregarDashboard() {
+    const perfil = localStorage.getItem('perfil') ? localStorage.getItem('perfil').toLowerCase() : null;
     const nome = localStorage.getItem('nome');
-    const perfil = localStorage.getItem('perfil');
-    const localNome = localStorage.getItem('local_nome') || "Não Identificado"; 
-
-    loginContainer.style.display = 'none';
-    app.style.display = 'block';
+    const localId = localStorage.getItem('local_id');
+    const container = document.getElementById('app-content');
+    const loginContainer = document.getElementById('login-container');
 
     if (!perfil) {
         if (loginContainer) loginContainer.style.display = 'block';
@@ -188,22 +150,21 @@ function renderizarMenuPrincipal() {
     if (container) container.style.display = 'block';
 
     // Cabeçalho Padrão
-    app.innerHTML = `
+    let html = `
         <div class="header-app">
             <span class="logo-texto">📦 PATRIMÔNIO SEMED</span>
             <div style="text-align: right;">
-                <div style="font-size: 0.9rem; font-weight: bold; color: #1e40af;">
-                    👤 ${nome} (${perfil.toUpperCase()}) | 📍 ${localNome}
-                </div>
-                <button onclick="logout()" class="btn-sair">SAIR</button>
+                <div style="font-size: 0.9rem; font-weight: bold; color: #1e40af;">Olá, ${nome} (${perfil.toUpperCase()})</div>
+                <button onclick="logout()" style="width: auto; padding: 5px 15px; background: #dc2626; font-size: 0.8rem; margin-top: 5px; color:white; border:none; border-radius:4px; cursor:pointer;">SAIR</button>
             </div>
         </div>
-        <div id="dashboard-content" class="container-principal">
-            </div>
+        <div id="area-alertas" style="margin-bottom:20px;"></div>
+        <div class="grid-menu-principal">
     `;
 
     // --- 1. FERRAMENTAS COMUNS (Todos os perfis) ---
     const menuComum = `
+        <div class="secao-titulo">FERRAMENTAS E CONTA</div>
         <button class="btn-grande" onclick="abrirCalculadoraConversao()">
             <i>🧮</i><span>CALCULADORA</span>
         </button>
@@ -215,6 +176,7 @@ function renderizarMenuPrincipal() {
     // --- 2. PERFIL: SUPER (Gestão de Usuários) ---
     if (perfil === 'super') {
         html += `
+            <div class="secao-titulo">ADMINISTRAÇÃO DO SISTEMA</div>
             <button class="btn-grande" onclick="telaGerenciarUsuarios()">
                 <i>👥</i><span>GERENCIAR USUÁRIOS</span>
             </button>
@@ -227,6 +189,7 @@ function renderizarMenuPrincipal() {
     // --- 3. PERFIL: ESCOLA ---
     if (perfil === 'escola') {
         html += `
+            <div class="secao-titulo">MINHA UNIDADE (ESCOLA)</div>
             <button class="btn-grande" onclick="listarPedidosEmCaminho()">
                 <i>🚚</i><span>CONFIRMAR RECEBIMENTO</span>
             </button>
@@ -260,9 +223,10 @@ function renderizarMenuPrincipal() {
             <button class="btn-grande" onclick="telaVisualizarEstoque()">
                 <i>📊</i><span>VISUALIZAR ESTOQUE</span>
             </button>
-            <button class="btn-grande" onclick="renderizarDashboardGeral()">
-                <i>📊</i><span>PAINEL DE PEDIDOS</span>
-            </button>
+            <div class="badge-container" onclick="renderizarDashboardGeral()" style="cursor:pointer;">
+                <span>📊 Dashboard</span>
+                <span id="badge-pendentes" class="badge-notificacao">0</span>
+            </div>
         `;
         // Chama alertas de novas solicitações de Escolas e Logística
         setTimeout(() => verificarSolicitacoesPendentes(), 500);
@@ -271,6 +235,7 @@ function renderizarMenuPrincipal() {
     // --- 5. PERFIL: ESTOQUE ---
     if (perfil === 'estoque') {
         html += `
+            <div class="secao-titulo">OPERAÇÕES DE ESTOQUE</div>
             <button class="btn-grande" onclick="abrirPainelSeparacao()">
                 <i>📦</i><span>SEPARAÇÃO DE VOLUMES</span>
             </button>
@@ -280,6 +245,7 @@ function renderizarMenuPrincipal() {
             <button class="btn-grande" onclick="telaReceberDevolucoes()">
                 <i>🔄</i><span>RECEBER DEVOLUÇÕES</span>
             </button>
+            <div class="secao-titulo">PAINEL</div>
             <button class="btn-grande" onclick="telaGerenciarPatrimonio()">
                 <i>🏷️</i><span>LANÇAR/MOVER PATRIMÔNIO</span>
             </button>
@@ -297,6 +263,7 @@ function renderizarMenuPrincipal() {
     // --- 6. PERFIL: LOGÍSTICA ---
     if (perfil === 'logistica') {
         html += `
+            <div class="secao-titulo">LOGÍSTICA E TRANSPORTE</div>
             <button class="btn-grande" onclick="listarColetaLogistica()">
                 <i>🚚</i><span>RECOLHER E TRANSPORTAR PEDIDO</span>
             </button>

@@ -22,6 +22,24 @@ router.get('/locais/lista-simples', verificarToken, async (req, res) => {
     }
 });
 
+router.get('/auth/quem-sou-eu', verificarToken, async (req, res) => {
+    try {
+        const result = await db.query(`
+            SELECT u.id, u.nome, u.perfil, u.local_id, l.nome as local_nome 
+            FROM usuarios u 
+            LEFT JOIN locais l ON u.local_id = l.id 
+            WHERE u.id = $1`, [req.userId]);
+        
+        if (result.rows.length > 0) {
+            res.json(result.rows[0]);
+        } else {
+            res.status(404).json({ error: "Usuário não encontrado" });
+        }
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 router.get('/pedidos/admin/lista', verificarToken, async (req, res) => {
     try {
         const result = await db.query(`
@@ -47,22 +65,27 @@ router.get('/pedidos/admin/lista', verificarToken, async (req, res) => {
 router.get('/pedidos/admin/lista-geral', verificarToken, async (req, res) => {
     try {
         const result = await db.query(`
-            SELECT 
-                p.id, 
-                p.data_criacao, 
-                p.status, 
-                p.tipo_pedido,
-                u.nome as solicitante,      -- Nome do Usuário
-                l.nome as escola_destino    -- Nome da Escola
+            SELECT p.id, p.data_criacao, p.status, p.tipo_pedido, 
+                   u.nome as solicitante, l.nome as escola_destino
+            FROM pedidos p
+            LEFT JOIN usuarios u ON p.usuario_origem_id = u.id
+            LEFT JOIN locais l ON p.local_destino_id = l.id -- LEFT JOIN garante que a linha apareça
+            ORDER BY p.data_criacao DESC`);
+        res.json(result.rows);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/pedidos/admin/aguardando', verificarToken, async (req, res) => {
+    try {
+        const result = await db.query(`
+            SELECT p.id, p.data_criacao, u.nome as solicitante, l.nome as escola_destino
             FROM pedidos p
             LEFT JOIN usuarios u ON p.usuario_origem_id = u.id
             LEFT JOIN locais l ON p.local_destino_id = l.id
-            ORDER BY p.data_criacao DESC
-        `);
+            WHERE p.status = 'AGUARDANDO_AUTORIZACAO'
+            ORDER BY p.data_criacao ASC`);
         res.json(result.rows);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
+    } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // ROTA 2: Para a função telaAdminGerenciarSolicitacoes (Apenas Pendentes)

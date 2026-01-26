@@ -69,14 +69,21 @@ router.get('/pedidos/admin/lista-geral', verificarToken, async (req, res) => {
 router.get('/pedidos/admin/pendentes', verificarToken, async (req, res) => {
     try {
         const result = await db.query(`
-            SELECT p.id, p.data_criacao, p.tipo_pedido, u.nome as solicitante, l.nome as local_nome
+            SELECT 
+                p.id, 
+                p.data_criacao, 
+                u.nome as solicitante, 
+                l.nome as escola_nome -- 👈 Aqui o nome da escola aparece
             FROM pedidos p
             INNER JOIN usuarios u ON p.usuario_origem_id = u.id
             INNER JOIN locais l ON p.local_destino_id = l.id
             WHERE p.status = 'AGUARDANDO_AUTORIZACAO'
-            ORDER BY p.data_criacao ASC`);
+            ORDER BY p.data_criacao ASC
+        `);
         res.json(result.rows);
-    } catch (err) { res.status(500).json({ error: err.message }); }
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // DETALHES DO PEDIDO VS ESTOQUE ATUAL
@@ -152,28 +159,37 @@ router.post('/antigopedidos/uniformes/criar', verificarToken, async (req, res) =
 
 router.post('/pedidos/uniformes/criar', verificarToken, async (req, res) => {
     const { itens, operacao } = req.body;
-    const usuario_id = req.userId; // Vem do Token de Login
+    const usuario_id = req.userId; // ID extraído do token (já funciona hoje)
 
     try {
         await db.query('BEGIN');
 
-        // 🟢 AQUI ESTÁ A CHAVE: O banco busca o local_id do usuário logado e insere no pedido
+        // O banco busca o local_id do usuário e grava no local_destino_id do pedido automaticamente
         const pedidoRes = await db.query(
-            `INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, tipo_pedido, data_criacao) 
-             VALUES ($1, (SELECT local_id FROM usuarios WHERE id = $1), 'AGUARDANDO_AUTORIZACAO', $2, NOW()) 
-             RETURNING id, local_destino_id`,
+            `INSERT INTO pedidos (
+                usuario_origem_id, 
+                local_destino_id, 
+                status, 
+                tipo_pedido, 
+                data_criacao
+            ) VALUES (
+                $1, 
+                (SELECT local_id FROM usuarios WHERE id = $1), 
+                'AGUARDANDO_AUTORIZACAO', 
+                $2, 
+                NOW()
+            ) RETURNING id, local_destino_id`,
             [usuario_id, operacao]
         );
 
         const pedidoId = pedidoRes.rows[0].id;
-        const localDestino = pedidoRes.rows[0].local_destino_id;
 
-        // Se o usuário não tiver local_id, o banco vai retornar erro ou nulo aqui
-        if (!localDestino) {
-            throw new Error("Usuário sem local vinculado no cadastro.");
+        // Se o usuário não tiver um local_id vinculado na tabela usuarios, o pedido falha aqui
+        if (!pedidoRes.rows[0].local_destino_id) {
+            await db.query('ROLLBACK');
+            return res.status(400).json({ error: "Seu usuário não possui um local vinculado no cadastro." });
         }
 
-        // Gravação dos itens
         for (const item of itens) {
             await db.query(
                 "INSERT INTO itens_pedido (pedido_id, produto_id, tamanho, quantidade) VALUES ($1, $2, $3, $4)",
@@ -182,12 +198,11 @@ router.post('/pedidos/uniformes/criar', verificarToken, async (req, res) => {
         }
 
         await db.query('COMMIT');
-        res.status(201).json({ message: "Pedido gravado com sucesso!", id: pedidoId });
+        res.status(201).json({ message: "Pedido enviado com sucesso!" });
 
     } catch (err) {
         await db.query('ROLLBACK');
-        console.error("ERRO NO PEDIDO:", err.message);
-        res.status(500).json({ error: "Falha técnica: " + err.message });
+        res.status(500).json({ error: "Erro interno: " + err.message });
     }
 });
 

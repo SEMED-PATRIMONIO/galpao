@@ -55,20 +55,16 @@ document.getElementById('form-login')?.addEventListener('submit', async (e) => {
         const data = await res.json();
 
         if (res.ok) {
-            // Limpa qualquer dado antigo antes de salvar o novo
-            localStorage.clear();
-
             localStorage.setItem('token', data.token);
             localStorage.setItem('perfil', data.perfil);
             localStorage.setItem('nome', data.nome);
             
-            // SALVA OS DADOS DA ESCOLA
-            // Usamos o nome exato 'local_id' para bater com sua função de envio
+            // 🟢 IMPORTANTE: Salva o ID e o NOME que vem do banco
             localStorage.setItem('local_id', data.local_id || ""); 
-            localStorage.setItem('local_nome', data.local_nome || "Sede/Geral");
+            localStorage.setItem('local_nome', data.local_nome || "SEDE/GERAL");
 
             TOKEN = data.token;
-            carregarDashboard();
+            carregarDashboard(); // Aqui ele chama a função que deu erro
         } else {
             alert('ERRO: ' + (data.message || 'Falha no login'));
         }
@@ -140,11 +136,14 @@ async function renderizarEstoqueCentral() {
 
 // --- FUNÇÃO DASHBOARD REVISADA COM REGRAS DE PERFIS ESPECÍFICAS ---
 function carregarDashboard() {
-    const perfil = localStorage.getItem('perfil') ? localStorage.getItem('perfil').toLowerCase() : null;
-    const nome = localStorage.getItem('nome');
-    const localId = localStorage.getItem('local_id');
-    const container = document.getElementById('app-content');
+    const app = document.getElementById('app-content');
     const loginContainer = document.getElementById('login-container');
+    const nome = localStorage.getItem('nome');
+    const perfil = localStorage.getItem('perfil');
+    const localNome = localStorage.getItem('local_nome') || "Não Identificado"; 
+
+    loginContainer.style.display = 'none';
+    app.style.display = 'block';
 
     if (!perfil) {
         if (loginContainer) loginContainer.style.display = 'block';
@@ -156,17 +155,18 @@ function carregarDashboard() {
     if (container) container.style.display = 'block';
 
     // Cabeçalho Padrão
-    let html = `
+    app.innerHTML = `
         <div class="header-app">
             <span class="logo-texto">📦 PATRIMÔNIO SEMED</span>
             <div style="text-align: right;">
-                <div style="font-size: 0.9rem; font-weight: bold; color: #1e40af;">Olá, ${nome} (${perfil.toUpperCase()})</div>
+                <div style="font-size: 0.9rem; font-weight: bold; color: #1e40af;">
                     👤 ${nome} (${perfil.toUpperCase()}) | 📍 ${localNome}
-                <button onclick="logout()" style="width: auto; padding: 5px 15px; background: #dc2626; font-size: 0.8rem; margin-top: 5px; color:white; border:none; border-radius:4px; cursor:pointer;">SAIR</button>
+                </div>
+                <button onclick="logout()" class="btn-sair">SAIR</button>
             </div>
         </div>
-        <div id="area-alertas" style="margin-bottom:20px;"></div>
-        <div class="grid-menu-principal">
+        <div id="dashboard-content" class="container-principal">
+            </div>
     `;
 
     // --- 1. FERRAMENTAS COMUNS (Todos os perfis) ---

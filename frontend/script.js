@@ -20,6 +20,50 @@ document.addEventListener('input', (e) => {
     }
 });
 
+async function enviarPedidoUniforme(operacao) {
+    // 1. O sistema lê o local_id de quem está logado
+    const localIdLogado = localStorage.getItem('local_id');
+
+    // Validação de segurança
+    if (!localIdLogado || localIdLogado === "" || localIdLogado === "null") {
+        return alert("⚠️ ERRO: Usuário sem local vinculado. Faça logout e login novamente.");
+    }
+
+    if (carrinhoUniforme.length === 0) {
+        return alert("O carrinho está vazio!");
+    }
+
+    // 2. Montamos o pacote de dados para o banco
+    const dadosPedido = {
+        local_destino_id: parseInt(localIdLogado), // O local da escola logada
+        tipo_pedido: 'UNIFORMES',
+        operacao: operacao, // 'SOLICITACAO' ou 'DEVOLUCAO'
+        itens: carrinhoUniforme 
+    };
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/uniformes/criar`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${TOKEN}`
+            },
+            body: JSON.stringify(dadosPedido)
+        });
+
+        if (res.ok) {
+            alert(`✅ ${operacao} de uniformes enviada com sucesso!`);
+            carrinhoUniforme = [];
+            carregarDashboard();
+        } else {
+            const erro = await res.json();
+            alert("Erro ao gravar pedido: " + erro.error);
+        }
+    } catch (err) {
+        alert("Erro de conexão com o servidor.");
+    }
+}
+
 async function abrirFormularioUsuario() {
     // Busca a lista de locais para o dropdown
     const res = await fetch(`${API_URL}/locais/dropdown`, {
@@ -50,6 +94,52 @@ function gerarCamposSerie() {
         input.className = 'input-serie';
         input.required = true;
         container.appendChild(input);
+    }
+}
+
+async function finalizarPedidoUniforme(tipoMovimentacao) {
+    // 1. Lemos o ID do local que o sistema 'aprendeu' no login
+    const localIdLogado = localStorage.getItem('local_id');
+
+    // Segurança: Se não houver local_id, o usuário não pode pedir nada
+    if (!localIdLogado || localIdLogado === "" || localIdLogado === "null") {
+        return alert("⚠️ ERRO: Seu usuário não possui um local vinculado. Saia e entre novamente no sistema.");
+    }
+
+    if (carrinhoUniforme.length === 0) {
+        return alert("Seu carrinho está vazio!");
+    }
+
+    // 2. Montamos o objeto que será enviado ao banco
+    const dadosPedido = {
+        // O local_id do usuário logado torna-se o DESTINO da solicitação
+        local_destino_id: parseInt(localIdLogado), 
+        tipo_movimentacao: 'UNIFORMES',
+        status: 'AGUARDANDO_AUTORIZACAO',
+        itens: carrinhoUniforme, // Array com os itens selecionados
+        operacao: tipoMovimentacao // 'SOLICITACAO' ou 'DEVOLUCAO'
+    };
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/uniformes/criar`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify(dadosPedido)
+        });
+
+        if (res.ok) {
+            alert("✨ Pedido realizado com sucesso para sua unidade!");
+            carrinhoUniforme = []; // Limpa o carrinho
+            carregarDashboard();
+        } else {
+            alert("Erro ao processar pedido no servidor.");
+        }
+    } catch (err) {
+        console.error("Erro no envio:", err);
+        alert("Falha na conexão com o servidor.");
     }
 }
 
@@ -234,16 +324,17 @@ function carregarDashboard() {
                 <i>📥</i><span>ENTRADA ESTOQUE</span>
             </button>
             <button class="btn-grande" onclick="telaAdminCriarPedido()">
-                <i>➕</i><span>CRIAR PEDIDO GERAL</span>
+                <i>➕</i><span>CRIAR PEDIDO</span>
             </button>
-            <div class="secao-titulo">PAINEL</div>
+            <button class="btn-grande" onclick="telaEntradaPatrimonioLote()">
+                <i>🏷️</i><span>LANÇAR PATRIMÔNIO</span>
+            </button>
             <button class="btn-grande" onclick="telaVisualizarEstoque()">
                 <i>📊</i><span>VISUALIZAR ESTOQUE</span>
             </button>
-            <div class="badge-container" onclick="renderizarDashboardGeral()" style="cursor:pointer;">
-                <span>📊 Dashboard</span>
-                <span id="badge-pendentes" class="badge-notificacao">0</span>
-            </div>
+            <button class="btn-grande" onclick="renderizarDashboardGeral()">
+                <i>📊</i><span>PAINEL DE PEDIDOS</span>
+            </button>
         `;
         // Chama alertas de novas solicitações de Escolas e Logística
         setTimeout(() => verificarSolicitacoesPendentes(), 500);
@@ -252,7 +343,6 @@ function carregarDashboard() {
     // --- 5. PERFIL: ESTOQUE ---
     if (perfil === 'estoque') {
         html += `
-            <div class="secao-titulo">OPERAÇÕES DE ESTOQUE</div>
             <button class="btn-grande" onclick="abrirPainelSeparacao()">
                 <i>📦</i><span>SEPARAÇÃO DE VOLUMES</span>
             </button>
@@ -262,9 +352,8 @@ function carregarDashboard() {
             <button class="btn-grande" onclick="telaReceberDevolucoes()">
                 <i>🔄</i><span>RECEBER DEVOLUÇÕES</span>
             </button>
-            <div class="secao-titulo">PAINEL</div>
-            <button class="btn-grande" onclick="telaGerenciarPatrimonio()">
-                <i>🏷️</i><span>LANÇAR/MOVER PATRIMÔNIO</span>
+             <button class="btn-grande" onclick="telaEntradaPatrimonioLote()">
+                <i>🏷️</i><span>LANÇAR PATRIMÔNIO</span>
             </button>
             <button class="btn-grande" onclick="telaVisualizarEstoque()">
                 <i>📊</i><span>VISUALIZAR ESTOQUE</span>
@@ -1512,7 +1601,7 @@ async function processarAprovacaoAdmin(pedidoId, acao) {
 
 // --- FUNÇÕES DE CADASTROS BÁSICOS (ADMIN) ---
 
-async function telaCadastrosBase() {
+async function antigotelaCadastrosBase() {
     const container = document.getElementById('app-content');
     
     let html = `
@@ -1767,7 +1856,7 @@ async function salvarPatrimonioLote() {
 
 // --- FUNÇÕES DE CADASTROS BÁSICOS ---
 
-async function telaCadastrosBase() {
+async function oldtelaCadastrosBase() {
     const container = document.getElementById('app-content');
     
     let html = `
@@ -1794,6 +1883,27 @@ async function telaCadastrosBase() {
         <div id="area-formulario-cadastro" style="margin-top: 30px;"></div>
     `;
     container.innerHTML = html;
+}
+
+async function telaCadastrosBase() {
+    const app = document.getElementById('app-content');
+    app.innerHTML = `
+        <div style="padding:20px;">
+            <div style="display:flex; align-items:center; gap:20px; margin-bottom:30px;">
+                <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:10px 20px; border-radius:8px; cursor:pointer; font-weight:bold;">⬅ VOLTAR</button>
+                <h2 style="color:#1e3a8a; margin:0;">🛠️ CADASTROS DO SISTEMA</h2>
+            </div>
+
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap:15px; margin-bottom:30px;">
+                <button onclick="formGenerico('categorias', 'CATEGORIA')" class="btn-quadrado-cad">📁<br>CATEGORIA</button>
+                <button onclick="formGenerico('locais', 'LOCAL')" class="btn-quadrado-cad">📍<br>LOCAL</button>
+                <button onclick="formGenerico('setores', 'SETOR')" class="btn-quadrado-cad">🏢<br>SETOR</button>
+                <button onclick="formProduto()" class="btn-quadrado-cad">📦<br>PRODUTO</button>
+            </div>
+
+            <div id="area-formulario-cadastro"></div>
+        </div>
+    `;
 }
 
 function formGenerico(tabela, label) {
@@ -1825,46 +1935,37 @@ async function salvarGenerico(tabela) {
 
 async function formProduto() {
     const area = document.getElementById('area-formulario-cadastro');
-    const resCat = await fetch(`${API_URL}/api/cadastros/categorias`, {
-        headers: { 'Authorization': `Bearer ${TOKEN}` }
-    });
-    const categorias = await resCat.json();
-
-    // Filtramos para que a categoria 'UNIFORMES' não apareça na criação de novos produtos
-    const categoriasFiltradas = categorias.filter(c => c.nome !== 'UNIFORMES');
-
     area.innerHTML = `
-        <div class="card-login" style="max-width: 100%;">
-            <h3>NOVO MATERIAL</h3>
-            <p style="font-size: 0.8rem; color: #64748b; margin-bottom: 15px;">
-                * Uniformes são itens fixos e não podem ser cadastrados manualmente.
-            </p>
-            
-            <input type="text" id="prod_nome" placeholder="NOME DO PRODUTO">
-            
-            <select id="prod_tipo" class="input-grade" style="width: 100%; height: 50px; margin-top:10px;">
-                <option value="MATERIAL">MATERIAL (LIMPEZA, ESCRITÓRIO, ETC)</option>
-                <option value="UNIFORMES" disabled>UNIFORME (BLOQUEADO - ITEM FIXO)</option>
+        <div style="background:white; padding:25px; border-radius:12px; box-shadow:0 2px 10px rgba(0,0,0,0.1); max-width:500px; margin:auto;">
+            <h3 style="margin-top:0;">📦 Cadastro de Novo Produto</h3>
+            <label style="display:block; margin-bottom:5px; font-weight:bold;">NOME:</label>
+            <input type="text" id="p_nome" style="width:100%; padding:10px; margin-bottom:15px; border:1px solid #ccc; border-radius:6px;">
+
+            <label style="display:block; margin-bottom:5px; font-weight:bold;">TIPO:</label>
+            <select id="p_tipo" onchange="toggleAlerta()" style="width:100%; padding:10px; margin-bottom:15px; border-radius:6px;">
+                <option value="MATERIAL">MATERIAL (CONSUMO)</option>
+                <option value="PATRIMONIO">PATRIMÔNIO (ATIVO)</option>
+                <option value="UNIFORMES">UNIFORMES</option>
             </select>
 
-            <select id="prod_categoria" class="input-grade" style="width: 100%; height: 50px; margin-top:10px;">
-                <option value="">SELECIONE UMA CATEGORIA</option>
-                ${categoriasFiltradas.map(c => `<option value="${c.id}">${c.nome}</option>`).join('')}
-            </select>
-
-            <input type="number" id="prod_qtd" placeholder="ESTOQUE INICIAL" style="margin-top: 10px;">
-            
-            <div id="box_alerta">
-                <input type="number" id="prod_alerta" placeholder="ALERTA MÍNIMO" style="margin-top: 10px;">
+            <div id="div_p_alerta">
+                <label style="display:block; margin-bottom:5px; font-weight:bold;">ESTOQUE MÍNIMO PARA ALERTA:</label>
+                <input type="number" id="p_alerta" value="0" style="width:100%; padding:10px; margin-bottom:15px; border:1px solid #ccc; border-radius:6px;">
             </div>
 
-            <div style="margin-top:20px; text-align:right;">
-                <button onclick="salvarNovoProduto()" style="padding:10px 20px; background:green; color:#fff; border:none; border-radius:4px; cursor:pointer;">
-                    SALVAR MATERIAL
-                </button>
-            </div>
+            <button onclick="executarSalvarProduto()" style="width:100%; background:#1e40af; color:white; border:none; padding:12px; border-radius:6px; font-weight:bold; cursor:pointer;">SALVAR PRODUTO</button>
         </div>
     `;
+}
+
+function toggleAlerta() {
+    const tipo = document.getElementById('p_tipo').value;
+    document.getElementById('div_p_alerta').style.display = (tipo === 'PATRIMONIO') ? 'none' : 'block';
+}
+
+function toggleAlertaEstoque() {
+    const tipo = document.getElementById('prod_tipo').value;
+    document.getElementById('div_alerta_minimo').style.display = (tipo === 'PATRIMONIO') ? 'none' : 'block';
 }
 
 async function salvarNovoProduto(event) {
@@ -1896,6 +1997,83 @@ async function salvarNovoProduto(event) {
         }
     } catch (err) {
         alert("Falha na conexão com o servidor.");
+    }
+}
+
+async function telaEntradaPatrimonioLote() {
+    const app = document.getElementById('app-content');
+    
+    // Busca apenas produtos cadastrados como PATRIMONIO
+    const res = await fetch(`${API_URL}/produtos/lista-por-tipo?tipo=PATRIMONIO`, {
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+    const produtos = await res.json();
+
+    app.innerHTML = `
+        <div style="padding:20px;">
+            <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:10px 20px; border-radius:8px; cursor:pointer; margin-bottom:20px;">⬅ VOLTAR</button>
+            
+            <div style="background:white; padding:30px; border-radius:12px; max-width:800px; margin:auto; box-shadow:0 4px 15px rgba(0,0,0,0.1);">
+                <h2 style="color:#1e3a8a; margin-top:0;">🏷️ ENTRADA DE PATRIMÔNIO EM LOTE</h2>
+                
+                <div style="display:grid; grid-template-columns: 1fr 150px; gap:15px; margin-bottom:20px;">
+                    <div>
+                        <label style="font-weight:bold;">PRODUTO:</label>
+                        <select id="lote_produto" style="width:100%; padding:12px; border-radius:8px; border:1px solid #cbd5e1;">
+                            <option value="">-- SELECIONE O PATRIMÔNIO --</option>
+                            ${produtos.map(p => `<option value="${p.id}">${p.nome}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-weight:bold;">QUANTIDADE:</label>
+                        <input type="number" id="lote_qtd" min="1" oninput="gerarInputsSerie()" style="width:100%; padding:12px; border-radius:8px; border:1px solid #cbd5e1;">
+                    </div>
+                </div>
+
+                <div id="container_series_lote" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap:10px;"></div>
+
+                <button id="btn-salvar-lote" onclick="salvarLotePatrimonio()" style="display:none; width:100%; margin-top:30px; padding:15px; background:#10b981; color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer;">
+                    CONFIRMAR ENTRADA DE ITENS
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+function gerarInputsSerie() {
+    const qtd = document.getElementById('lote_qtd').value;
+    const container = document.getElementById('container_series_lote');
+    const btn = document.getElementById('btn-salvar-lote');
+    container.innerHTML = '';
+    
+    if (qtd > 0) {
+        btn.style.display = 'block';
+        for (let i = 1; i <= qtd; i++) {
+            container.innerHTML += `
+                <div style="background:#f1f5f9; padding:10px; border-radius:6px;">
+                    <label style="font-size:12px; color:#64748b;">ITEM ${i}</label>
+                    <input type="text" class="input-serie-lote" placeholder="Nº SÉRIE / PLAQUETA" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px;">
+                </div>
+            `;
+        }
+    } else {
+        btn.style.display = 'none';
+    }
+}
+
+function gerarCamposSerieLote() {
+    const qtd = document.getElementById('lote_qtd').value;
+    const container = document.getElementById('container_series_lote');
+    const btn = document.getElementById('btn-salvar-lote');
+    container.innerHTML = '';
+    
+    if (qtd > 0) {
+        btn.style.display = 'block';
+        for (let i = 1; i <= qtd; i++) {
+            container.innerHTML += `
+                <input type="text" class="input-serie-lote" placeholder="PLAQUETA ${i}">
+            `;
+        }
     }
 }
 

@@ -17,8 +17,7 @@ document.addEventListener('input', (e) => {
         if (start !== null && e.target.setSelectionRange) {
             e.target.setSelectionRange(start, end);
         }
-    }
-});
+    }});
 
 document.getElementById('form-login')?.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -188,7 +187,7 @@ async function carregarDashboard() {
     // --- 3. PERFIL: ESCOLA ---
     if (perfil === 'escola') {
         html += `
-            <button class="btn-grande" onclick="listarPedidosEmCaminho()">
+            <button class="btn-grande" onclick="telaEscolaConfirmarRecebimento()">
                 <i>🚚</i><span>CONFIRMAR RECEBIMENTO</span>
             </button>
             <button class="btn-grande" onclick="telaSolicitarUniforme()">
@@ -240,6 +239,9 @@ async function carregarDashboard() {
             <button class="btn-grande" onclick="abrirPainelSeparacao()">
                 <i>📦</i><span>SEPARAÇÃO DE VOLUMES</span>
             </button>
+            <button class="btn-grande" onclick="telaEstoquePedidosPendentes()">
+                <i>📦</i><span>SEPARAÇÃO DE VOLUMES</span>
+            </button>
             <button class="btn-grande" onclick="telaCadastrosBase()">
                 <i>⚙️</i><span>CADASTROS BÁSICOS</span>
             </button>            
@@ -266,7 +268,7 @@ async function carregarDashboard() {
     // --- 6. PERFIL: LOGÍSTICA ---
     if (perfil === 'logistica') {
         html += `
-            <button class="btn-grande" onclick="listarColetaLogistica()">
+            <button class="btn-grande" onclick="telaLogisticaEntregas()">
                 <i>🚚</i><span>RECOLHER E TRANSPORTAR PEDIDO</span>
             </button>
             <button class="btn-grande" onclick="telaSolicitarPatrimonio()">
@@ -897,70 +899,119 @@ async function processarSolicitacao(pedidoId, acao) {
 
 
 async function telaDevolucaoUniforme() {
-    const container = document.getElementById('app-content');
-    container.innerHTML = '<div style="padding:20px;">Carregando produtos para devolução...</div>';
+    const app = document.getElementById('app-content');
     
-    // Resetamos o carrinho ao abrir a tela
-    carrinhoSolicitacao = [];
+    // Busca o "extrato" do que a escola recebeu nos últimos 30 dias
+    const res = await fetch(`${API_URL}/pedidos/escola/limite-devolucao`, {
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+    const itensRecebidos = await res.json();
 
-    try {
-        const res = await fetch(`${API_URL}/produtos/tipo/UNIFORMES`, {
-            headers: { 'Authorization': `Bearer ${TOKEN}` }
-        });
-        const produtos = await res.json();
+    app.innerHTML = `
+        <div style="padding:30px; background:#fff; min-height:100vh;">
+            <h2 style="color:#1e3a8a;">🔄 SOLICITAR DEVOLUÇÃO</h2>
+            <p style="color:#64748b;">Abaixo listamos os uniformes recebidos pela sua unidade nos últimos 30 dias. 
+            Você só pode devolver quantidades <b>iguais ou inferiores</b> ao que foi recebido.</p>
 
-        // DECLARAÇÃO DA VARIÁVEL QUE ESTAVA FALTANDO
-        const tituloTela = "🔄 DEVOLUÇÃO DE UNIFORMES";
+            <table style="width:100%; border-collapse:collapse; margin-top:20px;">
+                <thead style="background:#f1f5f9; color:#1e3a8a;">
+                    <tr>
+                        <th style="padding:15px; text-align:left;">PRODUTO / TAMANHO</th>
+                        <th style="padding:15px;">RECEBIDO (30d)</th>
+                        <th style="padding:15px; width:150px;">DEVOLVER</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${itensRecebidos.map(i => `
+                        <tr style="border-bottom:1px solid #eee;">
+                            <td style="padding:15px;"><b>${i.produto_nome}</b> (Tam: ${i.tamanho})</td>
+                            <td style="padding:15px; text-align:center; color:#1e40af; font-weight:bold;">${i.total_recebido}</td>
+                            <td style="padding:15px;">
+                                <input type="number" class="input-devolucao" 
+                                    data-id="${i.produto_id}" 
+                                    data-tam="${i.tamanho}" 
+                                    data-max="${i.total_recebido}"
+                                    data-nome="${i.produto_nome}"
+                                    placeholder="0" min="0" max="${i.total_recebido}"
+                                    style="width:100%; padding:10px; border:2px solid #cbd5e1; border-radius:8px; text-align:center; font-weight:bold;">
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
 
-        container.innerHTML = `
-            <div style="padding:20px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1px solid #ddd; padding-bottom:10px;">
-                    <h2 style="color:#1e3a8a; margin:0;">${tituloTela}</h2>
-                    <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer; font-weight:bold;">⬅️ VOLTAR</button>
-                </div>
-                
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                    <div style="background:white; padding:20px; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.1); height: fit-content;">
-                        <h3 style="margin-top:0;">Item para Devolver</h3>
-                        <label>PRODUTO:</label>
-                        <select id="solicitar_produto_id" style="width:100%; padding:10px; margin-bottom:15px;">
-                            ${produtos.map(p => `<option value="${p.id}">${p.nome}</option>`).join('')}
-                        </select>
-
-                        <label>TAMANHO:</label>
-                        <select id="solicitar_tamanho" style="width:100%; padding:10px; margin-bottom:15px;">
-                            <option>P</option><option>M</option><option>G</option><option>GG</option>
-                            <option>2</option><option>4</option><option>6</option><option>8</option>
-                            </select>
-
-                        <label>QUANTIDADE:</label>
-                        <input type="number" id="solicitar_qtd" value="1" min="1" style="width:100%; padding:10px; margin-bottom:15px;">
-
-                        <button onclick="adicionarAoCarrinhoSolicitacao()" style="width:100%; padding:12px; background:#f59e0b; color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">
-                            ➕ ADICIONAR À LISTA DE DEVOLUÇÃO
-                        </button>
-                    </div>
-
-                    <div style="background:white; padding:20px; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.1);">
-                        <h3 style="margin-top:0;">Itens Separados</h3>
-                        <div id="lista_carrinho_solicitacao">
-                            <p style="color:#666;">Nenhum item para devolver ainda.</p>
-                        </div>
-                        <hr style="border:0; border-top:1px solid #eee; margin:20px 0;">
-                        <button id="btnEnviarSolicitacao" onclick="enviarPedidoEscola('DEVOLUCAO')" disabled style="width:100%; padding:15px; background:#1e3a8a; color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer; opacity:0.5;">
-                            🚀 ENVIAR DEVOLUÇÃO COMPLETA
-                        </button>
-                    </div>
-                </div>
+            <div style="margin-top:30px; display:flex; gap:15px;">
+                <button onclick="processarSolicitacaoDevolucao()" style="flex:2; background:#1e3a8a; color:white; border:none; padding:18px; border-radius:10px; font-weight:bold; cursor:pointer;">
+                    ENVIAR SOLICITAÇÃO DE DEVOLUÇÃO
+                </button>
+                <button onclick="carregarDashboard()" style="flex:1; background:#94a3b8; color:white; border:none; border-radius:10px; cursor:pointer;">CANCELAR</button>
             </div>
-        `;
-    } catch (e) { 
-        console.error(e);
-        alert("Erro ao carregar produtos para devolução."); 
-    }
+        </div>
+    `;
 }
 
+function processarSolicitacaoDevolucao() {
+    const inputs = document.querySelectorAll('.input-devolucao');
+    const itensDevolucao = [];
+    let erroValidacao = "";
 
+    inputs.forEach(input => {
+        const qtdDevolver = parseInt(input.value) || 0;
+        const qtdMax = parseInt(input.getAttribute('data-max'));
+        const nomeProd = input.getAttribute('data-nome');
+        const tam = input.getAttribute('data-tam');
+
+        if (qtdDevolver > qtdMax) {
+            erroValidacao += `❌ Você não pode devolver ${qtdDevolver} unidades de ${nomeProd} (${tam}). O limite recebido foi ${qtdMax}.\n`;
+        }
+
+        if (qtdDevolver > 0 && qtdDevolver <= qtdMax) {
+            itensDevolucao.push({
+                produto_id: input.getAttribute('data-id'),
+                tamanho: tam,
+                quantidade: qtdDevolver
+            });
+        }
+    });
+
+    if (erroValidacao) {
+        alert("⚠️ ERRO DE QUANTIDADE:\n\n" + erroValidacao);
+        return;
+    }
+
+    if (itensDevolucao.length === 0) {
+        alert("Informe pelo menos uma quantidade válida para devolução.");
+        return;
+    }
+
+    // Se passou na validação, envia para a sua rota de criar pedido (operacao: 'DEVOLUCAO')
+    finalizarEnvioDevolucao(itensDevolucao);
+}
+
+async function finalizarEnvioDevolucao(itens) {
+    if (!confirm("Confirmar o envio desta solicitação de devolução?")) return;
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/escola/devolver`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${TOKEN}`
+            },
+            body: JSON.stringify({ itensDevolucao: itens })
+        });
+
+        if (res.ok) {
+            alert("✅ Solicitação enviada! O Administrador será notificado para autorizar a recolha.");
+            carregarDashboard(); // Volta para a tela principal
+        } else {
+            const erro = await res.json();
+            alert("❌ Erro ao enviar: " + erro.error);
+        }
+    } catch (err) {
+        alert("🚨 Erro de conexão com o servidor.");
+    }
+}
 
 function iniciarAlertaPedidos() {
     // Usando 'perfil' para bater com o resto do seu script
@@ -3334,29 +3385,53 @@ async function renderizarGerenciamentoDevolucoes() {
     `;
 }
 
-async function abrirModalConferenciaDevolucao(id) {
-    const res = await fetch(`${API_URL}/api/pedidos/${id}/itens`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-    });
+async function abrirModalConferencia(pedidoId) {
+    const modal = document.getElementById('modal-analise');
+    const res = await fetch(`${API_URL}/pedidos/detalhes/${pedidoId}`, { headers: {'Authorization': `Bearer ${TOKEN}`} });
     const itens = await res.json();
 
-    const modal = document.createElement('div');
-    modal.className = 'modal-overlay';
+    modal.style.display = 'flex';
     modal.innerHTML = `
-        <div class="modal-box">
-            <h3>CONFERIR DEVOLUÇÃO #${id}</h3>
-            <p>Verifique se as quantidades abaixo conferem com o que chegou fisicamente:</p>
-            <ul style="text-align:left; margin: 20px 0;">
-                ${itens.map(i => `<li><strong>${i.quantidade_solicitada}x</strong> ${i.produto_nome} (Tam: ${i.tamanho || 'N/A'})</li>`).join('')}
-            </ul>
-            <div style="background:#fff3cd; padding:10px; border-radius:4px; margin-bottom:20px; font-size:13px;">
-                ⚠️ Ao confirmar, estas quantidades serão somadas ao saldo atual do estoque.
+        <div style="background:white; padding:30px; border-radius:15px; width:90%; max-width:800px; max-height:90vh; overflow-y:auto;">
+            <h2 style="color:#1e3a8a;">📦 CONFERÊNCIA DE SAÍDA</h2>
+            <p style="color:#64748b;">Confirme as quantidades que estão saindo agora.</p>
+            
+            <table style="width:100%; border-collapse:collapse; margin-bottom:20px;">
+                <thead style="background:#f1f5f9; color:#1e3a8a;">
+                    <tr>
+                        <th style="padding:10px; text-align:left;">PRODUTO</th>
+                        <th style="padding:10px;">SOLICITADO</th>
+                        <th style="padding:10px;">ENVIAR AGORA</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${itens.map(i => `
+                        <tr style="border-bottom:1px solid #eee;">
+                            <td style="padding:10px;">${i.produto} (Tam: ${i.tamanho})</td>
+                            <td style="padding:10px; text-align:center;">${i.quantidade}</td>
+                            <td style="padding:10px; text-align:center;">
+                                <input type="number" class="input-remessa" data-id="${i.produto_id}" data-tam="${i.tamanho}" 
+                                    value="${i.quantidade}" min="0" max="${i.quantidade}"
+                                    style="width:70px; padding:8px; border:2px solid #cbd5e1; border-radius:6px; font-weight:bold; text-align:center;">
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:20px;">
+                <input type="text" id="motorista" placeholder="Nome do Motorista" style="padding:12px; border:1px solid #ccc; border-radius:6px;">
+                <input type="text" id="placa" placeholder="Placa do Veículo" style="padding:12px; border:1px solid #ccc; border-radius:6px;">
             </div>
-            <button onclick="confirmarRecebimentoFinal(${id})" class="btn-block">CONFIRMAR RECEBIMENTO E INTEGRAR ESTOQUE</button>
-            <button onclick="this.parentElement.parentElement.remove()" class="btn-cancel" style="width:100%; margin-top:10px;">FECHAR</button>
+            
+            <div style="display:flex; gap:10px;">
+                <button onclick="enviarRemessaFinal(${pedidoId})" style="flex:2; background:#10b981; color:white; border:none; padding:15px; border-radius:8px; font-weight:bold; cursor:pointer;">
+                    🚚 FINALIZAR E GERAR ROMANEIO
+                </button>
+                <button onclick="modal.style.display='none'" style="flex:1; background:#94a3b8; color:white; border:none; border-radius:8px; cursor:pointer;">CANCELAR</button>
+            </div>
         </div>
     `;
-    document.body.appendChild(modal);
 }
 
 async function confirmarRecebimentoFinal(id) {
@@ -3499,6 +3574,75 @@ async function renderizarTelaTermoResponsabilidade() {
             </button>
         </div>
     `;
+}
+
+async function enviarRemessaFinal(pedidoId) {
+    // 1. Coleta os dados do Motorista e Veículo
+    const motorista = document.getElementById('motorista').value;
+    const placa = document.getElementById('placa').value;
+
+    if (!motorista || !placa) {
+        alert("⚠️ Por favor, preencha o nome do motorista e a placa do veículo.");
+        return;
+    }
+
+    // 2. Coleta os itens e as quantidades que o estoque confirmou
+    const inputs = document.querySelectorAll('.input-remessa');
+    const itensParaEnviar = [];
+
+    inputs.forEach(input => {
+        const qtd = parseInt(input.value);
+        if (qtd > 0) {
+            itensParaEnviar.push({
+                produto_id: input.getAttribute('data-id'),
+                tamanho: input.getAttribute('data-tam'),
+                qtd_enviada: qtd
+            });
+        }
+    });
+
+    if (itensParaEnviar.length === 0) {
+        alert("❌ Você não pode gerar uma remessa vazia. Informe as quantidades.");
+        return;
+    }
+
+    // 3. Envia para o Backend
+    try {
+        const res = await fetch(`${API_URL}/pedidos/estoque/finalizar-remessa`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${TOKEN}`
+            },
+            body: JSON.stringify({ 
+                pedidoId, 
+                itensParaEnviar, 
+                motorista, 
+                placa 
+            })
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+            alert("✅ Remessa gerada e estoque atualizado!");
+            
+            // Fecha o modal de conferência
+            document.getElementById('modal-analise').style.display = 'none';
+            
+            // Recarrega a lista de pedidos pendentes do estoque
+            telaEstoquePedidosPendentes();
+
+            // 🖨️ ABRE O ROMANEIO PARA IMPRESSÃO AUTOMATICAMENTE
+            imprimirRomaneio(data.romaneioId);
+            
+        } else {
+            alert("Erro ao processar remessa: " + data.error);
+        }
+    } catch (err) {
+        console.error(err);
+        alert("🚨 Erro de comunicação com o servidor.");
+    }
 }
 
 async function gerarPDFTermo() {
@@ -5800,21 +5944,26 @@ async function listarFilaSeparacao() {
 }
 
 // Muda o status para SEPARACAO_INICIADA
-async function iniciarProcessoSeparacao(id) {
+async function iniciarProcessoSeparacao(pedidoId) {
     try {
-        const res = await fetch(`${API_URL}/pedidos/${id}/iniciar-separacao`, {
+        const res = await fetch(`${API_URL}/pedidos/estoque/iniciar-separacao`, {
             method: 'POST',
-            headers: { 'Authorization': `Bearer ${TOKEN}` }
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${TOKEN}`
+            },
+            body: JSON.stringify({ pedidoId })
         });
-        
+
         if (res.ok) {
-            alert("🚀 SEPARAÇÃO INICIADA COM SUCESSO!");
-            listarFilaSeparacao(); // Recarrega a lista
+            alert("🚀 Separação iniciada! O pedido agora está sob sua responsabilidade.");
+            // Aqui você pode redirecionar para uma tela que mostre os itens para ele ir bipando/conferindo
+            telaEstoquePedidosPendentes(); 
         } else {
-            alert("ERRO AO INICIAR SEPARAÇÃO");
+            alert("Erro ao assumir separação.");
         }
     } catch (err) {
-        alert("ERRO DE CONEXÃO");
+        alert("Erro de conexão.");
     }
 }
 
@@ -7012,6 +7161,210 @@ async function telaAdminVerPedidos() {
         `;
     } catch (err) {
         alert("Erro ao carregar a lista de pedidos.");
+    }
+}
+
+async function telaEstoquePedidosPendentes() {
+    const app = document.getElementById('app-content');
+    app.style.background = "#f8fafc"; // Cor clara para leitura
+    
+    try {
+        const res = await fetch(`${API_URL}/pedidos/estoque/pendentes`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const pedidos = await res.json();
+
+        app.innerHTML = `
+            <div style="padding:30px;">
+                <h2 style="color:#1e3a8a; border-bottom: 2px solid #e2e8f0; padding-bottom:10px;">📦 PEDIDOS PARA SEPARAÇÃO</h2>
+                <div style="margin-top:20px; display:grid; gap:15px;">
+                    ${pedidos.length === 0 ? '<p>Nenhum pedido aguardando separação no momento.</p>' : ''}
+                    ${pedidos.map(p => `
+                        <div style="background:white; padding:20px; border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,0.1); display:flex; justify-content:space-between; align-items:center;">
+                            <div>
+                                <div style="font-weight:bold; color:#1e40af; font-size:1.1rem;">📍 ${p.escola_destino}</div>
+                                <div style="color:#64748b;">Pedido #${p.id} | Solicitante: ${p.solicitante}</div>
+                            </div>
+                            <button onclick="iniciarProcessoSeparacao(${p.id})" style="background:#10b981; color:white; border:none; padding:12px 20px; border-radius:6px; font-weight:bold; cursor:pointer;">
+                                ▶️ INICIAR SEPARAÇÃO
+                            </button>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    } catch (err) {
+        alert("Erro ao carregar pedidos para o estoque.");
+    }
+}
+
+async function imprimirRomaneio(romaneioId) {
+    const res = await fetch(`${API_URL}/impressao/romaneio/${romaneioId}`, {
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+    const data = await res.json();
+
+    const janelaImpressao = window.open('', '_blank');
+    janelaImpressao.document.write(`
+        <html>
+        <head>
+            <title>Romaneio #${data.info.romaneio_id}</title>
+            <style>
+                body { font-family: sans-serif; padding: 40px; color: #000; }
+                .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 20px; }
+                .info-section { display: flex; justify-content: space-between; margin: 20px 0; }
+                table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                th, td { border: 1px solid #000; padding: 10px; text-align: left; }
+                th { background: #eee; }
+                .assinaturas { margin-top: 50px; display: flex; justify-content: space-between; }
+                .campo-assinatura { border-top: 1px solid #000; width: 250px; text-align: center; padding-top: 5px; margin-top: 40px; }
+                @media print { .no-print { display: none; } }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h1>ROMANEIO DE ENTREGA - SEMED</h1>
+                <p>Nº CONTROLE: <strong>${data.info.romaneio_id}</strong> | DATA: ${new Date(data.info.data_saida).toLocaleString()}</p>
+            </div>
+
+            <div class="info-section">
+                <div>
+                    <p><strong>DESTINO:</strong> ${data.info.escola_nome}</p>
+                    <p><strong>PEDIDO ORIGINAL:</strong> #${data.info.pedido_id}</p>
+                </div>
+                <div>
+                    <p><strong>MOTORISTA:</strong> ${data.info.motorista_nome}</p>
+                    <p><strong>PLACA:</strong> ${data.info.veiculo_placa}</p>
+                </div>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>CÓD.</th>
+                        <th>PRODUTO / DESCRIÇÃO</th>
+                        <th>TAMANHO</th>
+                        <th>QTD. ENVIADA</th>
+                        <th>CONFERIDO</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${data.itens.map(i => `
+                        <tr>
+                            <td>${i.produto_id}</td>
+                            <td>${i.produto_nome}</td>
+                            <td style="text-align:center;">${i.tamanho}</td>
+                            <td style="text-align:center;"><strong>${i.quantidade_enviada}</strong></td>
+                            <td style="width:100px;">[ ]</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+
+            <div class="assinaturas">
+                <div class="campo-assinatura">Assinatura Motorista</div>
+                <div class="campo-assinatura">Recebido por (Nome Legível)</div>
+            </div>
+
+            <div class="no-print" style="margin-top: 30px; text-align: center;">
+                <button onclick="window.print()" style="padding: 15px 30px; background: #000; color: #fff; cursor: pointer;">🖨️ IMPRIMIR AGORA</button>
+            </div>
+        </body>
+        </html>
+    `);
+}
+
+async function telaLogisticaEntregas() {
+    const app = document.getElementById('app-content');
+    const res = await fetch(`${API_URL}/pedidos/logistica/prontos`, {
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+    const pedidos = await res.json();
+
+    app.innerHTML = `
+        <div style="padding:30px; background:#f8fafc; min-height:100vh;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:25px;">
+                <h2 style="color:#1e3a8a;">🚛 LOGÍSTICA - PEDIDOS LIBERADOS</h2>
+                <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:10px 20px; border-radius:8px; cursor:pointer;">VOLTAR</button>
+            </div>
+            <div style="display:grid; gap:15px;">
+                ${pedidos.length === 0 ? '<p>Nenhum pedido aguardando coleta no momento.</p>' : ''}
+                ${pedidos.map(p => `
+                    <div style="background:white; padding:20px; border-radius:10px; display:flex; justify-content:space-between; align-items:center; border-left:8px solid #f59e0b; box-shadow:0 2px 4px rgba(0,0,0,0.05);">
+                        <div>
+                            <div style="font-weight:bold; color:#1e3a8a; font-size:1.1rem;">📍 DESTINO: ${p.escola}</div>
+                            <div style="color:#64748b;">Motorista: ${p.motorista_nome} | Placa: ${p.veiculo_placa}</div>
+                        </div>
+                        <button onclick="confirmarSaidaTransporte(${p.id})" style="background:#1e3a8a; color:white; border:none; padding:12px 20px; border-radius:8px; font-weight:bold; cursor:pointer;">
+                            🚚 DESPACHAR
+                        </button>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `;
+}
+
+async function telaEscolaConfirmarRecebimento() {
+    const app = document.getElementById('app-content');
+    app.style.background = "#f0fdf4"; // Fundo verde bem claro (suave)
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/escola/a-caminho`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const pedidos = await res.json();
+
+        app.innerHTML = `
+            <div style="padding:30px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:25px;">
+                    <h2 style="color:#166534; margin:0;">🚚 MATERIAL A CAMINHO</h2>
+                    <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:10px 20px; border-radius:8px; cursor:pointer; font-weight:bold;">VOLTAR</button>
+                </div>
+
+                <div style="display:grid; gap:15px;">
+                    ${pedidos.length === 0 ? `
+                        <div style="background:white; padding:40px; border-radius:12px; text-align:center; color:#64748b; border:1px dashed #ccc;">
+                            <span style="font-size:3rem;">📦</span><br><br>
+                            Nenhum material em transporte para sua unidade no momento.
+                        </div>
+                    ` : ''}
+
+                    ${pedidos.map(p => `
+                        <div style="background:white; border:2px solid #bbf7d0; padding:20px; border-radius:12px; display:flex; justify-content:space-between; align-items:center; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+                            <div>
+                                <div style="font-weight:bold; color:#166534; font-size:1.2rem; margin-bottom:5px;">PEDIDO #${p.id}</div>
+                                <div style="color:#475569;">
+                                    Motorista: <b>${p.motorista_nome}</b><br>
+                                    Veículo: <b>${p.veiculo_placa}</b><br>
+                                    Saiu em: ${new Date(p.data_saida).toLocaleString('pt-BR')}
+                                </div>
+                            </div>
+                            <button onclick="confirmarEntregaFinal(${p.id})" style="background:#22c55e; color:white; border:none; padding:15px 25px; border-radius:8px; font-weight:bold; cursor:pointer; font-size:1rem;">
+                                ✅ CONFIRMAR RECEBIMENTO
+                            </button>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    } catch (err) {
+        app.innerHTML = `<div style="padding:20px; color:red;">Erro de conexão.</div>`;
+    }
+}
+
+async function confirmarEntregaFinal(pedidoId) {
+    if(!confirm("Confirma que todos os itens deste pedido foram recebidos na unidade?")) return;
+    
+    const res = await fetch(`${API_URL}/pedidos/escola/confirmar-recebimento`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+        body: JSON.stringify({ pedidoId })
+    });
+
+    if(res.ok) {
+        alert("🎉 Excelente! O ciclo do pedido foi concluído.");
+        telaEscolaConfirmarRecebimento();
     }
 }
 

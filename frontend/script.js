@@ -517,25 +517,26 @@ async function telaAdminGerenciarSolicitacoes() {
     const pedidos = await res.json();
 
     app.innerHTML = `
-        <div style="padding:20px; background:#f1f5f9; min-height:100vh;">
-            <div style="display:flex; justify-content:space-between; margin-bottom:20px;">
-                <h2 style="color:#1e3a8a;">🔓 AUTORIZAR SOLICITAÇÕES</h2>
-                <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:10px 20px; border-radius:8px; cursor:pointer;">VOLTAR</button>
+        <div style="padding:20px; background:#f8fafc; min-height:100vh;">
+            <div style="display:flex; justify-content:space-between; margin-bottom:25px;">
+                <h2 style="color:#1e3a8a; margin:0; font-size:1.8rem;">🔓 AUTORIZAR SOLICITAÇÕES</h2>
+                <button onclick="carregarDashboard()" style="background:#475569; color:white; border:none; padding:10px 20px; border-radius:8px; cursor:pointer; font-weight:bold;">⬅ VOLTAR</button>
             </div>
 
-            <div style="display:grid; gap:10px;">
+            <div style="display:grid; gap:15px;">
                 ${pedidos.map(p => `
-                    <div style="background:white; padding:20px; border-radius:10px; border-left: 6px solid #1e40af; display:flex; justify-content:space-between; align-items:center; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
-                        <div>
-                            <div style="font-weight:bold; color:#1e3a8a; font-size:1.2rem;">📍 ${p.escola_nome}</div>
-                            <div style="color:#475569;">Por: ${p.solicitante} | ${new Date(p.data_criacao).toLocaleDateString()}</div>
+                    <div style="background:white; padding:25px; border-radius:12px; border-left: 8px solid #1e40af; display:flex; justify-content:space-between; align-items:center; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+                        <div style="text-align:left;">
+                            <div style="font-weight:bold; color:#1e40af; font-size:1.3rem; margin-bottom:5px;">📍 ${p.escola_nome}</div>
+                            <div style="color:#475569; font-size:1rem;">Solicitado por: <b>${p.solicitante}</b></div>
+                            <div style="color:#94a3b8; font-size:0.8rem;">Data: ${new Date(p.data_criacao).toLocaleDateString('pt-BR')}</div>
                         </div>
-                        <button onclick="analisarPedidoEstoque(${p.id})" style="background:#1e40af; color:white; border:none; padding:12px 25px; border-radius:8px; font-weight:bold; cursor:pointer;">ANALISAR PEDIDO</button>
+                        <button onclick="analisarPedidoEstoque(${p.id})" style="background:#2563eb; color:white; border:none; padding:15px 30px; border-radius:10px; font-weight:bold; cursor:pointer; font-size:1rem;">ANALISAR ITENS</button>
                     </div>
                 `).join('')}
             </div>
         </div>
-        <div id="modal-analise" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:1000; justify-content:center; align-items:center; padding:20px;"></div>
+        <div id="modal-analise" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15, 23, 42, 0.9); z-index:1000; justify-content:center; align-items:center;"></div>
     `;
 }
 

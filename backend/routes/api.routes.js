@@ -756,21 +756,32 @@ router.patch('/pedidos/:id/status', verificarToken, async (req, res) => {
 });
 
 router.post('/pedidos/escola/solicitar', verificarToken, async (req, res) => {
-    const { local_destino_id, itens, tipo_pedido } = req.body;
+    const { itens, tipo_pedido } = req.body; // Removemos o local_destino_id daqui
 
     try {
         await db.query('BEGIN');
 
-        // AJUSTE: Usando 'usuario_origem_id' para bater com o seu banco
+        // 1. BUSCA AUTOMÁTICA: O backend descobre o local_id real do usuário no banco
+        const userRes = await db.query(
+            "SELECT local_id FROM usuarios WHERE id = $1", 
+            [req.userId]
+        );
+        const local_id_automatico = userRes.rows[0]?.local_id;
+
+        if (!local_id_automatico) {
+            throw new Error("Usuário não possui um local vinculado no cadastro.");
+        }
+
+        // 2. INSERÇÃO: Agora usamos o local_id_automatico que veio direto do banco
         const pedidoRes = await db.query(
             `INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, tipo_pedido, data_criacao) 
              VALUES ($1, $2, 'AGUARDANDO_AUTORIZACAO', $3, NOW()) RETURNING id`,
-            [req.userId, local_destino_id, tipo_pedido]
+            [req.userId, local_id_automatico, tipo_pedido]
         );
 
         const pedidoId = pedidoRes.rows[0].id;
 
-        // Inserção dos itens (tabela itens_pedido)
+        // Inserção dos itens
         for (const item of itens) {
             await db.query(
                 `INSERT INTO itens_pedido (pedido_id, produto_id, tamanho, quantidade) 
@@ -785,7 +796,7 @@ router.post('/pedidos/escola/solicitar', verificarToken, async (req, res) => {
     } catch (err) {
         await db.query('ROLLBACK');
         console.error("ERRO AO SALVAR PEDIDO:", err.message);
-        res.status(500).json({ error: "Erro ao gravar pedido no banco de dados." });
+        res.status(500).json({ error: err.message || "Erro ao gravar pedido." });
     }
 });
 
@@ -1512,6 +1523,34 @@ router.get('/pedidos/escola/limite-devolucao', verificarToken, async (req, res) 
         res.json(result.rows);
     } catch (err) {
         res.status(500).json({ error: "Erro ao calcular limite: " + err.message });
+    }
+});
+
+router.post('/pedidos/solicitar', verificarToken, async (req, res) => {
+    const usuario_id = req.userId; // Vem do token JWT
+
+    try {
+        // Buscamos o local do usuário para garantir
+        const userRes = await db.query("SELECT local_id FROM usuarios WHERE id = $1", [usuario_id]);
+        const local_id = userRes.rows[0].local_id;
+
+        if (!local_id) {
+            return res.status(400).json({ error: "Seu usuário não está vinculado a nenhuma escola/local." });
+        }
+
+        // Inserimos o pedido. A Trigger agora garante o preenchimento, 
+        // mas passar o local_id aqui é o "plano A".
+        const result = await db.query(
+            `INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, tipo_pedido) 
+             VALUES ($1, $2, 'AGUARDANDO_AUTORIZACAO', 'SAIDA') RETURNING id`,
+            [usuario_id, local_id]
+        );
+
+        res.status(201).json({ pedidoId: result.rows[0].id });
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Erro ao processar solicitação." });
     }
 });
 

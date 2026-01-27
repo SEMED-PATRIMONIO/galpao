@@ -146,14 +146,60 @@ router.put('/pedidos/itens/atualizar', verificarToken, async (req, res) => {
     }
 });
 
-router.post('/pedidos/uniformes/criar', verificarToken, async (req, res) => {
-    const { itens, operacao } = req.body;
-    const usuario_id = req.userId; // ID extraído do Token
+router.post('/pedidos/admin/autorizar', verificarToken, async (req, res) => {
+    const { pedidoId } = req.body;
+    const admin_id = req.userId;
 
     try {
         await db.query('BEGIN');
 
-        // O banco busca o local_id do usuário logado e já grava no pedido
+        // 1. Busca os itens para verificar e subtrair saldo
+        const itens = await db.query(
+            "SELECT produto_id, tamanho, quantidade FROM itens_pedido WHERE pedido_id = $1",
+            [pedidoId]
+        );
+
+        for (const item of itens.rows) {
+            // Subtrai do estoque apenas se houver saldo (segurança contra furos)
+            const baixa = await db.query(
+                `UPDATE estoque_grades 
+                 SET quantidade = quantidade - $1 
+                 WHERE produto_id = $2 AND tamanho = $3 AND quantidade >= $1`,
+                [item.quantidade, item.produto_id, item.tamanho]
+            );
+
+            if (baixa.rowCount === 0) {
+                throw new Error(`Saldo insuficiente para o produto ${item.produto_id} tam ${item.tamanho}`);
+            }
+        }
+
+        // 2. Atualiza o pedido: Status muda para 'AGUARDANDO_SEPARACAO'
+        await db.query(
+            `UPDATE pedidos 
+            SET status = 'APROVADO', 
+                autorizado_por = $1, 
+                 data_autorizacao = NOW() 
+            WHERE id = $2`,
+            [admin_id, pedidoId]
+        );
+
+        await db.query('COMMIT');
+        res.json({ message: "Pedido autorizado e enviado para a fila de separação!" });
+
+    } catch (err) {
+        await db.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/pedidos/uniformes/criar', verificarToken, async (req, res) => {
+    const { itens, operacao } = req.body;
+    const usuario_id = req.userId;
+
+    try {
+        await db.query('BEGIN');
+
+        // O SELECT dentro do INSERT garante que o local_id do usuário seja gravado no local_destino_id do pedido
         const pedidoRes = await db.query(
             `INSERT INTO pedidos (
                 usuario_origem_id, 
@@ -167,13 +213,17 @@ router.post('/pedidos/uniformes/criar', verificarToken, async (req, res) => {
                 'AGUARDANDO_AUTORIZACAO', 
                 $2, 
                 NOW()
-            ) RETURNING id`,
+            ) RETURNING id, local_destino_id`,
             [usuario_id, operacao]
         );
 
         const pedidoId = pedidoRes.rows[0].id;
 
-        // Inserção dos itens
+        // Validação: Se o usuário não tiver local no cadastro, o banco retornará null e barramos aqui
+        if (!pedidoRes.rows[0].local_destino_id) {
+            throw new Error("Usuário sem unidade vinculada. Verifique o cadastro de usuários.");
+        }
+
         for (const item of itens) {
             await db.query(
                 "INSERT INTO itens_pedido (pedido_id, produto_id, tamanho, quantidade) VALUES ($1, $2, $3, $4)",
@@ -182,10 +232,11 @@ router.post('/pedidos/uniformes/criar', verificarToken, async (req, res) => {
         }
 
         await db.query('COMMIT');
-        res.status(201).json({ message: "Pedido enviado com sucesso!" });
+        res.status(201).json({ message: "Solicitação enviada!" });
+
     } catch (err) {
         await db.query('ROLLBACK');
-        res.status(500).json({ error: "Erro interno: " + err.message });
+        res.status(500).json({ error: err.message });
     }
 });
 
@@ -199,6 +250,48 @@ router.get('/produtos/lista-por-tipo', verificarToken, async (req, res) => {
         res.json(result.rows);
     } catch (err) {
         res.status(500).json({ error: err.message });
+    }
+});
+
+router.get('/pedidos/estoque/pendentes', verificarToken, async (req, res) => {
+    try {
+        const result = await db.query(`
+            SELECT p.id, p.data_criacao, u.nome as solicitante, l.nome as escola_destino
+            FROM pedidos p
+            JOIN usuarios u ON p.usuario_origem_id = u.id
+            JOIN locais l ON p.local_destino_id = l.id
+            WHERE p.status = 'AGUARDANDO_SEPARACAO'
+            ORDER BY p.data_criacao ASC
+        `);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/pedidos/estoque/iniciar-separacao', verificarToken, async (req, res) => {
+    const { pedidoId } = req.body;
+    const usuario_estoque_id = req.userId; // ID do usuário logado (perfil estoque)
+
+    try {
+        // Atualiza status e registra quem está operando
+        const result = await db.query(
+           `UPDATE pedidos 
+            SET status = 'SEPARACAO_INICIADA', 
+                usuario_separacao_id = $1, 
+                data_separacao = NOW() 
+            WHERE id = $2 AND status = 'APROVADO' -- Busca apenas os aprovados pelo admin
+            RETURNING id`,
+            [usuario_estoque_id, pedidoId]
+        );
+        if (result.rowCount === 0) {
+            return res.status(400).json({ error: "Pedido não disponível para separação ou já iniciado." });
+        }
+
+        res.json({ message: "Separação iniciada com sucesso!" });
+    } catch (err) {
+        console.error("Erro ao iniciar separação:", err.message);
+        res.status(500).json({ error: "Erro no servidor ao processar separação." });
     }
 });
 
@@ -721,27 +814,53 @@ router.get('/pedidos/alertas-escola', verificarToken, async (req, res) => {
 });
 
 router.post('/pedidos/escola/devolver', verificarToken, async (req, res) => {
-    const { itens } = req.body;
+    const { itensDevolucao } = req.body;
+    const usuario_id = req.userId;
+
     try {
         await db.query('BEGIN');
-        const user = await db.query('SELECT local_id FROM usuarios WHERE id = $1', [req.userId]);
-        
-        const pedido = await db.query(
-            "INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, data_criacao, tipo_pedido) VALUES ($1, $2, 'DEVOLUCAO_PENDENTE', NOW(), 'DEVOLUCAO') RETURNING id",
-            [req.userId, user.rows[0].local_id]
+
+        // 1. Cria o pedido de devolução vinculado à escola do usuário
+        const pedidoRes = await db.query(
+            `INSERT INTO pedidos (
+                usuario_origem_id, 
+                local_destino_id, 
+                status, 
+                tipo_pedido, 
+                data_criacao
+            ) VALUES (
+                $1, 
+                (SELECT local_id FROM usuarios WHERE id = $1), 
+                'DEVOLUCAO_PENDENTE', 
+                'DEVOLUCAO', 
+                NOW()
+            ) RETURNING id`,
+            [usuario_id]
         );
 
-        for (const item of itens) {
+        const pedidoId = pedidoRes.rows[0].id;
+
+        // 2. Insere os itens que a escola está a devolver
+        for (const item of itensDevolucao) {
             await db.query(
-                "INSERT INTO pedido_itens (pedido_id, produto_id, tamanho, quantidade_solicitada) VALUES ($1, $2, $3, $4)",
-                [pedido.rows[0].id, item.produto_id, item.tamanho, item.quantidade]
+                "INSERT INTO itens_pedido (pedido_id, produto_id, tamanho, quantidade) VALUES ($1, $2, $3, $4)",
+                [pedidoId, item.produto_id, item.tamanho, item.quantidade]
             );
         }
+
+        // 3. Regista no log para o Administrador acompanhar
+        await db.query(
+            "INSERT INTO log_status_pedidos (pedido_id, usuario_id, status_novo, observacao) VALUES ($1, $2, 'DEVOLUCAO_PENDENTE', 'Solicitação de devolução iniciada pela escola')",
+            [pedidoId, usuario_id]
+        );
+
         await db.query('COMMIT');
-        res.json({ message: "PEDIDO DE DEVOLUÇÃO REGISTRADO!" });
+        res.status(201).json({ message: "Solicitação de devolução enviada com sucesso!", pedidoId });
+
     } catch (err) {
         await db.query('ROLLBACK');
-        res.status(500).json({ error: err.message });
+        console.error("Erro na devolução:", err.message);
+        res.status(500).json({ error: "Erro ao processar devolução." });
     }
 });
 
@@ -1224,6 +1343,175 @@ router.get('/produtos/:id/grade', verificarToken, async (req, res) => {
         res.json(tamanhos.rows);
     } catch (err) {
         res.status(500).json({ error: "Erro ao buscar grade." });
+    }
+});
+
+router.post('/pedidos/estoque/finalizar-remessa', verificarToken, async (req, res) => {
+    const { pedidoId, itensParaEnviar, motorista, placa } = req.body;
+    const usuarioId = req.userId;
+
+    try {
+        await db.query('BEGIN');
+
+        // 1. Cria o Romaneio de Transporte
+        const romaneioRes = await db.query(
+            "INSERT INTO romaneios (usuario_estoque_id, motorista_nome, veiculo_placa, status) VALUES ($1, $2, $3, 'EM_TRANSPORTE') RETURNING id",
+            [usuarioId, motorista, placa]
+        );
+        const romaneioId = romaneioRes.rows[0].id;
+
+        // 2. Cria a Remessa vinculada ao Pedido
+        const remessaRes = await db.query(
+            "INSERT INTO pedido_remessas (pedido_id, status) VALUES ($1, 'SAIU_PARA_ENTREGA') RETURNING id",
+            [pedidoId]
+        );
+        const remessaId = remessaRes.rows[0].id;
+
+        // 3. Processa cada item enviado nesta remessa
+        for (const item of itensParaEnviar) {
+            // Grava o que está saindo nesta remessa específica
+            await db.query(
+                "INSERT INTO pedido_remessa_itens (remessa_id, produto_id, tamanho, quantidade_enviada) VALUES ($1, $2, $3, $4)",
+                [remessaId, item.produto_id, item.tamanho, item.qtd_enviada]
+            );
+
+            // Baixa o estoque físico
+            await db.query(
+                "UPDATE estoque_grades SET quantidade = quantidade - $1 WHERE produto_id = $2 AND tamanho = $3",
+                [item.qtd_enviada, item.produto_id, item.tamanho]
+            );
+        }
+
+        // 4. Atualiza o pedido com o último Romaneio e Log de Status
+        await db.query(
+            "UPDATE pedidos SET status = 'COLETA_LIBERADA', romaneio_id = $1 WHERE id = $2",
+            [romaneioId, pedidoId]
+        );        
+        await db.query(
+            "INSERT INTO log_status_pedidos (pedido_id, usuario_id, status_anterior, status_novo, observacao) VALUES ($1, $2, 'SEPARACAO_INICIADA', 'AGUARDANDO_COLETA', 'Remessa parcial/total gerada')",
+            [pedidoId, usuarioId]
+        );
+
+        await db.query('COMMIT');
+        res.json({ message: "Remessa finalizada com sucesso!", romaneioId });
+    } catch (err) {
+        await db.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.get('/impressao/romaneio/:id', verificarToken, async (req, res) => {
+    const romaneioId = req.params.id;
+
+    try {
+        const result = await db.query(`
+            SELECT 
+                r.id AS romaneio_id, r.motorista_nome, r.veiculo_placa, r.data_saida,
+                p.id AS pedido_id, p.tipo_pedido,
+                l.nome AS escola_nome, l.endereco,
+                pri.quantidade_enviada, pr.produto_id, prod.nome AS produto_nome, pri.tamanho
+            FROM romaneios r
+            JOIN pedidos p ON p.romaneio_id = r.id
+            JOIN locais l ON p.local_destino_id = l.id
+            JOIN pedido_remessas pr ON pr.pedido_id = p.id
+            JOIN pedido_remessa_itens pri ON pri.remessa_id = pr.id
+            JOIN produtos prod ON pri.produto_id = prod.id
+            WHERE r.id = $1`, [romaneioId]);
+
+        if (result.rows.length === 0) return res.status(404).json({ error: "Romaneio não encontrado." });
+
+        // Agrupando os dados para o cabeçalho
+        const romaneioData = {
+            info: result.rows[0],
+            itens: result.rows
+        };
+
+        res.json(romaneioData);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.get('/pedidos/logistica/prontos', verificarToken, async (req, res) => {
+    const result = await db.query(`
+        SELECT p.id, l.nome as escola, r.motorista_nome, r.veiculo_placa
+        FROM pedidos p
+        JOIN locais l ON p.local_destino_id = l.id
+        JOIN romaneios r ON p.romaneio_id = r.id
+        WHERE p.status = 'COLETA_LIBERADA' -- Filtra o que o estoque já soltou
+    `);
+    res.json(result.rows);
+});
+
+// DESPACHAR
+router.post('/pedidos/logistica/despachar', verificarToken, async (req, res) => {
+    const { pedidoId } = req.body;
+    await db.query("UPDATE pedidos SET status = 'EM_TRANSPORTE', data_saida = NOW() WHERE id = $1", [pedidoId]);
+    res.json({ message: "Carga em transporte!" });
+});
+
+router.post('/pedidos/escola/confirmar-recebimento', verificarToken, async (req, res) => {
+    const { pedidoId } = req.body;
+    try {
+        await db.query(
+            "UPDATE pedidos SET status = 'ENTREGUE', data_recebimento = NOW() WHERE id = $1",
+            [pedidoId]
+        );
+        res.json({ message: "Pedido finalizado: ENTREGUE!" });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.get('/pedidos/escola/a-caminho', verificarToken, async (req, res) => {
+    const usuario_id = req.userId;
+
+    try {
+        const result = await db.query(`
+            SELECT 
+                p.id, 
+                p.data_saida, 
+                r.motorista_nome, 
+                r.veiculo_placa,
+                p.status
+            FROM pedidos p
+            JOIN romaneios r ON p.romaneio_id = r.id
+            WHERE p.local_destino_id = (SELECT local_id FROM usuarios WHERE id = $1)
+            AND p.status = 'EM_TRANSPORTE'
+            ORDER BY p.data_saida DESC
+        `, [usuario_id]);
+
+        res.json(result.rows);
+    } catch (err) {
+        console.error("Erro ao buscar pedidos a caminho:", err.message);
+        res.status(500).json({ error: "Erro ao carregar entregas." });
+    }
+});
+
+router.get('/pedidos/escola/limite-devolucao', verificarToken, async (req, res) => {
+    const usuario_id = req.userId;
+
+    try {
+        const result = await db.query(`
+            SELECT 
+                prod.id AS produto_id, 
+                prod.nome AS produto_nome, 
+                pri.tamanho, 
+                SUM(pri.quantidade_enviada)::integer AS total_recebido
+            FROM pedido_remessa_itens pri
+            JOIN pedido_remessas pr ON pri.remessa_id = pr.id
+            JOIN pedidos p ON pr.pedido_id = p.id
+            JOIN produtos prod ON pri.produto_id = prod.id
+            WHERE p.local_destino_id = (SELECT local_id FROM usuarios WHERE id = $1)
+              AND p.data_criacao >= NOW() - INTERVAL '30 days'
+              AND p.status IN ('ENTREGUE', 'EM_TRANSPORTE', 'COLETA_LIBERADA')
+            GROUP BY prod.id, prod.nome, pri.tamanho
+            HAVING SUM(pri.quantidade_enviada) > 0
+        `, [usuario_id]);
+
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao calcular limite: " + err.message });
     }
 });
 

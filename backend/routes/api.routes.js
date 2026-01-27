@@ -96,10 +96,10 @@ router.get('/pedidos/admin/pendentes', verificarToken, async (req, res) => {
                 p.id, 
                 p.data_criacao, 
                 u.nome as solicitante, 
-                l.nome as escola_nome -- 👈 Aqui o nome da escola aparece
+                COALESCE(l.nome, '⚠️ LOCAL NÃO VINCULADO') as escola_nome
             FROM pedidos p
-            INNER JOIN usuarios u ON p.usuario_origem_id = u.id
-            INNER JOIN locais l ON p.local_destino_id = l.id
+            LEFT JOIN usuarios u ON p.usuario_origem_id = u.id
+            LEFT JOIN locais l ON p.local_destino_id = l.id
             WHERE p.status = 'AGUARDANDO_AUTORIZACAO'
             ORDER BY p.data_criacao ASC
         `);
@@ -146,48 +146,14 @@ router.put('/pedidos/itens/atualizar', verificarToken, async (req, res) => {
     }
 });
 
-router.post('/antigopedidos/uniformes/criar', verificarToken, async (req, res) => {
-    const { local_destino_id, itens, operacao } = req.body;
-    const usuario_origem_id = req.userId; // ID do usuário que está logado (vem do token)
-
-    try {
-        await db.query('BEGIN');
-
-        // Insere o cabeçalho do pedido com o local_destino_id automático
-        const pedidoRes = await db.query(
-            `INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, tipo_pedido, data_criacao) 
-             VALUES ($1, $2, 'AGUARDANDO_AUTORIZACAO', $3, NOW()) RETURNING id`,
-            [usuario_origem_id, local_destino_id, operacao]
-        );
-
-        const pedidoId = pedidoRes.rows[0].id;
-
-        // Loop para inserir os itens (tamanhos e quantidades)
-        for (const item of itens) {
-            await db.query(
-                "INSERT INTO itens_pedido (pedido_id, produto_id, tamanho, quantidade) VALUES ($1, $2, $3, $4)",
-                [pedidoId, item.produto_id, item.tamanho, item.quantidade]
-            );
-        }
-
-        await db.query('COMMIT');
-        res.status(201).json({ message: "Pedido registrado com sucesso!" });
-
-    } catch (err) {
-        await db.query('ROLLBACK');
-        console.error("Erro no SQL:", err.message);
-        res.status(500).json({ error: "Erro ao gravar pedido no banco." });
-    }
-});
-
 router.post('/pedidos/uniformes/criar', verificarToken, async (req, res) => {
     const { itens, operacao } = req.body;
-    const usuario_id = req.userId; // ID extraído do token (já funciona hoje)
+    const usuario_id = req.userId; // ID extraído do Token
 
     try {
         await db.query('BEGIN');
 
-        // O banco busca o local_id do usuário e grava no local_destino_id do pedido automaticamente
+        // O banco busca o local_id do usuário logado e já grava no pedido
         const pedidoRes = await db.query(
             `INSERT INTO pedidos (
                 usuario_origem_id, 
@@ -201,18 +167,13 @@ router.post('/pedidos/uniformes/criar', verificarToken, async (req, res) => {
                 'AGUARDANDO_AUTORIZACAO', 
                 $2, 
                 NOW()
-            ) RETURNING id, local_destino_id`,
+            ) RETURNING id`,
             [usuario_id, operacao]
         );
 
         const pedidoId = pedidoRes.rows[0].id;
 
-        // Se o usuário não tiver um local_id vinculado na tabela usuarios, o pedido falha aqui
-        if (!pedidoRes.rows[0].local_destino_id) {
-            await db.query('ROLLBACK');
-            return res.status(400).json({ error: "Seu usuário não possui um local vinculado no cadastro." });
-        }
-
+        // Inserção dos itens
         for (const item of itens) {
             await db.query(
                 "INSERT INTO itens_pedido (pedido_id, produto_id, tamanho, quantidade) VALUES ($1, $2, $3, $4)",
@@ -222,7 +183,6 @@ router.post('/pedidos/uniformes/criar', verificarToken, async (req, res) => {
 
         await db.query('COMMIT');
         res.status(201).json({ message: "Pedido enviado com sucesso!" });
-
     } catch (err) {
         await db.query('ROLLBACK');
         res.status(500).json({ error: "Erro interno: " + err.message });

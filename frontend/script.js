@@ -6002,21 +6002,107 @@ async function listarFilaSeparacao() {
 // Muda o status para SEPARACAO_INICIADA
 async function iniciarProcessoSeparacao(pedidoId) {
     try {
-        const res = await fetch(`${API_URL}/pedidos/estoque/iniciar-separacao`, {
+        // 1. Avisa o servidor que a separação começou (muda status para SEPARACAO_INICIADA se ainda não for)
+        await fetch(`${API_URL}/pedidos/estoque/iniciar-separacao`, {
             method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${TOKEN}`
-            },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
             body: JSON.stringify({ pedidoId })
         });
 
+        // 2. Em vez de recarregar a lista, abrimos a tela de conferência de itens
+        abrirTelaConferenciaItens(pedidoId);
+
+    } catch (err) {
+        alert("Erro ao iniciar processo.");
+    }
+}
+
+async function abrirTelaConferenciaItens(pedidoId) {
+    const container = document.getElementById('app-content');
+    
+    try {
+        // Rota que deve retornar os itens com a soma do que já foi enviado por remessas
+        const res = await fetch(`${API_URL}/pedidos/${pedidoId}/conferencia-itens`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const itens = await res.json();
+
+        container.innerHTML = `
+            <div style="padding:20px;">
+                <h2 style="color:#1e3a8a;">📝 CONFERÊNCIA DE SAÍDA - PEDIDO #${pedidoId}</h2>
+                <table style="width:100%; border-collapse:collapse; background:white;">
+                    <thead>
+                        <tr style="background:#f8fafc; border-bottom:2px solid #eee;">
+                            <th style="padding:12px;">PRODUTO</th>
+                            <th style="padding:12px;">TAM.</th>
+                            <th style="padding:12px;">PEDIDO</th>
+                            <th style="padding:12px;">JÁ ENVIADO</th>
+                            <th style="padding:12px; background:#fff7ed;">NESTA REMESSA</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${itens.map(i => {
+                            const pendente = i.quantidade - i.total_enviado;
+                            return `
+                            <tr>
+                                <td style="padding:12px;">${i.nome}</td>
+                                <td style="padding:12px; text-align:center;">${i.tamanho}</td>
+                                <td style="padding:12px; text-align:center;">${i.quantidade}</td>
+                                <td style="padding:12px; text-align:center; color:blue;">${i.total_enviado}</td>
+                                <td style="padding:12px; background:#fff7ed; text-align:center;">
+                                    <input type="number" class="qtd-envio" 
+                                           data-prod-id="${i.produto_id}" 
+                                           data-tam="${i.tamanho}" 
+                                           data-max="${pendente}"
+                                           value="${pendente}" min="0" max="${pendente}" 
+                                           style="width:60px; padding:5px;">
+                                </td>
+                            </tr>`;
+                        }).join('')}
+                    </tbody>
+                </table>
+                <button onclick="salvarRemessa(${pedidoId})" style="margin-top:20px; padding:15px; background:#1e40af; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:bold;">
+                    🚀 FINALIZAR REMESSA (ATUALIZAR ESTOQUE)
+                </button>
+            </div>
+        `;
+    } catch (err) { alert("Erro ao carregar itens."); }
+}
+
+async function salvarRemessa(pedidoId) {
+    const inputs = document.querySelectorAll('.qtd-envio');
+    const itensRemessa = [];
+
+    inputs.forEach(input => {
+        const qtd = parseInt(input.value) || 0;
+        if (qtd > 0) {
+            itensRemessa.push({
+                produto_id: input.dataset.prodId,
+                tamanho: input.dataset.tam,
+                quantidade_enviada: qtd
+            });
+        }
+    });
+
+    if (itensRemessa.length === 0) return alert("Informe a quantidade de pelo menos um item.");
+
+    if (!confirm("Confirmar o registro desta remessa de saída?")) return;
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/estoque/finalizar-remessa`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${TOKEN}` 
+            },
+            body: JSON.stringify({ pedidoId, itens: itensRemessa })
+        });
+
         if (res.ok) {
-            alert("🚀 Separação iniciada! O pedido agora está sob sua responsabilidade.");
-            // Aqui você pode redirecionar para uma tela que mostre os itens para ele ir bipando/conferindo
-            telaEstoquePedidosPendentes(); 
+            alert("✅ Remessa registrada com sucesso!");
+            telaEstoquePedidosPendentes(); // Volta para a lista de expedição
         } else {
-            alert("Erro ao assumir separação.");
+            alert("Erro ao salvar remessa.");
         }
     } catch (err) {
         alert("Erro de conexão.");
@@ -7233,6 +7319,7 @@ async function telaEstoquePedidosPendentes() {
         app.innerHTML = `
             <div style="padding:30px;">
                 <h2 style="color:#1e3a8a; border-bottom: 2px solid #e2e8f0; padding-bottom:10px;">📦 PEDIDOS PARA SEPARAÇÃO</h2>
+                <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:10px 15px; border-radius:4px; cursor:pointer; font-weight:bold;">⬅️ VOLTAR</button>
                 <div style="margin-top:20px; display:grid; gap:15px;">
                     ${pedidos.length === 0 ? '<p>Nenhum pedido aguardando separação no momento.</p>' : ''}
                     ${pedidos.map(p => `
@@ -7253,6 +7340,8 @@ async function telaEstoquePedidosPendentes() {
         alert("Erro ao carregar pedidos para o estoque.");
     }
 }
+
+
 
 async function imprimirRomaneio(romaneioId) {
     const res = await fetch(`${API_URL}/impressao/romaneio/${romaneioId}`, {

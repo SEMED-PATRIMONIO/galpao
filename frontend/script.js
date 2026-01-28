@@ -574,7 +574,7 @@ async function analisarPedidoEstoque(pedidoId) {
             <div style="display:flex; gap:15px;">
                 <button onclick="editarQuantidades(${pedidoId})" style="flex:1; background:#f59e0b; color:white; border:none; padding:15px; border-radius:8px; font-weight:bold; cursor:pointer;">✏️ EDITAR QUANTIDADES</button>
                 <button ${!saldoSuficiente ? 'disabled style="opacity:0.4; cursor:not-allowed;"' : ''} 
-                        onclick="finalizarPedido(${pedidoId})" 
+                        onclick="finalizarAutorizacao(${pedidoId})" 
                         style="flex:1; background:#16a34a; color:white; border:none; padding:15px; border-radius:8px; font-weight:bold; cursor:pointer;">
                     ✅ AUTORIZAR SAÍDA
                 </button>
@@ -706,6 +706,32 @@ async function salvarEdicaoPedido(pedidoId) {
         }
     } catch (err) {
         alert("Erro de conexão com o servidor.");
+    }
+}
+
+async function finalizarAutorizacao(pedidoId) {
+    if (!confirm("Deseja autorizar este pedido e dar baixa no estoque?")) return;
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/autorizar-final`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${TOKEN}`
+            },
+            body: JSON.stringify({ pedidoId: pedidoId })
+        });
+
+        if (res.ok) {
+            alert("✅ Pedido Autorizado! O status agora é 'AGUARDANDO SEPARAÇÃO'.");
+            document.getElementById('modal-analise').style.display = 'none';
+            telaAdminGerenciarSolicitacoes(); // Recarrega a lista de pendentes
+        } else {
+            const erro = await res.json();
+            alert("❌ Erro ao autorizar: " + erro.error);
+        }
+    } catch (err) {
+        alert("🚨 Erro de conexão com o servidor.");
     }
 }
 

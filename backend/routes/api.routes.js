@@ -1177,14 +1177,26 @@ router.get('/estoque/central', verificarToken, async (req, res) => {
 // Rota principal de ENTRADA DE ESTOQUE
 router.get('/estoque/geral', verificarToken, async (req, res) => {
     try {
+        // Esta query calcula a soma das grades NA HORA e organiza por categoria
         const result = await db.query(`
-            SELECT id, nome, tipo::text as tipo, quantidade_estoque, alerta_minimo 
-            FROM produtos 
-            ORDER BY nome ASC
+            SELECT 
+                p.id, 
+                p.nome, 
+                p.tipo, 
+                p.alerta_minimo,
+                COALESCE(SUM(eg.quantidade), 0) AS quantidade_estoque
+            FROM produtos p
+            LEFT JOIN estoque_grades eg ON p.id = eg.produto_id
+            GROUP BY p.id, p.nome, p.tipo, p.alerta_minimo
+            ORDER BY 
+                CASE WHEN p.tipo = 'UNIFORMES' THEN 1 ELSE 2 END, 
+                p.nome ASC
         `);
+
         res.json(result.rows);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        console.error("Erro no estoque geral:", err);
+        res.status(500).json({ error: "Erro ao processar saldo de estoque." });
     }
 });
 

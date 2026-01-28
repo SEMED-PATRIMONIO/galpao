@@ -225,7 +225,7 @@ async function carregarDashboard() {
             <button class="btn-grande" onclick="renderizarDashboardGeral()">
                 <i>📊</i><span>PAINEL DE PEDIDOS</span>
             </button>
-            <button onclick="telaAdminVerPedidos()" class="btn-quadrado">
+            <button class="btn-grande" onclick="telaAdminVerPedidos()">
                 📋<br>GESTÃO DE PEDIDOS
             </button>            
         `;
@@ -257,6 +257,9 @@ async function carregarDashboard() {
             <button class="btn-grande" onclick="renderizarDashboardGeral()">
                 <i>📊</i><span>PAINEL DE PEDIDOS</span>
             </button>
+            <button class="btn-grande" onclick="telaAdminVerPedidos()">
+                📋<br>GESTÃO DE PEDIDOS
+            </button>                        
         `;
         // Chama alertas de pedidos aguardando separação
         setTimeout(verificarPedidosParaSeparar, 500);
@@ -270,9 +273,6 @@ async function carregarDashboard() {
             </button>
             <button class="btn-grande" onclick="telaSolicitarPatrimonio()">
                 <i>🏷️</i><span>SOLICITAR PATRIMÔNIO</span>
-            </button>
-            <button class="btn-grande" onclick="renderizarDashboardGeral()">
-                <i>📊</i><span>PAINEL DE PEDIDOS</span>
             </button>
         `;
         // Alertas de pedidos prontos para coleta no Estoque Central
@@ -4539,60 +4539,59 @@ function renderizarAlertaNoPainel(mensagem) {
 // BLOCO DE CORREÇÃO PARA PERFIL ADMIN (BOTÕES EM FALTA OU ERRADOS)
 // ================================================================
 async function renderizarDashboardGeral() {
-    const perfil = localStorage.getItem('perfil');
-    if (perfil === 'escola') return;
-
     const container = document.getElementById('app-content');
-    container.innerHTML = '<div style="padding:20px;">📊 A carregar painel estratégico...</div>';
+    container.innerHTML = '<div style="padding:20px;">📊 Sincronizando fluxo logístico...</div>';
 
     try {
-        const token = localStorage.getItem('token');
-        const [resStats, resEvolucao] = await Promise.all([
-            fetch(`${API_URL}/dashboard/estatisticas`, { headers: { 'Authorization': `Bearer ${token}` } }),
-            fetch(`${API_URL}/dashboard/evolucao-semanal`, { headers: { 'Authorization': `Bearer ${token}` } })
-        ]);
+        const res = await fetch(`${API_URL}/pedidos/dashboard/contagem`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const c = await res.json(); // Abreviação de 'contagem'
 
-        const stats = await resStats.json();
-        const evolucao = await resEvolucao.json();
-
-        const getCount = (status) => stats.find(s => s.status === status)?.total || 0;
+        // Função auxiliar para garantir que status vazios mostrem '0'
+        const getQtd = (status) => c[status] || 0;
 
         container.innerHTML = `
-            <div style="padding:20px; animation: fadeIn 0.5s;">
-                <h2 style="color:#1e3a8a; margin-bottom:20px; display:flex; align-items:center; gap:10px;">
-                    <span>📦 PAINEL GERAL DE PEDIDOS</span>
-                    <small style="font-size:0.9rem; color:#64748b; font-weight:normal;">(Atualizado em tempo real)</small>
-                </h2>
-                <button onclick="carregarDashboard()" 
-                    style="background:#64748b; color:white; border:none; padding:10px 18px; border-radius:6px; cursor:pointer; font-weight:bold; display:flex; align-items:center; gap:8px; transition: background 0.2s;">
-                    ⬅️ VOLTAR
-                </button>
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom:30px;">
-                    ${renderizarCardInfo('⚖️ PENDENTES', getCount('AGUARDANDO_AUTORIZACAO'), '#fbbf24', 'AGUARDANDO_AUTORIZACAO')}
-                    ${renderizarCardInfo('📦 SEPARAÇÃO', getCount('APROVADO'), '#3b82f6', 'APROVADO')}
-                    ${renderizarCardInfo('🚛 COLETA', getCount('COLETA_LIBERADA'), '#8b5cf6', 'COLETA_LIBERADA')}
-                    ${renderizarCardInfo('🛣️ EM TRÂNSITO', getCount('EM_TRANSPORTE'), '#f97316', 'EM_TRANSPORTE')}
+            <div style="padding:20px; background:#f0f2f5; min-height:100vh;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:25px;">
+                    <h2 style="color:#1e3a8a; margin:0;">📦 PAINEL GERAL DE FLUXO (Tempo Real)</h2>
+                    <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:10px 20px; border-radius:6px; cursor:pointer; font-weight:bold;">⬅️ VOLTAR</button>
                 </div>
 
-                <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
-                    <div style="background:white; padding:20px; border-radius:12px; box-shadow:0 4px 6px rgba(0,0,0,0.05);">
-                        <h4 style="margin:0 0 15px 0;">📈 Evolução de Entregas (Últimos 7 dias)</h4>
-                        <canvas id="chartEvolucao" height="100"></canvas>
-                    </div>
-                    <div style="background:white; padding:20px; border-radius:12px; box-shadow:0 4px 6px rgba(0,0,0,0.05);">
-                        <h4 style="margin:0 0 15px 0;">🍕 Distribuição de Carga</h4>
-                        <canvas id="chartPizza"></canvas>
-                    </div>
+                <h3 style="color:#64748b; font-size:0.9rem; border-bottom:1px solid #cbd5e1; padding-bottom:5px;">🏢 ADMINISTRATIVO / ESCOLA</h3>
+                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:15px; margin-bottom:30px;">
+                    ${cardDashboard("⚖️ PENDENTES", getQtd('AGUARDANDO_AUTORIZACAO'), "#6366f1", 'AGUARDANDO_AUTORIZACAO')}
+                    ${cardDashboard("✅ APROVADOS", getQtd('APROVADO'), "#10b981", 'APROVADO')}
+                    ${cardDashboard("❌ RECUSADOS", getQtd('RECUSADO'), "#ef4444", 'RECUSADO')}
+                </div>
+
+                <h3 style="color:#64748b; font-size:0.9rem; border-bottom:1px solid #cbd5e1; padding-bottom:5px;">📦 OPERACIONAL (ESTOQUE)</h3>
+                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:15px; margin-bottom:30px;">
+                    ${cardDashboard("⏳ AGUARD. SEPARAÇÃO", getQtd('AGUARDANDO_SEPARACAO'), "#f59e0b", 'AGUARDANDO_SEPARACAO')}
+                    ${cardDashboard("🧺 EM SEPARAÇÃO", getQtd('EM_SEPARACAO') + getQtd('SEPARACAO_INICIADA'), "#3b82f6", 'EM_SEPARACAO')}
+                    ${cardDashboard("🚩 COLETA LIBERADA", getQtd('COLETA_LIBERADA'), "#8b5cf6", 'COLETA_LIBERADA')}
+                </div>
+
+                <h3 style="color:#64748b; font-size:0.9rem; border-bottom:1px solid #cbd5e1; padding-bottom:5px;">🚚 LOGÍSTICA / TRANSPORTE</h3>
+                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:15px;">
+                    ${cardDashboard("🚛 AGUARD. COLETA", getQtd('AGUARDANDO_COLETA'), "#06b6d4", 'AGUARDANDO_COLETA')}
+                    ${cardDashboard("🛣️ EM TRÂNSITO", getQtd('EM_TRANSPORTE'), "#f97316", 'EM_TRANSPORTE')}
+                    ${cardDashboard("🏁 ENTREGUES", getQtd('ENTREGUE'), "#059669", 'ENTREGUE')}
+                    ${cardDashboard("🔄 DEVOLUÇÕES", getQtd('DEVOLUCAO_PENDENTE') + getQtd('DEVOLUCAO_EM_TRANSITO') + getQtd('DEVOLVIDO'), "#475569", 'DEVOLVIDO')}
                 </div>
             </div>
         `;
+    } catch (e) { alert("Erro ao atualizar painel."); }
+}
 
-        // Inicializar Gráficos após o HTML ser inserido
-        inicializarGraficos(evolucao, stats);
-
-    } catch (err) {
-        container.innerHTML = `<div style="padding:20px; color:red;">Erro ao processar dashboard: ${err.message}</div>`;
-    }
+// FUNÇÃO AUXILIAR PARA CRIAR OS CARDS (Mantém o estilo do seu print)
+function cardDashboard(titulo, valor, cor, statusBusca) {
+    return `
+        <div onclick="verPedidosPorStatus('${statusBusca}')" style="background:white; padding:20px; border-radius:12px; border-left:8px solid ${cor}; box-shadow:0 4px 6px rgba(0,0,0,0.05); cursor:pointer; transition:transform 0.2s;">
+            <div style="color:#64748b; font-size:0.8rem; font-weight:bold; margin-bottom:10px;">${titulo}</div>
+            <div style="font-size:2rem; font-weight:bold; color:#1e293b;">${valor}</div>
+        </div>
+    `;
 }
 
 function inicializarGraficos(dadosEvolucao, dadosStats) {

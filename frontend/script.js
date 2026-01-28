@@ -7453,34 +7453,46 @@ async function imprimirRomaneio(romaneioId) {
 }
 
 async function telaLogisticaEntregas() {
-    const app = document.getElementById('app-content');
-    const res = await fetch(`${API_URL}/pedidos/logistica/prontos`, {
-        headers: { 'Authorization': `Bearer ${TOKEN}` }
-    });
-    const pedidos = await res.json();
+    const container = document.getElementById('app-content');
+    container.innerHTML = '<div style="padding:20px;">🚚 Buscando remessas prontas para saída...</div>';
 
-    app.innerHTML = `
-        <div style="padding:30px; background:#f8fafc; min-height:100vh;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:25px;">
-                <h2 style="color:#1e3a8a;">🚛 LOGÍSTICA - PEDIDOS LIBERADOS</h2>
-                <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:10px 20px; border-radius:8px; cursor:pointer;">VOLTAR</button>
-            </div>
-            <div style="display:grid; gap:15px;">
-                ${pedidos.length === 0 ? '<p>Nenhum pedido aguardando coleta no momento.</p>' : ''}
-                ${pedidos.map(p => `
-                    <div style="background:white; padding:20px; border-radius:10px; display:flex; justify-content:space-between; align-items:center; border-left:8px solid #f59e0b; box-shadow:0 2px 4px rgba(0,0,0,0.05);">
-                        <div>
-                            <div style="font-weight:bold; color:#1e3a8a; font-size:1.1rem;">📍 DESTINO: ${p.escola}</div>
-                            <div style="color:#64748b;">Motorista: ${p.motorista_nome} | Placa: ${p.veiculo_placa}</div>
+    try {
+        const res = await fetch(`${API_URL}/pedidos/logistica/remessas-pendentes`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const remessas = await res.json();
+
+        container.innerHTML = `
+            <div style="padding:20px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                    <h2 style="color:#1e3a8a;">🚛 COLETA DE REMESSAS (SAÍDA)</h2>
+                    <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:10px 15px; border-radius:4px; cursor:pointer;">⬅️ VOLTAR</button>
+                </div>
+
+                <div style="display:grid; gap:15px;">
+                    ${remessas.length === 0 ? '<p>Nenhuma remessa aguardando coleta.</p>' : 
+                        remessas.map(r => `
+                        <div style="background:white; padding:20px; border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,0.1); border-left:8px solid #8b5cf6;">
+                            <div style="display:flex; justify-content:space-between;">
+                                <div>
+                                    <div style="font-weight:bold; font-size:1.1rem; color:#1e293b;">${r.escola_nome}</div>
+                                    <div style="color:#64748b; font-size:0.9rem;">
+                                        Remessa: <strong>#${r.remessa_id}</strong> (Pedido #${r.pedido_id})
+                                    </div>
+                                    <div style="margin-top:5px; font-size:0.8rem; color:#94a3b8;">
+                                        Pronta desde: ${new Date(r.data_remessa).toLocaleString()}
+                                    </div>
+                                </div>
+                                <button onclick="iniciarTransporteRemessa(${r.remessa_id})" style="background:#1e40af; color:white; border:none; padding:10px 20px; border-radius:6px; cursor:pointer; font-weight:bold;">
+                                    🚚 COLETAR REMESSA
+                                </button>
+                            </div>
                         </div>
-                        <button onclick="confirmarSaidaTransporte(${p.id})" style="background:#1e3a8a; color:white; border:none; padding:12px 20px; border-radius:8px; font-weight:bold; cursor:pointer;">
-                            🚚 DESPACHAR
-                        </button>
-                    </div>
-                `).join('')}
+                    `).join('')}
+                </div>
             </div>
-        </div>
-    `;
+        `;
+    } catch (err) { alert("Erro ao carregar logística."); }
 }
 
 async function telaLogisticaColeta() {

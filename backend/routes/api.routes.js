@@ -292,12 +292,14 @@ router.get('/pedidos/estoque/pendentes', verificarToken, async (req, res) => {
                 p.tipo_pedido
             FROM pedidos p
             JOIN locais l ON p.local_destino_id = l.id
-            WHERE p.status IN ('APROVADO', 'SEPARACAO_INICIADA', 'EM_SEPARACAO')
+            -- Adicionamos AGUARDANDO_SEPARACAO e APROVADO no filtro
+            WHERE p.status IN ('APROVADO', 'AGUARDANDO_SEPARACAO', 'SEPARACAO_INICIADA', 'EM_SEPARACAO')
             ORDER BY 
                 CASE 
                     WHEN p.status = 'EM_SEPARACAO' THEN 1 
                     WHEN p.status = 'SEPARACAO_INICIADA' THEN 2
-                    ELSE 3 
+                    WHEN p.status = 'AGUARDANDO_SEPARACAO' THEN 3
+                    ELSE 4 
                 END, 
                 p.data_autorizacao ASC
         `);

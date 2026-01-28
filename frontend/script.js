@@ -6071,9 +6071,18 @@ async function abrirTelaConferenciaItens(pedidoId) {
 async function salvarRemessa(pedidoId) {
     const inputs = document.querySelectorAll('.qtd-envio');
     const itensRemessa = [];
+    let erroValidacao = false;
 
     inputs.forEach(input => {
         const qtd = parseInt(input.value) || 0;
+        const maxPermitido = parseInt(input.dataset.max); // Pega o que ainda falta enviar
+
+        if (qtd > maxPermitido) {
+            alert(`Erro: Você tentou enviar ${qtd} unidades, mas o saldo pendente é de apenas ${maxPermitido}.`);
+            erroValidacao = true;
+            return;
+        }
+
         if (qtd > 0) {
             itensRemessa.push({
                 produto_id: input.dataset.prodId,
@@ -6083,6 +6092,7 @@ async function salvarRemessa(pedidoId) {
         }
     });
 
+    if (erroValidacao) return; // Interrompe se houver erro
     if (itensRemessa.length === 0) return alert("Informe a quantidade de pelo menos um item.");
 
     if (!confirm("Confirmar o registro desta remessa de saída?")) return;
@@ -6099,9 +6109,10 @@ async function salvarRemessa(pedidoId) {
 
         if (res.ok) {
             alert("✅ Remessa registrada com sucesso!");
-            telaEstoquePedidosPendentes(); // Volta para a lista de expedição
+            telaEstoquePedidosPendentes(); 
         } else {
-            alert("Erro ao salvar remessa.");
+            const data = await res.json();
+            alert("Erro: " + data.error);
         }
     } catch (err) {
         alert("Erro de conexão.");
@@ -7447,6 +7458,40 @@ async function telaLogisticaEntregas() {
             </div>
         </div>
     `;
+}
+
+async function telaLogisticaColeta() {
+    const container = document.getElementById('app-content');
+    container.innerHTML = '<div style="padding:20px;">🚚 Buscando pedidos prontos para coleta...</div>';
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/logistica/prontos`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const pedidos = await res.json();
+
+        container.innerHTML = `
+            <div style="padding:20px;">
+                <h2 style="color:#1e3a8a;">🚛 PEDIDOS LIBERADOS PARA COLETA</h2>
+                <div style="display:grid; gap:15px;">
+                    ${pedidos.length === 0 ? '<p>Nenhum pedido aguardando coleta no momento.</p>' : 
+                        pedidos.map(p => `
+                        <div style="background:white; padding:20px; border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,0.1); border-left:8px solid #8b5cf6;">
+                            <div style="font-weight:bold; font-size:1.1rem;">${p.escola_nome}</div>
+                            <div style="color:#64748b;">Pedido #${p.id} | Volumes: <strong>${p.volumes}</strong></div>
+                            <div style="margin-top:10px;">
+                                <button onclick="iniciarTransporte(${p.id})" style="background:#1e40af; color:white; border:none; padding:10px 20px; border-radius:6px; cursor:pointer; font-weight:bold;">
+                                    🚚 REGISTRAR COLETA / SAÍDA
+                                </button>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    } catch (err) {
+        alert("Erro ao carregar pedidos da logística.");
+    }
 }
 
 async function telaEscolaConfirmarRecebimento() {

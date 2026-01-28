@@ -284,16 +284,27 @@ router.get('/produtos/lista-por-tipo', verificarToken, async (req, res) => {
 router.get('/pedidos/estoque/pendentes', verificarToken, async (req, res) => {
     try {
         const result = await db.query(`
-            SELECT p.id, p.data_criacao, u.nome as solicitante, l.nome as escola_destino
+            SELECT 
+                p.id, 
+                l.nome as escola_nome, 
+                p.status, 
+                p.data_autorizacao,
+                p.tipo_pedido
             FROM pedidos p
-            JOIN usuarios u ON p.usuario_origem_id = u.id
             JOIN locais l ON p.local_destino_id = l.id
-            WHERE p.status = 'AGUARDANDO_SEPARACAO'
-            ORDER BY p.data_criacao ASC
+            WHERE p.status IN ('APROVADO', 'SEPARACAO_INICIADA', 'EM_SEPARACAO')
+            ORDER BY 
+                CASE 
+                    WHEN p.status = 'EM_SEPARACAO' THEN 1 
+                    WHEN p.status = 'SEPARACAO_INICIADA' THEN 2
+                    ELSE 3 
+                END, 
+                p.data_autorizacao ASC
         `);
         res.json(result.rows);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        console.error(err);
+        res.status(500).json({ error: "Erro ao listar pedidos pendentes." });
     }
 });
 
@@ -1448,6 +1459,26 @@ router.post('/pedidos/estoque/finalizar-remessa', verificarToken, async (req, re
         await db.query('ROLLBACK');
         console.error(err);
         res.status(500).json({ error: "Erro ao registrar logística da remessa." });
+    }
+});
+
+router.get('/pedidos/dashboard/contagem', verificarToken, async (req, res) => {
+    try {
+        const result = await db.query(`
+            SELECT status, COUNT(*) as total 
+            FROM pedidos 
+            GROUP BY status
+        `);
+        
+        // Transformamos o array em um objeto fácil de ler no frontend
+        const contagem = {};
+        result.rows.forEach(row => {
+            contagem[row.status] = parseInt(row.total);
+        });
+
+        res.json(contagem);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao carregar dashboard." });
     }
 });
 

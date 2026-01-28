@@ -7328,30 +7328,53 @@ async function telaEstoquePedidosPendentes() {
 
         app.innerHTML = `
             <div style="padding:30px;">
-                <h2 style="color:#1e3a8a; border-bottom: 2px solid #e2e8f0; padding-bottom:10px;">📦 PEDIDOS PARA SEPARAÇÃO</h2>
-                <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:10px 15px; border-radius:4px; cursor:pointer; font-weight:bold;">⬅️ VOLTAR</button>
-                <div style="margin-top:20px; display:grid; gap:15px;">
-                    ${pedidos.length === 0 ? '<p>Nenhum pedido aguardando separação no momento.</p>' : ''}
-                    ${pedidos.map(p => `
-                        <div style="background:white; padding:20px; border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,0.1); display:flex; justify-content:space-between; align-items:center;">
-                            <div>
-                                <div style="font-weight:bold; color:#1e40af; font-size:1.1rem;">📍 ${p.escola_destino}</div>
-                                <div style="color:#64748b;">Pedido #${p.id} | Solicitante: ${p.solicitante}</div>
-                            </div>
-                            <button onclick="iniciarProcessoSeparacao(${p.id})" style="background:#10b981; color:white; border:none; padding:12px 20px; border-radius:6px; font-weight:bold; cursor:pointer;">
-                                ▶️ INICIAR SEPARAÇÃO
-                            </button>
-                        </div>
-                    `).join('')}
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
+                    <h2 style="color:#1e3a8a; margin:0;">📦 PEDIDOS PARA SEPARAÇÃO</h2>
+                    <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:10px 15px; border-radius:4px; cursor:pointer; font-weight:bold;">⬅️ VOLTAR</button>
+                </div>
+
+                <div style="display:grid; gap:15px;">
+                    ${pedidos.length === 0 ? 
+                        '<p style="color:#64748b; text-align:center; padding:20px;">Nenhum pedido aguardando separação no momento.</p>' : 
+                        pedidos.map(p => {
+                            // Lógica de Cores e Labels baseada no Status Real
+                            let corStatus = '#10b981'; // Verde padrão (Aprovado)
+                            let labelBotao = '▶️ INICIAR SEPARAÇÃO';
+
+                            if (p.status === 'EM_SEPARACAO') {
+                                corStatus = '#f59e0b'; // Laranja (Parcial)
+                                labelBotao = '🔄 COMPLETAR REMESSA';
+                            } else if (p.status === 'AGUARDANDO_SEPARACAO' || p.status === 'SEPARACAO_INICIADA') {
+                                corStatus = '#3b82f6'; // Azul (Iniciado ou aguardando)
+                                labelBotao = '📦 CONTINUAR SEPARAÇÃO';
+                            }
+
+                            return `
+                                <div style="background:white; padding:20px; border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,0.1); border-left:10px solid ${corStatus}; display:flex; justify-content:space-between; align-items:center;">
+                                    <div>
+                                        <div style="font-size:1.1rem; font-weight:bold; color:#1e293b; margin-bottom:5px;">
+                                            📍 ${p.escola_nome || 'Local Não Identificado'}
+                                        </div>
+                                        <div style="color:#64748b; font-size:0.9rem;">
+                                            Pedido <strong>#${p.id}</strong> | Status: 
+                                            <span style="color:${corStatus}; font-weight:bold;">${p.status.replace(/_/g, ' ')}</span>
+                                        </div>
+                                    </div>
+                                    <button onclick="iniciarProcessoSeparacao(${p.id})" style="background:${corStatus}; color:white; border:none; padding:12px 25px; border-radius:6px; cursor:pointer; font-weight:bold; transition: 0.2s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
+                                        ${labelBotao}
+                                    </button>
+                                </div>
+                            `;
+                        }).join('')
+                    }
                 </div>
             </div>
         `;
     } catch (err) {
+        console.error(err);
         alert("Erro ao carregar pedidos para o estoque.");
     }
 }
-
-
 
 async function imprimirRomaneio(romaneioId) {
     const res = await fetch(`${API_URL}/impressao/romaneio/${romaneioId}`, {

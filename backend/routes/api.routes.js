@@ -1514,15 +1514,25 @@ router.get('/impressao/romaneio/:id', verificarToken, async (req, res) => {
     }
 });
 
+// Rota para o perfil Logística ver o que está pronto para carregar
 router.get('/pedidos/logistica/prontos', verificarToken, async (req, res) => {
-    const result = await db.query(`
-        SELECT p.id, l.nome as escola, r.motorista_nome, r.veiculo_placa
-        FROM pedidos p
-        JOIN locais l ON p.local_destino_id = l.id
-        JOIN romaneios r ON p.romaneio_id = r.id
-        WHERE p.status = 'COLETA_LIBERADA' -- Filtra o que o estoque já soltou
-    `);
-    res.json(result.rows);
+    try {
+        const result = await db.query(`
+            SELECT 
+                p.id, 
+                l.nome as escola_nome, 
+                p.data_separacao,
+                p.volumes,
+                p.status
+            FROM pedidos p
+            JOIN locais l ON p.local_destino_id = l.id
+            WHERE p.status = 'COLETA_LIBERADA'
+            ORDER BY p.data_separacao ASC
+        `);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao buscar pedidos para coleta." });
+    }
 });
 
 // Rota para o perfil Logística ver o que está pronto para carregar

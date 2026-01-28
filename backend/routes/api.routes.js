@@ -1525,6 +1525,27 @@ router.get('/pedidos/logistica/prontos', verificarToken, async (req, res) => {
     res.json(result.rows);
 });
 
+// Rota para o perfil Logística ver o que está pronto para carregar
+router.get('/pedidos/logistica/prontos', verificarToken, async (req, res) => {
+    try {
+        const result = await db.query(`
+            SELECT 
+                p.id, 
+                l.nome as escola_nome, 
+                p.data_separacao,
+                p.volumes,
+                p.status
+            FROM pedidos p
+            JOIN locais l ON p.local_destino_id = l.id
+            WHERE p.status = 'COLETA_LIBERADA'
+            ORDER BY p.data_separacao ASC
+        `);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao buscar pedidos para coleta." });
+    }
+});
+
 // DESPACHAR
 router.post('/pedidos/logistica/despachar', verificarToken, async (req, res) => {
     const { pedidoId } = req.body;

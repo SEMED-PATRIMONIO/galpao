@@ -236,9 +236,6 @@ async function carregarDashboard() {
     // --- 5. PERFIL: ESTOQUE ---
     if (perfil === 'estoque') {
         html += `
-            <button class="btn-grande" onclick="abrirPainelSeparacao()">
-                <i>📦</i><span>SEPARAÇÃO DE VOLUMES</span>
-            </button>
             <button class="btn-grande" onclick="telaEstoquePedidosPendentes()">
                 <i>📦</i><span>SEPARAÇÃO DE VOLUMES</span>
             </button>
@@ -290,7 +287,7 @@ async function carregarDashboard() {
 
 async function telaVisualizarEstoque() {
     const container = document.getElementById('app-content');
-    container.innerHTML = '<div style="padding:20px;">CARREGANDO ESTOQUE GERAL...</div>';
+    container.innerHTML = '<div style="padding:20px;">🔄 SINCRONIZANDO SALDOS DE ESTOQUE...</div>';
 
     try {
         const res = await fetch(`${API_URL}/estoque/geral`, {
@@ -300,55 +297,62 @@ async function telaVisualizarEstoque() {
 
         let html = `
             <div style="padding:20px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                    <h2 style="color:#1e3a8a;">📊 ESTOQUE ATUAL</h2>
-                    <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer;">⬅️ VOLTAR</button>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; background:#f8fafc; padding:15px; border-radius:10px; border-left:5px solid #1e3a8a;">
+                    <h2 style="color:#1e3a8a; margin:0;">📊 GESTÃO DE ESTOQUE REAL (POR CATEGORIA)</h2>
+                    <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:10px 20px; border-radius:6px; cursor:pointer; font-weight:bold; box-shadow:0 2px 4px rgba(0,0,0,0.1);">⬅️ VOLTAR AO MENU</button>
                 </div>
 
-                <table style="width:100%; border-collapse:collapse; background:white; border-radius:8px; overflow:hidden; box-shadow:0 2px 10px rgba(0,0,0,0.1);">
+                <table style="width:100%; border-collapse:collapse; background:white; border-radius:12px; overflow:hidden; box-shadow:0 4px 15px rgba(0,0,0,0.1);">
                     <thead>
                         <tr style="background:#1e3a8a; color:white;">
-                            <th style="padding:12px; text-align:left;">PRODUTO</th>
-                            <th style="padding:12px; text-align:center;">CATEGORIA</th>
-                            <th style="padding:12px; text-align:center;">SALDO TOTAL</th>
-                            <th style="padding:12px; text-align:center;">STATUS</th>
+                            <th style="padding:15px; text-align:left;">PRODUTO</th>
+                            <th style="padding:15px; text-align:center;">CATEGORIA</th>
+                            <th style="padding:15px; text-align:center;">SALDO REAL (SOMA)</th>
+                            <th style="padding:15px; text-align:center;">STATUS</th>
                         </tr>
                     </thead>
                     <tbody>
                         ${produtos.map(p => {
                             const isUniforme = p.tipo === 'UNIFORMES';
-                            const status = p.quantidade_estoque <= p.alerta_minimo ? '🔴 CRÍTICO' : '🟢 OK';
+                            // A lógica de alerta mínimo agora usa o valor calculado em tempo real
+                            const status = Number(p.quantidade_estoque) <= Number(p.alerta_minimo) 
+                                ? '<span style="color:#ef4444; font-weight:bold;">🔴 CRÍTICO</span>' 
+                                : '<span style="color:#10b981; font-weight:bold;">🟢 OK</span>';
                             
                             return `
-                                <tr style="border-bottom:1px solid #eee;">
-                                    <td style="padding:12px;">${p.nome}</td>
-                                    <td style="padding:12px; text-align:center;"><small>${p.tipo}</small></td>
-                                    <td style="padding:12px; text-align:center;">
+                                <tr style="border-bottom:1px solid #f1f5f9; hover:background:#f8fafc;">
+                                    <td style="padding:15px; font-weight:500;">${p.nome}</td>
+                                    <td style="padding:15px; text-align:center;">
+                                        <span style="background:#f1f5f9; padding:4px 8px; border-radius:4px; font-size:0.8rem; color:#475569;">${p.tipo}</span>
+                                    </td>
+                                    <td style="padding:15px; text-align:center;">
                                         ${isUniforme ? 
-                                            `<button onclick="abrirModalGrade(${p.id}, '${p.nome}')" style="background:#dbeafe; color:#1e40af; border:1px solid #1e40af; padding:4px 10px; border-radius:4px; cursor:pointer; font-weight:bold;">
-                                                ${p.quantidade_estoque} (VER GRADE)
+                                            `<button onclick="abrirModalGrade(${p.id}, '${p.nome}')" style="background:#eff6ff; color:#1e40af; border:1px solid #bfdbfe; padding:6px 12px; border-radius:6px; cursor:pointer; font-weight:bold; transition:all 0.2s;">
+                                                🔍 ${p.quantidade_estoque} (VER GRADE)
                                              </button>` : 
-                                            `<strong>${p.quantidade_estoque}</strong>`
+                                            `<strong style="font-size:1.1rem; color:#1e293b;">${p.quantidade_estoque}</strong>`
                                         }
                                     </td>
-                                    <td style="padding:12px; text-align:center;">${status}</td>
+                                    <td style="padding:15px; text-align:center;">${status}</td>
                                 </tr>
                             `;
                         }).join('')}
                     </tbody>
                 </table>
             </div>
-            <div id="modalGrade" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:9999; justify-content:center; align-items:center;">
-                <div style="background:white; padding:25px; border-radius:12px; width:90%; max-width:400px; box-shadow:0 10px 25px rgba(0,0,0,0.2);">
-                    <h3 id="modalTitulo" style="margin-top:0; color:#1e3a8a; border-bottom:2px solid #eee; padding-bottom:10px;"></h3>
-                    <div id="modalCorpo" style="margin:20px 0; display:grid; grid-template-columns:repeat(3, 1fr); gap:10px;"></div>
-                    <button onclick="document.getElementById('modalGrade').style.display='none'" style="width:100%; padding:10px; background:#ef4444; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:bold;">FECHAR</button>
+
+            <div id="modalGrade" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:9999; justify-content:center; align-items:center; backdrop-filter: blur(4px);">
+                <div style="background:white; padding:30px; border-radius:16px; width:95%; max-width:450px; box-shadow:0 20px 25px -5px rgba(0,0,0,0.2);">
+                    <h3 id="modalTitulo" style="margin-top:0; color:#1e3a8a; border-bottom:2px solid #f1f5f9; padding-bottom:15px; text-align:center;"></h3>
+                    <div id="modalCorpo" style="margin:25px 0; display:grid; grid-template-columns:repeat(3, 1fr); gap:15px;"></div>
+                    <button onclick="document.getElementById('modalGrade').style.display='none'" style="width:100%; padding:12px; background:#ef4444; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:bold; font-size:1rem;">FECHAR VISUALIZAÇÃO</button>
                 </div>
             </div>
         `;
         container.innerHTML = html;
     } catch (err) {
-        container.innerHTML = "Erro ao carregar estoque.";
+        console.error(err);
+        container.innerHTML = "<div style='padding:20px; color:red;'>🚨 Erro ao carregar estoque. Verifique a conexão com o servidor.</div>";
     }
 }
 

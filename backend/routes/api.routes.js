@@ -1554,4 +1554,91 @@ router.post('/pedidos/solicitar', verificarToken, async (req, res) => {
     }
 });
 
+router.post('/pedidos/finalizar-autorizacao', verificarToken, async (req, res) => {
+    const { pedidoId } = req.body;
+
+    try {
+        await db.query('BEGIN');
+
+        // 1. Busca os itens do pedido para saber o que subtrair
+        const itensReq = await db.query(
+            "SELECT produto_id, tamanho, quantidade FROM itens_pedido WHERE pedido_id = $1",
+            [pedidoId]
+        );
+
+        // 2. Para cada item, damos baixa no estoque central (estoque_grades)
+        for (const item of itensReq.rows) {
+            const updateEstoque = await db.query(
+                `UPDATE estoque_grades 
+                 SET quantidade = quantidade - $1 
+                 WHERE produto_id = $2 AND tamanho = $3 AND quantidade >= $1
+                 RETURNING quantidade`,
+                [item.quantidade, item.produto_id, item.tamanho]
+            );
+
+            if (updateEstoque.rowCount === 0) {
+                throw new Error(`Estoque insuficiente para o produto ID ${item.produto_id} tamanho ${item.tamanho}`);
+            }
+        }
+
+        // 3. Atualiza o status do pedido para 'EM_SEPARACAO'
+        await db.query(
+            "UPDATE pedidos SET status = 'EM_SEPARACAO' WHERE id = $1",
+            [pedidoId]
+        );
+
+        await db.query('COMMIT');
+        res.json({ message: "Pedido autorizado e estoque atualizado!" });
+
+    } catch (err) {
+        await db.query('ROLLBACK');
+        console.error("Erro ao finalizar:", err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/pedidos/autorizar-final', verificarToken, async (req, res) => {
+    const { pedidoId } = req.body;
+
+    try {
+        await db.query('BEGIN');
+
+        // 1. Busca os itens do pedido
+        const itensReq = await db.query(
+            "SELECT produto_id, tamanho, quantidade FROM itens_pedido WHERE pedido_id = $1",
+            [pedidoId]
+        );
+
+        // 2. Processa a baixa de estoque para cada item
+        for (const item of itensReq.rows) {
+            // Só subtrai se a quantidade atual for suficiente (segurança extra)
+            const resultBaixa = await db.query(
+                `UPDATE estoque_grades 
+                 SET quantidade = quantidade - $1 
+                 WHERE produto_id = $2 AND tamanho = $3 AND quantidade >= $1
+                 RETURNING quantidade`,
+                [item.quantidade, item.produto_id, item.tamanho]
+            );
+
+            if (resultBaixa.rowCount === 0) {
+                throw new Error(`Estoque insuficiente para o item ID ${item.produto_id} tam ${item.tamanho}`);
+            }
+        }
+
+        // 3. Atualiza o status para o próximo passo da logística
+        await db.query(
+            "UPDATE pedidos SET status = 'AGUARDANDO_SEPARACAO' WHERE id = $1",
+            [pedidoId]
+        );
+
+        await db.query('COMMIT');
+        res.json({ message: "Pedido autorizado. Status: AGUARDANDO_SEPARACAO" });
+
+    } catch (err) {
+        await db.query('ROLLBACK');
+        console.error("Erro na autorização:", err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;

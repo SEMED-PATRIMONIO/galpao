@@ -40,6 +40,34 @@ router.get('/auth/quem-sou-eu', verificarToken, async (req, res) => {
     }
 });
 
+router.get('/pedidos/:id/conferencia-itens', verificarToken, async (req, res) => {
+    const pedidoId = req.params.id;
+    try {
+        const sql = `
+            SELECT 
+                ip.produto_id, 
+                p.nome, 
+                ip.tamanho, 
+                ip.quantidade,
+                COALESCE((
+                    SELECT SUM(pri.quantidade_enviada) 
+                    FROM pedido_remessa_itens pri
+                    JOIN pedido_remessas pr ON pri.remessa_id = pr.id
+                    WHERE pr.pedido_id = ip.pedido_id 
+                    AND pri.produto_id = ip.produto_id 
+                    AND pri.tamanho = ip.tamanho
+                ), 0) as total_enviado
+            FROM itens_pedido ip
+            JOIN produtos p ON ip.produto_id = p.id
+            WHERE ip.pedido_id = $1
+        `;
+        const result = await db.query(sql, [pedidoId]);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 router.get('/pedidos/admin/lista', verificarToken, async (req, res) => {
     try {
         const result = await db.query(`
@@ -1370,56 +1398,56 @@ router.get('/produtos/:id/grade', verificarToken, async (req, res) => {
 });
 
 router.post('/pedidos/estoque/finalizar-remessa', verificarToken, async (req, res) => {
-    const { pedidoId, itensParaEnviar, motorista, placa } = req.body;
-    const usuarioId = req.userId;
+    const { pedidoId, itens } = req.body; 
 
     try {
         await db.query('BEGIN');
 
-        // 1. Cria o Romaneio de Transporte
-        const romaneioRes = await db.query(
-            "INSERT INTO romaneios (usuario_estoque_id, motorista_nome, veiculo_placa, status) VALUES ($1, $2, $3, 'EM_TRANSPORTE') RETURNING id",
-            [usuarioId, motorista, placa]
-        );
-        const romaneioId = romaneioRes.rows[0].id;
-
-        // 2. Cria a Remessa vinculada ao Pedido
+        // 1. Criar o cabeçalho da Remessa
         const remessaRes = await db.query(
-            "INSERT INTO pedido_remessas (pedido_id, status) VALUES ($1, 'SAIU_PARA_ENTREGA') RETURNING id",
+            `INSERT INTO pedido_remessas (pedido_id, status, data_criacao) 
+             VALUES ($1, 'PRONTO', NOW()) RETURNING id`,
             [pedidoId]
         );
         const remessaId = remessaRes.rows[0].id;
 
-        // 3. Processa cada item enviado nesta remessa
-        for (const item of itensParaEnviar) {
-            // Grava o que está saindo nesta remessa específica
+        // 2. Registrar o que está saindo fisicamente nesta viagem/caixa
+        for (const item of itens) {
             await db.query(
-                "INSERT INTO pedido_remessa_itens (remessa_id, produto_id, tamanho, quantidade_enviada) VALUES ($1, $2, $3, $4)",
-                [remessaId, item.produto_id, item.tamanho, item.qtd_enviada]
-            );
-
-            // Baixa o estoque físico
-            await db.query(
-                "UPDATE estoque_grades SET quantidade = quantidade - $1 WHERE produto_id = $2 AND tamanho = $3",
-                [item.qtd_enviada, item.produto_id, item.tamanho]
+                `INSERT INTO pedido_remessa_itens (remessa_id, produto_id, tamanho, quantidade_enviada) 
+                 VALUES ($1, $2, $3, $4)`,
+                [remessaId, item.produto_id, item.tamanho, item.quantidade_enviada]
             );
         }
 
-        // 4. Atualiza o pedido com o último Romaneio e Log de Status
-        await db.query(
-            "UPDATE pedidos SET status = 'COLETA_LIBERADA', romaneio_id = $1 WHERE id = $2",
-            [romaneioId, pedidoId]
-        );        
-        await db.query(
-            "INSERT INTO log_status_pedidos (pedido_id, usuario_id, status_anterior, status_novo, observacao) VALUES ($1, $2, 'SEPARACAO_INICIADA', 'AGUARDANDO_COLETA', 'Remessa parcial/total gerada')",
-            [pedidoId, usuarioId]
-        );
+        // 3. Verificar se o que foi enviado em TODAS as remessas cobre o total do pedido
+        const sqlVerifica = `
+            SELECT 
+                (SELECT SUM(quantidade) FROM itens_pedido WHERE pedido_id = $1) as total_solicitado,
+                (SELECT SUM(quantidade_enviada) FROM pedido_remessa_itens pri 
+                 JOIN pedido_remessas pr ON pri.remessa_id = pr.id 
+                 WHERE pr.pedido_id = $1) as total_enviado
+        `;
+        const check = await db.query(sqlVerifica, [pedidoId]);
+        const { total_solicitado, total_enviado } = check.rows[0];
+
+        // Lógica de Status Baseada na sua Lista:
+        // Se ainda falta enviar algo, mantemos em 'EM_SEPARACAO'
+        // Se completou o envio de tudo, liberamos para a logística com 'COLETA_LIBERADA'
+        let novoStatusPedido = 'EM_SEPARACAO';
+        if (parseInt(total_enviado) >= parseInt(total_solicitado)) {
+            novoStatusPedido = 'COLETA_LIBERADA';
+        }
+
+        await db.query("UPDATE pedidos SET status = $1 WHERE id = $2", [novoStatusPedido, pedidoId]);
 
         await db.query('COMMIT');
-        res.json({ message: "Remessa finalizada com sucesso!", romaneioId });
+        res.json({ message: "Registro de remessa concluído!", status: novoStatusPedido });
+
     } catch (err) {
         await db.query('ROLLBACK');
-        res.status(500).json({ error: err.message });
+        console.error(err);
+        res.status(500).json({ error: "Erro ao registrar logística da remessa." });
     }
 });
 

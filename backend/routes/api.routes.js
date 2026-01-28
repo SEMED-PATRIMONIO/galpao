@@ -312,27 +312,28 @@ router.get('/pedidos/estoque/pendentes', verificarToken, async (req, res) => {
 
 router.post('/pedidos/estoque/iniciar-separacao', verificarToken, async (req, res) => {
     const { pedidoId } = req.body;
-    const usuario_estoque_id = req.userId; // ID do usuário logado (perfil estoque)
-
     try {
-        // Atualiza status e registra quem está operando
-        const result = await db.query(
-           `UPDATE pedidos 
-            SET status = 'SEPARACAO_INICIADA', 
-                usuario_separacao_id = $1, 
-                data_separacao = NOW() 
-            WHERE id = $2 AND status = 'APROVADO' -- Busca apenas os aprovados pelo admin
-            RETURNING id`,
-            [usuario_estoque_id, pedidoId]
-        );
-        if (result.rowCount === 0) {
-            return res.status(400).json({ error: "Pedido não disponível para separação ou já iniciado." });
-        }
+        await db.query('BEGIN');
+        
+        // 1. Pegamos o status atual antes de mudar
+        const atual = await db.query("SELECT status FROM pedidos WHERE id = $1", [pedidoId]);
+        const statusAnterior = atual.rows[0].status;
 
-        res.json({ message: "Separação iniciada com sucesso!" });
+        // 2. Atualizamos para 'SEPARACAO_INICIADA'
+        await db.query("UPDATE pedidos SET status = 'SEPARACAO_INICIADA' WHERE id = $1", [pedidoId]);
+
+        // 3. GRAVAMOS NO LOG (O que faltava!)
+        await db.query(
+            `INSERT INTO log_status_pedidos (pedido_id, usuario_id, status_anterior, status_novo, observacao) 
+             VALUES ($1, $2, $3, 'SEPARACAO_INICIADA', 'Usuário iniciou a conferência dos itens')`,
+            [pedidoId, req.userId, statusAnterior]
+        );
+
+        await db.query('COMMIT');
+        res.json({ message: "Iniciado com sucesso" });
     } catch (err) {
-        console.error("Erro ao iniciar separação:", err.message);
-        res.status(500).json({ error: "Erro no servidor ao processar separação." });
+        await db.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
     }
 });
 
@@ -1411,7 +1412,8 @@ router.get('/produtos/:id/grade', verificarToken, async (req, res) => {
 });
 
 router.post('/pedidos/estoque/finalizar-remessa', verificarToken, async (req, res) => {
-    const { pedidoId, itens } = req.body; 
+    const { pedidoId, itens } = req.body;
+    const usuarioId = req.userId; // Extraído do token
 
     try {
         await db.query('BEGIN');
@@ -1424,7 +1426,7 @@ router.post('/pedidos/estoque/finalizar-remessa', verificarToken, async (req, re
         );
         const remessaId = remessaRes.rows[0].id;
 
-        // 2. Registrar o que está saindo fisicamente nesta viagem/caixa
+        // 2. Registrar os itens da remessa
         for (const item of itens) {
             await db.query(
                 `INSERT INTO pedido_remessa_itens (remessa_id, produto_id, tamanho, quantidade_enviada) 
@@ -1433,34 +1435,42 @@ router.post('/pedidos/estoque/finalizar-remessa', verificarToken, async (req, re
             );
         }
 
-        // 3. Verificar se o que foi enviado em TODAS as remessas cobre o total do pedido
-        const sqlVerifica = `
+        // 3. Cálculo de Saldo (Otimizado: Uma única query para os dois valores)
+        const check = await db.query(`
             SELECT 
-                (SELECT SUM(quantidade) FROM itens_pedido WHERE pedido_id = $1) as total_solicitado,
-                (SELECT SUM(quantidade_enviada) FROM pedido_remessa_itens pri 
+                (SELECT COALESCE(SUM(quantidade), 0) FROM itens_pedido WHERE pedido_id = $1) as solicitado,
+                (SELECT COALESCE(SUM(pri.quantidade_enviada), 0) 
+                 FROM pedido_remessa_itens pri 
                  JOIN pedido_remessas pr ON pri.remessa_id = pr.id 
-                 WHERE pr.pedido_id = $1) as total_enviado
-        `;
-        const check = await db.query(sqlVerifica, [pedidoId]);
-        const { total_solicitado, total_enviado } = check.rows[0];
+                 WHERE pr.pedido_id = $1) as enviado
+        `, [pedidoId]);
+        
+        const { solicitado, enviado } = check.rows[0];
+        
+        // Decisão do novo status baseado no saldo real
+        const novoStatus = (parseInt(enviado) >= parseInt(solicitado)) ? 'COLETA_LIBERADA' : 'EM_SEPARACAO';
 
-        // Lógica de Status Baseada na sua Lista:
-        // Se ainda falta enviar algo, mantemos em 'EM_SEPARACAO'
-        // Se completou o envio de tudo, liberamos para a logística com 'COLETA_LIBERADA'
-        let novoStatusPedido = 'EM_SEPARACAO';
-        if (parseInt(total_enviado) >= parseInt(total_solicitado)) {
-            novoStatusPedido = 'COLETA_LIBERADA';
-        }
+        // 4. Pegar status anterior para o log de auditoria
+        const statusRes = await db.query("SELECT status FROM pedidos WHERE id = $1", [pedidoId]);
+        const statusAnterior = statusRes.rows[0].status;
 
-        await db.query("UPDATE pedidos SET status = $1 WHERE id = $2", [novoStatusPedido, pedidoId]);
+        // 5. Atualizar Pedido Principal
+        await db.query("UPDATE pedidos SET status = $1 WHERE id = $2", [novoStatus, pedidoId]);
+
+        // 6. Registrar Log de Auditoria (Usando a coluna data_hora que confirmamos antes)
+        await db.query(
+            `INSERT INTO log_status_pedidos (pedido_id, usuario_id, status_anterior, status_novo, observacao) 
+             VALUES ($1, $2, $3, $4, $5)`,
+            [pedidoId, usuarioId, statusAnterior, novoStatus, `Remessa #${remessaId} gerada. Progresso: ${enviado}/${solicitado} itens.`]
+        );
 
         await db.query('COMMIT');
-        res.json({ message: "Registro de remessa concluído!", status: novoStatusPedido });
+        res.json({ message: "Remessa salva com sucesso!", status: novoStatus, remessaId });
 
     } catch (err) {
         await db.query('ROLLBACK');
-        console.error(err);
-        res.status(500).json({ error: "Erro ao registrar logística da remessa." });
+        console.error("ERRO NA REMESSA:", err);
+        res.status(500).json({ error: "Falha interna ao processar remessa: " + err.message });
     }
 });
 
@@ -1742,6 +1752,62 @@ router.post('/pedidos/autorizar-final', verificarToken, async (req, res) => {
         await db.query('ROLLBACK');
         console.error("Erro na autorização:", err.message);
         res.status(500).json({ error: err.message });
+    }
+});
+
+router.get('/pedidos/logistica/remessas-pendentes', verificarToken, async (req, res) => {
+    try {
+        const result = await db.query(`
+            SELECT 
+                pr.id AS remessa_id,
+                p.id AS pedido_id,
+                l.nome AS escola_nome,
+                pr.data_criacao AS data_remessa,
+                p.status AS status_pedido
+            FROM pedido_remessas pr
+            JOIN pedidos p ON pr.pedido_id = p.id
+            JOIN locais l ON p.local_destino_id = l.id
+            WHERE pr.status = 'PRONTO'
+            ORDER BY pr.data_criacao ASC
+        `);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao buscar remessas para transporte." });
+    }
+});
+
+router.post('/pedidos/logistica/iniciar-transporte', verificarToken, async (req, res) => {
+    const { remessaId } = req.body;
+    try {
+        // Atualiza a remessa específica
+        await db.query("UPDATE pedido_remessas SET status = 'EM_TRANSPORTE' WHERE id = $1", [remessaId]);
+        
+        // Opcional: Se quiser que o pedido pai também mude para EM_TRANSPORTE
+        const remessa = await db.query("SELECT pedido_id FROM pedido_remessas WHERE id = $1", [remessaId]);
+        await db.query("UPDATE pedidos SET status = 'EM_TRANSPORTE' WHERE id = $1", [remessa.rows[0].pedido_id]);
+
+        res.json({ message: "Transporte iniciado!" });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/pedidos/logistica/entregas-pendentes', verificarToken, async (req, res) => {
+    try {
+        const result = await db.query(`
+            SELECT 
+                pr.id AS remessa_id,
+                p.id AS pedido_id,
+                l.nome AS escola_nome,
+                pr.data_criacao,
+                p.status AS status_pedido
+            FROM pedido_remessas pr
+            JOIN pedidos p ON pr.pedido_id = p.id
+            JOIN locais l ON p.local_destino_id = l.id
+            WHERE pr.status = 'PRONTO' -- Mostra qualquer remessa que o estoque finalizou
+            ORDER BY pr.data_criacao ASC
+        `);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao buscar remessas." });
     }
 });
 

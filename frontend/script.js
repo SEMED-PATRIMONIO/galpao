@@ -17,6 +17,17 @@ function prepararContainerPrincipal() {
     return app;
 }
 
+function inicializarFundo() {
+    const bg = document.getElementById('bg-container');
+    if (!bg) return;
+
+    // Gera 200 vezes a palavra SEMED para garantir que encha a tela
+    let htmlContent = '';
+    for (let i = 0; i < 200; i++) {
+        htmlContent += '<span>SEMED</span>';
+    }
+    bg.innerHTML = htmlContent;
+}
 // Forçar maiúsculas sem acentos APENAS em campos de texto
 document.addEventListener('input', (e) => {
     // Adicionamos a verificação: e.target.type === 'text'
@@ -7872,3 +7883,7 @@ async function gerarECompartilharRomaneio(remessaId) {
 window.telaVisualizarEstoque = telaVisualizarEstoque;
 window.telaAbastecerEstoque = telaAbastecerEstoque;
 window.telaAdminGerenciarSolicitacoes = telaAdminGerenciarSolicitacoes;
+
+document.addEventListener('DOMContentLoaded', () => {
+    inicializarFundo();
+});

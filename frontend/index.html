@@ -11,25 +11,21 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
 <body>
+    <div id="bg-container" class="login-bg-wrapper"></div>
+
     <div class="card-login" id="login-container">
         <span class="icone-app">📦</span>
         <h1>Patrimônio SEMED</h1>
         
         <form id="form-login">
-            <div style="text-align: left; margin-bottom: 15px;">
-                <label style="color: white; font-size: 0.8rem; font-weight: bold; margin-bottom: 5px; display: block; opacity: 0.8;">USUÁRIO</label>
-                <input type="text" id="usuario" class="input-glass" placeholder="NOME DE USUÁRIO" required>
+            <input type="text" id="usuario" placeholder="NOME DE USUÁRIO" required>
+            
+            <div class="senha-container">
+                <input type="password" id="senha" placeholder="SENHA" required>
+                <span id="eye-icon" class="toggle-senha" onclick="toggleSenha()">👁️</span>
             </div>
-
-            <div style="text-align: left; margin-bottom: 20px;">
-                <label style="color: white; font-size: 0.8rem; font-weight: bold; margin-bottom: 5px; display: block; opacity: 0.8;">SENHA</label>
-                <div class="senha-container">
-                    <input type="password" id="senha" class="input-glass" placeholder="SUA SENHA" required>
-                    <span class="toggle-senha" id="eye-icon" onclick="toggleSenha()">👁️</span>
-                </div>
-            </div>
-
-            <button type="submit" class="btn-login">ENTRAR</button>
+            
+            <button type="submit" style="background-color: #004a99; color: white;">ENTRAR</button>
         </form>
     </div>
     <div id="app-content" style="display: none;">

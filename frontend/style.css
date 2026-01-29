@@ -35,30 +35,63 @@
     background: rgba(255, 255, 255, 0.9);
 }
 
-/* Fundo da tela de login */
+/* 1. O fundo azul com o movimento de bandeira */
 .login-bg-wrapper {
     position: fixed;
-    top: -25%; left: -25%; /* Expandido para não mostrar bordas no movimento */
-    width: 150%; height: 150%;
-    background-color: #1e3a8a; /* Azul SEMED fechado */
+    top: -10%; left: -10%;
+    width: 120%; height: 120%;
+    background-color: #004a99; /* Seu azul de preferência */
     z-index: -1;
     overflow: hidden;
     display: flex;
     flex-wrap: wrap;
-    justify-content: center;
-    align-content: center;
+    align-content: flex-start;
+    gap: 40px;
+    padding: 50px;
     transform: rotate(-15deg); /* Inclinação diagonal */
-    animation: bandeiraFlamulando 12s ease-in-out infinite;
+    /* Aqui está o segredo do movimento de bandeira */
+    animation: waveEffect 8s ease-in-out infinite alternate;
 }
 
 .login-bg-wrapper span {
     font-family: 'Arial Black', sans-serif;
     font-size: 2.5rem;
-    color: rgba(255, 255, 255, 0.04); /* Texto quase invisível, muito elegante */
-    margin: 10px 20px;
-    letter-spacing: 2px;
+    color: rgba(255, 255, 255, 0.1); /* Texto SEMED sutil */
     user-select: none;
     white-space: nowrap;
+}
+
+/* Intercala o texto para não ficar um embaixo do outro certinho */
+.login-bg-wrapper span:nth-child(even) {
+    margin-left: 60px;
+}
+
+/* Animação que simula a ondulação */
+@keyframes waveEffect {
+    0% { transform: rotate(-15deg) translateY(0) scale(1); }
+    50% { transform: rotate(-13deg) translateY(-20px) scale(1.02); }
+    100% { transform: rotate(-17deg) translateY(20px) scale(1); }
+}
+
+/* 2. O Cartão de Login (Fundo Claro) */
+.card-login {
+    background: rgba(255, 255, 255, 0.95) !important; /* Fundo branco/claro */
+    color: #333 !important; /* Texto escuro para contraste */
+    padding: 40px;
+    border-radius: 15px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    text-align: center;
+}
+
+.card-login h1 {
+    color: #004a99; /* Título no azul do tema */
+}
+
+/* Ajuste dos inputs para fundo claro */
+.card-login input {
+    background: #f4f4f4;
+    border: 1px solid #ddd;
+    color: #333;
 }
 
 /* Container do campo de senha */

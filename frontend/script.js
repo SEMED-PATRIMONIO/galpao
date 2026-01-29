@@ -6106,10 +6106,17 @@ async function salvarRemessa(pedidoId) {
             },
             body: JSON.stringify({ pedidoId, itens: itensRemessa })
         });
-
         if (res.ok) {
-            alert("✅ Remessa registrada com sucesso!");
-            telaEstoquePedidosPendentes(); 
+            const data = await res.json();
+            
+            // Pequeno delay para o usuário respirar após o clique
+            setTimeout(() => {
+                if (confirm(`✅ Remessa #${data.remessaId} Salva!\n\nDeseja compartilhar o Romaneio via WhatsApp agora?`)) {
+                    gerarECompartilharRomaneio(data.remessaId);
+                }
+                telaEstoquePedidosPendentes(); // Recarrega a fila
+            }, 300);
+
         } else {
             const data = await res.json();
             alert("Erro: " + data.error);
@@ -7376,80 +7383,82 @@ async function telaEstoquePedidosPendentes() {
     }
 }
 
-async function imprimirRomaneio(romaneioId) {
-    const res = await fetch(`${API_URL}/impressao/romaneio/${romaneioId}`, {
-        headers: { 'Authorization': `Bearer ${TOKEN}` }
-    });
-    const data = await res.json();
+async function imprimirRomaneio(remessaId) {
+    try {
+        const res = await fetch(`${API_URL}/pedidos/remessa/${remessaId}/detalhes`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const dados = await res.json();
+        
+        const info = dados[0];
+        const dataFormatada = new Date(info.data_criacao).toLocaleString();
 
-    const janelaImpressao = window.open('', '_blank');
-    janelaImpressao.document.write(`
-        <html>
-        <head>
-            <title>Romaneio #${data.info.romaneio_id}</title>
-            <style>
-                body { font-family: sans-serif; padding: 40px; color: #000; }
-                .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 20px; }
-                .info-section { display: flex; justify-content: space-between; margin: 20px 0; }
-                table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-                th, td { border: 1px solid #000; padding: 10px; text-align: left; }
-                th { background: #eee; }
-                .assinaturas { margin-top: 50px; display: flex; justify-content: space-between; }
-                .campo-assinatura { border-top: 1px solid #000; width: 250px; text-align: center; padding-top: 5px; margin-top: 40px; }
-                @media print { .no-print { display: none; } }
-            </style>
-        </head>
-        <body>
-            <div class="header">
-                <h1>ROMANEIO DE ENTREGA - SEMED</h1>
-                <p>Nº CONTROLE: <strong>${data.info.romaneio_id}</strong> | DATA: ${new Date(data.info.data_saida).toLocaleString()}</p>
-            </div>
-
-            <div class="info-section">
-                <div>
-                    <p><strong>DESTINO:</strong> ${data.info.escola_nome}</p>
-                    <p><strong>PEDIDO ORIGINAL:</strong> #${data.info.pedido_id}</p>
+        const janelaImpressao = window.open('', '_blank');
+        janelaImpressao.document.write(`
+            <html>
+            <head>
+                <title>Romaneio #${remessaId}</title>
+                <style>
+                    body { font-family: sans-serif; padding: 20px; line-height: 1.6; }
+                    .header { text-align: center; border-bottom: 2px solid #000; margin-bottom: 20px; padding-bottom: 10px; }
+                    .info-grid { display: grid; grid-template-columns: 1fr 1fr; margin-bottom: 20px; }
+                    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                    th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+                    th { background-color: #f2f2f2; }
+                    .assinatura { margin-top: 50px; display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
+                    .campo-assinatura { border-top: 1px solid #000; text-align: center; padding-top: 5px; margin-top: 40px; }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <h1>ROMANEIO DE ENTREGA #${remessaId}</h1>
+                    <p>Referente ao Pedido #${info.pedido_id}</p>
                 </div>
-                <div>
-                    <p><strong>MOTORISTA:</strong> ${data.info.motorista_nome}</p>
-                    <p><strong>PLACA:</strong> ${data.info.veiculo_placa}</p>
+                
+                <div class="info-grid">
+                    <div>
+                        <strong>DESTINO:</strong> ${info.escola_nome}<br>
+                        <strong>ENDEREÇO:</strong> ${info.escola_endereco || 'Não informado'}
+                    </div>
+                    <div style="text-align: right;">
+                        <strong>DATA/HORA:</strong> ${dataFormatada}
+                    </div>
                 </div>
-            </div>
 
-            <table>
-                <thead>
-                    <tr>
-                        <th>CÓD.</th>
-                        <th>PRODUTO / DESCRIÇÃO</th>
-                        <th>TAMANHO</th>
-                        <th>QTD. ENVIADA</th>
-                        <th>CONFERIDO</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${data.itens.map(i => `
+                <table>
+                    <thead>
                         <tr>
-                            <td>${i.produto_id}</td>
-                            <td>${i.produto_nome}</td>
-                            <td style="text-align:center;">${i.tamanho}</td>
-                            <td style="text-align:center;"><strong>${i.quantidade_enviada}</strong></td>
-                            <td style="width:100px;">[ ]</td>
+                            <th>PRODUTO</th>
+                            <th>TAMANHO</th>
+                            <th>QUANTIDADE ENVIADA</th>
                         </tr>
-                    `).join('')}
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        ${dados.map(item => `
+                            <tr>
+                                <td>${item.produto_nome}</td>
+                                <td>${item.tamanho}</td>
+                                <td>${item.quantidade_enviada}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
 
-            <div class="assinaturas">
-                <div class="campo-assinatura">Assinatura Motorista</div>
-                <div class="campo-assinatura">Recebido por (Nome Legível)</div>
-            </div>
+                <div class="assinatura">
+                    <div class="campo-assinatura">Responsável pela Saída (Estoque)</div>
+                    <div class="campo-assinatura">Recebido por (Escola)</div>
+                </div>
 
-            <div class="no-print" style="margin-top: 30px; text-align: center;">
-                <button onclick="window.print()" style="padding: 15px 30px; background: #000; color: #fff; cursor: pointer;">🖨️ IMPRIMIR AGORA</button>
-            </div>
-        </body>
-        </html>
-    `);
+                <script>
+                    window.onload = function() { window.print(); window.close(); };
+                </script>
+            </body>
+            </html>
+        `);
+        janelaImpressao.document.close();
+    } catch (err) {
+        alert("Erro ao gerar romaneio.");
+    }
 }
 
 async function telaLogisticaEntregas() {
@@ -7530,51 +7539,55 @@ async function telaLogisticaColeta() {
 }
 
 async function telaEscolaConfirmarRecebimento() {
-    const app = document.getElementById('app-content');
-    app.style.background = "#f0fdf4"; // Fundo verde bem claro (suave)
+    const container = document.getElementById('app-content');
+    container.innerHTML = '<div style="padding:20px;">🚚 Verificando se há entregas a caminho...</div>';
 
     try {
-        const res = await fetch(`${API_URL}/pedidos/escola/a-caminho`, {
+        const res = await fetch(`${API_URL}/pedidos/escola/recebimentos-pendentes`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
-        const pedidos = await res.json();
+        const remessas = await res.json();
 
-        app.innerHTML = `
-            <div style="padding:30px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:25px;">
-                    <h2 style="color:#166534; margin:0;">🚚 MATERIAL A CAMINHO</h2>
-                    <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:10px 20px; border-radius:8px; cursor:pointer; font-weight:bold;">VOLTAR</button>
-                </div>
-
+        container.innerHTML = `
+            <div style="padding:20px;">
+                <h2 style="color:#1e3a8a; margin-bottom:20px;">📦 CONFIRMAR RECEBIMENTO DE MATERIAL</h2>
+                
                 <div style="display:grid; gap:15px;">
-                    ${pedidos.length === 0 ? `
-                        <div style="background:white; padding:40px; border-radius:12px; text-align:center; color:#64748b; border:1px dashed #ccc;">
-                            <span style="font-size:3rem;">📦</span><br><br>
-                            Nenhum material em transporte para sua unidade no momento.
-                        </div>
-                    ` : ''}
-
-                    ${pedidos.map(p => `
-                        <div style="background:white; border:2px solid #bbf7d0; padding:20px; border-radius:12px; display:flex; justify-content:space-between; align-items:center; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+                    ${remessas.length === 0 ? 
+                        '<p style="background:#f1f5f9; padding:20px; border-radius:8px; text-align:center;">Não há remessas em trânsito para sua unidade no momento.</p>' : 
+                        remessas.map(r => `
+                        <div style="background:white; padding:20px; border-radius:12px; box-shadow:0 4px 6px rgba(0,0,0,0.05); border-left:8px solid #10b981; display:flex; justify-content:space-between; align-items:center;">
                             <div>
-                                <div style="font-weight:bold; color:#166534; font-size:1.2rem; margin-bottom:5px;">PEDIDO #${p.id}</div>
-                                <div style="color:#475569;">
-                                    Motorista: <b>${p.motorista_nome}</b><br>
-                                    Veículo: <b>${p.veiculo_placa}</b><br>
-                                    Saiu em: ${new Date(p.data_saida).toLocaleString('pt-BR')}
-                                </div>
+                                <div style="font-weight:bold; font-size:1.1rem; color:#1e293b;">Remessa #${r.remessa_id}</div>
+                                <div style="color:#64748b; font-size:0.9rem;">Referente ao Pedido: #${r.pedido_id}</div>
+                                <div style="color:#64748b; font-size:0.9rem;">Despachado por: ${r.quem_enviou} em ${new Date(r.data_envio).toLocaleDateString()}</div>
                             </div>
-                            <button onclick="confirmarEntregaFinal(${p.id})" style="background:#22c55e; color:white; border:none; padding:15px 25px; border-radius:8px; font-weight:bold; cursor:pointer; font-size:1rem;">
-                                ✅ CONFIRMAR RECEBIMENTO
+                            <button onclick="confirmarRecebimentoRemessa(${r.remessa_id}, ${r.pedido_id})" style="background:#10b981; color:white; border:none; padding:12px 20px; border-radius:8px; cursor:pointer; font-weight:bold; box-shadow:0 2px 4px rgba(0,0,0,0.1);">
+                                ✅ CONFIRMAR QUE RECEBI
                             </button>
                         </div>
                     `).join('')}
                 </div>
             </div>
         `;
-    } catch (err) {
-        app.innerHTML = `<div style="padding:20px; color:red;">Erro de conexão.</div>`;
-    }
+    } catch (err) { alert("Erro ao carregar entregas."); }
+}
+
+async function confirmarRecebimentoRemessa(remessaId, pedidoId) {
+    if (!confirm("Você confirma que conferiu e recebeu todos os itens desta remessa?")) return;
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/escola/confirmar-recebimento`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ remessaId, pedidoId })
+        });
+
+        if (res.ok) {
+            alert("✨ Recebimento registrado! O estoque da escola foi atualizado.");
+            telaEscolaConfirmarRecebimento(); // Atualiza a lista
+        }
+    } catch (err) { alert("Erro ao processar recebimento."); }
 }
 
 async function confirmarEntregaFinal(pedidoId) {
@@ -7589,6 +7602,146 @@ async function confirmarEntregaFinal(pedidoId) {
     if(res.ok) {
         alert("🎉 Excelente! O ciclo do pedido foi concluído.");
         telaEscolaConfirmarRecebimento();
+    }
+}
+
+async function processarDocumentoRomaneio(remessaId, acao = 'imprimir') {
+    // 1. Busca os dados (usando a rota que já criamos)
+    const res = await fetch(`${API_URL}/pedidos/remessa/${remessaId}/detalhes`, {
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+    const dados = await res.json();
+    const info = dados[0];
+
+    // 2. Criamos um elemento temporário com o layout do romaneio
+    const elemento = document.createElement('div');
+    elemento.innerHTML = `
+        <div style="padding:40px; font-family: Arial, sans-serif; color: #333;">
+            <h1 style="text-align:center; color:#1e3a8a;">ROMANEIO DE ENTREGA #${remessaId}</h1>
+            <p style="text-align:center;">Pedido #${info.pedido_id} | Emissão: ${new Date().toLocaleString()}</p>
+            <hr>
+            <p><strong>DESTINO:</strong> ${info.escola_nome}</p>
+            <p><strong>ENDEREÇO:</strong> ${info.escola_endereco || 'Não informado'}</p>
+            <table style="width:100%; border-collapse:collapse; margin-top:20px;">
+                <thead>
+                    <tr style="background:#f2f2f2;">
+                        <th style="border:1px solid #ddd; padding:8px;">PRODUTO</th>
+                        <th style="border:1px solid #ddd; padding:8px;">TAM.</th>
+                        <th style="border:1px solid #ddd; padding:8px;">QTD</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${dados.map(i => `<tr><td style="border:1px solid #ddd; padding:8px;">${i.produto_nome}</td><td style="border:1px solid #ddd; padding:8px;">${i.tamanho}</td><td style="border:1px solid #ddd; padding:8px;">${i.quantidade_enviada}</td></tr>`).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+
+    const opt = {
+        margin: 10,
+        filename: `romaneio_${remessaId}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2 },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+
+    if (acao === 'imprimir') {
+        html2pdf().set(opt).from(elemento).save();
+    } else if (acao === 'compartilhar') {
+        // Gera o PDF como um Blob para compartilhar
+        const pdfBlob = await html2pdf().set(opt).from(elemento).output('blob');
+        const arquivo = new File([pdfBlob], `romaneio_${remessaId}.pdf`, { type: 'application/pdf' });
+
+        if (navigator.share) {
+            try {
+                await navigator.share({
+                    files: [arquivo],
+                    title: `Romaneio #${remessaId}`,
+                    text: `Segue o romaneio da entrega para a escola ${info.escola_nome}`
+                });
+            } catch (err) { console.log("Compartilhamento cancelado."); }
+        } else {
+            alert("Seu navegador não suporta compartilhamento de arquivos. O PDF será baixado.");
+            html2pdf().set(opt).from(elemento).save();
+        }
+    }
+}
+
+async function gerarECompartilharRomaneio(remessaId) {
+    try {
+        const res = await fetch(`${API_URL}/pedidos/remessa/${remessaId}/detalhes`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const dados = await res.json();
+        const info = dados[0];
+
+        // Criando o "Papel" do Romaneio
+        const elemento = document.createElement('div');
+        elemento.innerHTML = `
+            <div style="padding: 20px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #1e293b;">
+                <div style="text-align: center; border-bottom: 3px solid #1e40af; padding-bottom: 10px; margin-bottom: 20px;">
+                    <h2 style="margin: 0; color: #1e40af;">ROMANEIO DE SAÍDA</h2>
+                    <p style="margin: 5px 0; font-size: 1.2rem; font-weight: bold;">Remessa #${remessaId}</p>
+                </div>
+
+                <div style="background: #f8fafc; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
+                    <p style="margin: 5px 0;"><strong>Escola:</strong> ${info.escola_nome}</p>
+                    <p style="margin: 5px 0;"><strong>Pedido Origem:</strong> #${info.pedido_id}</p>
+                    <p style="margin: 5px 0;"><strong>Data/Hora:</strong> ${new Date().toLocaleString()}</p>
+                </div>
+
+                <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px;">
+                    <thead>
+                        <tr style="background: #1e40af; color: white;">
+                            <th style="padding: 12px; text-align: left; border: 1px solid #1e40af;">PRODUTO</th>
+                            <th style="padding: 12px; text-align: center; border: 1px solid #1e40af;">TAM.</th>
+                            <th style="padding: 12px; text-align: center; border: 1px solid #1e40af;">QTD</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${dados.map(i => `
+                            <tr style="border-bottom: 1px solid #e2e8f0;">
+                                <td style="padding: 12px; font-weight: 500;">${i.produto_nome}</td>
+                                <td style="padding: 12px; text-align: center;">${i.tamanho}</td>
+                                <td style="padding: 12px; text-align: center; font-weight: bold;">${i.quantidade_enviada}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+
+                <div style="text-align: center; color: #64748b; font-size: 0.8rem; border-top: 1px dashed #cbd5e1; padding-top: 20px;">
+                    <p>Documento Logístico Digital - Verificado via Sistema Central</p>
+                </div>
+            </div>
+        `;
+
+        const opt = {
+            margin: 10,
+            filename: `romaneio_${remessaId}.pdf`,
+            html2canvas: { scale: 3, useCORS: true },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
+
+        // Gera o arquivo
+        const pdfBlob = await html2pdf().set(opt).from(elemento).output('blob');
+        const file = new File([pdfBlob], `Romaneio_${remessaId}.pdf`, { type: 'application/pdf' });
+
+        // Tenta compartilhar via API nativa (WhatsApp, E-mail, etc)
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            await navigator.share({
+                files: [file],
+                title: `Romaneio #${remessaId} - ${info.escola_nome}`,
+                text: `Segue romaneio digital da remessa #${remessaId}.`
+            });
+        } else {
+            // Fallback: Se não suportar share, faz o download do arquivo
+            html2pdf().set(opt).from(elemento).save();
+            alert("Compartilhamento nativo indisponível. O PDF foi baixado.");
+        }
+
+    } catch (err) {
+        console.error("Erro ao processar romaneio:", err);
+        alert("Falha ao gerar documento.");
     }
 }
 

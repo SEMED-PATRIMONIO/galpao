@@ -1,6 +1,18 @@
 const API_URL = 'https://patrimoniosemed.paiva.api.br';
 let TOKEN = localStorage.getItem('token');
 
+function prepararContainerPrincipal() {
+    const app = document.getElementById('app-content');
+    
+    // Aplica a classe CSS padronizada
+    app.className = 'painel-principal'; 
+    
+    // Limpa o conteúdo anterior e adiciona um estado de carregamento sutil
+    app.innerHTML = '<div style="padding:20px; color:#64748b;">⏳ Carregando...</div>';
+    
+    return app;
+}
+
 // Forçar maiúsculas sem acentos APENAS em campos de texto
 document.addEventListener('input', (e) => {
     // Adicionamos a verificação: e.target.type === 'text'
@@ -4086,7 +4098,9 @@ async function exportarPDFEstatisticoUniformes() {
 }
 
 function abrirCalculadoraConversao() {
+    const container = prepararContainerPrincipal();
     // Remove modal anterior se existir
+
     const modalAntigo = document.querySelector('.modal-overlay');
     if (modalAntigo) modalAntigo.remove();
 
@@ -4965,7 +4979,7 @@ window.telaMovimentarPatrimonio = function() {
 let carrinhoSolicitacao = [];
 
 async function telaSolicitarUniforme() {
-    const container = document.getElementById('app-content');
+    const container = prepararContainerPrincipal();
     container.innerHTML = '<div style="padding:20px;">Carregando produtos...</div>';
     
     carrinhoSolicitacao = [];
@@ -7539,7 +7553,7 @@ async function telaLogisticaColeta() {
 }
 
 async function telaEscolaConfirmarRecebimento() {
-    const container = document.getElementById('app-content');
+    const container = prepararContainerPrincipal();
     container.innerHTML = '<div style="padding:20px;">🚚 Verificando se há entregas a caminho...</div>';
 
     try {

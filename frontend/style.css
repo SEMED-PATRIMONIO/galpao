@@ -6,6 +6,18 @@
     --success: #16a34a;
 }
 
+/* Classe para o container principal das telas */
+.painel-principal {
+    background-color: #f8fafc;
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    border: 1px solid #e2e8f0;
+    margin: 20px;
+    padding: 0; /* O padding interno as funções de tela já controlam */
+    overflow: hidden; /* Garante que o conteúdo respeite o arredondamento */
+    min-height: 80vh; /* Garante que o fundo cubra a tela quase toda */
+}
+
 body {
     margin: 0;
     padding: 0;

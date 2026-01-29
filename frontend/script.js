@@ -4,11 +4,15 @@ let TOKEN = localStorage.getItem('token');
 function prepararContainerPrincipal() {
     const app = document.getElementById('app-content');
     
-    // Aplica a classe CSS padronizada
+    // Aplica a classe CSS padronizada com efeito de vidro
     app.className = 'painel-principal'; 
     
-    // Limpa o conteúdo anterior e adiciona um estado de carregamento sutil
-    app.innerHTML = '<div style="padding:20px; color:#64748b;">⏳ Carregando...</div>';
+    // Limpa o conteúdo e define um carregamento elegante
+    app.innerHTML = `
+        <div style="padding:40px; text-align:center; color:#1e3a8a;">
+            <div class="spinner"></div> <p style="font-weight:bold; margin-top:10px;">Sincronizando dados...</p>
+        </div>
+    `;
     
     return app;
 }
@@ -64,22 +68,50 @@ document.getElementById('form-login')?.addEventListener('submit', async (e) => {
     }
 });
 
+function toggleSenha() {
+    const senhaInput = document.getElementById('senha');
+    const eyeIcon = document.getElementById('eye-icon');
+    
+    if (senhaInput.type === 'password') {
+        senhaInput.type = 'text';
+        eyeIcon.innerHTML = '👁️‍🗨️'; // Ícone de olho aberto
+    } else {
+        senhaInput.type = 'password';
+        eyeIcon.innerHTML = '👁️'; // Ícone de olho fechado/normal
+    }
+}
+
 function mostrarLogin() {
     const app = document.getElementById('app-content');
     const loginContainer = document.getElementById('login-container');
     
-    // Criar o fundo com texto repetido (ex: 150 vezes para preencher a tela)
-    let backgroundHTML = '<div class="login-background-text">';
-    for (let i = 0; i < 150; i++) {
+    // 1. Remove fundo anterior se o usuário deslogar e voltar
+    const bgAntigo = document.querySelector('.login-bg-wrapper');
+    if (bgAntigo) bgAntigo.remove();
+
+    // 2. Criar o fundo com 400 repetições para garantir preenchimento total
+    let backgroundHTML = '<div class="login-bg-wrapper">';
+    for (let i = 0; i < 400; i++) {
         backgroundHTML += '<span>SEMED</span>';
     }
     backgroundHTML += '</div>';
 
-    document.body.classList.add('login-body');
+    // 3. Aplica os estilos ao body
+    document.body.style.backgroundColor = "#1e3a8a"; // Cor de segurança
     document.body.insertAdjacentHTML('afterbegin', backgroundHTML);
+    
+    // 4. Exibe o container de login com efeito suave
     loginContainer.style.display = 'block';
+    loginContainer.style.opacity = '0';
     app.style.display = 'none';
+
+    // Pequeno delay para a transição de opacidade
+    setTimeout(() => {
+        loginContainer.style.transition = 'opacity 1s ease';
+        loginContainer.style.opacity = '1';
+    }, 100);
 }
+
 // Carregar alertas para Perfil Escola
 async function verificarAlertasEscola() { // Removi o localId daqui
     try {
@@ -4135,30 +4167,40 @@ function abrirCalculadoraConversao() {
     const modal = document.createElement('div');
     modal.className = 'modal-overlay';
     
-    // 3. Função interna para fechar o modal de forma segura
+    // 3. Função interna para fechar o modal
     const fechar = () => modal.remove();
 
     modal.innerHTML = `
-        <div class="modal-box" style="max-width: 400px; border-top: 5px solid #3498db; position: relative;">
+        <div class="modal-box" style="
+            max-width: 400px; 
+            border-top: 5px solid #3498db; 
+            position: relative; 
+            background: rgba(255, 255, 255, 0.97); /* Fundo quase sólido para garantir leitura */
+            backdrop-filter: blur(12px);           /* Desfoque do fundo para estilo moderno */
+            -webkit-backdrop-filter: blur(12px);   /* Suporte para Safari */
+            padding: 25px; 
+            border-radius: 12px; 
+            box-shadow: 0 15px 35px rgba(0,0,0,0.2);
+        ">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
                 <button id="btn-voltar-calc" style="background:#64748b; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer; font-weight:bold;">⬅️ VOLTAR</button>
                 
-                <h3 style="margin:0; font-size: 16px;">🧮 CALCULADORA</h3>
+                <h3 style="margin:0; font-size: 16px; color: #1e293b;">🧮 CALCULADORA</h3>
                 
                 <button id="btn-x-calc" style="background:none; border:none; font-size:24px; cursor:pointer; color:#94a3b8;">&times;</button>
             </div>
             
-            <p style="font-size: 13px; color: #64748b; margin-bottom:20px;">Converta quantidades totais em embalagens.</p>
+            <p style="font-size: 13px; color: #475569; margin-bottom:20px;">Converta quantidades totais em embalagens.</p>
 
-            <div style="display: flex; flex-direction: column; gap: 10px; text-align: left;">
-                <label style="font-size: 12px; font-weight: bold; color: #475569;">QUANTIDADE TOTAL:</label>
-                <input type="number" id="calc_total" class="input-field" placeholder="Ex: 10" oninput="calcularConversao()">
+            <div style="display: flex; flex-direction: column; gap: 12px; text-align: left;">
+                <label style="font-size: 12px; font-weight: 800; color: #1e293b;">QUANTIDADE TOTAL:</label>
+                <input type="number" id="calc_total" class="input-field" placeholder="Ex: 10" oninput="calcularConversao()" style="background: white;">
 
-                <label style="font-size: 12px; font-weight: bold; color: #475569;">UNIDADES POR EMBALAGEM:</label>
-                <input type="number" id="calc_embalagem" class="input-field" placeholder="Ex: 4" oninput="calcularConversao()">
+                <label style="font-size: 12px; font-weight: 800; color: #1e293b;">UNIDADES POR EMBALAGEM:</label>
+                <input type="number" id="calc_embalagem" class="input-field" placeholder="Ex: 4" oninput="calcularConversao()" style="background: white;">
 
-                <label style="font-size: 12px; font-weight: bold; color: #475569;">NOME DA EMBALAGEM:</label>
-                <input type="text" id="calc_nome_emb" class="input-field" value="LATA" oninput="calcularConversao()">
+                <label style="font-size: 12px; font-weight: 800; color: #1e293b;">NOME DA EMBALAGEM:</label>
+                <input type="text" id="calc_nome_emb" class="input-field" value="LATA" oninput="calcularConversao()" style="background: white;">
             </div>
 
             <hr style="margin: 20px 0; border: 0; border-top: 1px solid #e2e8f0;">
@@ -4167,13 +4209,16 @@ function abrirCalculadoraConversao() {
                 Aguardando dados...
             </div>
             
-            <button id="btn-fechar-calc" class="btn-block" style="margin-top: 15px; background: #94a3b8; color: white; border: none; padding: 12px; border-radius: 6px; width: 100%; cursor: pointer; font-weight: bold;">FECHAR</button>
+            <button id="btn-fechar-calc" class="btn-block" style="margin-top: 20px; background: #3498db; color: white; border: none; padding: 12px; border-radius: 6px; width: 100%; cursor: pointer; font-weight: bold; transition: 0.2s;">FECHAR</button>
         </div>
     `;
 
     document.body.appendChild(modal);
 
-    // 4. Atribuindo os eventos de clique de forma limpa
+    // 4. Fechamento ao clicar fora da caixa (opcional, mas recomendado)
+    modal.onclick = (e) => { if(e.target === modal) fechar(); };
+
+    // 5. Atribuindo os eventos de clique
     document.getElementById('btn-voltar-calc').onclick = () => { fechar(); carregarDashboard(); };
     document.getElementById('btn-x-calc').onclick = fechar;
     document.getElementById('btn-fechar-calc').onclick = fechar;

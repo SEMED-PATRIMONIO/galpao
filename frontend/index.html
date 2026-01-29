@@ -14,13 +14,24 @@
     <div class="card-login" id="login-container">
         <span class="icone-app">📦</span>
         <h1>Patrimônio SEMED</h1>
+        
         <form id="form-login">
-            <input type="text" id="usuario" placeholder="NOME DE USUÁRIO" required>
-            <input type="password" id="senha" placeholder="SENHA" required>
-            <button type="submit">ENTRAR</button>
+            <div style="text-align: left; margin-bottom: 15px;">
+                <label style="color: white; font-size: 0.8rem; font-weight: bold; margin-bottom: 5px; display: block; opacity: 0.8;">USUÁRIO</label>
+                <input type="text" id="usuario" class="input-glass" placeholder="NOME DE USUÁRIO" required>
+            </div>
+
+            <div style="text-align: left; margin-bottom: 20px;">
+                <label style="color: white; font-size: 0.8rem; font-weight: bold; margin-bottom: 5px; display: block; opacity: 0.8;">SENHA</label>
+                <div class="senha-container">
+                    <input type="password" id="senha" class="input-glass" placeholder="SUA SENHA" required>
+                    <span class="toggle-senha" id="eye-icon" onclick="toggleSenha()">👁️</span>
+                </div>
+            </div>
+
+            <button type="submit" class="btn-login">ENTRAR</button>
         </form>
     </div>
-
     <div id="app-content" style="display: none;">
         </div>
 

@@ -6,16 +6,118 @@
     --success: #16a34a;
 }
 
-/* Classe para o container principal das telas */
+/* Container Principal (Telas) */
 .painel-principal {
-    background-color: #f8fafc;
-    border-radius: 16px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-    border: 1px solid #e2e8f0;
+    background: rgba(248, 250, 252, 0.95); /* Fundo claro com leve transparência */
+    backdrop-filter: blur(12px);           /* O efeito de vidro fosco */
+    -webkit-backdrop-filter: blur(12px);
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.3); /* "Brilho" na borda do vidro */
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
     margin: 20px;
-    padding: 0; /* O padding interno as funções de tela já controlam */
-    overflow: hidden; /* Garante que o conteúdo respeite o arredondamento */
-    min-height: 80vh; /* Garante que o fundo cubra a tela quase toda */
+    padding: 0;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+/* Cartões Internos (Pedidos, Remessas, etc) */
+.glass-card {
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(4px);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    padding: 15px;
+    transition: transform 0.2s;
+}
+
+.glass-card:hover {
+    transform: translateY(-2px);
+    background: rgba(255, 255, 255, 0.9);
+}
+
+/* Fundo da tela de login */
+.login-bg-wrapper {
+    position: fixed;
+    top: -25%; left: -25%; /* Expandido para não mostrar bordas no movimento */
+    width: 150%; height: 150%;
+    background-color: #1e3a8a; /* Azul SEMED fechado */
+    z-index: -1;
+    overflow: hidden;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-content: center;
+    transform: rotate(-15deg); /* Inclinação diagonal */
+    animation: bandeiraFlamulando 12s ease-in-out infinite;
+}
+
+.login-bg-wrapper span {
+    font-family: 'Arial Black', sans-serif;
+    font-size: 2.5rem;
+    color: rgba(255, 255, 255, 0.04); /* Texto quase invisível, muito elegante */
+    margin: 10px 20px;
+    letter-spacing: 2px;
+    user-select: none;
+    white-space: nowrap;
+}
+
+/* Container do campo de senha */
+.senha-container {
+    position: relative;
+    width: 100%;
+    margin-bottom: 20px;
+}
+
+/* Estilo do Input de Vidro (Padronizado) */
+.input-glass {
+    width: 100%;
+    padding: 12px 45px 12px 15px; /* Espaço extra na direita para o ícone */
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    color: white;
+    outline: none;
+    transition: all 0.3s;
+}
+
+.input-glass:focus {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+/* O Ícone de Olho */
+.toggle-senha {
+    position: absolute;
+    right: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    cursor: pointer;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 1.2rem;
+    transition: color 0.3s;
+    user-select: none;
+}
+
+.toggle-senha:hover {
+    color: white;
+}
+
+/* Efeito de Bandeira Flamulando */
+@keyframes bandeiraFlamulando {
+    0%, 100% { transform: rotate(-15deg) skew(0deg, 0deg) scale(1); }
+    33% { transform: rotate(-13deg) skew(2deg, 1deg) scale(1.05); }
+    66% { transform: rotate(-17deg) skew(-2deg, -1deg) scale(0.95); }
+}
+
+/* Ajuste no Container de Login para o Vidro Fosco */
+#login-container {
+    background: rgba(255, 255, 255, 0.08) !important;
+    backdrop-filter: blur(20px) !important;
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    border-radius: 24px !important;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4) !important;
+    padding: 50px !important;
 }
 
 body {
@@ -900,12 +1002,6 @@ body.login-body {
     font-weight: bold;
     cursor: pointer;
     animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.02); }
-    100% { transform: scale(1); }
 }
 
 /* Modal de Detalhes */

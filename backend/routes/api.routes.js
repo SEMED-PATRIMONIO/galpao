@@ -1576,14 +1576,45 @@ router.post('/pedidos/logistica/despachar', verificarToken, async (req, res) => 
 });
 
 router.post('/pedidos/escola/confirmar-recebimento', verificarToken, async (req, res) => {
-    const { pedidoId } = req.body;
+    const { remessaId, pedidoId } = req.body;
+    const usuario_id = req.userId;
+
     try {
-        await db.query(
-            "UPDATE pedidos SET status = 'ENTREGUE', data_recebimento = NOW() WHERE id = $1",
-            [pedidoId]
-        );
-        res.json({ message: "Pedido finalizado: ENTREGUE!" });
+        await db.query('BEGIN');
+
+        // A. Atualiza a Remessa para ENTREGUE
+        await db.query("UPDATE pedido_remessas SET status = 'ENTREGUE' WHERE id = $1", [remessaId]);
+
+        // B. Verifica se todas as remessas deste pedido já foram entregues
+        // e se a soma das quantidades enviadas bate com o total do pedido
+        const conferênciaFinal = await db.query(`
+            SELECT 
+                (SELECT SUM(quantidade) FROM itens_pedido WHERE pedido_id = $1) as total_pedido,
+                (SELECT SUM(pri.quantidade_enviada) 
+                 FROM pedido_remessa_itens pri 
+                 JOIN pedido_remessas pr ON pri.remessa_id = pr.id 
+                 WHERE pr.pedido_id = $1 AND pr.status = 'ENTREGUE') as total_recebido
+        `, [pedidoId]);
+
+        const { total_pedido, total_recebido } = conferênciaFinal.rows[0];
+
+        // C. Se o total recebido atingiu o total do pedido, encerra o Pedido Pai
+        if (parseInt(total_recebido) >= parseInt(total_pedido)) {
+            await db.query("UPDATE pedidos SET status = 'ENTREGUE' WHERE id = $1", [pedidoId]);
+            
+            // Log de Encerramento Total
+            await db.query(
+                `INSERT INTO log_status_pedidos (pedido_id, usuario_id, status_anterior, status_novo, observacao, data_hora) 
+                 VALUES ($1, $2, 'EM_TRANSPORTE', 'ENTREGUE', 'Pedido totalmente recebido pela escola', NOW())`,
+                [pedidoId, usuario_id]
+            );
+        }
+
+        await db.query('COMMIT');
+        res.json({ message: "Recebimento confirmado com sucesso!" });
+
     } catch (err) {
+        await db.query('ROLLBACK');
         res.status(500).json({ error: err.message });
     }
 });
@@ -1808,6 +1839,61 @@ router.get('/pedidos/logistica/entregas-pendentes', verificarToken, async (req, 
         res.json(result.rows);
     } catch (err) {
         res.status(500).json({ error: "Erro ao buscar remessas." });
+    }
+});
+
+router.get('/pedidos/remessa/:id/detalhes', verificarToken, async (req, res) => {
+    const { id } = req.params;
+    try {
+        const query = `
+            SELECT 
+                pr.id as remessa_id,
+                pr.data_criacao,
+                p.id as pedido_id,
+                l.nome as escola_nome,
+                l.endereco as escola_endereco,
+                pri.tamanho,
+                pri.quantidade_enviada,
+                prod.nome as produto_nome
+            FROM pedido_remessas pr
+            JOIN pedidos p ON pr.pedido_id = p.id
+            JOIN locais l ON p.local_destino_id = l.id
+            JOIN pedido_remessa_itens pri ON pr.id = pri.remessa_id
+            JOIN produtos prod ON pri.produto_id = prod.id
+            WHERE pr.id = $1
+        `;
+        const result = await db.query(query, [id]);
+        
+        if (result.rows.length === 0) return res.status(404).json({ error: "Remessa não encontrada" });
+        
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.get('/pedidos/escola/recebimentos-pendentes', verificarToken, async (req, res) => {
+    // Pegamos o local_id do usuário logado (deve estar no seu Token)
+    const local_id = req.localId; 
+
+    try {
+        const result = await db.query(`
+            SELECT 
+                pr.id AS remessa_id,
+                p.id AS pedido_id,
+                pr.data_criacao AS data_envio,
+                u.nome AS quem_enviou
+            FROM pedido_remessas pr
+            JOIN pedidos p ON pr.pedido_id = p.id
+            JOIN usuarios u ON p.usuario_separacao_id = u.id
+            WHERE p.local_destino_id = $1 
+            AND pr.status = 'EM_TRANSPORTE'
+            ORDER BY pr.data_criacao DESC
+        `, [local_id]);
+
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao buscar entregas pendentes." });
     }
 });
 

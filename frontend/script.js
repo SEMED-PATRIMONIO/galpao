@@ -967,56 +967,84 @@ async function processarSolicitacao(pedidoId, acao) {
 
 
 async function telaDevolucaoUniforme() {
-    const app = document.getElementById('app-content');
-    
-    // Busca o "extrato" do que a escola recebeu nos últimos 30 dias
-    const res = await fetch(`${API_URL}/pedidos/escola/limite-devolucao`, {
-        headers: { 'Authorization': `Bearer ${TOKEN}` }
-    });
-    const itensRecebidos = await res.json();
+    // 1. Prepara o container principal (aplica bordas arredondadas e limpa a tela)
+    const container = prepararContainerPrincipal();
+    container.innerHTML = '<div style="padding:30px; color:#64748b;">⏳ Carregando histórico de recebimentos...</div>';
 
-    app.innerHTML = `
-        <div style="padding:30px; background:#fff; min-height:100vh;">
-            <h2 style="color:#1e3a8a;">🔄 SOLICITAR DEVOLUÇÃO</h2>
-            <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer; font-weight:bold;">⬅️ VOLTAR</button>
-            <p style="color:#64748b;">Abaixo listamos os uniformes recebidos pela sua unidade nos últimos 30 dias. 
-            Você só pode devolver quantidades <b>iguais ou inferiores</b> ao que foi recebido.</p>
+    try {
+        // Busca o "extrato" do que a escola recebeu nos últimos 30 dias
+        const res = await fetch(`${API_URL}/pedidos/escola/limite-devolucao`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const itensRecebidos = await res.json();
 
-            <table style="width:100%; border-collapse:collapse; margin-top:20px;">
-                <thead style="background:#f1f5f9; color:#1e3a8a;">
-                    <tr>
-                        <th style="padding:15px; text-align:left;">PRODUTO / TAMANHO</th>
-                        <th style="padding:15px;">RECEBIDO (30d)</th>
-                        <th style="padding:15px; width:150px;">DEVOLVER</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${itensRecebidos.map(i => `
-                        <tr style="border-bottom:1px solid #eee;">
-                            <td style="padding:15px;"><b>${i.produto_nome}</b> (Tam: ${i.tamanho})</td>
-                            <td style="padding:15px; text-align:center; color:#1e40af; font-weight:bold;">${i.total_recebido}</td>
-                            <td style="padding:15px;">
-                                <input type="number" class="input-devolucao" 
-                                    data-id="${i.produto_id}" 
-                                    data-tam="${i.tamanho}" 
-                                    data-max="${i.total_recebido}"
-                                    data-nome="${i.produto_nome}"
-                                    placeholder="0" min="0" max="${i.total_recebido}"
-                                    style="width:100%; padding:10px; border:2px solid #cbd5e1; border-radius:8px; text-align:center; font-weight:bold;">
-                            </td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>
+        container.innerHTML = `
+            <div style="padding:30px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
+                    <h2 style="color:#1e3a8a; margin:0;">🔄 SOLICITAR DEVOLUÇÃO</h2>
+                    <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:10px 20px; border-radius:6px; cursor:pointer; font-weight:bold; transition: 0.2s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
+                        ⬅️ VOLTAR
+                    </button>
+                </div>
 
-            <div style="margin-top:30px; display:flex; gap:15px;">
-                <button onclick="processarSolicitacaoDevolucao()" style="flex:2; background:#1e3a8a; color:white; border:none; padding:18px; border-radius:10px; font-weight:bold; cursor:pointer;">
-                    ENVIAR SOLICITAÇÃO DE DEVOLUÇÃO
-                </button>
-                <button onclick="carregarDashboard()" style="flex:1; background:#94a3b8; color:white; border:none; border-radius:10px; cursor:pointer;">CANCELAR</button>
+                <div style="background: #fff9eb; border-left: 4px solid #f59e0b; padding: 15px; border-radius: 8px; margin-bottom: 25px;">
+                    <p style="color:#92400e; margin:0; font-size:0.95rem;">
+                        Abaixo listamos os uniformes recebidos nos últimos 30 dias. 
+                        A devolução é limitada à quantidade total recebida no período.
+                    </p>
+                </div>
+
+                <div style="overflow-x:auto;">
+                    <table style="width:100%; border-collapse:collapse;">
+                        <thead style="background:#f1f5f9; color:#1e3a8a;">
+                            <tr>
+                                <th style="padding:15px; text-align:left; border-radius: 8px 0 0 0;">PRODUTO / TAMANHO</th>
+                                <th style="padding:15px; text-align:center;">RECEBIDO (30d)</th>
+                                <th style="padding:15px; width:150px; text-align:center; border-radius: 0 8px 0 0;">DEVOLVER</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${itensRecebidos.length === 0 ? 
+                                '<tr><td colspan="3" style="padding:30px; text-align:center; color:#64748b;">Nenhum item disponível para devolução.</td></tr>' :
+                                itensRecebidos.map(i => `
+                                <tr style="border-bottom:1px solid #eee;">
+                                    <td style="padding:15px; color:#1e293b;"><b>${i.produto_nome}</b><br><span style="color:#64748b; font-size:0.85rem;">Tam: ${i.tamanho}</span></td>
+                                    <td style="padding:15px; text-align:center; color:#1e40af; font-weight:bold; font-size:1.1rem;">${i.total_recebido}</td>
+                                    <td style="padding:15px;">
+                                        <input type="number" class="input-devolucao" 
+                                            data-id="${i.produto_id}" 
+                                            data-tam="${i.tamanho}" 
+                                            data-max="${i.total_recebido}"
+                                            data-nome="${i.produto_nome}"
+                                            placeholder="0" min="0" max="${i.total_recebido}"
+                                            style="width:100%; padding:10px; border:2px solid #cbd5e1; border-radius:8px; text-align:center; font-weight:bold; outline:none;"
+                                            onfocus="this.style.borderColor='#1e3a8a'"
+                                            onblur="this.style.borderColor='#cbd5e1'">
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div style="margin-top:35px; display:flex; gap:15px;">
+                    <button onclick="processarSolicitacaoDevolucao()" style="flex:2; background:#1e3a8a; color:white; border:none; padding:18px; border-radius:10px; font-weight:bold; cursor:pointer; font-size:1rem; transition:0.2s;" onmouseover="this.style.backgroundColor='#1e40af'">
+                        🚀 ENVIAR SOLICITAÇÃO
+                    </button>
+                    <button onclick="carregarDashboard()" style="flex:1; background:#94a3b8; color:white; border:none; padding:18px; border-radius:10px; font-weight:bold; cursor:pointer; transition:0.2s;" onmouseover="this.style.backgroundColor='#64748b'">
+                        CANCELAR
+                    </button>
+                </div>
             </div>
-        </div>
-    `;
+        `;
+    } catch (err) {
+        container.innerHTML = `
+            <div style="padding:30px; text-align:center;">
+                <p style="color:#ef4444;">Erro ao carregar dados de devolução.</p>
+                <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:10px 20px; border-radius:6px; cursor:pointer;">⬅️ VOLTAR</button>
+            </div>
+        `;
+    }
 }
 
 function processarSolicitacaoDevolucao() {
@@ -4099,43 +4127,56 @@ async function exportarPDFEstatisticoUniformes() {
 }
 
 function abrirCalculadoraConversao() {
-    const container = prepararContainerPrincipal();
-    // Remove modal anterior se existir
-
+    // 1. Remove qualquer modal aberto anteriormente para não duplicar
     const modalAntigo = document.querySelector('.modal-overlay');
     if (modalAntigo) modalAntigo.remove();
 
+    // 2. Criamos o elemento do modal
     const modal = document.createElement('div');
     modal.className = 'modal-overlay';
+    
+    // 3. Função interna para fechar o modal de forma segura
+    const fechar = () => modal.remove();
+
     modal.innerHTML = `
-        <div class="modal-box" style="max-width: 400px; border-top: 5px solid #3498db;">
+        <div class="modal-box" style="max-width: 400px; border-top: 5px solid #3498db; position: relative;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer; font-weight:bold;">⬅️ VOLTAR</button>
-                <h3 style="margin:0;">🧮 CALCULADORA DE UNIDADES</h3>
-                <button onclick="this.parentElement.parentElement.parentElement.remove()" style="background:none; border:none; font-size:20px; cursor:pointer;">&times;</button>
+                <button id="btn-voltar-calc" style="background:#64748b; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer; font-weight:bold;">⬅️ VOLTAR</button>
+                
+                <h3 style="margin:0; font-size: 16px;">🧮 CALCULADORA</h3>
+                
+                <button id="btn-x-calc" style="background:none; border:none; font-size:24px; cursor:pointer; color:#94a3b8;">&times;</button>
             </div>
             
-            <p style="font-size: 13px; color: #666; margin-bottom:20px;">Converta quantidades totais em embalagens fechadas + unidades avulsas.</p>
+            <p style="font-size: 13px; color: #64748b; margin-bottom:20px;">Converta quantidades totais em embalagens.</p>
 
-            <label>QUANTIDADE QUE PRECISO (TOTAL):</label>
-            <input type="number" id="calc_total" class="input-field" placeholder="Ex: 10" oninput="calcularConversao()">
+            <div style="display: flex; flex-direction: column; gap: 10px; text-align: left;">
+                <label style="font-size: 12px; font-weight: bold; color: #475569;">QUANTIDADE TOTAL:</label>
+                <input type="number" id="calc_total" class="input-field" placeholder="Ex: 10" oninput="calcularConversao()">
 
-            <label>QUANTIDADE POR EMBALAGEM (UNIDADES):</label>
-            <input type="number" id="calc_embalagem" class="input-field" placeholder="Ex: 4" oninput="calcularConversao()">
+                <label style="font-size: 12px; font-weight: bold; color: #475569;">UNIDADES POR EMBALAGEM:</label>
+                <input type="number" id="calc_embalagem" class="input-field" placeholder="Ex: 4" oninput="calcularConversao()">
 
-            <label>NOME DA EMBALAGEM:</label>
-            <input type="text" id="calc_nome_emb" class="input-field" value="LATA" placeholder="Ex: CAIXA, FARDO, LATA" oninput="calcularConversao()">
+                <label style="font-size: 12px; font-weight: bold; color: #475569;">NOME DA EMBALAGEM:</label>
+                <input type="text" id="calc_nome_emb" class="input-field" value="LATA" oninput="calcularConversao()">
+            </div>
 
-            <hr style="margin: 20px 0; opacity: 0.2;">
+            <hr style="margin: 20px 0; border: 0; border-top: 1px solid #e2e8f0;">
 
-            <div id="resultado_calculadora" style="background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #e0e0e0; min-height: 60px; display: flex; align-items: center; justify-content: center; text-align: center; font-weight: bold; color: #2c3e50;">
+            <div id="resultado_calculadora" style="background: #f1f5f9; padding: 15px; border-radius: 8px; border: 1px dashed #cbd5e1; min-height: 60px; display: flex; align-items: center; justify-content: center; text-align: center; font-weight: bold; color: #1e293b; font-size: 15px;">
                 Aguardando dados...
             </div>
             
-            <button onclick="this.parentElement.parentElement.remove()" class="btn-block" style="margin-top: 15px; background: #7f8c8d;">FECHAR</button>
+            <button id="btn-fechar-calc" class="btn-block" style="margin-top: 15px; background: #94a3b8; color: white; border: none; padding: 12px; border-radius: 6px; width: 100%; cursor: pointer; font-weight: bold;">FECHAR</button>
         </div>
     `;
+
     document.body.appendChild(modal);
+
+    // 4. Atribuindo os eventos de clique de forma limpa
+    document.getElementById('btn-voltar-calc').onclick = () => { fechar(); carregarDashboard(); };
+    document.getElementById('btn-x-calc').onclick = fechar;
+    document.getElementById('btn-fechar-calc').onclick = fechar;
 }
 
 function calcularConversao() {
@@ -7555,8 +7596,9 @@ async function telaLogisticaColeta() {
 }
 
 async function telaEscolaConfirmarRecebimento() {
+    // 1. Prepara o container com o padrão visual (arredondamento, sombra, fundo claro)
     const container = prepararContainerPrincipal();
-    container.innerHTML = '<div style="padding:20px;">🚚 Verificando se há entregas a caminho...</div>';
+    container.innerHTML = '<div style="padding:30px; color:#64748b;">🚚 Verificando se há entregas a caminho...</div>';
 
     try {
         const res = await fetch(`${API_URL}/pedidos/escola/recebimentos-pendentes`, {
@@ -7564,29 +7606,49 @@ async function telaEscolaConfirmarRecebimento() {
         });
         const remessas = await res.json();
 
+        // 2. Renderiza o conteúdo com o cabeçalho organizado
         container.innerHTML = `
-            <div style="padding:20px;">
-                <h2 style="color:#1e3a8a; margin-bottom:20px;">📦 CONFIRMAR RECEBIMENTO DE MATERIAL</h2>
-                <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer; font-weight:bold;">⬅️ VOLTAR</button>
+            <div style="padding:30px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:25px;">
+                    <h2 style="color:#1e3a8a; margin:0;">📦 CONFIRMAR RECEBIMENTO</h2>
+                    <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:10px 20px; border-radius:6px; cursor:pointer; font-weight:bold; transition: 0.2s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
+                        ⬅️ VOLTAR
+                    </button>
+                </div>
+
                 <div style="display:grid; gap:15px;">
                     ${remessas.length === 0 ? 
-                        '<p style="background:#f1f5f9; padding:20px; border-radius:8px; text-align:center;">Não há remessas em trânsito para sua unidade no momento.</p>' : 
+                        `<div style="background:#f1f5f9; padding:40px; border-radius:12px; text-align:center; color:#64748b;">
+                            <p style="font-size:1.2rem; margin:0;">🏁 Tudo em dia!</p>
+                            <p>Não há remessas em trânsito para sua unidade no momento.</p>
+                        </div>` : 
                         remessas.map(r => `
-                        <div style="background:white; padding:20px; border-radius:12px; box-shadow:0 4px 6px rgba(0,0,0,0.05); border-left:8px solid #10b981; display:flex; justify-content:space-between; align-items:center;">
+                        <div style="background:white; padding:20px; border-radius:12px; box-shadow:0 4px 6px rgba(0,0,0,0.05); border-left:10px solid #10b981; display:flex; justify-content:space-between; align-items:center;">
                             <div>
-                                <div style="font-weight:bold; font-size:1.1rem; color:#1e293b;">Remessa #${r.remessa_id}</div>
-                                <div style="color:#64748b; font-size:0.9rem;">Referente ao Pedido: #${r.pedido_id}</div>
-                                <div style="color:#64748b; font-size:0.9rem;">Despachado por: ${r.quem_enviou} em ${new Date(r.data_envio).toLocaleDateString()}</div>
+                                <div style="font-weight:bold; font-size:1.1rem; color:#1e293b; margin-bottom:5px;">Remessa #${r.remessa_id}</div>
+                                <div style="color:#64748b; font-size:0.9rem;">
+                                    Referente ao Pedido: <strong>#${r.pedido_id}</strong>
+                                </div>
+                                <div style="color:#94a3b8; font-size:0.85rem; margin-top:5px;">
+                                    🚢 Despachado por: ${r.quem_enviou} em ${new Date(r.data_envio).toLocaleDateString()}
+                                </div>
                             </div>
-                            <button onclick="confirmarRecebimentoRemessa(${r.remessa_id}, ${r.pedido_id})" style="background:#10b981; color:white; border:none; padding:12px 20px; border-radius:8px; cursor:pointer; font-weight:bold; box-shadow:0 2px 4px rgba(0,0,0,0.1);">
-                                ✅ CONFIRMAR QUE RECEBI
+                            <button onclick="confirmarRecebimentoRemessa(${r.remessa_id}, ${r.pedido_id})" style="background:#10b981; color:white; border:none; padding:12px 20px; border-radius:8px; cursor:pointer; font-weight:bold; box-shadow:0 2px 4px rgba(0,0,0,0.1); transition: transform 0.1s;" onmousedown="this.style.transform='scale(0.95)'" onmouseup="this.style.transform='scale(1)'">
+                                ✅ CONFIRMAR RECEBIMENTO
                             </button>
                         </div>
                     `).join('')}
                 </div>
             </div>
         `;
-    } catch (err) { alert("Erro ao carregar entregas."); }
+    } catch (err) { 
+        container.innerHTML = `
+            <div style="padding:30px; text-align:center;">
+                <p style="color:#ef4444;">Erro ao carregar entregas pendentes.</p>
+                <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:10px 20px; border-radius:6px; cursor:pointer;">⬅️ VOLTAR</button>
+            </div>
+        `;
+    }
 }
 
 async function confirmarRecebimentoRemessa(remessaId, pedidoId) {

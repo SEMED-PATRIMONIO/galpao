@@ -978,6 +978,7 @@ async function telaDevolucaoUniforme() {
     app.innerHTML = `
         <div style="padding:30px; background:#fff; min-height:100vh;">
             <h2 style="color:#1e3a8a;">🔄 SOLICITAR DEVOLUÇÃO</h2>
+            <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer; font-weight:bold;">⬅️ VOLTAR</button>
             <p style="color:#64748b;">Abaixo listamos os uniformes recebidos pela sua unidade nos últimos 30 dias. 
             Você só pode devolver quantidades <b>iguais ou inferiores</b> ao que foi recebido.</p>
 
@@ -4109,6 +4110,7 @@ function abrirCalculadoraConversao() {
     modal.innerHTML = `
         <div class="modal-box" style="max-width: 400px; border-top: 5px solid #3498db;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer; font-weight:bold;">⬅️ VOLTAR</button>
                 <h3 style="margin:0;">🧮 CALCULADORA DE UNIDADES</h3>
                 <button onclick="this.parentElement.parentElement.parentElement.remove()" style="background:none; border:none; font-size:20px; cursor:pointer;">&times;</button>
             </div>
@@ -7565,7 +7567,7 @@ async function telaEscolaConfirmarRecebimento() {
         container.innerHTML = `
             <div style="padding:20px;">
                 <h2 style="color:#1e3a8a; margin-bottom:20px;">📦 CONFIRMAR RECEBIMENTO DE MATERIAL</h2>
-                
+                <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer; font-weight:bold;">⬅️ VOLTAR</button>
                 <div style="display:grid; gap:15px;">
                     ${remessas.length === 0 ? 
                         '<p style="background:#f1f5f9; padding:20px; border-radius:8px; text-align:center;">Não há remessas em trânsito para sua unidade no momento.</p>' : 

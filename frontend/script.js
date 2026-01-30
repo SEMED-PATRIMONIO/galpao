@@ -233,7 +233,7 @@ async function carregarDashboard() {
             <button class="btn-grande" onclick="telaGerenciarUsuarios()">
                 <i>👥</i><span>GERENCIAR USUÁRIOS</span>
             </button>
-            <button class="btn-grande" onclick="renderizarDashboardGeral()">
+            <button class="btn-grande" onclick="telaAdminDashboard()">
                 <i>📊</i><span>PAINEL DE PEDIDOS</span>
             </button>            
         `;
@@ -242,7 +242,7 @@ async function carregarDashboard() {
     // --- 3. PERFIL: ESCOLA ---
     if (perfil === 'escola') {
         html += `
-            <button class="btn-grande" onclick="carregarAlertasEscola()">
+            <button class="btn-grande" onclick="telaEscolaConfirmarRecebimento()">
                 <i>🚚</i><span>CONFIRMAR RECEBIMENTO</span>
             </button>
             <button class="btn-grande" onclick="telaSolicitarUniforme()">
@@ -277,12 +277,9 @@ async function carregarDashboard() {
             <button class="btn-grande" onclick="telaVisualizarEstoque()">
                 <i>📊</i><span>VISUALIZAR ESTOQUE</span>
             </button>
-            <button class="btn-grande" onclick="renderizarDashboardGeral()">
+            <button class="btn-grande" onclick="telaAdminDashboard()">
                 <i>📊</i><span>PAINEL DE PEDIDOS</span>
             </button>
-            <button class="btn-grande" onclick="telaAdminVerPedidos()">
-                📋<br>GESTÃO DE PEDIDOS
-            </button>            
         `;
         // Chama alertas de novas solicitações de Escolas e Logística
         setTimeout(() => verificarSolicitacoesPendentes(), 500);
@@ -309,12 +306,9 @@ async function carregarDashboard() {
             <button class="btn-grande" onclick="telaVisualizarEstoque()">
                 <i>📊</i><span>VISUALIZAR ESTOQUE</span>
             </button>
-            <button class="btn-grande" onclick="renderizarDashboardGeral()">
+            <button class="btn-grande" onclick="telaAdminDashboard()">
                 <i>📊</i><span>PAINEL DE PEDIDOS</span>
             </button>
-            <button class="btn-grande" onclick="telaAdminVerPedidos()">
-                📋<br>GESTÃO DE PEDIDOS
-            </button>                        
         `;
         // Chama alertas de pedidos aguardando separação
         setTimeout(verificarPedidosParaSeparar, 500);
@@ -7574,6 +7568,49 @@ async function imprimirRomaneio(remessaId) {
     }
 }
 
+async function telaAdminDashboard() {
+    const container = document.getElementById('app-content');
+    container.innerHTML = '<div style="padding:20px;">📊 Carregando indicadores em tempo real...</div>';
+
+    try {
+        const res = await fetch(`${API_URL}/admin/dashboard-stats`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const s = await res.json();
+
+        container.innerHTML = `
+            <div style="padding:20px; font-family: sans-serif;">
+                <h2 style="color:#1e3a8a; margin-bottom:25px;">📊 PAINEL DE CONTROLE LOGÍSTICO</h2>
+                
+                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:15px; margin-bottom:30px;">
+                    ${renderCard('SOLICITADO', s.total_solicitados, '#ef4444', '📩')}
+                    ${renderCard('AUTORIZADO', s.total_autorizados, '#f59e0b', '⚖️')}
+                    ${renderCard('EM SEPARAÇÃO', s.total_separacao, '#8b5cf6', '📦')}
+                    ${renderCard('PRONTO', s.total_prontos, '#3b82f6', '✅')}
+                    ${renderCard('EM_TRANSPORTE', s.total_transporte, '#06b6d4', '🚚')}
+                    ${renderCard('ENTREGUE', s.total_entregues, '#10b981', '🏠')}
+                </div>
+
+                <div id="detalhes-fase" style="background:white; border-radius:12px; padding:20px; box-shadow:0 4px 12px rgba(0,0,0,0.1); min-height:200px;">
+                    <p style="color:#64748b; text-align:center; margin-top:80px;">Clique em uma fase acima para detalhar os pedidos.</p>
+                </div>
+            </div>
+        `;
+    } catch (err) { alert("Erro ao carregar dashboard."); }
+}
+
+function renderCard(fase, qtd, cor, icone) {
+    return `
+        <div class="card-estatistica" 
+             onclick="detalharFase('${fase}')"
+             style="background:white; border-top:5px solid ${cor}; padding:20px; border-radius:8px; shadow:0 2px 4px rgba(0,0,0,0.05); cursor:pointer; text-align:center; transition: transform 0.2s;">
+            <div style="font-size:1.5rem;">${icone}</div>
+            <div style="font-size:2rem; font-weight:bold; color:#1e293b;">${qtd}</div>
+            <div style="font-size:0.8rem; color:#64748b; font-weight:bold;">${fase}</div>
+        </div>
+    `;
+}
+
 async function telaLogisticaEntregas() {
     const container = document.getElementById('app-content');
     container.innerHTML = '<div style="padding:20px;">🚚 Buscando remessas prontas para saída...</div>';
@@ -7628,6 +7665,64 @@ async function telaLogisticaEntregas() {
         container.innerHTML = `<div style="padding:20px; color:red;">Erro ao carregar logística: ${err.message}</div>`;
     }
 }
+
+window.detalharFase = async function(fase) {
+    const area = document.getElementById('detalhes-fase');
+    area.innerHTML = '🔍 Buscando listagem...';
+
+    const res = await fetch(`${API_URL}/admin/pedidos-por-fase?status=${fase}`, {
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+    const lista = await res.json();
+
+    area.innerHTML = `
+        <h3 style="color:#1e3a8a; border-bottom:1px solid #e2e8f0; padding-bottom:10px;">Lista: ${fase}</h3>
+        <table style="width:100%; border-collapse:collapse;">
+            <thead>
+                <tr style="text-align:left; color:#64748b; font-size:0.85rem;">
+                    <th style="padding:10px;">ID</th>
+                    <th style="padding:10px;">ESCOLA</th>
+                    <th style="padding:10px;">DATA</th>
+                    <th style="padding:10px;">AÇÃO</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${lista.map(p => `
+                    <tr style="border-top:1px solid #f1f5f9;">
+                        <td style="padding:10px; font-weight:bold;">#${p.id}</td>
+                        <td style="padding:10px;">${p.escola_nome}</td>
+                        <td style="padding:10px; font-size:0.8rem;">${new Date(p.data_criacao).toLocaleDateString()}</td>
+                        <td style="padding:10px;">
+                            <button onclick="verItensPedido(${p.id})" style="background:#f1f5f9; border:1px solid #cbd5e1; border-radius:4px; cursor:pointer; padding:5px 10px;">👁️ Ver Itens</button>
+                        </td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
+};
+
+window.verItensPedido = async function(pedidoId) {
+    // Aqui você chama a rota que já criamos de detalhes e mostra em um modal ou abaixo da linha
+    const res = await fetch(`${API_URL}/pedidos/${pedidoId}/detalhes`, {
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+    const itens = await res.json();
+    
+    let htmlItens = `<div style="background:#f8fafc; padding:15px; border-radius:8px; margin-top:10px; border-left:4px solid #3b82f6;">
+        <h4 style="margin:0 0 10px 0;">Produtos do Pedido #${pedidoId}:</h4>`;
+    
+    itens.forEach(i => {
+        htmlItens += `<div style="display:flex; justify-content:space-between; font-size:0.9rem; padding:4px 0; border-bottom:1px dashed #e2e8f0;">
+            <span>${i.produto_nome} (${i.tamanho})</span>
+            <strong>Qtd: ${i.quantidade}</strong>
+        </div>`;
+    });
+    htmlItens += `</div>`;
+    
+    alert("Dados carregados com sucesso! (Você pode substituir este alert por um Modal flutuante)");
+    // Para um efeito visual melhor, você pode injetar este htmlItens dentro de uma div modal
+};
 
 // Garante que a função seja global antes de qualquer coisa
 async function telaLogisticaColeta() {

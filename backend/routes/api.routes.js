@@ -1921,8 +1921,12 @@ router.patch('/pedidos/remessa/:id/status', verificarToken, async (req, res) => 
 });
 
 router.get('/escola/remessas-a-caminho', verificarToken, async (req, res) => {
-    // IMPORTANTE: O local_id deve vir do token do usuário logado
-    const local_id = req.usuario.local_id; 
+    // IMPORTANTE: Verifique se seu token salva como local_id ou localId
+    const local_id = req.usuario?.local_id || req.localId; 
+
+    if (!local_id) {
+        return res.status(400).json({ error: "ID da unidade escolar não identificado no token." });
+    }
 
     try {
         const query = `
@@ -1938,10 +1942,13 @@ router.get('/escola/remessas-a-caminho', verificarToken, async (req, res) => {
             AND r.status = 'EM_TRANSPORTE'
             ORDER BY r.id DESC
         `;
+        
         const { rows } = await db.query(query, [local_id]);
         res.json(rows);
+
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        console.error("ERRO SQL ESCOLA:", err.message); // Verifique isso no terminal do VS Code/Ubuntu
+        res.status(500).json({ error: "Erro interno: " + err.message });
     }
 });
 

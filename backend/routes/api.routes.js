@@ -1922,16 +1922,22 @@ router.patch('/pedidos/remessa/:id/status', verificarToken, async (req, res) => 
 
 router.get('/escola/remessas-a-caminho', verificarToken, async (req, res) => {
     try {
-        // 1. Busca o local_id direto no banco para garantir que ele existe
-        const userRes = await db.query("SELECT local_id FROM usuarios WHERE id = $1", [req.usuario.id]);
-        const local_id = userRes.rows[0]?.local_id;
+        // 1. Pegamos o ID do usuário que vem do token
+        const usuarioId = req.usuario.id;
 
-        if (!local_id) {
-            return res.status(400).json({ error: "Usuário não possui uma escola vinculada no cadastro." });
+        // 2. Buscamos o local_id desse usuário diretamente no banco
+        const userQuery = "SELECT local_id FROM usuarios WHERE id = $1";
+        const userResult = await db.query(userQuery, [usuarioId]);
+        
+        const localId = userResult.rows[0]?.local_id;
+
+        if (!localId) {
+            return res.status(400).json({ error: "Unidade escolar não encontrada para este usuário." });
         }
 
-        // 2. Busca as remessas em transporte para este local específico
-        const query = `
+        // 3. Agora buscamos as remessas em transporte para este local
+        // Nota: Certifique-se que na tabela 'pedidos' o campo é 'local_destino_id'
+        const queryRemessas = `
             SELECT 
                 pr.id as remessa_id,
                 pr.pedido_id,
@@ -1944,13 +1950,17 @@ router.get('/escola/remessas-a-caminho', verificarToken, async (req, res) => {
             AND pr.status = 'EM_TRANSPORTE'
             ORDER BY pr.id DESC
         `;
+
+        const { rows } = await db.query(queryRemessas, [localId]);
         
-        const { rows } = await db.query(query, [local_id]);
+        // Retornamos os dados (mesmo que seja um array vazio [])
         res.json(rows);
 
     } catch (err) {
-        console.error("Erro na rota escola:", err.message);
-        res.status(500).json({ error: "Erro interno no servidor." });
+        // Este log aparecerá no seu terminal do servidor (Ubuntu/VS Code)
+        // Ele dirá exatamente qual coluna ou tabela está errada
+        console.error("ERRO CRÍTICO NA ROTA ESCOLA:", err.message);
+        res.status(500).json({ error: "Erro interno: " + err.message });
     }
 });
 

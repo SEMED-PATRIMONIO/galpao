@@ -2057,4 +2057,43 @@ router.get('/admin/dashboard-stats', verificarToken, async (req, res) => {
     }
 });
 
+// Rota dedicada para a Escola ver o que está a caminho
+router.get('/escola/minhas-remessas-transporte', verificarToken, async (req, res) => {
+    try {
+        // 1. Buscamos o local_id atual do usuário direto no banco (Garante que não falte)
+        const usuarioRes = await db.query(
+            "SELECT local_id FROM usuarios WHERE id = $1", 
+            [req.usuario.id]
+        );
+
+        const localId = usuarioRes.rows[0]?.local_id;
+
+        if (!localId) {
+            return res.status(400).json({ error: "Este usuário não possui uma escola vinculada no cadastro." });
+        }
+
+        // 2. Buscamos as remessas que são para este local e estão EM_TRANSPORTE
+        const query = `
+            SELECT 
+                pr.id as remessa_id,
+                pr.pedido_id,
+                pr.data_criacao,
+                l.nome as escola_nome
+            FROM pedido_remessas pr
+            JOIN pedidos p ON pr.pedido_id = p.id
+            JOIN locais l ON p.local_destino_id = l.id
+            WHERE p.local_destino_id = $1 
+            AND pr.status = 'EM_TRANSPORTE'
+            ORDER BY pr.id DESC
+        `;
+        
+        const { rows } = await db.query(query, [localId]);
+        res.json(rows);
+
+    } catch (err) {
+        console.error("Erro na rota da escola:", err.message);
+        res.status(500).json({ error: "Erro interno: " + err.message });
+    }
+});
+
 module.exports = router;

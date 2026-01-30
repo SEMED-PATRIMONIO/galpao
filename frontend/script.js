@@ -7793,47 +7793,38 @@ window.iniciarTransporteRemessa = async function(remessaId) {
 
 async function telaEscolaConfirmarRecebimento() {
     const container = document.getElementById('app-content');
-    if (!container) return;
-    
-    container.innerHTML = '<div style="padding:20px; text-align:center;">🔍 Localizando entregas para sua unidade...</div>';
+    container.innerHTML = '<div style="padding:20px;">🔍 Buscando entregas para sua unidade...</div>';
 
     try {
-        const res = await fetch(`${API_URL}/escola/minhas-remessas-transporte`, {
+        const res = await fetch(`${API_URL}/escola/remessas-a-caminho`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
 
-        if (!res.ok) {
-            const erroTxt = await res.json();
-            throw new Error(erroTxt.error || "Erro ao carregar dados.");
-        }
+        const dados = await res.json();
 
-        const remessas = await res.json();
+        if (!res.ok) {
+            throw new Error(dados.error || "Erro ao carregar dados.");
+        }
 
         container.innerHTML = `
             <div style="padding:20px;">
                 <h2 style="color:#1e3a8a; margin-bottom:20px;">🚚 RECEBIMENTO DE MERCADORIA</h2>
-                
                 <div style="display:grid; gap:15px;">
-                    ${remessas.length === 0 ? `
+                    ${dados.length === 0 ? `
                         <div style="background:#f1f5f9; padding:40px; text-align:center; border-radius:10px; color:#64748b; border:1px dashed #cbd5e1;">
-                            Nenhuma remessa em trânsito para sua escola no momento.
+                            Nenhuma remessa em trânsito para sua unidade no momento.
                         </div>` : 
-                        remessas.map(r => `
-                        <div style="background:#fffbeb; padding:20px; border-radius:10px; border:1px solid #fde68a; border-left:10px solid #f59e0b; box-shadow:0 4px 6px rgba(0,0,0,0.05);">
+                        dados.map(r => `
+                        <div style="background:#fffbeb; padding:20px; border-radius:10px; border-left:10px solid #f59e0b; box-shadow:0 4px 6px rgba(0,0,0,0.05);">
                             <div style="display:flex; justify-content:space-between; align-items:center;">
                                 <div>
-                                    <div style="font-weight:bold; font-size:1.1rem; color:#92400e;">📦 REMESSA A CAMINHO</div>
-                                    <div style="color:#b45309; margin-top:5px;">
-                                        Protocolo: <strong>#${r.remessa_id}</strong> | Pedido Origem: #${r.pedido_id}
-                                    </div>
-                                    <div style="font-size:0.85rem; color:#d97706; margin-top:5px;">
-                                        Enviado em: ${new Date(r.data_criacao).toLocaleString('pt-BR')}
-                                    </div>
+                                    <div style="font-weight:bold; font-size:1.1rem; color:#92400e;">📦 CARGA EM TRÂNSITO</div>
+                                    <div style="color:#b45309;">Remessa: #${r.remessa_id} | Pedido: #${r.pedido_id}</div>
+                                    <div style="font-size:0.8rem; color:#d97706;">Escola: ${r.escola_nome}</div>
                                 </div>
-                                <button class="btn-confirmar-entrega" 
-                                        data-remessa-id="${r.remessa_id}" 
-                                        style="background:#059669; color:white; border:none; padding:12px 25px; border-radius:6px; cursor:pointer; font-weight:bold; box-shadow:0 2px 4px rgba(0,0,0,0.1);">
-                                    ✅ CONFIRMAR RECEBIMENTO
+                                <button class="btn-confirmar-entrega" data-remessa-id="${r.remessa_id}" 
+                                        style="background:#059669; color:white; border:none; padding:12px 25px; border-radius:6px; cursor:pointer; font-weight:bold;">
+                                    ✅ CONFIRMAR CHEGADA
                                 </button>
                             </div>
                         </div>
@@ -7843,8 +7834,8 @@ async function telaEscolaConfirmarRecebimento() {
         `;
     } catch (err) {
         container.innerHTML = `
-            <div style="padding:20px; color:#ef4444; background:#fef2f2; border-radius:8px; margin:20px; border:1px solid #fee2e2;">
-                <strong>⚠️ Atenção:</strong> ${err.message}
+            <div style="padding:20px; color:#ef4444; background:#fef2f2; border:1px solid #fee2e2; border-radius:8px;">
+                <strong>⚠️ Erro de Configuração:</strong> ${err.message}
             </div>`;
     }
 }
@@ -8096,61 +8087,49 @@ window.confirmarRecebimento = async function(remessaId) {
 };
 
 document.addEventListener('click', async (event) => {
-    // Verifica se o elemento clicado (ou o ícone dentro dele) tem a classe correta
-    const botao = event.target.closest('.btn-coletar-remessa');
-    
-    if (botao) {
-        const remessaId = botao.getAttribute('data-remessa-id');
-        
-        if (!confirm(`Confirmar o início do transporte para a Remessa #${remessaId}?`)) return;
+    // 1. Detecta qual botão foi clicado (usando closest para ignorar ícones/emojis internos)
+    const btnColetar = event.target.closest('.btn-coletar-remessa');
+    const btnConfirmar = event.target.closest('.btn-confirmar-entrega');
+    const btnVerItens = event.target.closest('.btn-ver-itens-admin');
+
+    // --- LOGICA DA LOGÍSTICA ---
+    if (btnColetar) {
+        const id = btnColetar.getAttribute('data-remessa-id');
+        if (!confirm(`Confirmar o início do transporte para a Remessa #${id}?`)) return;
 
         try {
-            // Chamando a nova rota dedicada que você criou
-            const res = await fetch(`${API_URL}/logistica/iniciar-transporte/${remessaId}`, {
+            const res = await fetch(`${API_URL}/logistica/iniciar-transporte/${id}`, {
                 method: 'PATCH',
-                headers: { 
-                    'Authorization': `Bearer ${TOKEN}`,
-                    'Content-Type': 'application/json'
-                }
+                headers: { 'Authorization': `Bearer ${TOKEN}`, 'Content-Type': 'application/json' }
             });
-
             if (res.ok) {
-                alert("🚚 Transporte iniciado! A remessa agora está visível para a escola.");
-                telaLogisticaEntregas(); // Recarrega a lista para a remessa sumir
-            } else {
-                const errorData = await res.json();
-                alert(`Erro: ${errorData.error || "Não foi possível iniciar o transporte."}`);
+                alert("🚚 Transporte iniciado!");
+                telaLogisticaEntregas(); 
             }
-        } catch (err) {
-            console.error("Erro na logística:", err);
-            alert("Falha na conexão com o servidor.");
-        }
+        } catch (err) { alert("Erro na conexão."); }
     }
-});
 
-document.addEventListener('click', async (event) => {
-    const botao = event.target.closest('.btn-confirmar-entrega');
-    
-    if (botao) {
-        const remessaId = botao.getAttribute('data-remessa-id');
-        
-        if (!confirm(`Você confirma que a Remessa #${remessaId} chegou à escola?`)) return;
+    // --- LOGICA DA ESCOLA ---
+    else if (btnConfirmar) {
+        const id = btnConfirmar.getAttribute('data-remessa-id');
+        if (!confirm(`Confirma que a Remessa #${id} chegou na escola?`)) return;
 
         try {
-            const res = await fetch(`${API_URL}/escola/confirmar-recebimento/${remessaId}`, {
+            const res = await fetch(`${API_URL}/escola/confirmar-recebimento/${id}`, {
                 method: 'PATCH',
                 headers: { 'Authorization': `Bearer ${TOKEN}` }
             });
-
             if (res.ok) {
-                alert("Recebimento registrado! O processo desta remessa foi concluído.");
-                telaEscolaConfirmarRecebimento(); // Recarrega a lista para o card sumir
-            } else {
-                alert("Erro ao confirmar recebimento.");
+                alert("✅ Recebimento registrado!");
+                telaEscolaConfirmarRecebimento(); 
             }
-        } catch (err) {
-            alert("Erro de conexão com o servidor.");
-        }
+        } catch (err) { alert("Erro ao confirmar."); }
+    }
+
+    // --- LOGICA DO DASHBOARD ADMIN (SURPRESA) ---
+    else if (btnVerItens) {
+        const pedidoId = btnVerItens.getAttribute('data-pedido-id');
+        investigarPedido(pedidoId); // Aquela função que mostra os produtos
     }
 });
 

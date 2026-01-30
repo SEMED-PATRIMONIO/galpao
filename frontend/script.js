@@ -7618,43 +7618,6 @@ async function telaLogisticaEntregas() {
 }
 
 // Garante que a função seja global antes de qualquer coisa
-window.iniciarTransporteRemessa = async function(remessaId) {
-    console.log("Iniciando transporte para remessa ID:", remessaId); // Debug
-
-    if (!confirm(`Deseja confirmar a saída da remessa #${remessaId} para transporte?`)) {
-        return;
-    }
-
-    try {
-        const res = await fetch(`${API_URL}/pedidos/remessa/${remessaId}/status`, {
-            method: 'PATCH',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${TOKEN}`
-            },
-            body: JSON.stringify({ novoStatus: 'EM_TRANSPORTE' })
-        });
-
-        if (!res.ok) {
-            const erro = await res.json();
-            throw new Error(erro.error || "Erro ao atualizar status.");
-        }
-
-        alert("🚚 Remessa em trânsito! A escola já foi notificada.");
-        
-        // Recarrega a tela de logística para atualizar a lista
-        if (typeof telaLogisticaEntrega === 'function') {
-            telaLogisticaEntrega();
-        } else {
-            location.reload(); // Fallback caso a função de renderização suma
-        }
-
-    } catch (err) {
-        console.error("Erro na logística:", err);
-        alert("Falha ao iniciar transporte: " + err.message);
-    }
-};
-
 async function telaLogisticaColeta() {
     const container = document.getElementById('app-content');
     container.innerHTML = '<div style="padding:20px;">🚚 Buscando pedidos prontos para coleta...</div>';
@@ -7688,6 +7651,38 @@ async function telaLogisticaColeta() {
         alert("Erro ao carregar pedidos da logística.");
     }
 }
+
+window.iniciarTransporteRemessa = async function(remessaId) {
+    console.log("Botão clicado para remessa:", remessaId);
+
+    if (!confirm(`Deseja iniciar o transporte da remessa #${remessaId}?`)) return;
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/remessa/${remessaId}/status`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${TOKEN}`
+            },
+            body: JSON.stringify({ novoStatus: 'EM_TRANSPORTE' })
+        });
+
+        if (res.ok) {
+            alert("🚚 Transporte iniciado!");
+            // IMPORTANTE: Chama a função que desenha a tela de logística novamente
+            // Isso fará a remessa sumir da lista (pois o status mudou)
+            if (typeof telaLogisticaEntrega === 'function') {
+                telaLogisticaEntrega(); 
+            }
+        } else {
+            const erro = await res.json();
+            alert("Erro: " + erro.error);
+        }
+    } catch (err) {
+        console.error(err);
+        alert("Falha ao conectar com o servidor.");
+    }
+};
 
 async function telaEscolaConfirmarRecebimento() {
     // 1. Prepara o container com o padrão visual (arredondamento, sombra, fundo claro)

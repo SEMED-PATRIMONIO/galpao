@@ -7793,11 +7793,11 @@ window.iniciarTransporteRemessa = async function(remessaId) {
 
 async function telaEscolaConfirmarRecebimento() {
     const container = document.getElementById('app-content');
-    if (!container) return;
-
+    // 1. Limpa a tela e mostra que está carregando
     container.innerHTML = '<div style="padding:20px; text-align:center;">🔍 Buscando entregas para sua unidade...</div>';
 
     try {
+        // --- INSERIR O TRECHO AQUI (Início da comunicação com o servidor) ---
         const res = await fetch(`${API_URL}/escola/remessas-a-caminho`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });

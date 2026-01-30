@@ -7793,21 +7793,19 @@ window.iniciarTransporteRemessa = async function(remessaId) {
 
 async function telaEscolaConfirmarRecebimento() {
     const container = document.getElementById('app-content');
-    // 1. Limpa a tela e mostra que está carregando
-    container.innerHTML = '<div style="padding:20px; text-align:center;">🔍 Buscando entregas para sua unidade...</div>';
+    container.innerHTML = '<div style="padding:20px; text-align:center;">🔍 Localizando mercadorias em trânsito...</div>';
 
     try {
-        // --- INSERIR O TRECHO AQUI (Início da comunicação com o servidor) ---
         const res = await fetch(`${API_URL}/escola/remessas-a-caminho`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
 
-        const dados = await res.json();
-
         if (!res.ok) {
-            // Agora o alert mostrará o erro real do SQL se houver
-            throw new Error(dados.error || "Erro ao carregar dados.");
+            const erro = await res.json();
+            throw new Error(erro.error || "Erro ao buscar dados.");
         }
+
+        const dados = await res.json();
 
         container.innerHTML = `
             <div style="padding:20px;">
@@ -7815,15 +7813,19 @@ async function telaEscolaConfirmarRecebimento() {
                 <div style="display:grid; gap:15px;">
                     ${dados.length === 0 ? `
                         <div style="background:#f8fafc; padding:40px; text-align:center; border-radius:10px; color:#64748b; border:1px dashed #cbd5e1;">
-                            Nenhuma remessa em trânsito encontrada para sua unidade.
+                            Nenhuma remessa vindo para sua unidade no momento.
                         </div>` : 
                         dados.map(r => `
                         <div style="background:#fffbeb; padding:20px; border-radius:10px; border-left:10px solid #f59e0b; box-shadow:0 4px 6px rgba(0,0,0,0.05);">
                             <div style="display:flex; justify-content:space-between; align-items:center;">
                                 <div>
-                                    <div style="font-weight:bold; font-size:1.1rem; color:#92400e;">📦 CARGA EM TRÂNSITO</div>
-                                    <div style="color:#b45309;">Remessa: #${r.remessa_id} | Pedido: #${r.pedido_id}</div>
-                                    <div style="font-size:0.8rem; color:#d97706;">Destino: ${r.escola_nome}</div>
+                                    <div style="font-weight:bold; font-size:1.1rem; color:#92400e;">📦 CARGA A CAMINHO</div>
+                                    <div style="color:#b45309; margin-top:5px;">
+                                        Remessa: <strong>#${r.remessa_id}</strong> | Pedido: #${r.pedido_id}
+                                    </div>
+                                    <div style="font-size:0.8rem; color:#d97706; margin-top:5px;">
+                                        Escola: ${r.escola_nome}
+                                    </div>
                                 </div>
                                 <button class="btn-confirmar-entrega" data-remessa-id="${r.remessa_id}" 
                                         style="background:#059669; color:white; border:none; padding:12px 25px; border-radius:6px; cursor:pointer; font-weight:bold;">
@@ -7838,7 +7840,7 @@ async function telaEscolaConfirmarRecebimento() {
     } catch (err) {
         container.innerHTML = `
             <div style="padding:20px; color:#ef4444; background:#fef2f2; border:1px solid #fee2e2; border-radius:8px;">
-                <strong>⚠️ Falha no Sistema:</strong> ${err.message}
+                <strong>⚠️ Falha:</strong> ${err.message}
             </div>`;
     }
 }

@@ -1900,4 +1900,24 @@ router.get('/pedidos/escola/recebimentos-pendentes', verificarToken, async (req,
     }
 });
 
+router.patch('/pedidos/remessa/:id/status', verificarToken, async (req, res) => {
+    const { id } = req.params;
+    const { novoStatus } = req.body;
+
+    try {
+        // 1. Atualiza o status da remessa
+        await db.query(
+            "UPDATE pedido_remessas SET status = $1 WHERE id = $2",
+            [novoStatus, id]
+        );
+
+        // 2. Opcional: Se for a última remessa, você pode querer atualizar o status do pedido pai também
+        // Mas por enquanto, focar na remessa já resolve para a escola ver.
+
+        res.json({ message: "Status atualizado com sucesso" });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;

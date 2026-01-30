@@ -1921,34 +1921,36 @@ router.patch('/pedidos/remessa/:id/status', verificarToken, async (req, res) => 
 });
 
 router.get('/escola/remessas-a-caminho', verificarToken, async (req, res) => {
-    // IMPORTANTE: Verifique se seu token salva como local_id ou localId
-    const local_id = req.usuario?.local_id || req.localId; 
-
-    if (!local_id) {
-        return res.status(400).json({ error: "ID da unidade escolar não identificado no token." });
-    }
-
     try {
+        // 1. Busca o local_id direto no banco para garantir que ele existe
+        const userRes = await db.query("SELECT local_id FROM usuarios WHERE id = $1", [req.usuario.id]);
+        const local_id = userRes.rows[0]?.local_id;
+
+        if (!local_id) {
+            return res.status(400).json({ error: "Usuário não possui uma escola vinculada no cadastro." });
+        }
+
+        // 2. Busca as remessas em transporte para este local específico
         const query = `
             SELECT 
-                r.id as remessa_id,
-                r.pedido_id,
-                r.data_criacao,
+                pr.id as remessa_id,
+                pr.pedido_id,
+                pr.data_criacao,
                 l.nome as escola_nome
-            FROM pedido_remessas r
-            JOIN pedidos p ON r.pedido_id = p.id
+            FROM pedido_remessas pr
+            JOIN pedidos p ON pr.pedido_id = p.id
             JOIN locais l ON p.local_destino_id = l.id
             WHERE p.local_destino_id = $1 
-            AND r.status = 'EM_TRANSPORTE'
-            ORDER BY r.id DESC
+            AND pr.status = 'EM_TRANSPORTE'
+            ORDER BY pr.id DESC
         `;
         
         const { rows } = await db.query(query, [local_id]);
         res.json(rows);
 
     } catch (err) {
-        console.error("ERRO SQL ESCOLA:", err.message); // Verifique isso no terminal do VS Code/Ubuntu
-        res.status(500).json({ error: "Erro interno: " + err.message });
+        console.error("Erro na rota escola:", err.message);
+        res.status(500).json({ error: "Erro interno no servidor." });
     }
 });
 
@@ -2039,6 +2041,7 @@ router.patch('/logistica/iniciar-transporte/:id', verificarToken, async (req, re
         res.status(500).json({ error: "Erro no banco de dados: " + err.message });
     }
 });
+
 
 router.get('/admin/dashboard-stats', verificarToken, async (req, res) => {
     try {

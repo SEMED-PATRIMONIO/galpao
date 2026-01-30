@@ -7697,58 +7697,50 @@ window.iniciarTransporteRemessa = async function(remessaId) {
 };
 
 async function telaEscolaConfirmarRecebimento() {
-    // 1. Prepara o container com o padrão visual (arredondamento, sombra, fundo claro)
-    const container = prepararContainerPrincipal();
-    container.innerHTML = '<div style="padding:30px; color:#64748b;">🚚 Verificando se há entregas a caminho...</div>';
+    const container = document.getElementById('app-content');
+    container.innerHTML = '<div style="padding:20px;">🔍 Verificando entregas a caminho...</div>';
 
     try {
-        const res = await fetch(`${API_URL}/pedidos/escola/recebimentos-pendentes`, {
+        const res = await fetch(`${API_URL}/escola/remessas-a-caminho`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
         const remessas = await res.json();
 
-        // 2. Renderiza o conteúdo com o cabeçalho organizado
         container.innerHTML = `
-            <div style="padding:30px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:25px;">
-                    <h2 style="color:#1e3a8a; margin:0;">📦 CONFIRMAR RECEBIMENTO</h2>
-                    <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:10px 20px; border-radius:6px; cursor:pointer; font-weight:bold; transition: 0.2s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
-                        ⬅️ VOLTAR
-                    </button>
-                </div>
-
+            <div style="padding:20px;">
+                <h2 style="color:#1e3a8a; margin-bottom:20px;">🚚 CONFIRMAR RECEBIMENTO</h2>
+                
                 <div style="display:grid; gap:15px;">
-                    ${remessas.length === 0 ? 
-                        `<div style="background:#f1f5f9; padding:40px; border-radius:12px; text-align:center; color:#64748b;">
-                            <p style="font-size:1.2rem; margin:0;">🏁 Tudo em dia!</p>
-                            <p>Não há remessas em trânsito para sua unidade no momento.</p>
+                    ${remessas.length === 0 ? `
+                        <div style="background:#f1f5f9; padding:40px; text-align:center; border-radius:10px; color:#64748b;">
+                            Nenhuma remessa em transporte para sua unidade no momento.
                         </div>` : 
                         remessas.map(r => `
-                        <div style="background:white; padding:20px; border-radius:12px; box-shadow:0 4px 6px rgba(0,0,0,0.05); border-left:10px solid #10b981; display:flex; justify-content:space-between; align-items:center;">
-                            <div>
-                                <div style="font-weight:bold; font-size:1.1rem; color:#1e293b; margin-bottom:5px;">Remessa #${r.remessa_id}</div>
-                                <div style="color:#64748b; font-size:0.9rem;">
-                                    Referente ao Pedido: <strong>#${r.pedido_id}</strong>
+                        <div style="background:#fffbeb; padding:20px; border-radius:10px; border:1px solid #fde68a; box-shadow:0 2px 8px rgba(0,0,0,0.05); border-left:8px solid #f59e0b;">
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <div>
+                                    <div style="font-weight:bold; font-size:1.1rem; color:#92400e;">REMESSA A CAMINHO</div>
+                                    <div style="color:#b45309; font-size:0.9rem;">
+                                        ID: #${r.remessa_id} | Pedido: #${r.pedido_id}
+                                    </div>
+                                    <div style="margin-top:5px; font-size:0.8rem; color:#d97706;">
+                                        Despachado em: ${new Date(r.data_criacao).toLocaleString('pt-BR')}
+                                    </div>
                                 </div>
-                                <div style="color:#94a3b8; font-size:0.85rem; margin-top:5px;">
-                                    🚢 Despachado por: ${r.quem_enviou} em ${new Date(r.data_envio).toLocaleDateString()}
-                                </div>
+                                
+                                <button class="btn-confirmar-entrega" 
+                                        data-remessa-id="${r.remessa_id}" 
+                                        style="background:#059669; color:white; border:none; padding:12px 20px; border-radius:6px; cursor:pointer; font-weight:bold;">
+                                    ✅ CONFIRMAR CHEGADA
+                                </button>
                             </div>
-                            <button onclick="confirmarRecebimentoRemessa(${r.remessa_id}, ${r.pedido_id})" style="background:#10b981; color:white; border:none; padding:12px 20px; border-radius:8px; cursor:pointer; font-weight:bold; box-shadow:0 2px 4px rgba(0,0,0,0.1); transition: transform 0.1s;" onmousedown="this.style.transform='scale(0.95)'" onmouseup="this.style.transform='scale(1)'">
-                                ✅ CONFIRMAR RECEBIMENTO
-                            </button>
                         </div>
                     `).join('')}
                 </div>
             </div>
         `;
-    } catch (err) { 
-        container.innerHTML = `
-            <div style="padding:30px; text-align:center;">
-                <p style="color:#ef4444;">Erro ao carregar entregas pendentes.</p>
-                <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:10px 20px; border-radius:6px; cursor:pointer;">⬅️ VOLTAR</button>
-            </div>
-        `;
+    } catch (err) {
+        alert("Erro ao carregar dados da escola.");
     }
 }
 
@@ -8027,6 +8019,32 @@ document.addEventListener('click', async (event) => {
         } catch (err) {
             console.error("Erro na logística:", err);
             alert("Falha na conexão com o servidor.");
+        }
+    }
+});
+
+document.addEventListener('click', async (event) => {
+    const botao = event.target.closest('.btn-confirmar-entrega');
+    
+    if (botao) {
+        const remessaId = botao.getAttribute('data-remessa-id');
+        
+        if (!confirm(`Você confirma que a Remessa #${remessaId} chegou à escola?`)) return;
+
+        try {
+            const res = await fetch(`${API_URL}/escola/confirmar-recebimento/${remessaId}`, {
+                method: 'PATCH',
+                headers: { 'Authorization': `Bearer ${TOKEN}` }
+            });
+
+            if (res.ok) {
+                alert("Recebimento registrado! O processo desta remessa foi concluído.");
+                telaEscolaConfirmarRecebimento(); // Recarrega a lista para o card sumir
+            } else {
+                alert("Erro ao confirmar recebimento.");
+            }
+        } catch (err) {
+            alert("Erro de conexão com o servidor.");
         }
     }
 });

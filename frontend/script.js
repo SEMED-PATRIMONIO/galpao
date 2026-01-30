@@ -7803,28 +7803,28 @@ async function processarDocumentoRomaneio(remessaId, acao = 'imprimir') {
 
 async function gerarECompartilharRomaneio(remessaId) {
     try {
+        // 1. Busca os dados no servidor
         const res = await fetch(`${API_URL}/pedidos/remessa/${remessaId}/detalhes`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
 
-        // NOVO: Verifica se o servidor retornou erro antes de tentar ler os dados
         if (!res.ok) {
             const erroServidor = await res.json();
-            throw new Error(erroServidor.error || "Erro desconhecido no servidor");
+            throw new Error(erroServidor.error || "Erro ao buscar dados no servidor.");
         }
 
         const dados = await res.json();
         
         if (!dados || dados.length === 0) {
-            throw new Error("Nenhum item encontrado nesta remessa.");
+            throw new Error("Nenhum item encontrado para esta remessa.");
         }
 
         const info = dados[0];
 
-        // Criando o "Papel" do Romaneio
+        // 2. Cria a estrutura visual do romaneio (HTML)
         const elemento = document.createElement('div');
         elemento.innerHTML = `
-            <div style="padding: 20px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #1e293b;">
+            <div style="padding: 20px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #1e293b; background: #fff;">
                 <div style="text-align: center; border-bottom: 3px solid #1e40af; padding-bottom: 10px; margin-bottom: 20px;">
                     <h2 style="margin: 0; color: #1e40af;">ROMANEIO DE SAÍDA</h2>
                     <p style="margin: 5px 0; font-size: 1.2rem; font-weight: bold;">Remessa #${remessaId}</p>
@@ -7833,7 +7833,7 @@ async function gerarECompartilharRomaneio(remessaId) {
                 <div style="background: #f8fafc; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
                     <p style="margin: 5px 0;"><strong>Escola:</strong> ${info.escola_nome}</p>
                     <p style="margin: 5px 0;"><strong>Pedido Origem:</strong> #${info.pedido_id}</p>
-                    <p style="margin: 5px 0;"><strong>Data/Hora:</strong> ${new Date().toLocaleString()}</p>
+                    <p style="margin: 5px 0;"><strong>Data/Hora:</strong> ${new Date().toLocaleString('pt-BR')}</p>
                 </div>
 
                 <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px;">
@@ -7856,38 +7856,53 @@ async function gerarECompartilharRomaneio(remessaId) {
                 </table>
 
                 <div style="text-align: center; color: #64748b; font-size: 0.8rem; border-top: 1px dashed #cbd5e1; padding-top: 20px;">
-                    <p>Documento Logístico Digital - Verificado via Sistema Central</p>
+                    <p>Documento Logístico Digital - Verificado via Sistema Central SEMED</p>
                 </div>
             </div>
         `;
 
+        // 3. Configurações do PDF
         const opt = {
             margin: 10,
             filename: `romaneio_${remessaId}.pdf`,
-            html2canvas: { scale: 3, useCORS: true },
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 3, useCORS: true, logging: false },
             jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
         };
 
-        // Gera o arquivo
+        // 4. Gera o PDF como Blob
         const pdfBlob = await html2pdf().set(opt).from(elemento).output('blob');
         const file = new File([pdfBlob], `Romaneio_${remessaId}.pdf`, { type: 'application/pdf' });
 
-        // Tenta compartilhar via API nativa (WhatsApp, E-mail, etc)
-        if (navigator.canShare && navigator.canShare({ files: [file] })) {
-            await navigator.share({
-                files: [file],
-                title: `Romaneio #${remessaId} - ${info.escola_nome}`,
-                text: `Segue romaneio digital da remessa #${remessaId}.`
-            });
-        } else {
-            // Fallback: Se não suportar share, faz o download do arquivo
-            html2pdf().set(opt).from(elemento).save();
-            alert("Compartilhamento nativo indisponível. O PDF foi baixado.");
+        // 5. Lógica de Compartilhamento / Download (À prova de erros de gesto)
+        try {
+            if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+                await navigator.share({
+                    files: [file],
+                    title: `Romaneio #${remessaId} - ${info.escola_nome}`,
+                    text: `Segue romaneio digital da remessa #${remessaId} para a escola ${info.escola_nome}.`
+                });
+            } else {
+                throw new Error("API de compartilhamento não suportada neste navegador.");
+            }
+        } catch (shareErr) {
+            // Se o erro for de segurança (User Gesture) ou indisponibilidade, faz o download
+            console.warn("Redirecionando para download direto:", shareErr.message);
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(pdfBlob);
+            link.download = `Romaneio_${remessaId}.pdf`;
+            link.click();
+            
+            if (shareErr.name === 'NotAllowedError') {
+                alert("O navegador bloqueou o compartilhamento direto. O romaneio foi baixado na sua pasta de Downloads.");
+            } else {
+                alert("Compartilhamento indisponível. O PDF foi baixado automaticamente.");
+            }
         }
 
     } catch (err) {
-        console.error("Erro ao processar romaneio:", err);
-        alert("Falha ao gerar documento.");
+        console.error("Erro crítico ao processar romaneio:", err);
+        alert(`Falha ao gerar documento: ${err.message}`);
     }
 }
 

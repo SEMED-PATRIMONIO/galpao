@@ -1939,6 +1939,22 @@ router.get('/pedidos/escola/remessas-a-caminho', verificarToken, async (req, res
         res.status(500).json({ error: err.message });
     }
 });
+router.get('/pedidos/remessas/pendentes-transporte', verificarToken, async (req, res) => {
+    try {
+        const query = `
+            SELECT r.*, l.nome as escola_nome 
+            FROM pedido_remessas r
+            JOIN pedidos p ON r.pedido_id = p.id
+            JOIN locais l ON p.local_destino_id = l.id
+            WHERE r.status = 'PRONTO' -- ELA SÓ APARECE SE ESTIVER PRONTA
+        `;
+        const { rows } = await db.query(query);
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+
+});
 
 router.patch('/pedidos/remessa/:id/confirmar-recebimento', verificarToken, async (req, res) => {
     const { id } = req.params;

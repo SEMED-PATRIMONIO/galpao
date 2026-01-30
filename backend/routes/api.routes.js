@@ -1842,33 +1842,34 @@ router.get('/pedidos/logistica/entregas-pendentes', verificarToken, async (req, 
     }
 });
 
-router.get('/pedidos/remessa/:id/detalhes', verificarToken, async (req, res) => {
+router.get('/pedidos/remessa/:id/detalhes', async (req, res) => {
     const { id } = req.params;
     try {
         const query = `
             SELECT 
-                pr.id as remessa_id,
-                pr.data_criacao,
-                p.id as pedido_id,
-                l.nome as escola_nome,
-                l.endereco as escola_endereco,
-                pri.tamanho,
-                pri.quantidade_enviada,
-                prod.nome as produto_nome
-            FROM pedido_remessas pr
-            JOIN pedidos p ON pr.pedido_id = p.id
+                r.id AS remessa_id,
+                r.pedido_id,
+                l.nome AS escola_nome,
+                p_prod.nome AS produto_nome,
+                ri.tamanho,
+                ri.quantidade_enviada
+            FROM pedido_remessas r
+            JOIN pedidos p ON r.pedido_id = p.id
             JOIN locais l ON p.local_destino_id = l.id
-            JOIN pedido_remessa_itens pri ON pr.id = pri.remessa_id
-            JOIN produtos prod ON pri.produto_id = prod.id
-            WHERE pr.id = $1
+            JOIN pedido_remessa_itens ri ON ri.remessa_id = r.id
+            JOIN produtos p_prod ON ri.produto_id = p_prod.id
+            WHERE r.id = $1
         `;
-        const result = await db.query(query, [id]);
+        const { rows } = await pool.query(query, [id]);
         
-        if (result.rows.length === 0) return res.status(404).json({ error: "Remessa não encontrada" });
-        
-        res.json(result.rows);
+        if (rows.length === 0) {
+            return res.status(404).json({ error: 'Remessa não encontrada' });
+        }
+
+        res.json(rows);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        console.error(err);
+        res.status(500).json({ error: 'Erro interno ao buscar detalhes da remessa' });
     }
 });
 

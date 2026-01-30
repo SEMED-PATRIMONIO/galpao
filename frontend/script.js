@@ -7793,40 +7793,40 @@ window.iniciarTransporteRemessa = async function(remessaId) {
 
 async function telaEscolaConfirmarRecebimento() {
     const container = document.getElementById('app-content');
+    if (!container) return;
+    
     container.innerHTML = '<div style="padding:20px;">🔍 Verificando entregas a caminho...</div>';
 
     try {
         const res = await fetch(`${API_URL}/escola/remessas-a-caminho`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
+
+        if (!res.ok) {
+            const erroTxt = await res.json();
+            throw new Error(erroTxt.error || "Erro no servidor");
+        }
+
         const remessas = await res.json();
 
         container.innerHTML = `
             <div style="padding:20px;">
                 <h2 style="color:#1e3a8a; margin-bottom:20px;">🚚 CONFIRMAR RECEBIMENTO</h2>
-                
                 <div style="display:grid; gap:15px;">
                     ${remessas.length === 0 ? `
                         <div style="background:#f1f5f9; padding:40px; text-align:center; border-radius:10px; color:#64748b;">
-                            Nenhuma remessa em transporte para sua unidade no momento.
+                            Nenhuma remessa em transporte para sua unidade.
                         </div>` : 
                         remessas.map(r => `
-                        <div style="background:#fffbeb; padding:20px; border-radius:10px; border:1px solid #fde68a; box-shadow:0 2px 8px rgba(0,0,0,0.05); border-left:8px solid #f59e0b;">
+                        <div style="background:#fffbeb; padding:20px; border-radius:10px; border:1px solid #fde68a; border-left:8px solid #f59e0b;">
                             <div style="display:flex; justify-content:space-between; align-items:center;">
                                 <div>
-                                    <div style="font-weight:bold; font-size:1.1rem; color:#92400e;">REMESSA A CAMINHO</div>
-                                    <div style="color:#b45309; font-size:0.9rem;">
-                                        ID: #${r.remessa_id} | Pedido: #${r.pedido_id}
-                                    </div>
-                                    <div style="margin-top:5px; font-size:0.8rem; color:#d97706;">
-                                        Despachado em: ${new Date(r.data_criacao).toLocaleString('pt-BR')}
-                                    </div>
+                                    <div style="font-weight:bold; color:#92400e;">REMESSA A CAMINHO</div>
+                                    <div style="font-size:0.9rem;">ID: #${r.remessa_id} | Pedido: #${r.pedido_id}</div>
                                 </div>
-                                
-                                <button class="btn-confirmar-entrega" 
-                                        data-remessa-id="${r.remessa_id}" 
-                                        style="background:#059669; color:white; border:none; padding:12px 20px; border-radius:6px; cursor:pointer; font-weight:bold;">
-                                    ✅ CONFIRMAR CHEGADA
+                                <button class="btn-confirmar-entrega" data-remessa-id="${r.remessa_id}" 
+                                        style="background:#059669; color:white; border:none; padding:10px 20px; border-radius:6px; cursor:pointer;">
+                                    ✅ CONFIRMAR
                                 </button>
                             </div>
                         </div>
@@ -7835,7 +7835,12 @@ async function telaEscolaConfirmarRecebimento() {
             </div>
         `;
     } catch (err) {
-        alert("Erro ao carregar dados da escola.");
+        console.error(err);
+        container.innerHTML = `
+            <div style="padding:20px; color:#ef4444; background:#fef2f2; border-radius:8px; margin:20px;">
+                <strong>⚠️ Erro:</strong> ${err.message} <br>
+                <small>Verifique se o seu perfil tem um local (escola) vinculado.</small>
+            </div>`;
     }
 }
 

@@ -1922,45 +1922,34 @@ router.patch('/pedidos/remessa/:id/status', verificarToken, async (req, res) => 
 
 router.get('/escola/remessas-a-caminho', verificarToken, async (req, res) => {
     try {
-        // 1. Diagnóstico do Usuário (Log no terminal)
-        console.log("--- DEBUG ESCOLA ---");
-        console.log("Usuário logado ID:", req.usuario?.id || "NÃO ENCONTRADO");
-        
-        // No seu código, o token pode injetar localId ou usuario.local_id
-        // Vamos tentar pegar de todas as formas possíveis:
-        const localId = req.usuario?.local_id || req.localId || req.user?.local_id;
+        // Usamos o ID do usuário que o seu 'verificarToken' já valida com sucesso
+        const usuarioId = req.usuario.id;
 
-        console.log("Local ID identificado:", localId);
-
-        if (!localId) {
-            console.error("ERRO: local_id está indefinido no token/request.");
-            return res.status(400).json({ error: "Unidade escolar não vinculada ao seu usuário." });
-        }
-
-        // 2. Query SQL (Note os nomes das tabelas de acordo com seu PDF)
+        // TÉCNICA DE JOIN: Buscamos a remessa partindo do ID do usuário logado
+        // Relacionamos: Usuario -> Local -> Pedido -> Remessa
         const query = `
             SELECT 
                 pr.id as remessa_id,
                 pr.pedido_id,
                 pr.data_criacao,
                 l.nome as escola_nome
-            FROM pedido_remessas pr
-            JOIN pedidos p ON pr.pedido_id = p.id
-            JOIN locais l ON p.local_destino_id = l.id
-            WHERE p.local_destino_id = $1 
+            FROM usuarios u
+            JOIN locais l ON u.local_id = l.id
+            JOIN pedidos p ON p.local_destino_id = l.id
+            JOIN pedido_remessas pr ON pr.pedido_id = p.id
+            WHERE u.id = $1 
             AND pr.status = 'EM_TRANSPORTE'
             ORDER BY pr.id DESC
         `;
 
-        const { rows } = await db.query(query, [localId]);
+        const { rows } = await db.query(query, [usuarioId]);
         
-        console.log(`Sucesso! Encontradas ${rows.length} remessas.`);
+        // Se retornar vazio, enviamos [], o que fará o front mostrar "Nenhuma remessa"
         res.json(rows);
 
     } catch (err) {
-        // ISSO VAI MOSTRAR O ERRO REAL NO PM2
-        console.error("ERRO CRÍTICO NO POSTGRES:", err.message);
-        res.status(500).json({ error: "Erro interno no banco: " + err.message });
+        console.error("Erro na rota escola:", err.message);
+        res.status(500).json({ error: "Erro no banco: " + err.message });
     }
 });
 

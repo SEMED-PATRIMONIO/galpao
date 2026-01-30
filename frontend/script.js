@@ -7582,6 +7582,9 @@ async function telaLogisticaEntregas() {
         const res = await fetch(`${API_URL}/pedidos/logistica/remessas-pendentes`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
+        
+        if (!res.ok) throw new Error("Falha ao carregar remessas.");
+        
         const remessas = await res.json();
 
         container.innerHTML = `
@@ -7592,20 +7595,26 @@ async function telaLogisticaEntregas() {
                 </div>
 
                 <div style="display:grid; gap:15px;">
-                    ${remessas.length === 0 ? '<p>Nenhuma remessa aguardando coleta.</p>' : 
+                    ${remessas.length === 0 ? `
+                        <div style="background:#f1f5f9; padding:40px; text-align:center; border-radius:10px; color:#64748b;">
+                            Nenhuma remessa aguardando coleta no momento.
+                        </div>` : 
                         remessas.map(r => `
                         <div style="background:white; padding:20px; border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,0.1); border-left:8px solid #8b5cf6;">
-                            <div style="display:flex; justify-content:space-between;">
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
                                 <div>
                                     <div style="font-weight:bold; font-size:1.1rem; color:#1e293b;">${r.escola_nome}</div>
                                     <div style="color:#64748b; font-size:0.9rem;">
                                         Remessa: <strong>#${r.remessa_id}</strong> (Pedido #${r.pedido_id})
                                     </div>
                                     <div style="margin-top:5px; font-size:0.8rem; color:#94a3b8;">
-                                        Pronta desde: ${new Date(r.data_remessa).toLocaleString()}
+                                        Pronta desde: ${new Date(r.data_remessa).toLocaleString('pt-BR')}
                                     </div>
                                 </div>
-                                <button onclick="window.iniciarTransporteRemessa(${r.remessa_id})" style="background:#1e40af; color:white; border:none; padding:10px 20px; border-radius:6px; cursor:pointer; font-weight:bold;">
+                                
+                                <button class="btn-coletar-remessa" 
+                                        data-remessa-id="${r.remessa_id}" 
+                                        style="background:#1e40af; color:white; border:none; padding:12px 25px; border-radius:6px; cursor:pointer; font-weight:bold; transition: background 0.3s;">
                                     🚚 COLETAR REMESSA
                                 </button>
                             </div>
@@ -7614,7 +7623,10 @@ async function telaLogisticaEntregas() {
                 </div>
             </div>
         `;
-    } catch (err) { alert("Erro ao carregar logística."); }
+    } catch (err) {
+        console.error(err);
+        container.innerHTML = `<div style="padding:20px; color:red;">Erro ao carregar logística: ${err.message}</div>`;
+    }
 }
 
 // Garante que a função seja global antes de qualquer coisa
@@ -7985,6 +7997,39 @@ window.confirmarRecebimento = async function(remessaId) {
         alert("Falha ao confirmar recebimento: " + err.message);
     }
 };
+
+document.addEventListener('click', async (event) => {
+    // Verifica se o elemento clicado (ou o ícone dentro dele) tem a classe correta
+    const botao = event.target.closest('.btn-coletar-remessa');
+    
+    if (botao) {
+        const remessaId = botao.getAttribute('data-remessa-id');
+        
+        if (!confirm(`Confirmar o início do transporte para a Remessa #${remessaId}?`)) return;
+
+        try {
+            // Chamando a nova rota dedicada que você criou
+            const res = await fetch(`${API_URL}/logistica/iniciar-transporte/${remessaId}`, {
+                method: 'PATCH',
+                headers: { 
+                    'Authorization': `Bearer ${TOKEN}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (res.ok) {
+                alert("🚚 Transporte iniciado! A remessa agora está visível para a escola.");
+                telaLogisticaEntregas(); // Recarrega a lista para a remessa sumir
+            } else {
+                const errorData = await res.json();
+                alert(`Erro: ${errorData.error || "Não foi possível iniciar o transporte."}`);
+            }
+        } catch (err) {
+            console.error("Erro na logística:", err);
+            alert("Falha na conexão com o servidor.");
+        }
+    }
+});
 
 // Isso garante que o onclick="funcao()" funcione sempre
 window.telaVisualizarEstoque = telaVisualizarEstoque;

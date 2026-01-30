@@ -7806,7 +7806,19 @@ async function gerarECompartilharRomaneio(remessaId) {
         const res = await fetch(`${API_URL}/pedidos/remessa/${remessaId}/detalhes`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
+
+        // NOVO: Verifica se o servidor retornou erro antes de tentar ler os dados
+        if (!res.ok) {
+            const erroServidor = await res.json();
+            throw new Error(erroServidor.error || "Erro desconhecido no servidor");
+        }
+
         const dados = await res.json();
+        
+        if (!dados || dados.length === 0) {
+            throw new Error("Nenhum item encontrado nesta remessa.");
+        }
+
         const info = dados[0];
 
         // Criando o "Papel" do Romaneio

@@ -7980,6 +7980,8 @@ window.confirmarRecebimento = async function(remessaId) {
     }
 };
 
+window.iniciarTransporteRemessa = iniciarTransporteRemessa
+
 // Isso garante que o onclick="funcao()" funcione sempre
 window.telaVisualizarEstoque = telaVisualizarEstoque;
 window.telaAbastecerEstoque = telaAbastecerEstoque;

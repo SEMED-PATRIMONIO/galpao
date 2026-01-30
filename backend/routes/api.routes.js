@@ -1981,4 +1981,30 @@ router.patch('/pedidos/remessa/:id/confirmar-recebimento', verificarToken, async
     }
 });
 
+router.patch('/logistica/iniciar-transporte/:id', verificarToken, async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        // 1. Atualiza a remessa para EM_TRANSPORTE
+        // 2. Registra a hora exata da saída
+        const query = `
+            UPDATE pedido_remessas 
+            SET status = 'EM_TRANSPORTE', 
+                data_saida = NOW() 
+            WHERE id = $1
+        `;
+        
+        const result = await db.query(query, [id]);
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: "Remessa não encontrada." });
+        }
+
+        res.json({ message: "Transporte iniciado!" });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Erro interno no servidor." });
+    }
+});
+
 module.exports = router;

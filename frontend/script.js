@@ -7617,7 +7617,7 @@ async function telaLogisticaEntregas() {
     } catch (err) { alert("Erro ao carregar logística."); }
 }
 
-window.iniciarTransporteRemessa = async function(remessaId) {
+async function iniciarTransporteRemessa(remessaId) {
     if (!confirm(`Deseja iniciar o transporte da remessa #${remessaId}?`)) return;
 
     try {

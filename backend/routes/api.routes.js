@@ -1922,11 +1922,14 @@ router.patch('/pedidos/remessa/:id/status', verificarToken, async (req, res) => 
 
 router.get('/escola/remessas-a-caminho', verificarToken, async (req, res) => {
     try {
-        // Usamos o ID do usuário que o seu 'verificarToken' já valida com sucesso
-        const usuarioId = req.usuario.id;
+        // Tenta capturar o ID do usuário de todas as formas possíveis que seu sistema pode usar
+        const usuarioId = req.usuario?.id || req.user?.id || req.userId || req.id;
 
-        // TÉCNICA DE JOIN: Buscamos a remessa partindo do ID do usuário logado
-        // Relacionamos: Usuario -> Local -> Pedido -> Remessa
+        if (!usuarioId) {
+            console.error("Objeto req completo para inspeção:", req.usuario, req.user);
+            return res.status(401).json({ error: "Sessão expirada ou usuário não identificado. Tente fazer login novamente." });
+        }
+
         const query = `
             SELECT 
                 pr.id as remessa_id,
@@ -1943,8 +1946,6 @@ router.get('/escola/remessas-a-caminho', verificarToken, async (req, res) => {
         `;
 
         const { rows } = await db.query(query, [usuarioId]);
-        
-        // Se retornar vazio, enviamos [], o que fará o front mostrar "Nenhuma remessa"
         res.json(rows);
 
     } catch (err) {
@@ -1955,20 +1956,9 @@ router.get('/escola/remessas-a-caminho', verificarToken, async (req, res) => {
 
 router.patch('/escola/confirmar-recebimento/:id', verificarToken, async (req, res) => {
     const { id } = req.params;
-
     try {
-        const query = `
-            UPDATE pedido_remessas 
-            SET status = 'ENTREGUE' 
-            WHERE id = $1
-        `;
-        const result = await db.query(query, [id]);
-
-        if (result.rowCount === 0) {
-            return res.status(404).json({ error: "Remessa não encontrada." });
-        }
-
-        res.json({ message: "Recebimento confirmado com sucesso!" });
+        await db.query("UPDATE pedido_remessas SET status = 'ENTREGUE' WHERE id = $1", [id]);
+        res.json({ message: "Recebimento confirmado!" });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

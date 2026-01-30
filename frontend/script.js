@@ -7605,7 +7605,7 @@ async function telaLogisticaEntregas() {
                                         Pronta desde: ${new Date(r.data_remessa).toLocaleString()}
                                     </div>
                                 </div>
-                                <button onclick="iniciarTransporteRemessa(${r.remessa_id})" style="background:#1e40af; color:white; border:none; padding:10px 20px; border-radius:6px; cursor:pointer; font-weight:bold;">
+                                <button onclick="window.iniciarTransporteRemessa(${r.remessa_id})" style="background:#1e40af; color:white; border:none; padding:10px 20px; border-radius:6px; cursor:pointer; font-weight:bold;">
                                     🚚 COLETAR REMESSA
                                 </button>
                             </div>
@@ -7617,30 +7617,41 @@ async function telaLogisticaEntregas() {
     } catch (err) { alert("Erro ao carregar logística."); }
 }
 
-async function iniciarTransporteRemessa(remessaId) {
-    if (!confirm(`Deseja iniciar o transporte da remessa #${remessaId}?`)) return;
+// Garante que a função seja global antes de qualquer coisa
+window.iniciarTransporteRemessa = async function(remessaId) {
+    console.log("Iniciando transporte para remessa ID:", remessaId); // Debug
+
+    if (!confirm(`Deseja confirmar a saída da remessa #${remessaId} para transporte?`)) {
+        return;
+    }
 
     try {
         const res = await fetch(`${API_URL}/pedidos/remessa/${remessaId}/status`, {
             method: 'PATCH',
-            headers: { 
+            headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${TOKEN}` 
+                'Authorization': `Bearer ${TOKEN}`
             },
             body: JSON.stringify({ novoStatus: 'EM_TRANSPORTE' })
         });
 
-        if (res.ok) {
-            alert("Transporte iniciado! A escola já pode visualizar o envio.");
-            // Recarrega a tela de logística para sumir com essa remessa da lista de pendentes
-            if(typeof telaLogisticaEntrega === 'function') telaLogisticaEntrega(); 
-        } else {
+        if (!res.ok) {
             const erro = await res.json();
-            throw new Error(erro.error);
+            throw new Error(erro.error || "Erro ao atualizar status.");
         }
+
+        alert("🚚 Remessa em trânsito! A escola já foi notificada.");
+        
+        // Recarrega a tela de logística para atualizar a lista
+        if (typeof telaLogisticaEntrega === 'function') {
+            telaLogisticaEntrega();
+        } else {
+            location.reload(); // Fallback caso a função de renderização suma
+        }
+
     } catch (err) {
-        console.error("Erro ao iniciar transporte:", err);
-        alert("Erro ao atualizar status: " + err.message);
+        console.error("Erro na logística:", err);
+        alert("Falha ao iniciar transporte: " + err.message);
     }
 };
 
@@ -7979,8 +7990,6 @@ window.confirmarRecebimento = async function(remessaId) {
         alert("Falha ao confirmar recebimento: " + err.message);
     }
 };
-
-window.iniciarTransporteRemessa = iniciarTransporteRemessa
 
 // Isso garante que o onclick="funcao()" funcione sempre
 window.telaVisualizarEstoque = telaVisualizarEstoque;

@@ -7617,6 +7617,33 @@ async function telaLogisticaEntregas() {
     } catch (err) { alert("Erro ao carregar logística."); }
 }
 
+window.iniciarTransporteRemessa = async function(remessaId) {
+    if (!confirm(`Deseja iniciar o transporte da remessa #${remessaId}?`)) return;
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/remessa/${remessaId}/status`, {
+            method: 'PATCH',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${TOKEN}` 
+            },
+            body: JSON.stringify({ novoStatus: 'EM_TRANSPORTE' })
+        });
+
+        if (res.ok) {
+            alert("Transporte iniciado! A escola já pode visualizar o envio.");
+            // Recarrega a tela de logística para sumir com essa remessa da lista de pendentes
+            if(typeof telaLogisticaEntrega === 'function') telaLogisticaEntrega(); 
+        } else {
+            const erro = await res.json();
+            throw new Error(erro.error);
+        }
+    } catch (err) {
+        console.error("Erro ao iniciar transporte:", err);
+        alert("Erro ao atualizar status: " + err.message);
+    }
+};
+
 async function telaLogisticaColeta() {
     const container = document.getElementById('app-content');
     container.innerHTML = '<div style="padding:20px;">🚚 Buscando pedidos prontos para coleta...</div>';

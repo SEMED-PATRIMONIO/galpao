@@ -1985,12 +1985,10 @@ router.patch('/logistica/iniciar-transporte/:id', verificarToken, async (req, re
     const { id } = req.params;
 
     try {
-        // 1. Atualiza a remessa para EM_TRANSPORTE
-        // 2. Registra a hora exata da saída
+        // Atualizamos APENAS o status, que sabemos que existe
         const query = `
             UPDATE pedido_remessas 
-            SET status = 'EM_TRANSPORTE', 
-                data_saida = NOW() 
+            SET status = 'EM_TRANSPORTE' 
             WHERE id = $1
         `;
         
@@ -2000,10 +1998,11 @@ router.patch('/logistica/iniciar-transporte/:id', verificarToken, async (req, re
             return res.status(404).json({ error: "Remessa não encontrada." });
         }
 
-        res.json({ message: "Transporte iniciado!" });
+        res.json({ message: "Transporte iniciado com sucesso!" });
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: "Erro interno no servidor." });
+        // Isso vai imprimir o erro real no console do seu servidor Ubuntu
+        console.error("ERRO NO BANCO:", err.message);
+        res.status(500).json({ error: "Erro no banco de dados: " + err.message });
     }
 });
 

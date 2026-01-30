@@ -1920,4 +1920,49 @@ router.patch('/pedidos/remessa/:id/status', verificarToken, async (req, res) => 
     }
 });
 
+router.get('/pedidos/escola/remessas-a-caminho', verificarToken, async (req, res) => {
+    // O seu middleware 'verificarToken' deve injetar o local_id do usuário no req
+    const local_id = req.usuario.local_id; 
+
+    try {
+        const query = `
+            SELECT r.id, r.pedido_id, r.data_criacao
+            FROM pedido_remessas r
+            JOIN pedidos p ON r.pedido_id = p.id
+            WHERE p.local_destino_id = $1 
+            AND r.status = 'EM_TRANSPORTE'
+            ORDER BY r.data_criacao DESC
+        `;
+        const { rows } = await db.query(query, [local_id]);
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.patch('/pedidos/remessa/:id/confirmar-recebimento', verificarToken, async (req, res) => {
+    const { id } = req.params;
+    try {
+        // Iniciamos uma transação para garantir que tudo ocorra bem
+        await db.query('BEGIN');
+
+        // 1. Atualiza a remessa para ENTREGUE
+        await db.query(`
+            UPDATE pedido_remessas 
+            SET status = 'ENTREGUE', 
+                data_recebimento = NOW() 
+            WHERE id = $1`, [id]);
+
+        // 2. Opcional: Aqui podes disparar uma função para somar essas quantidades 
+        // no saldo atual da escola caso tenhas uma tabela de 'estoque_escolas'
+
+        await db.query('COMMIT');
+        res.json({ message: "Recebimento confirmado com sucesso!" });
+    } catch (err) {
+        await db.query('ROLLBACK');
+        console.error(err);
+        res.status(500).json({ error: "Erro ao confirmar recebimento: " + err.message });
+    }
+});
+
 module.exports = router;

@@ -1922,22 +1922,23 @@ router.patch('/pedidos/remessa/:id/status', verificarToken, async (req, res) => 
 
 router.get('/escola/remessas-a-caminho', verificarToken, async (req, res) => {
     try {
-        // 1. Pegamos o ID do usuário que vem do token
-        const usuarioId = req.usuario.id;
-
-        // 2. Buscamos o local_id desse usuário diretamente no banco
-        const userQuery = "SELECT local_id FROM usuarios WHERE id = $1";
-        const userResult = await db.query(userQuery, [usuarioId]);
+        // 1. Diagnóstico do Usuário (Log no terminal)
+        console.log("--- DEBUG ESCOLA ---");
+        console.log("Usuário logado ID:", req.usuario?.id || "NÃO ENCONTRADO");
         
-        const localId = userResult.rows[0]?.local_id;
+        // No seu código, o token pode injetar localId ou usuario.local_id
+        // Vamos tentar pegar de todas as formas possíveis:
+        const localId = req.usuario?.local_id || req.localId || req.user?.local_id;
+
+        console.log("Local ID identificado:", localId);
 
         if (!localId) {
-            return res.status(400).json({ error: "Unidade escolar não encontrada para este usuário." });
+            console.error("ERRO: local_id está indefinido no token/request.");
+            return res.status(400).json({ error: "Unidade escolar não vinculada ao seu usuário." });
         }
 
-        // 3. Agora buscamos as remessas em transporte para este local
-        // Nota: Certifique-se que na tabela 'pedidos' o campo é 'local_destino_id'
-        const queryRemessas = `
+        // 2. Query SQL (Note os nomes das tabelas de acordo com seu PDF)
+        const query = `
             SELECT 
                 pr.id as remessa_id,
                 pr.pedido_id,
@@ -1951,16 +1952,15 @@ router.get('/escola/remessas-a-caminho', verificarToken, async (req, res) => {
             ORDER BY pr.id DESC
         `;
 
-        const { rows } = await db.query(queryRemessas, [localId]);
+        const { rows } = await db.query(query, [localId]);
         
-        // Retornamos os dados (mesmo que seja um array vazio [])
+        console.log(`Sucesso! Encontradas ${rows.length} remessas.`);
         res.json(rows);
 
     } catch (err) {
-        // Este log aparecerá no seu terminal do servidor (Ubuntu/VS Code)
-        // Ele dirá exatamente qual coluna ou tabela está errada
-        console.error("ERRO CRÍTICO NA ROTA ESCOLA:", err.message);
-        res.status(500).json({ error: "Erro interno: " + err.message });
+        // ISSO VAI MOSTRAR O ERRO REAL NO PM2
+        console.error("ERRO CRÍTICO NO POSTGRES:", err.message);
+        res.status(500).json({ error: "Erro interno no banco: " + err.message });
     }
 });
 

@@ -7795,38 +7795,45 @@ async function telaEscolaConfirmarRecebimento() {
     const container = document.getElementById('app-content');
     if (!container) return;
     
-    container.innerHTML = '<div style="padding:20px;">🔍 Verificando entregas a caminho...</div>';
+    container.innerHTML = '<div style="padding:20px; text-align:center;">🔍 Localizando entregas para sua unidade...</div>';
 
     try {
-        const res = await fetch(`${API_URL}/escola/remessas-a-caminho`, {
+        const res = await fetch(`${API_URL}/escola/minhas-remessas-transporte`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
 
         if (!res.ok) {
             const erroTxt = await res.json();
-            throw new Error(erroTxt.error || "Erro no servidor");
+            throw new Error(erroTxt.error || "Erro ao carregar dados.");
         }
 
         const remessas = await res.json();
 
         container.innerHTML = `
             <div style="padding:20px;">
-                <h2 style="color:#1e3a8a; margin-bottom:20px;">🚚 CONFIRMAR RECEBIMENTO</h2>
+                <h2 style="color:#1e3a8a; margin-bottom:20px;">🚚 RECEBIMENTO DE MERCADORIA</h2>
+                
                 <div style="display:grid; gap:15px;">
                     ${remessas.length === 0 ? `
-                        <div style="background:#f1f5f9; padding:40px; text-align:center; border-radius:10px; color:#64748b;">
-                            Nenhuma remessa em transporte para sua unidade.
+                        <div style="background:#f1f5f9; padding:40px; text-align:center; border-radius:10px; color:#64748b; border:1px dashed #cbd5e1;">
+                            Nenhuma remessa em trânsito para sua escola no momento.
                         </div>` : 
                         remessas.map(r => `
-                        <div style="background:#fffbeb; padding:20px; border-radius:10px; border:1px solid #fde68a; border-left:8px solid #f59e0b;">
+                        <div style="background:#fffbeb; padding:20px; border-radius:10px; border:1px solid #fde68a; border-left:10px solid #f59e0b; box-shadow:0 4px 6px rgba(0,0,0,0.05);">
                             <div style="display:flex; justify-content:space-between; align-items:center;">
                                 <div>
-                                    <div style="font-weight:bold; color:#92400e;">REMESSA A CAMINHO</div>
-                                    <div style="font-size:0.9rem;">ID: #${r.remessa_id} | Pedido: #${r.pedido_id}</div>
+                                    <div style="font-weight:bold; font-size:1.1rem; color:#92400e;">📦 REMESSA A CAMINHO</div>
+                                    <div style="color:#b45309; margin-top:5px;">
+                                        Protocolo: <strong>#${r.remessa_id}</strong> | Pedido Origem: #${r.pedido_id}
+                                    </div>
+                                    <div style="font-size:0.85rem; color:#d97706; margin-top:5px;">
+                                        Enviado em: ${new Date(r.data_criacao).toLocaleString('pt-BR')}
+                                    </div>
                                 </div>
-                                <button class="btn-confirmar-entrega" data-remessa-id="${r.remessa_id}" 
-                                        style="background:#059669; color:white; border:none; padding:10px 20px; border-radius:6px; cursor:pointer;">
-                                    ✅ CONFIRMAR
+                                <button class="btn-confirmar-entrega" 
+                                        data-remessa-id="${r.remessa_id}" 
+                                        style="background:#059669; color:white; border:none; padding:12px 25px; border-radius:6px; cursor:pointer; font-weight:bold; box-shadow:0 2px 4px rgba(0,0,0,0.1);">
+                                    ✅ CONFIRMAR RECEBIMENTO
                                 </button>
                             </div>
                         </div>
@@ -7835,11 +7842,9 @@ async function telaEscolaConfirmarRecebimento() {
             </div>
         `;
     } catch (err) {
-        console.error(err);
         container.innerHTML = `
-            <div style="padding:20px; color:#ef4444; background:#fef2f2; border-radius:8px; margin:20px;">
-                <strong>⚠️ Erro:</strong> ${err.message} <br>
-                <small>Verifique se o seu perfil tem um local (escola) vinculado.</small>
+            <div style="padding:20px; color:#ef4444; background:#fef2f2; border-radius:8px; margin:20px; border:1px solid #fee2e2;">
+                <strong>⚠️ Atenção:</strong> ${err.message}
             </div>`;
     }
 }
@@ -8148,6 +8153,8 @@ document.addEventListener('click', async (event) => {
         }
     }
 });
+
+
 
 // Isso garante que o onclick="funcao()" funcione sempre
 window.telaVisualizarEstoque = telaVisualizarEstoque;

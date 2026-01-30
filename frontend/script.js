@@ -242,7 +242,7 @@ async function carregarDashboard() {
     // --- 3. PERFIL: ESCOLA ---
     if (perfil === 'escola') {
         html += `
-            <button class="btn-grande" onclick="telaEscolaConfirmarRecebimento()">
+            <button class="btn-grande" onclick="carregarAlertasEscola()">
                 <i>🚚</i><span>CONFIRMAR RECEBIMENTO</span>
             </button>
             <button class="btn-grande" onclick="telaSolicitarUniforme()">
@@ -1313,7 +1313,7 @@ async function processarSolicitacao(pedidoId, acao) {
 }
 
 // Função para Escola confirmar recebimento [cite: 16, 51, 52]
-async function confirmarRecebimento(pedidoId) {
+async function confirmarRecebimentoantigo(pedidoId) {
     if (!confirm("CONFIRMA O RECEBIMENTO DESTE PEDIDO?")) return;
 
     const res = await fetch(`${API_URL}/pedidos/${pedidoId}/status`, {
@@ -7932,6 +7932,53 @@ async function gerarECompartilharRomaneio(remessaId) {
         alert(`Falha ao gerar documento: ${err.message}`);
     }
 }
+
+async function carregarAlertasEscola() {
+    // Busca remessas destinadas a esta escola que estão 'EM_TRANSPORTE'
+    const res = await fetch(`${API_URL}/pedidos/escola/remessas-a-caminho`, {
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+    const remessas = await res.json();
+
+    const areaAlerta = document.getElementById('alertas-transporte');
+    if (remessas.length > 0) {
+        areaAlerta.innerHTML = remessas.map(r => `
+            <div class="alerta-viagem" style="background: #fef3c7; border-left: 5px solid #d97706; padding: 15px; margin-bottom: 10px;">
+                <p><strong>🚚 MERCADORIA A CAMINHO!</strong></p>
+                <p>Remessa #${r.id} saiu do estoque e está em transporte.</p>
+                <button onclick="confirmarRecebimento(${r.id})">Confirmar Recebimento</button>
+            </div>
+        `).join('');
+    }
+}
+
+window.confirmarRecebimento = async function(remessaId) {
+    if (!confirm(`Confirma que todos os itens da Remessa #${remessaId} foram entregues na unidade?`)) return;
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/remessa/${remessaId}/confirmar-recebimento`, {
+            method: 'PATCH',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${TOKEN}` 
+            }
+        });
+
+        if (res.ok) {
+            alert("Sucesso! O recebimento foi registado no sistema.");
+            // Recarrega os alertas para o card amarelo desaparecer
+            if (typeof carregarAlertasEscola === 'function') carregarAlertasEscola();
+            // Se tiver uma função de histórico na tela da escola, recarrega-a também
+            if (typeof carregarHistoricoEscola === 'function') carregarHistoricoEscola();
+        } else {
+            const erro = await res.json();
+            throw new Error(erro.error);
+        }
+    } catch (err) {
+        console.error("Erro ao confirmar:", err);
+        alert("Falha ao confirmar recebimento: " + err.message);
+    }
+};
 
 // Isso garante que o onclick="funcao()" funcione sempre
 window.telaVisualizarEstoque = telaVisualizarEstoque;

@@ -1920,18 +1920,23 @@ router.patch('/pedidos/remessa/:id/status', verificarToken, async (req, res) => 
     }
 });
 
-router.get('/pedidos/escola/remessas-a-caminho', verificarToken, async (req, res) => {
-    // O seu middleware 'verificarToken' deve injetar o local_id do usuário no req
+router.get('/escola/remessas-a-caminho', verificarToken, async (req, res) => {
+    // IMPORTANTE: O local_id deve vir do token do usuário logado
     const local_id = req.usuario.local_id; 
 
     try {
         const query = `
-            SELECT r.id, r.pedido_id, r.data_criacao
+            SELECT 
+                r.id as remessa_id,
+                r.pedido_id,
+                r.data_criacao,
+                l.nome as escola_nome
             FROM pedido_remessas r
             JOIN pedidos p ON r.pedido_id = p.id
+            JOIN locais l ON p.local_destino_id = l.id
             WHERE p.local_destino_id = $1 
             AND r.status = 'EM_TRANSPORTE'
-            ORDER BY r.data_criacao DESC
+            ORDER BY r.id DESC
         `;
         const { rows } = await db.query(query, [local_id]);
         res.json(rows);
@@ -1939,6 +1944,28 @@ router.get('/pedidos/escola/remessas-a-caminho', verificarToken, async (req, res
         res.status(500).json({ error: err.message });
     }
 });
+
+router.patch('/escola/confirmar-recebimento/:id', verificarToken, async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        const query = `
+            UPDATE pedido_remessas 
+            SET status = 'ENTREGUE' 
+            WHERE id = $1
+        `;
+        const result = await db.query(query, [id]);
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: "Remessa não encontrada." });
+        }
+
+        res.json({ message: "Recebimento confirmado com sucesso!" });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 router.get('/pedidos/remessas/pendentes-transporte', verificarToken, async (req, res) => {
     try {
         const query = `

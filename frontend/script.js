@@ -7570,33 +7570,46 @@ async function imprimirRomaneio(remessaId) {
 
 async function telaAdminDashboard() {
     const container = document.getElementById('app-content');
-    container.innerHTML = '<div style="padding:20px;">📊 Carregando indicadores em tempo real...</div>';
+    container.innerHTML = '<div style="text-align:center; padding:50px;">🔄 Sincronizando fluxo logístico...</div>';
 
     try {
-        const res = await fetch(`${API_URL}/admin/dashboard-stats`, {
+        const res = await fetch(`${API_URL}/admin/dashboard/stats`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
         const s = await res.json();
 
         container.innerHTML = `
-            <div style="padding:20px; font-family: sans-serif;">
-                <h2 style="color:#1e3a8a; margin-bottom:25px;">📊 PAINEL DE CONTROLE LOGÍSTICO</h2>
+            <div style="padding:20px;">
+                <h2 style="text-align:center; color:#1e3a8a; margin-bottom:30px;">🔄 CICLO DE ATENDIMENTO SEMED</h2>
                 
-                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:15px; margin-bottom:30px;">
-                    ${renderCard('SOLICITADO', s.total_solicitados, '#ef4444', '📩')}
-                    ${renderCard('AUTORIZADO', s.total_autorizados, '#f59e0b', '⚖️')}
-                    ${renderCard('EM SEPARAÇÃO', s.total_separacao, '#8b5cf6', '📦')}
-                    ${renderCard('PRONTO', s.total_prontos, '#3b82f6', '✅')}
-                    ${renderCard('EM_TRANSPORTE', s.total_transporte, '#06b6d4', '🚚')}
-                    ${renderCard('ENTREGUE', s.total_entregues, '#10b981', '🏠')}
+                <div class="fluxo-container">
+                    ${renderCirculo('SOLICITADO', s.qtd_solicitado, '📩', '#ef4444')}
+                    ${renderCirculo('AUTORIZADO', s.qtd_autorizado, '⚖️', '#f59e0b')}
+                    ${renderCirculo('EM SEPARAÇÃO', s.qtd_separacao, '📦', '#8b5cf6')}
+                    ${renderCirculo('PRONTO', s.qtd_pronto, '✅', '#3b82f6')}
+                    ${renderCirculo('EM_TRANSPORTE', s.qtd_transporte, '🚚', '#06b6d4')}
+                    ${renderCirculo('ENTREGUE', s.qtd_entregue, '🏠', '#10b981')}
                 </div>
 
-                <div id="detalhes-fase" style="background:white; border-radius:12px; padding:20px; box-shadow:0 4px 12px rgba(0,0,0,0.1); min-height:200px;">
-                    <p style="color:#64748b; text-align:center; margin-top:80px;">Clique em uma fase acima para detalhar os pedidos.</p>
+                <div id="detalhes-dashboard" style="margin-top:40px; background:white; border-radius:15px; padding:25px; box-shadow:0 10px 25px rgba(0,0,0,0.05); min-height:300px;">
+                    <h3 id="titulo-fase" style="color:#1e3a8a; border-bottom:2px solid #f1f5f9; padding-bottom:10px;">📊 Detalhes da Operação</h3>
+                    <div id="lista-fase-conteudo" style="margin-top:15px;">
+                        <p style="text-align:center; color:#94a3b8;">Clique em uma fase do círculo para investigar os pedidos.</p>
+                    </div>
                 </div>
             </div>
         `;
-    } catch (err) { alert("Erro ao carregar dashboard."); }
+    } catch (err) { console.error(err); }
+}
+
+function renderCirculo(fase, qtd, icone, cor) {
+    return `
+        <div class="fase-card" style="border-color: ${qtd > 0 ? cor : '#e2e8f0'}" onclick="verDetalhesFase('${fase}')">
+            <span class="icone">${icone}</span>
+            <span class="qtd" style="color:${cor}">${qtd}</span>
+            <span class="label">${fase}</span>
+        </div>
+    `;
 }
 
 function renderCard(fase, qtd, cor, icone) {
@@ -7610,6 +7623,43 @@ function renderCard(fase, qtd, cor, icone) {
         </div>
     `;
 }
+
+window.verDetalhesFase = async function(fase) {
+    const listaArea = document.getElementById('lista-fase-conteudo');
+    const titulo = document.getElementById('titulo-fase');
+    titulo.innerText = `📋 LISTAGEM: ${fase}`;
+    listaArea.innerHTML = '🔍 Carregando dados...';
+
+    const res = await fetch(`${API_URL}/admin/dashboard/detalhes/${fase}`, {
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+    const dados = await res.json();
+
+    if (dados.length === 0) {
+        listaArea.innerHTML = '<p style="text-align:center; padding:20px;">Nenhum registro nesta fase.</p>';
+        return;
+    }
+
+    listaArea.innerHTML = `
+        <table style="width:100%; border-collapse:collapse;">
+            <tr style="text-align:left; background:#f8fafc; color:#64748b; font-size:0.8rem;">
+                <th style="padding:12px;">ID</th>
+                <th style="padding:12px;">UNIDADE ESCOLAR</th>
+                <th style="padding:12px;">AÇÃO</th>
+            </tr>
+            ${dados.map(d => `
+                <tr style="border-bottom:1px solid #f1f5f9;">
+                    <td style="padding:12px; font-weight:bold;">#${d.id}</td>
+                    <td style="padding:12px;">${d.escola}</td>
+                    <td style="padding:12px;">
+                        <button class="btn-investigar" data-id="${d.id}" style="background:#3b82f6; color:white; border:none; padding:5px 12px; border-radius:4px; cursor:pointer;">🔍 Itens</button>
+                    </td>
+                </tr>
+            `).join('')}
+        </table>
+        <div id="box-produtos" style="margin-top:20px;"></div>
+    `;
+};
 
 async function telaLogisticaEntregas() {
     const container = document.getElementById('app-content');
@@ -8138,7 +8188,37 @@ document.addEventListener('click', async (event) => {
     }
 });
 
+document.addEventListener('click', async (e) => {
+    const btn = e.target.closest('.btn-investigar');
+    if (!btn) return;
 
+    const id = btn.dataset.id;
+    const box = document.getElementById('box-produtos');
+    box.innerHTML = '📦 Buscando produtos...';
+
+    const res = await fetch(`${API_URL}/pedidos/${id}/itens`, {
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+    const itens = await res.json();
+
+    box.innerHTML = `
+        <div style="background:#eff6ff; border:2px solid #dbeafe; padding:15px; border-radius:10px;">
+            <h4 style="margin:0 0 10px 0; color:#1e40af;">Produtos do Registro #${id}</h4>
+            <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px; font-weight:bold; font-size:0.8rem; border-bottom:1px solid #bfdbfe; padding-bottom:5px;">
+                <span>PRODUTO</span><span>TAMANHO</span><span>QUANTIDADE</span>
+            </div>
+            ${itens.map(i => `
+                <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px; font-size:0.85rem; padding:8px 0; border-bottom:1px solid #dbeafe;">
+                    <span>${i.produto_nome}</span>
+                    <span>${i.tamanho}</span>
+                    <span style="font-weight:bold;">${i.quantidade}</span>
+                </div>
+            `).join('')}
+        </div>
+    `;
+    // Rola a tela suavemente para os produtos
+    box.scrollIntoView({ behavior: 'smooth' });
+});
 
 // Isso garante que o onclick="funcao()" funcione sempre
 window.telaVisualizarEstoque = telaVisualizarEstoque;

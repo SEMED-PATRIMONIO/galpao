@@ -1099,3 +1099,50 @@ body.login-body {
 .input-qtd-grade {
     -moz-appearance: textfield;
 }
+
+.fluxo-container {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 20px;
+    padding: 20px;
+    background: #f1f5f9;
+    border-radius: 15px;
+}
+
+.fase-card {
+    width: 150px;
+    height: 150px;
+    background: white;
+    border-radius: 50%; /* Faz o card ser um círculo */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: 4px solid #e2e8f0;
+    position: relative;
+    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+}
+
+.fase-card:hover {
+    transform: scale(1.1);
+    border-color: #3b82f6;
+    box-shadow: 0 10px 15px -3px rgba(0,0,0,0.2);
+}
+
+.fase-card .icone { font-size: 2.5rem; margin-bottom: 5px; }
+.fase-card .qtd { font-size: 1.5rem; font-weight: bold; color: #1e3a8a; }
+.fase-card .label { font-size: 0.7rem; font-weight: bold; color: #64748b; text-transform: uppercase; }
+
+/* Indicador de "Conexão" entre as fases */
+.fase-card::after {
+    content: '→';
+    position: absolute;
+    right: -25px;
+    top: 40%;
+    font-size: 1.5rem;
+    color: #cbd5e1;
+}
+.fase-card:last-child::after { content: ''; } /* Remove seta do último */

@@ -36,21 +36,27 @@
 }
 
 /* 1. O fundo azul com o movimento de bandeira */
+/* 2. O FUNDO QUE BALANÇA (A Bandeira - Camada 5) */
 .login-bg-wrapper {
     position: fixed;
-    top: -10%; left: -10%;
-    width: 120%; height: 120%;
-    background-color: #004a99; /* Seu azul de preferência */
-    z-index: -1;
+    top: -10%; 
+    left: -10%;
+    width: 120%; 
+    height: 120%;
+    background-color: #004a99; /* Azul SEMED */
     overflow: hidden;
     display: flex;
     flex-wrap: wrap;
     align-content: flex-start;
     gap: 40px;
     padding: 50px;
-    transform: rotate(-15deg); /* Inclinação diagonal */
-    /* Aqui está o segredo do movimento de bandeira */
+    transform: rotate(-15deg);
+    
+    /* Z-INDEX INTERMEDIÁRIO: Fica por cima da logo, mas abaixo do formulário */
+    z-index: 5; 
+    
     animation: waveEffect 8s ease-in-out infinite alternate;
+    pointer-events: none; /* Garante que o fundo não bloqueie cliques */
 }
 
 .login-bg-wrapper span {
@@ -1224,15 +1230,18 @@ body.login-body {
     position: fixed;
     top: 0;
     left: 0;
-    width: 220px; /* Ajuste conforme necessário */
+    width: 220px;
     height: 110px;
-    background-color: #ffffff; /* Fundo branco solicitado */
+    background-color: #ffffff; /* Fundo branco */
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 10px;
-    z-index: 1; /* Fica por baixo de tudo */
     border-bottom-right-radius: 15px;
+    box-shadow: 2px 2px 8px rgba(0,0,0,0.1);
+    
+    /* Z-INDEX BAIXO: Ela fica por trás da bandeira */
+    z-index: 1; 
 }
 
 .camada-logo-fixa img {

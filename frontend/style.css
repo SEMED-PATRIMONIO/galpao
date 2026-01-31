@@ -1168,3 +1168,54 @@ body.login-body {
     max-height: 100%;
     object-fit: contain;
 }
+
+/* Container do botão para permitir o posicionamento da tarja */
+.btn-breve {
+    position: relative;
+    overflow: hidden; /* Garante que a tarja não saia do limite do botão */
+    cursor: not-allowed !important;
+    filter: grayscale(0.8); /* Deixa o botão levemente cinza */
+    opacity: 0.7;
+}
+
+/* A tarja "EM BREVE" */
+.btn-breve::after {
+    content: "EM BREVE";
+    position: absolute;
+    top: 20px;
+    right: -35px;
+    width: 150px;
+    background: #dc2626; /* Vermelho */
+    color: white;
+    font-size: 0.7rem;
+    font-weight: bold;
+    text-align: center;
+    transform: rotate(45deg); /* Diagonal */
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    pointer-events: none; /* Garante que a tarja não atrapalhe o layout */
+    padding: 2px 0;
+}
+
+/* Container para a logo fixa no fundo branco */
+.logo-fixa-background {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 200px; /* Ajuste a largura conforme o tamanho da sua logo */
+    height: 100px;
+    background-color: #ffffff; /* Fundo branco solicitado */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px;
+    z-index: 1; /* Valor baixo para ficar por baixo da animação (bandeira) */
+    border-bottom-right-radius: 12px;
+    box-shadow: 2px 2px 8px rgba(0,0,0,0.1);
+}
+
+.logo-fixa-background img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+

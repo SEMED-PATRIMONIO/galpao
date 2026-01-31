@@ -207,7 +207,7 @@ async function carregarDashboard() {
     // Cabeçalho Padrão
     let html = `
         <div class="header-app">
-            <span class="logo-texto">📦 PATRIMÔNIO SEMED</span>
+            <span class="logo-texto">SEMED</span>
             <div style="text-align: right;">
                 <div style="font-size: 0.9rem; font-weight: bold; color: #1e40af;">Olá, ${nome} (${perfil.toUpperCase()})</div>
                 <button onclick="logout()" style="width: auto; padding: 5px 15px; background: #dc2626; font-size: 0.8rem; margin-top: 5px; color:white; border:none; border-radius:4px; cursor:pointer;">SAIR</button>
@@ -234,8 +234,12 @@ async function carregarDashboard() {
                 <i>👥</i><span>GERENCIAR USUÁRIOS</span>
             </button>
             <button class="btn-grande" onclick="telaAdminDashboard()">
-                <i>📊</i><span>PAINEL DE PEDIDOS</span>
-            </button>            
+                <i>📈</i><span>PAINEL DE PEDIDOS</span>
+            </button>
+            <button class="btn-grande" onclick="telaVisualizarEstoque()">
+                <i>🔍</i><span>VISUALIZAR ESTOQUE</span>
+            </button>
+            
         `;
     }
 
@@ -271,14 +275,14 @@ async function carregarDashboard() {
             <button class="btn-grande" onclick="telaAdminCriarPedido()">
                 <i>➕</i><span>CRIAR PEDIDO</span>
             </button>
-            <button class="btn-grande" onclick="telaEntradaPatrimonioLote()">
+            <button class="btn-grande btn-breve">
                 <i>🏷️</i><span>LANÇAR PATRIMÔNIO</span>
             </button>
             <button class="btn-grande" onclick="telaVisualizarEstoque()">
-                <i>📊</i><span>VISUALIZAR ESTOQUE</span>
+                <i>🔍</i><span>VISUALIZAR ESTOQUE</span>
             </button>
             <button class="btn-grande" onclick="telaAdminDashboard()">
-                <i>📊</i><span>PAINEL DE PEDIDOS</span>
+                <i>📈</i><span>PAINEL DE PEDIDOS</span>
             </button>
         `;
         // Chama alertas de novas solicitações de Escolas e Logística
@@ -300,14 +304,14 @@ async function carregarDashboard() {
             <button class="btn-grande" onclick="telaReceberDevolucoes()">
                 <i>🔄</i><span>RECEBER DEVOLUÇÕES</span>
             </button>
-             <button class="btn-grande" onclick="telaEntradaPatrimonioLote()">
+             <button class="btn-grande btn-breve">
                 <i>🏷️</i><span>LANÇAR PATRIMÔNIO</span>
             </button>
             <button class="btn-grande" onclick="telaVisualizarEstoque()">
-                <i>📊</i><span>VISUALIZAR ESTOQUE</span>
+                <i>🔍</i><span>VISUALIZAR ESTOQUE</span>
             </button>
             <button class="btn-grande" onclick="telaAdminDashboard()">
-                <i>📊</i><span>PAINEL DE PEDIDOS</span>
+                <i>📈</i><span>PAINEL DE PEDIDOS</span>
             </button>
         `;
         // Chama alertas de pedidos aguardando separação
@@ -320,7 +324,7 @@ async function carregarDashboard() {
             <button class="btn-grande" onclick="telaLogisticaEntregas()">
                 <i>🚚</i><span>RECOLHER E TRANSPORTAR PEDIDO</span>
             </button>
-            <button class="btn-grande" onclick="telaSolicitarPatrimonio()">
+            <button class="btn-grande btn-breve">
                 <i>🏷️</i><span>SOLICITAR PATRIMÔNIO</span>
             </button>
         `;

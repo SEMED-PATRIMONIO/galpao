@@ -1146,3 +1146,25 @@ body.login-body {
     color: #cbd5e1;
 }
 .fase-card:last-child::after { content: ''; } /* Remove seta do último */
+
+/* Container para a logo fixa no fundo */
+.bg-fixo-logomd {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 250px; /* Ajuste conforme o tamanho da sua logo */
+    height: 120px;
+    background-color: #ffffff; /* Fundo branco solicitado */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px;
+    z-index: 0; /* Fica por baixo do efeito de bandeira que deve ter z-index maior */
+    border-bottom-right-radius: 15px; /* Opcional: arredonda o canto interno */
+}
+
+.bg-fixo-logomd img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}

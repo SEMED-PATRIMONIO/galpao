@@ -1264,5 +1264,5 @@ body.login-body {
 /* 3. Card de Login */
 #login-container {
     position: relative;
-    z-index: 10; /* Sempre no topo para ser clicável */
+    z-index: 15; /* Sempre no topo para ser clicável */
 }

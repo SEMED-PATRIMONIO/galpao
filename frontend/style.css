@@ -1263,3 +1263,49 @@ body.login-body {
     position: relative;
     z-index: 15; /* Sempre no topo para ser clicável */
 }
+
+/* O painel de vidro no canto superior direito */
+.painel-usuario-vidro {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 15px 25px;
+    
+    /* O segredo do vidro: fundo semi-transparente + desfoque */
+    background: rgba(255, 255, 255, 0.1); 
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 15px;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
+    
+    z-index: 100; /* Garante que fique acima de tudo */
+    text-align: right;
+}
+
+.nome-usuario-painel {
+    color: white;
+    font-weight: bold;
+    font-size: 0.95rem;
+    display: block;
+    margin-bottom: 8px;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+}
+
+.btn-sair-vidro {
+    background: rgba(220, 38, 38, 0.8);
+    color: white;
+    border: none;
+    padding: 5px 15px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    font-weight: bold;
+    transition: 0.3s;
+}
+
+.btn-sair-vidro:hover {
+    background: #dc2626;
+    transform: scale(1.05);
+}

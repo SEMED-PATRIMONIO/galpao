@@ -210,14 +210,13 @@ async function carregarDashboard() {
 
     // Cabeçalho Padrão
     let html = `
-        <div class="header-app">
-            <span class="logo-texto">SEMED</span>
-            <div style="text-align: right;">
-                <div style="font-size: 0.9rem; font-weight: bold; color: #1e40af;">Olá, ${nome} (${perfil.toUpperCase()})</div>
-                <button onclick="logout()" style="width: auto; padding: 5px 15px; background: #dc2626; font-size: 0.8rem; margin-top: 5px; color:white; border:none; border-radius:4px; cursor:pointer;">SAIR</button>
-            </div>
+        <div class="painel-usuario-vidro">
+            <span class="nome-usuario-painel">${nome.toUpperCase()}</span>
+            <button onclick="logout()" class="btn-sair-vidro">SAIR</button>
         </div>
-        <div id="area-alertas" style="margin-bottom:20px;"></div>
+
+        <div id="area-alertas" style="margin-top: 80px; margin-bottom: 20px;"></div>
+        
         <div class="grid-menu-principal">
     `;
 

@@ -193,7 +193,11 @@ async function carregarDashboard() {
     const localId = localStorage.getItem('local_id');
     const container = document.getElementById('app-content');
     const loginContainer = document.getElementById('login-container');
-
+    if (container) {
+        container.style.display = 'block';
+        container.style.position = 'relative'; // Reforço via JS
+        container.style.zIndex = '20';         // Reforço via JS
+    }
 
     if (!perfil) {
         if (loginContainer) loginContainer.style.display = 'block';

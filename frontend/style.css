@@ -217,22 +217,19 @@ button:active { transform: scale(0.98); }
 .icone-app { font-size: 3rem; margin-bottom: 10px; display: block; }
 
 #app-content {
-    width: 100%;
-    max-width: 900px;
-    padding: 10px;
-    overflow-y: auto;
-    overflow-x: hidden;
+    position: relative; /* Essencial para o z-index funcionar */
+    z-index: 20;        /* Maior que o login(10) e que o fundo(5) */
+    min-height: 100vh;
+    padding-top: 20px;  /* Espaço para não colar no topo */
 }
 
 .header-app {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background: var(--white);
-    padding: 10px 20px;
-    border-radius: 15px;
-    margin-bottom: 25px;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    position: sticky;
+    top: 0;
+    z-index: 30; /* Fica acima dos botões do menu */
+    background: white;
+    padding: 15px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
 }
 
 

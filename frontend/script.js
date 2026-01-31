@@ -222,10 +222,10 @@ async function carregarDashboard() {
 
     // --- 1. FERRAMENTAS COMUNS (Todos os perfis) ---
     const menuComum = `
-        <button class="btn-grande" onclick="abrirCalculadoraConversao()">
+        <button class="btn-grande btn-vidro" onclick="abrirCalculadoraConversao()">
             <i>🧮</i><span>CALCULADORA</span>
         </button>
-        <button class="btn-grande" onclick="telaAlterarSenha()">
+        <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()">
             <i>🔑</i><span>ALTERAR MINHA SENHA</span>
         </button>
     `;
@@ -233,13 +233,13 @@ async function carregarDashboard() {
     // --- 2. PERFIL: SUPER (Gestão de Usuários) ---
     if (perfil === 'super') {
         html += `
-            <button class="btn-grande" onclick="telaGerenciarUsuarios()">
+            <button class="btn-grande btn-vidro" onclick="telaGerenciarUsuarios()">
                 <i>👥</i><span>GERENCIAR USUÁRIOS</span>
             </button>
-            <button class="btn-grande" onclick="telaAdminDashboard()">
+            <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()">
                 <i>📈</i><span>PAINEL DE PEDIDOS</span>
             </button>
-            <button class="btn-grande" onclick="telaVisualizarEstoque()">
+            <button class="btn-grande btn-vidro" onclick="telaVisualizarEstoque()">
                 <i>🔍</i><span>VISUALIZAR ESTOQUE</span>
             </button>
             
@@ -249,13 +249,13 @@ async function carregarDashboard() {
     // --- 3. PERFIL: ESCOLA ---
     if (perfil === 'escola') {
         html += `
-            <button class="btn-grande" onclick="telaEscolaConfirmarRecebimento()">
+            <button class="btn-grande btn-vidro" onclick="telaEscolaConfirmarRecebimento()">
                 <i>🚚</i><span>CONFIRMAR RECEBIMENTO</span>
             </button>
-            <button class="btn-grande" onclick="telaSolicitarUniforme()">
+            <button class="btn-grande btn-vidro" onclick="telaSolicitarUniforme()">
                 <i>👕</i><span>SOLICITAR UNIFORMES</span>
             </button>
-            <button class="btn-grande" onclick="telaDevolucaoUniforme()">
+            <button class="btn-grande btn-vidro" onclick="telaDevolucaoUniforme()">
                 <i>🔄</i><span>DEVOLVER UNIFORMES</span>
             </button>
         `;
@@ -266,25 +266,25 @@ async function carregarDashboard() {
     // --- 4. PERFIL: ADMIN ---
     if (perfil === 'admin') {
         html += `
-            <button class="btn-grande" onclick="telaCadastrosBase()">
+            <button class="btn-grande btn-vidro" onclick="telaCadastrosBase()">
                 <i>⚙️</i><span>CADASTROS BÁSICOS</span>
             </button>
-            <button class="btn-grande" onclick="telaAdminGerenciarSolicitacoes()">
+            <button class="btn-grande btn-vidro" onclick="telaAdminGerenciarSolicitacoes()">
                 <i>⚖️</i><span>AUTORIZAR SOLICITAÇÕES</span>
             </button>
-            <button class="btn-grande" onclick="telaAbastecerEstoque()">
+            <button class="btn-grande btn-vidro" onclick="telaAbastecerEstoque()">
                 <i>📥</i><span>ENTRADA ESTOQUE</span>
             </button>
-            <button class="btn-grande" onclick="telaAdminCriarPedido()">
+            <button class="btn-grande btn-vidro" onclick="telaAdminCriarPedido()">
                 <i>➕</i><span>CRIAR PEDIDO</span>
             </button>
             <button class="btn-grande btn-breve">
                 <i>🏷️</i><span>LANÇAR PATRIMÔNIO</span>
             </button>
-            <button class="btn-grande" onclick="telaVisualizarEstoque()">
+            <button class="btn-grande btn-vidro" onclick="telaVisualizarEstoque()">
                 <i>🔍</i><span>VISUALIZAR ESTOQUE</span>
             </button>
-            <button class="btn-grande" onclick="telaAdminDashboard()">
+            <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()">
                 <i>📈</i><span>PAINEL DE PEDIDOS</span>
             </button>
         `;
@@ -295,25 +295,25 @@ async function carregarDashboard() {
     // --- 5. PERFIL: ESTOQUE ---
     if (perfil === 'estoque') {
         html += `
-            <button class="btn-grande" onclick="telaEstoquePedidosPendentes()">
+            <button class="btn-grande btn-vidro" onclick="telaEstoquePedidosPendentes()">
                 <i>📦</i><span>SEPARAÇÃO DE VOLUMES</span>
             </button>
-            <button class="btn-grande" onclick="telaCadastrosBase()">
+            <button class="btn-grande btn-vidro onclick="telaCadastrosBase()">
                 <i>⚙️</i><span>CADASTROS BÁSICOS</span>
             </button>            
-            <button class="btn-grande" onclick="telaAbastecerEstoque()">
+            <button class="btn-grande btn-vidro" onclick="telaAbastecerEstoque()">
                 <i>📥</i><span>ENTRADA ESTOQUE</span>
             </button>
-            <button class="btn-grande" onclick="telaReceberDevolucoes()">
+            <button class="btn-grande btn-vidro" onclick="telaReceberDevolucoes()">
                 <i>🔄</i><span>RECEBER DEVOLUÇÕES</span>
             </button>
              <button class="btn-grande btn-breve">
                 <i>🏷️</i><span>LANÇAR PATRIMÔNIO</span>
             </button>
-            <button class="btn-grande" onclick="telaVisualizarEstoque()">
+            <button class="btn-grande btn-vidro" onclick="telaVisualizarEstoque()">
                 <i>🔍</i><span>VISUALIZAR ESTOQUE</span>
             </button>
-            <button class="btn-grande" onclick="telaAdminDashboard()">
+            <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()">
                 <i>📈</i><span>PAINEL DE PEDIDOS</span>
             </button>
         `;
@@ -324,7 +324,7 @@ async function carregarDashboard() {
     // --- 6. PERFIL: LOGÍSTICA ---
     if (perfil === 'logistica') {
         html += `
-            <button class="btn-grande" onclick="telaLogisticaEntregas()">
+            <button class="btn-grande btn-vidro" onclick="telaLogisticaEntregas()">
                 <i>🚚</i><span>RECOLHER E TRANSPORTAR PEDIDO</span>
             </button>
             <button class="btn-grande btn-breve">

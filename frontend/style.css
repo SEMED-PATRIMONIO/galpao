@@ -299,12 +299,32 @@ body.login-body {
 /* Ajuste da Grade para 2 colunas (dois em dois) */
 .grid-menu-principal {
     display: grid;
-    /* Divide o espaço em 5 colunas iguais */
-    grid-template-columns: repeat(5, 1fr); 
-    gap: 15px; /* Espaço entre os botões */
+    /* Define 3 colunas no desktop, mas centraliza se houver menos */
+    grid-template-columns: repeat(3, 1fr); 
+    gap: 25px;
+    max-width: 1000px;
+    margin: 40px auto; /* Centraliza a grid na tela */
     padding: 20px;
-    max-width: 1200px;
-    margin: 0 auto;
+    justify-content: center;
+}
+
+.btn-vidro {
+    background: rgba(255, 255, 255, 0.15) !important;
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    color: white !important;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+    transition: all 0.3s ease;
+}
+
+.btn-vidro:hover {
+    background: rgba(255, 255, 255, 0.25) !important;
+    transform: translateY(-5px);
+}
+
+.btn-vidro i {
+    color: white !important;
 }
 
 /* Estilo do botão quadrado */
@@ -343,7 +363,13 @@ body.login-body {
 /* Responsividade: em telas pequenas (celular), diminui para 2 colunas */
 @media (max-width: 768px) {
     .grid-menu-principal {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: 1fr; /* Uma única coluna */
+        max-width: 400px; /* Evita que o botão fique largo demais no celular */
+    }
+    .painel-usuario-vidro {
+        width: calc(100% - 40px);
+        left: 20px;
+        text-align: center;
     }
 }
 

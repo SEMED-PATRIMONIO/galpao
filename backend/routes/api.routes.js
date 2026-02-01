@@ -1311,21 +1311,44 @@ router.get('/produtos/lista', verificarToken, async (req, res) => {
 });
 
 router.post('/estoque/entrada-patrimonio-lote', verificarToken, async (req, res) => {
-    const { produto_id, series, local_id } = req.body;
+    const { doc, itens } = req.body; 
+    // itens = { produto_id, quantidade, series: [] }
+    const client = await db.connect();
 
     try {
-        await db.query('BEGIN');
-        for (const serie of series) {
-            await db.query(
-                "INSERT INTO estoque_individual (produto_id, local_id, numero_serie, status) VALUES ($1, $2, $3, 'DISPONIVEL')",
-                [produto_id, local_id, serie.toUpperCase()]
+        await client.query('BEGIN');
+
+        // 1. Registra o Documento Fiscal
+        const docRes = await client.query(
+            `INSERT INTO documentos_fiscais (tipo_doc, numero_doc, serie_doc, chave_nfe, usuario_id) 
+             VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+            [doc.tipo, doc.numero, doc.serie, doc.chave, req.usuario.id]
+        );
+        const documentoId = docRes.rows[0].id;
+
+        // 2. Atualiza Saldo Geral na tabela de produtos
+        await client.query(
+            "UPDATE produtos_estoque SET quantidade_estoque = quantidade_estoque + $1 WHERE id = $2",
+            [itens.quantidade, itens.produto_id]
+        );
+
+        // 3. Insere cada item individual com seu número de série
+        for (const serie of itens.series) {
+            await client.query(
+                `INSERT INTO patrimonios_individuais (produto_id, documento_id, numero_serie) 
+                 VALUES ($1, $2, $3)`,
+                [itens.produto_id, documentoId, serie]
             );
         }
-        await db.query('COMMIT');
-        res.status(201).json({ message: "Itens registrados com sucesso!" });
+
+        await client.query('COMMIT');
+        res.json({ message: "Entrada de lote realizada com sucesso!" });
+
     } catch (err) {
-        await db.query('ROLLBACK');
-        res.status(500).json({ error: "Erro ao inserir: " + err.message });
+        await client.query('ROLLBACK');
+        res.status(500).json({ error: "Erro na entrada: " + err.message });
+    } finally {
+        client.release();
     }
 });
 
@@ -2085,6 +2108,259 @@ router.get('/escola/minhas-remessas-transporte', verificarToken, async (req, res
     } catch (err) {
         console.error("Erro na rota da escola:", err.message);
         res.status(500).json({ error: "Erro interno: " + err.message });
+    }
+});
+
+router.post('/impressoras/chamado', verificarToken, async (req, res) => {
+    const { impressora_id, tipo, motivo, observacoes } = req.body;
+    try {
+        // Valida se já existe chamado ABERTO para esta impressora e TIPO
+        const check = await db.query(
+            "SELECT id FROM chamados_impressora WHERE impressora_id = $1 AND tipo = $2 AND status = 'ABERTO'",
+            [impressora_id, tipo]
+        );
+
+        if (check.rowCount > 0) {
+            return res.status(400).json({ error: `Já existe um chamado de ${tipo} em aberto para esta impressora.` });
+        }
+
+        await db.query(
+            "INSERT INTO chamados_impressora (impressora_id, tipo, motivo, observacoes) VALUES ($1, $2, $3, $4)",
+            [impressora_id, tipo, motivo, observacoes]
+        );
+        res.json({ message: "Solicitação registrada com sucesso!" });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Fechar chamado com cálculo automático de tempo
+router.patch('/impressoras/fechar-chamado/:id', verificarToken, async (req, res) => {
+    try {
+        const query = `
+            UPDATE chamados_impressora 
+            SET status = 'FECHADO', 
+                data_fechamento = NOW(),
+                tempo_decorrido = NOW() - data_abertura
+            WHERE id = $1
+        `;
+        await db.query(query, [req.params.id]);
+        res.json({ message: "Chamado finalizado com sucesso!" });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/impressoras/chamados/abertos', verificarToken, async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                c.id, 
+                c.tipo, 
+                c.motivo, 
+                c.observacoes, 
+                c.data_abertura,
+                i.modelo,
+                l.nome as escola_nome
+            FROM chamados_impressora c
+            JOIN impressoras i ON c.impressora_id = i.id
+            JOIN locais l ON i.local_id = l.id
+            WHERE c.status = 'ABERTO'
+            ORDER BY c.data_abertura ASC
+        `;
+        const { rows } = await db.query(query);
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/impressoras', verificarToken, async (req, res) => {
+    const { local_id, modelo } = req.body;
+    
+    try {
+        // Validação simples
+        if (!local_id || !modelo) {
+            return res.status(400).json({ error: "Local e modelo são obrigatórios." });
+        }
+
+        const query = "INSERT INTO impressoras (local_id, modelo) VALUES ($1, $2)";
+        await db.query(query, [local_id, modelo]);
+        
+        res.json({ message: "Impressora cadastrada com sucesso!" });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Erro ao cadastrar impressora: " + err.message });
+    }
+});
+
+router.get('/impressoras/dashboard-stats', verificarToken, async (req, res) => {
+    const { inicio, fim, local_id } = req.query;
+    
+    try {
+        let filtroLocal = local_id && local_id !== 'TODAS' ? `AND i.local_id = ${local_id}` : '';
+        
+        const query = `
+            SELECT 
+                COUNT(*) FILTER (WHERE tipo = 'recarga') as total_recarga,
+                COUNT(*) FILTER (WHERE tipo = 'manutencao') as total_manutencao,
+                COUNT(*) FILTER (WHERE status = 'FECHADO') as atendidos,
+                COUNT(*) FILTER (WHERE status = 'ABERTO') as pendentes
+            FROM chamados_impressora c
+            JOIN impressoras i ON c.impressora_id = i.id
+            WHERE c.data_abertura::date BETWEEN $1 AND $2
+            ${filtroLocal}
+        `;
+        
+        const { rows } = await db.query(query, [inicio, fim]);
+        res.json(rows[0]);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.get('/impressoras/relatorio-geral', verificarToken, async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                i.id,
+                i.modelo,
+                l.nome as local_nome,
+                (SELECT tipo FROM chamados_impressora 
+                 WHERE impressora_id = i.id AND status = 'ABERTO' 
+                 LIMIT 1) as status_chamado
+            FROM impressoras i
+            JOIN locais l ON i.local_id = l.id
+            ORDER BY l.nome ASC, i.modelo ASC
+        `;
+        const { rows } = await db.query(query);
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/pedidos/admin-direto', verificarToken, async (req, res) => {
+    const { local_destino_id, itens } = req.body; // itens = [{produto_id, qtd}]
+    const cliente = await db.connect(); // Usamos 'connect' para garantir uma transação segura
+
+    try {
+        await cliente.query('BEGIN'); // Início da transação
+
+        // 1. Cria o Pedido já APROVADO
+        const pedidoRes = await cliente.query(
+            `INSERT INTO pedidos (local_destino_id, status, usuario_origem_id, data_criacao) 
+             VALUES ($1, 'APROVADO', $2, NOW()) RETURNING id`,
+            [local_destino_id, req.usuario.id]
+        );
+        const pedidoId = pedidoRes.rows[0].id;
+
+        // 2. Processa cada item: Baixa no estoque + Vínculo ao pedido
+        for (let item of itens) {
+            // Verifica se tem estoque e já subtrai (Baixa automática)
+            const estoqueRes = await cliente.query(
+                `UPDATE produtos_estoque 
+                 SET quantidade_estoque = quantidade_estoque - $1 
+                 WHERE id = $2 AND quantidade_estoque >= $1
+                 RETURNING nome`,
+                [item.quantidade, item.produto_id]
+            );
+
+            if (estoqueRes.rowCount === 0) {
+                throw new Error(`Estoque insuficiente ou produto ID ${item.produto_id} não encontrado.`);
+            }
+
+            // Insere na tabela de itens do pedido
+            await cliente.query(
+                `INSERT INTO pedido_itens (pedido_id, produto_id, quantidade) VALUES ($1, $2, $3)`,
+                [pedidoId, item.produto_id, item.quantidade]
+            );
+        }
+
+        await cliente.query('COMMIT'); // Grava tudo no banco
+        res.json({ message: "Pedido criado e estoque atualizado!", pedido_id: pedidoId });
+
+    } catch (err) {
+        await cliente.query('ROLLBACK'); // Cancela tudo em caso de erro
+        res.status(500).json({ error: err.message });
+    } finally {
+        cliente.release();
+    }
+});
+
+router.post('/pedidos/admin-direto-final', verificarToken, async (req, res) => {
+    const { local_destino_id, itens } = req.body; 
+    const client = await db.connect();
+
+    try {
+        await client.query('BEGIN');
+
+        // 1. Cria o pedido já com status 'APROVADO' (vai direto para separação)
+        const pedidoRes = await client.query(
+            `INSERT INTO pedidos (local_destino_id, status, usuario_origem_id, data_criacao) 
+             VALUES ($1, 'APROVADO', $2, NOW()) RETURNING id`,
+            [local_destino_id, req.usuario.id]
+        );
+        const pedidoId = pedidoRes.rows[0].id;
+
+        // 2. Itera sobre os itens para baixar estoque e vincular ao pedido
+        for (const item of itens) {
+            // Tenta dar a baixa no estoque verificando disponibilidade
+            const baixaRes = await client.query(
+                `UPDATE produtos_estoque 
+                 SET quantidade_estoque = quantidade_estoque - $1 
+                 WHERE id = $2 AND quantidade_estoque >= $1
+                 RETURNING nome`,
+                [item.quantidade, item.produto_id]
+            );
+
+            if (baixaRes.rowCount === 0) {
+                throw new Error(`Estoque insuficiente para o produto ID: ${item.produto_id}`);
+            }
+
+            // Registra o item no pedido (com tamanho, se houver)
+            await client.query(
+                `INSERT INTO pedido_itens (pedido_id, produto_id, quantidade, tamanho) 
+                 VALUES ($1, $2, $3, $4)`,
+                [pedidoId, item.produto_id, item.quantidade, item.tamanho || 'UNICO']
+            );
+        }
+
+        await client.query('COMMIT');
+        res.json({ message: "Pedido gerado com sucesso! Estoque atualizado.", pedido_id: pedidoId });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
+router.get('/estoque/consulta-patrimonio/:serie', verificarToken, async (req, res) => {
+    const { serie } = req.params;
+    try {
+        const query = `
+            SELECT 
+                pi.numero_serie,
+                pi.status,
+                p.nome AS produto_nome,
+                df.numero_doc,
+                df.serie_doc,
+                df.chave_nfe,
+                to_char(df.data_entrada, 'DD/MM/YYYY HH24:MI') as data_entrada_formatada,
+                u.nome as cadastrado_por
+            FROM patrimonios_individuais pi
+            JOIN produtos_estoque p ON pi.produto_id = p.id
+            JOIN documentos_fiscais df ON pi.documento_id = df.id
+            JOIN usuarios u ON df.usuario_id = u.id
+            WHERE pi.numero_serie = $1
+        `;
+        const { rows } = await db.query(query, [serie]);
+
+        if (rows.length === 0) {
+            return res.status(404).json({ error: "Patrimônio não localizado no sistema." });
+        }
+
+        res.json(rows[0]);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
     }
 });
 

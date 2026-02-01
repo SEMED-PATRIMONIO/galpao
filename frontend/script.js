@@ -187,12 +187,17 @@ async function renderizarEstoqueCentral() {
 
 // --- FUNÇÃO DASHBOARD REVISADA COM REGRAS DE PERFIS ESPECÍFICAS ---
 async function carregarDashboard() {
+    let chart1, chart2;
+    let dadosEstoqueCache = [];
+    let categoriaAtual = 'UNIFORMES';
+    let carrinhoAdmin = [];
     await inicializarSessaoUsuario();
     const perfil = localStorage.getItem('perfil') ? localStorage.getItem('perfil').toLowerCase() : null;
     const nome = localStorage.getItem('nome');
     const localId = localStorage.getItem('local_id');
     const container = document.getElementById('app-content');
     const loginContainer = document.getElementById('login-container');
+    let modoComparacao = false;
     if (container) {
         container.style.display = 'block';
         container.style.position = 'relative'; // Reforço via JS
@@ -242,10 +247,34 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="telaVisualizarEstoque()">
                 <i>🔍</i><span>VISUALIZAR ESTOQUE</span>
             </button>
-            
         `;
     }
-
+    if (perfil === 'dti') {
+        html += `
+            <button class="btn-grande btn-vidro" onclick="telaCadastroImpressoras()">
+                <i>🖨️</i><span>CADASTRAR IMPRESSORAS</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="telaListarChamadosAbertos()">
+                <i>📋</i><span>ATENDER CHAMADOS</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="telaDashboardImpressoras()">
+                <i>📈</i><span>DASHBOARD TÉCNICO</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioGeralAtivos()">
+                <i>📋</i><span>INVENTÁRIO DE ATIVOS</span>
+            </button>
+        `;
+    }
+    if (perfil === 'impres') {
+        html += `
+            <button class="btn-grande btn-vidro" onclick="telaListarChamadosAbertos()">
+                <i>📋</i><span>FILA CHAMADOS</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="telaDashboardImpressoras()">
+                <i>📈</i><span>DASHBOARD TÉCNICO</span>
+            </button>
+        `;
+    }
     // --- 3. PERFIL: ESCOLA ---
     if (perfil === 'escola') {
         html += `
@@ -258,6 +287,12 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="telaDevolucaoUniforme()">
                 <i>🔄</i><span>DEVOLVER UNIFORMES</span>
             </button>
+            <button class="btn-grande btn-vidro" onclick="telaSolicitarServicoImpressora('recarga')">
+                <i>💧</i><span>SOLICITAR RECARGA DE TONER</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="telaSolicitarServicoImpressora('manutencao')">
+                <i>🛠️</i><span>SOLICITAR MANUTENÇÃO IMPRESSORA</span>
+            </button>            
         `;
         // Chama alertas específicos da escola (Pedidos em transporte para o localId)
         setTimeout(() => verificarAlertasEscola(), 500);
@@ -280,6 +315,9 @@ async function carregarDashboard() {
             </button>
             <button class="btn-grande btn-breve">
                 <i>🏷️</i><span>LANÇAR PATRIMÔNIO</span>
+            </button>
+            <button class="btn-grande" onclick="telaEntradaPatrimonioLote()">
+                <i>🏷️</i><span>LANÇAR ENTRADA PATRIMÔNIO</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="telaVisualizarEstoque()">
                 <i>🔍</i><span>VISUALIZAR ESTOQUE</span>
@@ -343,73 +381,116 @@ async function carregarDashboard() {
 
 async function telaVisualizarEstoque() {
     const container = document.getElementById('app-content');
-    container.innerHTML = '<div style="padding:20px;">🔄 SINCRONIZANDO SALDOS DE ESTOQUE...</div>';
+    container.innerHTML = '<div style="padding:20px; color:white; text-align:center;">🔄 SINCRONIZANDO SALDOS DE ESTOQUE...</div>';
 
     try {
         const res = await fetch(`${API_URL}/estoque/geral`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
-        const produtos = await res.json();
+        dadosEstoqueCache = await res.json();
 
-        let html = `
+        container.innerHTML = `
             <div style="padding:20px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; background:#f8fafc; padding:15px; border-radius:10px; border-left:5px solid #1e3a8a;">
-                    <h2 style="color:#1e3a8a; margin:0;">📊 GESTÃO DE ESTOQUE REAL (POR CATEGORIA)</h2>
-                    <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:10px 20px; border-radius:6px; cursor:pointer; font-weight:bold; box-shadow:0 2px 4px rgba(0,0,0,0.1);">⬅️ VOLTAR AO MENU</button>
+                <div class="painel-usuario-vidro" style="position:relative; width:100%; top:0; right:0; margin-bottom:25px; display:flex; justify-content:space-between; align-items:center;">
+                    <h2 style="color:white; margin:0; font-size:1.2rem;">📊 GESTÃO DE ESTOQUE REAL</h2>
+                    <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background:#64748b;">⬅️ VOLTAR</button>
                 </div>
 
-                <table style="width:100%; border-collapse:collapse; background:white; border-radius:12px; overflow:hidden; box-shadow:0 4px 15px rgba(0,0,0,0.1);">
-                    <thead>
-                        <tr style="background:#1e3a8a; color:white;">
-                            <th style="padding:15px; text-align:left;">PRODUTO</th>
-                            <th style="padding:15px; text-align:center;">CATEGORIA</th>
-                            <th style="padding:15px; text-align:center;">SALDO REAL (SOMA)</th>
-                            <th style="padding:15px; text-align:center;">STATUS</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${produtos.map(p => {
-                            const isUniforme = p.tipo === 'UNIFORMES';
-                            // A lógica de alerta mínimo agora usa o valor calculado em tempo real
-                            const status = Number(p.quantidade_estoque) <= Number(p.alerta_minimo) 
-                                ? '<span style="color:#ef4444; font-weight:bold;">🔴 CRÍTICO</span>' 
-                                : '<span style="color:#10b981; font-weight:bold;">🟢 OK</span>';
-                            
-                            return `
-                                <tr style="border-bottom:1px solid #f1f5f9; hover:background:#f8fafc;">
-                                    <td style="padding:15px; font-weight:500;">${p.nome}</td>
-                                    <td style="padding:15px; text-align:center;">
-                                        <span style="background:#f1f5f9; padding:4px 8px; border-radius:4px; font-size:0.8rem; color:#475569;">${p.tipo}</span>
-                                    </td>
-                                    <td style="padding:15px; text-align:center;">
-                                        ${isUniforme ? 
-                                            `<button onclick="abrirModalGrade(${p.id}, '${p.nome}')" style="background:#eff6ff; color:#1e40af; border:1px solid #bfdbfe; padding:6px 12px; border-radius:6px; cursor:pointer; font-weight:bold; transition:all 0.2s;">
-                                                🔍 ${p.quantidade_estoque} (VER GRADE)
-                                             </button>` : 
-                                            `<strong style="font-size:1.1rem; color:#1e293b;">${p.quantidade_estoque}</strong>`
-                                        }
-                                    </td>
-                                    <td style="padding:15px; text-align:center;">${status}</td>
-                                </tr>
-                            `;
-                        }).join('')}
-                    </tbody>
-                </table>
+                <div class="container-busca-estoque">
+                    <span class="icone-lupa-busca">🔍</span>
+                    <input type="text" id="busca-produto" class="input-busca-vidro" 
+                           placeholder="Pesquisar produto nesta categoria..." 
+                           oninput="filtrarEstoque()">
+                </div>
+
+                <div class="container-abas">
+                    <div class="aba-item ativa" id="tab-UNIFORMES" onclick="mudarAba('UNIFORMES')">UNIFORMES</div>
+                    <div class="aba-item" id="tab-MATERIAL" onclick="mudarAba('MATERIAL')">MATERIAL</div>
+                    <div class="aba-item" id="tab-PATRIMONIO" onclick="mudarAba('PATRIMONIO')">PATRIMÔNIO</div>
+                </div>
+
+                <div id="conteudo-estoque" class="painel-vidro" style="padding:0; overflow:hidden;"></div>
             </div>
 
-            <div id="modalGrade" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:9999; justify-content:center; align-items:center; backdrop-filter: blur(4px);">
-                <div style="background:white; padding:30px; border-radius:16px; width:95%; max-width:450px; box-shadow:0 20px 25px -5px rgba(0,0,0,0.2);">
+            <div id="modalGrade" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:9999; justify-content:center; align-items:center; backdrop-filter: blur(8px);">
+                <div class="painel-vidro" style="width:95%; max-width:450px; background:white;">
                     <h3 id="modalTitulo" style="margin-top:0; color:#1e3a8a; border-bottom:2px solid #f1f5f9; padding-bottom:15px; text-align:center;"></h3>
-                    <div id="modalCorpo" style="margin:25px 0; display:grid; grid-template-columns:repeat(3, 1fr); gap:15px;"></div>
-                    <button onclick="document.getElementById('modalGrade').style.display='none'" style="width:100%; padding:12px; background:#ef4444; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:bold; font-size:1rem;">FECHAR VISUALIZAÇÃO</button>
+                    <div id="modalCorpo" style="margin:25px 0; display:grid; grid-template-columns:repeat(3, 1fr); gap:15px; color: #1e3a8a;"></div>
+                    <button onclick="document.getElementById('modalGrade').style.display='none'" class="btn-sair-vidro" style="width:100%; background:#ef4444;">FECHAR VISUALIZAÇÃO</button>
                 </div>
             </div>
         `;
-        container.innerHTML = html;
+
+        mudarAba('UNIFORMES');
+
     } catch (err) {
-        console.error(err);
-        container.innerHTML = "<div style='padding:20px; color:red;'>🚨 Erro ao carregar estoque. Verifique a conexão com o servidor.</div>";
+        container.innerHTML = "<div class='painel-vidro' style='color:#f87171;'>🚨 Erro ao carregar estoque.</div>";
     }
+}
+
+function mudarAba(novaCategoria) {
+    categoriaAtual = novaCategoria;
+    
+    // Atualiza visual das abas
+    document.querySelectorAll('.aba-item').forEach(aba => aba.classList.remove('ativa'));
+    document.getElementById(`tab-${novaCategoria}`).classList.add('ativa');
+
+    // Limpa o campo de busca ao trocar de categoria para não confundir o usuário
+    document.getElementById('busca-produto').value = '';
+    
+    filtrarEstoque();
+}
+
+function filtrarEstoque() {
+    const termoBusca = document.getElementById('busca-produto').value.toLowerCase();
+    
+    // Filtra por Categoria E por Texto (se houver)
+    const produtosExibidos = dadosEstoqueCache.filter(p => {
+        const matchCategoria = p.tipo === categoriaAtual;
+        const matchTexto = p.nome.toLowerCase().includes(termoBusca);
+        return matchCategoria && matchTexto;
+    });
+
+    const areaTabela = document.getElementById('conteudo-estoque');
+    
+    if (produtosExibidos.length === 0) {
+        areaTabela.innerHTML = `<div style="padding:40px; text-align:center; color:#cbd5e1;">Nenhum item encontrado.</div>`;
+        return;
+    }
+
+    areaTabela.innerHTML = `
+        <table style="width:100%; border-collapse:collapse; color:white;">
+            <thead>
+                <tr style="background:rgba(255,255,255,0.1);">
+                    <th style="padding:15px; text-align:left;">PRODUTO</th>
+                    <th style="padding:15px; text-align:center;">SALDO REAL</th>
+                    <th style="padding:15px; text-align:center;">STATUS</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${produtosExibidos.map(p => {
+                    const status = Number(p.quantidade_estoque) <= Number(p.alerta_minimo) 
+                        ? '<span style="color:#f87171; font-weight:bold;">🔴 CRÍTICO</span>' 
+                        : '<span style="color:#4ade80; font-weight:bold;">🟢 OK</span>';
+                    
+                    return `
+                        <tr style="border-bottom:1px solid rgba(255,255,255,0.1);">
+                            <td style="padding:15px; font-weight:500;">${p.nome}</td>
+                            <td style="padding:15px; text-align:center;">
+                                ${p.tipo === 'UNIFORMES' ? 
+                                    `<button onclick="abrirModalGrade(${p.id}, '${p.nome}')" class="btn-sair-vidro" style="background:rgba(59,130,246,0.3); border:1px solid #3b82f6; font-size:0.8rem;">
+                                        🔍 ${p.quantidade_estoque} (GRADE)
+                                     </button>` : 
+                                    `<strong style="font-size:1.1rem;">${p.quantidade_estoque}</strong>`
+                                }
+                            </td>
+                            <td style="padding:15px; text-align:center;">${status}</td>
+                        </tr>
+                    `;
+                }).join('')}
+            </tbody>
+        </table>
+    `;
 }
 
 async function enviarPedidoUniforme(operacao) {
@@ -1579,15 +1660,15 @@ function salvarUsuario() {
 
 async function telaGerenciarUsuarios() {
     const container = document.getElementById('app-content');
-    container.innerHTML = '<div style="padding:20px; font-weight:bold;">Carregando usuários e locais...</div>';
+    container.innerHTML = '<div style="padding:20px; font-weight:bold; color:white;">🔍 Carregando usuários e locais...</div>';
 
     try {
         const token = localStorage.getItem('token');
 
-        // 1. Buscamos usuários e locais em paralelo para ganhar tempo
+        // 1. Buscamos usuários e locais em paralelo
         const [resUsuarios, resLocais] = await Promise.all([
             fetch(`${API_URL}/usuarios/lista`, { headers: { 'Authorization': `Bearer ${token}` } }),
-            fetch(`${API_URL}/locais/dropdown`, { headers: { 'Authorization': `Bearer ${token}` } }) // Rota que criamos no backend
+            fetch(`${API_URL}/locais/dropdown`, { headers: { 'Authorization': `Bearer ${token}` } })
         ]);
 
         if (!resUsuarios.ok || !resLocais.ok) throw new Error("Falha ao buscar dados no servidor.");
@@ -1595,34 +1676,48 @@ async function telaGerenciarUsuarios() {
         const usuarios = await resUsuarios.json();
         const locais = await resLocais.json();
 
+        // Mapeamento para exibição amigável na tabela
+        const nomesPerfis = {
+            'escola': 'Escola',
+            'admin': 'Administração',
+            'estoque': 'Estoque',
+            'logistica': 'Logística',
+            'super': 'Supervisão',
+            'dti': 'DTI - Admin',
+            'impres': 'Técnico Impressora'
+        };
+
         container.innerHTML = `
             <div style="padding:20px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1px solid #ddd; padding-bottom:15px;">
-                    <h2 style="color:#1e3a8a; margin:0;">👥 GERENCIAR USUÁRIOS E ACESSOS</h2>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1px solid rgba(255,255,255,0.2); padding-bottom:15px;">
+                    <h2 style="color:white; margin:0;">👥 GERENCIAR USUÁRIOS E ACESSOS</h2>
                     <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:10px 15px; border-radius:6px; cursor:pointer; font-weight:bold;">⬅️ VOLTAR</button>
                 </div>
 
                 <div style="display: grid; grid-template-columns: 350px 1fr; gap: 25px; align-items: start;">
                     
-                    <div style="background:white; padding:20px; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.1); border-top: 4px solid #10b981;">
+                    <div class="painel-vidro" style="border-top: 4px solid #10b981;">
                         <h3 style="margin-top:0; color:#10b981;">➕ Novo Usuário</h3>
                         
-                        <label style="display:block; margin-bottom:5px; font-weight:bold;">NOME/LOGIN:</label>
-                        <input type="text" id="novo_nome" placeholder="Ex: joao.silva" style="width:100%; padding:10px; margin-bottom:15px; border:1px solid #ccc; border-radius:4px;">
+                        <label style="display:block; margin-bottom:5px; font-weight:bold; color:white;">NOME/LOGIN:</label>
+                        <input type="text" id="novo_nome" class="input-vidro" placeholder="Ex: joao.silva" style="width:100%; margin-bottom:15px;">
 
-                        <label style="display:block; margin-bottom:5px; font-weight:bold;">SENHA:</label>
-                        <input type="password" id="nova_senha" placeholder="****" style="width:100%; padding:10px; margin-bottom:15px; border:1px solid #ccc; border-radius:4px;">
+                        <label style="display:block; margin-bottom:5px; font-weight:bold; color:white;">SENHA:</label>
+                        <input type="password" id="nova_senha" class="input-vidro" placeholder="****" style="width:100%; margin-bottom:15px;">
 
-                        <label style="display:block; margin-bottom:5px; font-weight:bold;">PERFIL DE ACESSO:</label>
-                        <select id="novo_perfil" style="width:100%; padding:10px; margin-bottom:15px; border:1px solid #ccc; border-radius:4px;">
+                        <label style="display:block; margin-bottom:5px; font-weight:bold; color:white;">PERFIL DE ACESSO:</label>
+                        <select id="novo_perfil" class="input-vidro" style="width:100%; margin-bottom:15px;">
                             <option value="escola">ESCOLA (Acesso Restrito)</option>
                             <option value="admin">ADMIN (Gestão Geral)</option>
                             <option value="estoque">ESTOQUE (Operacional)</option>
+                            <option value="logistica">LOGÍSTICA (Transporte)</option>
+                            <option value="dti">DTI - Admin</option>
+                            <option value="impres">Técnico Impressora</option>
                             <option value="super">SUPER (Total)</option>
                         </select>
 
-                        <label style="display:block; margin-bottom:5px; font-weight:bold;">VINCULAR À UNIDADE:</label>
-                        <select id="novo_local_id" style="width:100%; padding:10px; margin-bottom:20px; border:1px solid #ccc; border-radius:4px; background:#fff7ed;">
+                        <label style="display:block; margin-bottom:5px; font-weight:bold; color:white;">VINCULAR À UNIDADE:</label>
+                        <select id="novo_local_id" class="input-vidro" style="width:100%; margin-bottom:20px;">
                             <option value="">-- SELECIONE A ESCOLA/SETOR --</option>
                             ${locais.map(l => `<option value="${l.id}">${l.nome}</option>`).join('')}
                         </select>
@@ -1632,26 +1727,30 @@ async function telaGerenciarUsuarios() {
                         </button>
                     </div>
 
-                    <div style="background:white; padding:20px; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.1);">
-                        <h3 style="margin-top:0;">Funcionários Cadastrados</h3>
+                    <div class="painel-vidro">
+                        <h3 style="margin-top:0; color:white;">Funcionários Cadastrados</h3>
                         <div style="overflow-x:auto;">
-                            <table style="width:100%; border-collapse:collapse;">
-                                <thead style="background:#f1f5f9;">
+                            <table style="width:100%; border-collapse:collapse; color:white;">
+                                <thead style="background:rgba(255,255,255,0.1);">
                                     <tr>
-                                        <th style="padding:12px; text-align:left; border-bottom:2px solid #e2e8f0;">Nome</th>
-                                        <th style="padding:12px; text-align:left; border-bottom:2px solid #e2e8f0;">Perfil</th>
-                                        <th style="padding:12px; text-align:left; border-bottom:2px solid #e2e8f0;">Lotação/Local</th>
-                                        <th style="padding:12px; text-align:center; border-bottom:2px solid #e2e8f0;">Status</th>
+                                        <th style="padding:12px; text-align:left; border-bottom:2px solid rgba(255,255,255,0.2);">Nome</th>
+                                        <th style="padding:12px; text-align:left; border-bottom:2px solid rgba(255,255,255,0.2);">Perfil</th>
+                                        <th style="padding:12px; text-align:left; border-bottom:2px solid rgba(255,255,255,0.2);">Lotação/Local</th>
+                                        <th style="padding:12px; text-align:center; border-bottom:2px solid rgba(255,255,255,0.2);">Status</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     ${usuarios.map(u => `
-                                        <tr style="border-bottom:1px solid #f1f5f9;">
+                                        <tr style="border-bottom:1px solid rgba(255,255,255,0.1);">
                                             <td style="padding:12px; font-weight:bold;">${u.nome}</td>
-                                            <td style="padding:12px;"><span style="background:#e0f2fe; color:#0369a1; padding:2px 8px; border-radius:10px; font-size:12px;">${u.perfil.toUpperCase()}</span></td>
-                                            <td style="padding:12px; color:#64748b;">${u.local_nome || '<span style="color:red;">Não Vinculado</span>'}</td>
+                                            <td style="padding:12px;">
+                                                <span style="background:#e0f2fe; color:#0369a1; padding:2px 8px; border-radius:10px; font-size:12px; font-weight:bold;">
+                                                    ${nomesPerfis[u.perfil] || u.perfil.toUpperCase()}
+                                                </span>
+                                            </td>
+                                            <td style="padding:12px; color:#cbd5e1;">${u.local_nome || '<span style="color:#f87171;">Não Vinculado</span>'}</td>
                                             <td style="padding:12px; text-align:center;">
-                                                <span style="color:${u.status === 'ativo' ? '#10b981' : '#ef4444'}; font-weight:bold;">
+                                                <span style="color:${u.status === 'ativo' ? '#4ade80' : '#f87171'}; font-weight:bold;">
                                                     ${u.status.toUpperCase()}
                                                 </span>
                                             </td>
@@ -2369,62 +2468,175 @@ async function salvarNovoProduto(event) {
 
 async function telaEntradaPatrimonioLote() {
     const app = document.getElementById('app-content');
-    
-    // Busca apenas produtos cadastrados como PATRIMONIO
-    const res = await fetch(`${API_URL}/produtos/lista-por-tipo?tipo=PATRIMONIO`, {
-        headers: { 'Authorization': `Bearer ${TOKEN}` }
-    });
-    const produtos = await res.json();
+    app.innerHTML = '<div class="painel-vidro">🔍 Carregando lista de patrimônios...</div>';
 
-    app.innerHTML = `
-        <div style="padding:20px;">
-            <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:10px 20px; border-radius:8px; cursor:pointer; margin-bottom:20px;">⬅ VOLTAR</button>
-            
-            <div style="background:white; padding:30px; border-radius:12px; max-width:800px; margin:auto; box-shadow:0 4px 15px rgba(0,0,0,0.1);">
-                <h2 style="color:#1e3a8a; margin-top:0;">🏷️ ENTRADA DE PATRIMÔNIO EM LOTE</h2>
-                
-                <div style="display:grid; grid-template-columns: 1fr 150px; gap:15px; margin-bottom:20px;">
-                    <div>
-                        <label style="font-weight:bold;">PRODUTO:</label>
-                        <select id="lote_produto" style="width:100%; padding:12px; border-radius:8px; border:1px solid #cbd5e1;">
-                            <option value="">-- SELECIONE O PATRIMÔNIO --</option>
-                            ${produtos.map(p => `<option value="${p.id}">${p.nome}</option>`).join('')}
-                        </select>
-                    </div>
-                    <div>
-                        <label style="font-weight:bold;">QUANTIDADE:</label>
-                        <input type="number" id="lote_qtd" min="1" oninput="gerarInputsSerie()" style="width:100%; padding:12px; border-radius:8px; border:1px solid #cbd5e1;">
-                    </div>
+    try {
+        const res = await fetch(`${API_URL}/produtos/lista-por-tipo?tipo=PATRIMONIO`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const produtos = await res.json();
+
+        app.innerHTML = `
+            <div style="padding:20px;">
+                <div class="painel-usuario-vidro" style="position:relative; width:100%; top:0; right:0; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center;">
+                    <h2 style="color:white; margin:0;">🏷️ ENTRADA DE PATRIMÔNIO (LOTE)</h2>
+                    <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background:#64748b;">⬅ VOLTAR</button>
                 </div>
 
-                <div id="container_series_lote" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap:10px;"></div>
+                <div class="painel-vidro" style="max-width:900px; margin:auto; text-align:left;">
+                    
+                    <h3 style="color:#fbbf24; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:10px;">1. Dados da Nota Fiscal</h3>
+                    <div style="display:grid; grid-template-columns: 200px 1fr; gap:15px; margin-bottom:25px;">
+                        <div>
+                            <label style="color:white;">TIPO DOC:</label>
+                            <select id="doc_tipo" class="input-vidro" style="width:100%;" onchange="alternarCamposDoc()">
+                                <option value="DANFE">DANFE (Nº/Série)</option>
+                                <option value="CHAVE">CHAVE DE ACESSO (NFe)</option>
+                            </select>
+                        </div>
+                        <div id="container_campos_doc">
+                            </div>
+                    </div>
 
-                <button id="btn-salvar-lote" onclick="salvarLotePatrimonio()" style="display:none; width:100%; margin-top:30px; padding:15px; background:#10b981; color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer;">
-                    CONFIRMAR ENTRADA DE ITENS
-                </button>
+                    <h3 style="color:#fbbf24; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:10px;">2. Seleção de Itens</h3>
+                    <div style="display:grid; grid-template-columns: 1fr 150px; gap:15px; margin-bottom:25px;">
+                        <div>
+                            <label style="color:white;">PATRIMÔNIO:</label>
+                            <select id="lote_produto" class="input-vidro" style="width:100%;">
+                                <option value="">-- SELECIONE O PRODUTO --</option>
+                                ${produtos.map(p => `<option value="${p.id}">${p.nome}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div>
+                            <label style="color:white;">QUANTIDADE:</label>
+                            <input type="number" id="lote_qtd" min="1" class="input-vidro" style="width:100%;" oninput="gerarInputsSerie()">
+                        </div>
+                    </div>
+
+                    <div id="sessao_series" style="display:none;">
+                        <h3 style="color:#fbbf24; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:10px;">3. Identificação Individual (Bipe as Séries)</h3>
+                        <div id="container_series_lote" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap:12px; margin-bottom:30px;"></div>
+                        
+                        <button onclick="salvarLotePatrimonio()" class="btn-grande btn-vidro" style="background:#10b981; width:100%;">
+                            🚀 CONFIRMAR ENTRADA EM LOTE
+                        </button>
+                    </div>
+                </div>
             </div>
-        </div>
-    `;
+        `;
+        alternarCamposDoc(); // Inicializa campos
+    } catch (e) { alert("Erro ao carregar tela."); }
+}
+
+async function salvarLotePatrimonio() {
+    // 1. Coleta dados do Documento Fiscal
+    const tipoDoc = document.getElementById('doc_tipo').value;
+    const numDoc = document.getElementById('doc_numero')?.value || '';
+    const serieDoc = document.getElementById('doc_serie')?.value || '';
+    const chaveNfe = document.getElementById('doc_chave')?.value || '';
+
+    // 2. Coleta dados do Produto
+    const produtoId = document.getElementById('lote_produto').value;
+    const quantidade = parseInt(document.getElementById('lote_qtd').value);
+
+    // 3. Coleta e Valida os Números de Série
+    const inputsSerie = document.querySelectorAll('.serie-item');
+    const listaSeries = [];
+    let erroSerie = false;
+
+    inputsSerie.forEach((input, index) => {
+        const valor = input.value.trim();
+        if (!valor) {
+            input.style.borderColor = "#ef4444"; // Marca erro em vermelho
+            erroSerie = true;
+        } else {
+            input.style.borderColor = "#fbbf24"; // Restaura cor padrão
+            listaSeries.push(valor);
+        }
+    });
+
+    // --- VALIDAÇÕES ---
+    if (tipoDoc === 'DANFE' && (!numDoc || !serieDoc)) {
+        return alert("Por favor, preencha o número e a série da Nota Fiscal.");
+    }
+    if (tipoDoc === 'CHAVE' && chaveNfe.length < 44) {
+        return alert("A Chave de Acesso deve conter os 44 dígitos bipados.");
+    }
+    if (!produtoId || isNaN(quantidade)) {
+        return alert("Selecione o produto e informe a quantidade total.");
+    }
+    if (erroSerie) {
+        return alert("Existem campos de série/plaqueta vazios. Todos os itens devem ser identificados.");
+    }
+
+    // 4. Envio dos Dados para o Servidor
+    if (!confirm(`Confirmar a entrada de ${quantidade} itens no patrimônio?`)) return;
+
+    try {
+        const payload = {
+            doc: { tipo: tipoDoc, numero: numDoc, serie: serieDoc, chave: chaveNfe },
+            itens: { produto_id: produtoId, quantidade, series: listaSeries }
+        };
+
+        const res = await fetch(`${API_URL}/estoque/entrada-patrimonio-lote`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${TOKEN}`
+            },
+            body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+            alert("✅ " + data.message);
+            carregarDashboard(); // Retorna ao menu
+        } else {
+            // Caso o banco rejeite (ex: número de série já existente)
+            alert("⚠️ " + data.error);
+        }
+    } catch (err) {
+        alert("Erro crítico de conexão com o servidor.");
+    }
+}
+
+function alternarCamposDoc() {
+    const tipo = document.getElementById('doc_tipo').value;
+    const container = document.getElementById('container_campos_doc');
+
+    if (tipo === 'DANFE') {
+        container.innerHTML = `
+            <div style="display:grid; grid-template-columns: 1fr 100px; gap:10px;">
+                <input type="text" id="doc_numero" placeholder="Número da Nota" class="input-vidro" style="width:100%;">
+                <input type="text" id="doc_serie" placeholder="Série" class="input-vidro" style="width:100%;">
+            </div>
+        `;
+    } else {
+        container.innerHTML = `
+            <input type="text" id="doc_chave" placeholder="Bipe ou Digite a Chave da NFe (44 dígitos)" class="input-vidro" style="width:100%;">
+        `;
+    }
 }
 
 function gerarInputsSerie() {
-    const qtd = document.getElementById('lote_qtd').value;
+    const qtd = parseInt(document.getElementById('lote_qtd').value);
     const container = document.getElementById('container_series_lote');
-    const btn = document.getElementById('btn-salvar-lote');
-    container.innerHTML = '';
-    
+    const sessao = document.getElementById('sessao_series');
+
     if (qtd > 0) {
-        btn.style.display = 'block';
+        sessao.style.display = 'block';
+        container.innerHTML = '';
         for (let i = 1; i <= qtd; i++) {
             container.innerHTML += `
-                <div style="background:#f1f5f9; padding:10px; border-radius:6px;">
-                    <label style="font-size:12px; color:#64748b;">ITEM ${i}</label>
-                    <input type="text" class="input-serie-lote" placeholder="Nº SÉRIE / PLAQUETA" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px;">
+                <div style="background:rgba(255,255,255,0.05); padding:10px; border-radius:8px;">
+                    <label style="color:#cbd5e1; font-size:0.7rem; display:block;">ITEM ${i}:</label>
+                    <input type="text" class="input-vidro serie-item" placeholder="Série/Plaqueta" style="width:100%; border-color:#fbbf24;">
                 </div>
             `;
         }
     } else {
-        btn.style.display = 'none';
+        sessao.style.display = 'none';
     }
 }
 
@@ -6341,84 +6553,188 @@ async function salvarAbastecimento(produtoId) {
 let carrinhoAdmin = [];
 
 async function telaAdminCriarPedido() {
-    const app = document.getElementById('app-content');
+    const container = document.getElementById('app-content');
+    container.innerHTML = '<div class="painel-vidro">🔍 Carregando recursos do sistema...</div>';
     
+    carrinhoAdminDireto = []; // Limpa o carrinho ao abrir
+
     try {
-        // 1. Busca os locais (aqui é onde dava o erro, verifique se a rota está correta)
-        const resLocais = await fetch(`${API_URL}/locais/lista-simples`, {
-            headers: { 'Authorization': `Bearer ${TOKEN}` }
-        });
+        // Busca Locais e Produtos simultaneamente
+        const [resLocais, resProdutos] = await Promise.all([
+            fetch(`${API_URL}/locais/dropdown`, { headers: {'Authorization': `Bearer ${TOKEN}`} }),
+            fetch(`${API_URL}/estoque/geral`, { headers: {'Authorization': `Bearer ${TOKEN}`} })
+        ]);
 
-        // Verificação de segurança para evitar o erro de JSON
-        if (!resLocais.ok) throw new Error("Erro ao buscar lista de locais no servidor.");
         const locais = await resLocais.json();
+        const produtos = await resProdutos.json();
 
-        app.innerHTML = `
+        container.innerHTML = `
             <div style="padding:20px;">
-                <button onclick="carregarDashboard()" class="btn-voltar">⬅ VOLTAR</button>
-                <div class="card-form" style="max-width: 900px; margin: auto;">
-                    <h2 style="color:#1e3a8a;">📝 CRIAR PEDIDO (MODO ADMIN)</h2>
-                    <p style="color: #64748b;">Este pedido será gerado como <b>APROVADO</b> automaticamente.</p>
+                <div class="painel-usuario-vidro" style="position:relative; width:100%; top:0; right:0; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center;">
+                    <h2 style="color:white; margin:0;">📝 PEDIDO DIRETO (ADMIN)</h2>
+                    <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background:#64748b;">⬅️ VOLTAR</button>
+                </div>
+
+                <div class="grid-menu-principal" style="grid-template-columns: 1fr 1.2fr; gap: 20px; align-items: start; max-width: 1200px;">
                     
-                    <div style="background: #f1f5f9; padding: 20px; border-radius: 10px; margin-bottom: 25px;">
-                        <label style="font-weight:bold; display:block; margin-bottom:10px;">1. SELECIONE O DESTINO DO PEDIDO:</label>
-                        <select id="admin_local_destino" style="width:100%; padding:12px; border-radius:8px; border:1px solid #cbd5e1; font-size:1rem;">
-                            <option value="">-- SELECIONE A ESCOLA OU SETOR --</option>
+                    <div class="painel-vidro" style="text-align: left;">
+                        <h3 style="color: #4ade80; margin-top:0;">1. Destino e Item</h3>
+                        
+                        <label style="color:white; display:block; margin-bottom:8px;">UNIDADE DESTINO:</label>
+                        <select id="admin_direto_local" class="input-vidro" style="width:100%; margin-bottom:15px;">
+                            <option value="">-- SELECIONE A ESCOLA --</option>
                             ${locais.map(l => `<option value="${l.id}">${l.nome}</option>`).join('')}
                         </select>
-                    </div>
 
-                    <div id="sessao-itens-pedido">
-                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                             <button onclick="prepararItensAdmin('UNIFORMES')" class="btn-quadrado">👕 UNIFORMES</button>
-                             <button onclick="prepararItensAdmin('MATERIAL')" class="btn-quadrado">📦 MATERIAIS</button>
+                        <label style="color:white; display:block; margin-bottom:8px;">PRODUTO:</label>
+                        <select id="admin_direto_produto" class="input-vidro" style="width:100%; margin-bottom:15px;">
+                            <option value="">-- SELECIONE O PRODUTO --</option>
+                            ${produtos.map(p => `<option value="${p.id}" data-tipo="${p.tipo}">${p.nome} (Disp: ${p.quantidade_estoque})</option>`).join('')}
+                        </select>
+
+                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:20px;">
+                            <div>
+                                <label style="color:white; display:block; margin-bottom:8px;">TAMANHO:</label>
+                                <select id="admin_direto_tamanho" class="input-vidro" style="width:100%;">
+                                    <option value="UNICO">ÚNICO</option>
+                                    <option value="P">P</option><option value="M">M</option>
+                                    <option value="G">G</option><option value="GG</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label style="color:white; display:block; margin-bottom:8px;">QTD:</label>
+                                <input type="number" id="admin_direto_qtd" value="1" min="1" class="input-vidro" style="width:100%;">
+                            </div>
                         </div>
+
+                        <button onclick="adicionarAoCarrinhoAdminDireto()" class="btn-grande btn-vidro" style="background: #10b981; color:white; border:none;">
+                            ➕ ADICIONAR À LISTA
+                        </button>
                     </div>
 
-                    <div id="lista-carrinho-admin" style="margin-top: 25px;"></div>
-
-                    <button id="btn-finalizar-admin" onclick="salvarPedidoDiretoAdmin()" style="display:none; width:100%; margin-top:30px; padding:18px; background:#10b981; color:white; border:none; border-radius:8px; font-weight:bold; font-size:1.1rem; cursor:pointer;">
-                        🚀 FINALIZAR E ENVIAR PARA ESTOQUE
-                    </button>
+                    <div class="painel-vidro">
+                        <h3 style="color: white; margin-top:0;">2. Itens do Pedido</h3>
+                        <div id="display-carrinho-admin" style="min-height: 150px; color: #cbd5e1; text-align: left;">
+                            Sua lista está vazia.
+                        </div>
+                        
+                        <hr style="border:0; border-top:1px solid rgba(255,255,255,0.1); margin:20px 0;">
+                        
+                        <button id="btnFinalizarAdmin" onclick="enviarPedidoAdminDireto()" disabled class="btn-grande btn-vidro" style="width:100%; opacity:0.5;">
+                            🚀 FINALIZAR E DAR BAIXA NO ESTOQUE
+                        </button>
+                    </div>
                 </div>
             </div>
         `;
+
     } catch (err) {
-        console.error("Erro detalhado:", err);
-        alert("Erro ao carregar dados: Verifique se o servidor está online.");
+        alert("Erro ao carregar dados do pedido.");
     }
 }
 
-async function salvarPedidoDiretoAdmin() {
-    const local_destino_id = document.getElementById('admin_local_destino').value;
-    
-    if (!local_destino_id) return alert("Selecione o destino do pedido!");
-    if (carrinhoAdmin.length === 0) return alert("O carrinho está vazio!");
+async function enviarPedidoAdminDireto() {
+    const localId = document.getElementById('admin_direto_local').value;
+    if (!localId) return alert("Selecione o local de destino.");
 
-    const payload = {
-        local_destino_id: local_destino_id,
-        tipo_pedido: tipoPedidoAtual, // 'UNIFORMES' ou 'MATERIAL'
-        itens: carrinhoAdmin
-    };
+    if (!confirm("Isso gerará baixa imediata no estoque e enviará o pedido para a expedição. Confirma?")) return;
 
     try {
-        const res = await fetch(`${API_URL}/pedidos/admin/criar`, {
+        const res = await fetch(`${API_URL}/pedidos/admin-direto-final`, {
             method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${TOKEN}`
-            },
-            body: JSON.stringify(payload)
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ local_destino_id: localId, itens: carrinhoAdminDireto })
         });
 
         if (res.ok) {
-            alert("✅ Pedido Admin gerado e enviado para o Estoque!");
+            alert("✅ Pedido finalizado com sucesso!");
             carregarDashboard();
         } else {
-            alert("Erro ao salvar pedido.");
+            const erro = await res.json();
+            alert("Erro: " + erro.error);
+        }
+    } catch (err) { alert("Falha na comunicação com o servidor."); }
+}
+
+function adicionarAoCarrinhoAdminDireto() {
+    const select = document.getElementById('admin_direto_produto');
+    const produtoId = select.value;
+    const nome = select.options[select.selectedIndex].text;
+    const tamanho = document.getElementById('admin_direto_tamanho').value;
+    const qtd = parseInt(document.getElementById('admin_direto_qtd').value);
+
+    if (!produtoId || qtd <= 0) return alert("Selecione um produto e a quantidade.");
+
+    // --- O PULO DO GATO: Verificação de Duplicidade ---
+    // Procuramos se já existe um item com o MESMO ID e MESMO TAMANHO
+    const itemExistente = carrinhoAdminDireto.find(item => 
+        item.produto_id === produtoId && item.tamanho === tamanho
+    );
+
+    if (itemExistente) {
+        // Se já existe, apenas somamos a quantidade ao item que já está lá
+        itemExistente.quantidade += qtd;
+        console.log(`Produto duplicado detectado. Nova quantidade para ${nome}: ${itemExistente.quantidade}`);
+    } else {
+        // Se for um item novo, adicionamos normalmente
+        carrinhoAdminDireto.push({ 
+            produto_id: produtoId, 
+            nome, 
+            tamanho, 
+            quantidade: qtd 
+        });
+    }
+
+    // Limpa os campos para a próxima inserção (opcional, mas melhora a experiência)
+    document.getElementById('admin_direto_qtd').value = 1;
+    
+    // Atualiza a visualização da lista na tela
+    atualizarVisualCarrinhoAdmin();
+}
+
+function atualizarVisualCarrinhoAdmin() {
+    const display = document.getElementById('display-carrinho-admin');
+    const btn = document.getElementById('btnFinalizarAdmin');
+
+    if (carrinhoAdminDireto.length === 0) {
+        display.innerHTML = "Sua lista está vazia.";
+        btn.disabled = true;
+        btn.style.opacity = "0.5";
+        return;
+    }
+
+    display.innerHTML = carrinhoAdminDireto.map((item, index) => `
+        <div style="background:rgba(255,255,255,0.05); padding:10px; border-radius:8px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+            <span><b>${item.quantidade}x</b> ${item.nome} (${item.tamanho})</span>
+            <button onclick="removerItemAdmin(${index})" style="background:none; border:none; color:#f87171; cursor:pointer;">❌</button>
+        </div>
+    `).join('');
+
+    btn.disabled = false;
+    btn.style.opacity = "1";
+    btn.style.background = "#3b82f6";
+}
+
+async function salvarPedidoDiretoAdmin() {
+    const local_id = document.getElementById('admin_local_destino').value;
+    
+    try {
+        const res = await fetch(`${API_URL}/pedidos/admin-direto`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ local_destino_id: local_id, itens: carrinhoAdmin })
+        });
+
+        if (res.ok) {
+            alert("✅ Sucesso! Pedido enviado para o estoque e baixa realizada.");
+            carrinhoAdmin = [];
+            carregarDashboard();
+        } else {
+            const erro = await res.json();
+            alert("Erro: " + erro.error);
         }
     } catch (err) {
-        alert("Erro de conexão.");
+        alert("Falha de rede.");
     }
 }
 
@@ -8226,6 +8542,675 @@ document.addEventListener('click', async (e) => {
     // Rola a tela suavemente para os produtos
     box.scrollIntoView({ behavior: 'smooth' });
 });
+
+async function telaSolicitarServicoImpressora(tipoServico) {
+    const container = document.getElementById('app-content');
+    const localId = localStorage.getItem('local_id');
+    
+    container.innerHTML = `<div class="painel-vidro"><h2>${tipoServico.toUpperCase()}</h2><p>Selecione a impressora:</p><div id="lista-imp" class="grid-menu-principal"></div></div>`;
+
+    // Busca as impressoras do local
+    const res = await fetch(`${API_URL}/impressoras/local/${localId}`, { headers: {'Authorization': `Bearer ${TOKEN}`} });
+    const impressoras = await res.json();
+
+    const area = document.getElementById('lista-imp');
+    impressoras.map(imp => {
+        const img = imp.modelo === 'mono' ? 'mono.png' : 'color.png';
+        area.innerHTML += `
+            <button class="btn-grande btn-vidro" onclick="abrirChamadoFinal(${imp.id}, '${tipoServico}')">
+                <img src="${img}" style="width:80px; margin-bottom:10px;">
+                <span>${imp.modelo.toUpperCase()}</span>
+            </button>
+        `;
+    });
+}
+
+async function telaDashboardImpressoras() {
+    const container = document.getElementById('app-content');
+    
+    // Busca locais para o select
+    const resLocais = await fetch(`${API_URL}/locais`, { headers: {'Authorization': `Bearer ${TOKEN}`} });
+    const locais = await resLocais.json();
+
+    container.innerHTML = `
+        <div style="padding: 20px;">
+            <div class="painel-vidro" style="margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 15px; align-items: flex-end; justify-content: center;">
+                <div>
+                    <label style="color:white; display:block; font-size:0.8rem;">INÍCIO</label>
+                    <input type="date" id="dash-inicio" class="input-vidro">
+                </div>
+                <div>
+                    <label style="color:white; display:block; font-size:0.8rem;">FIM</label>
+                    <input type="date" id="dash-fim" class="input-vidro">
+                </div>
+                <div>
+                    <label style="color:white; display:block; font-size:0.8rem;">LOCAL</label>
+                    <select id="dash-local" class="input-vidro" onchange="atualizarDashboardImpressoras()">
+                        <option value="TODAS">TODAS AS UNIDADES</option>
+                        ${locais.map(l => `<option value="${l.id}">${l.nome}</option>`).join('')}
+                    </select>
+                </div>
+                <button onclick="gerarPDFDashboard()" class="btn-sair-vidro" style="background:#059669; height:45px;">📄 PDF</button>
+                <button onclick="prepararComparacao()" class="btn-sair-vidro" style="background:#3b82f6; height:45px;">⚖️ COMPARAR</button>
+            </div>
+
+            <div id="relatorio-pdf-area">
+                <div class="grid-menu-principal" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-top:0;">
+                    <div class="painel-vidro">
+                        <small style="color:#cbd5e1;">RECARGAS</small>
+                        <h2 id="stat-recarga" style="color:white; margin:0;">0</h2>
+                    </div>
+                    <div class="painel-vidro">
+                        <small style="color:#cbd5e1;">MANUTENÇÕES</small>
+                        <h2 id="stat-manutencao" style="color:white; margin:0;">0</h2>
+                    </div>
+                    <div class="painel-vidro">
+                        <small style="color:#cbd5e1;">ATENDIDOS</small>
+                        <h2 id="stat-atendidos" style="color:#4ade80; margin:0;">0</h2>
+                    </div>
+                    <div class="painel-vidro">
+                        <small style="color:#cbd5e1;">PENDENTES</small>
+                        <h2 id="stat-pendentes" style="color:#fb7185; margin:0;">0</h2>
+                    </div>
+                </div>
+
+                <div style="margin-top:20px; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap:20px;">
+                    <div class="painel-vidro">
+                        <canvas id="chartTipos"></canvas>
+                    </div>
+                    <div class="painel-vidro">
+                        <canvas id="chartStatus"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Define datas padrão (mês atual)
+    document.getElementById('dash-inicio').value = new Date(new Date().setDate(1)).toISOString().split('T')[0];
+    document.getElementById('dash-fim').value = new Date().toISOString().split('T')[0];
+    
+    atualizarDashboardImpressoras();
+}
+
+async function abrirChamadoFinal(impressoraId, tipoServico) {
+    const container = document.getElementById('app-content');
+
+    // Se for Recarga, o processo é simplificado
+    if (tipoServico === 'recarga') {
+        if (!confirm("Confirmar solicitação de recarga de toner para esta impressora?")) return;
+        enviarChamadoAoServidor({ impressora_id: impressoraId, tipo: 'recarga' });
+        return;
+    }
+
+    // Se for Manutenção, montamos o formulário de diagnóstico
+    container.innerHTML = `
+        <div class="painel-vidro" style="max-width: 500px; margin: 0 auto; text-align: left;">
+            <h2 style="color: white; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 10px;">
+                🛠️ DETALHES DA MANUTENÇÃO
+            </h2>
+            
+            <div style="margin-top: 20px;">
+                <label style="color: white; display: block; margin-bottom: 8px;">O que está acontecendo?</label>
+                <select id="motivo-manutencao" class="input-vidro" style="width: 100%;" onchange="verificarMotivoOutros(this.value)">
+                    <option value="">Selecione um problema...</option>
+                    <option value="Não liga">Não liga</option>
+                    <option value="Não digitaliza">Não digitaliza</option>
+                    <option value="Está amassando papel">Está amassando papel</option>
+                    <option value="Não puxa o papel">Não puxa o papel</option>
+                    <option value="Impressão com falhas">Impressão com falhas</option>
+                    <option value="outros">Outros (Descrever abaixo)</option>
+                </select>
+            </div>
+
+            <div id="campo-outros" style="display: none; margin-top: 20px;">
+                <label style="color: white; display: block; margin-bottom: 8px;">Descreva o problema:</label>
+                <textarea id="obs-manutencao" class="input-vidro" style="width: 100%; height: 80px;" placeholder="Detalhe o defeito aqui..."></textarea>
+            </div>
+
+            <div style="margin-top: 30px; display: flex; gap: 10px;">
+                <button onclick="telaSolicitarServicoImpressora('manutencao')" class="btn-sair-vidro" style="background: #64748b;">CANCELAR</button>
+                <button onclick="validarEEnviarManutencao(${impressoraId})" class="btn-sair-vidro" style="background: #059669; flex: 1;">ENVIAR CHAMADO</button>
+            </div>
+        </div>
+    `;
+}
+
+function verificarMotivoOutros(valor) {
+    const campo = document.getElementById('campo-outros');
+    campo.style.display = valor === 'outros' ? 'block' : 'none';
+}
+
+async function validarEEnviarManutencao(impressoraId) {
+    const motivo = document.getElementById('motivo-manutencao').value;
+    const obs = document.getElementById('obs-manutencao').value;
+
+    if (!motivo) {
+        alert("Por favor, selecione o motivo da manutenção.");
+        return;
+    }
+
+    if (motivo === 'outros' && obs.trim().length < 5) {
+        alert("Para o motivo 'Outros', é obrigatório descrever o problema detalhadamente.");
+        return;
+    }
+
+    enviarChamadoAoServidor({
+        impressora_id: impressoraId,
+        tipo: 'manutencao',
+        motivo: motivo === 'outros' ? 'Outros - Ver observações' : motivo,
+        observacoes: obs
+    });
+}
+
+async function enviarChamadoAoServidor(dados) {
+    try {
+        const res = await fetch(`${API_URL}/impressoras/chamado`, {
+            method: 'POST',
+            headers: { 
+                'Authorization': `Bearer ${TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(dados)
+        });
+
+        const resultado = await res.json();
+
+        if (res.ok) {
+            alert("✅ " + resultado.message);
+            carregarDashboard(); // Retorna ao menu principal
+        } else {
+            // Aqui o servidor avisará se já existe um chamado em aberto
+            alert("⚠️ " + resultado.error);
+        }
+    } catch (err) {
+        alert("Erro de conexão com o servidor.");
+    }
+}
+
+async function telaListarChamadosAbertos() {
+    const container = document.getElementById('app-content');
+    container.innerHTML = '<div style="padding:20px; text-align:center; color:white;">🔍 Consultando fila de chamados...</div>';
+
+    try {
+        const res = await fetch(`${API_URL}/impressoras/chamados/abertos`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const chamados = await res.json();
+
+        container.innerHTML = `
+            <div style="padding:20px;">
+                <h2 style="color: white; margin-bottom: 25px; text-align: center;">📋 CHAMADOS AGUARDANDO ATENDIMENTO</h2>
+                <div class="grid-menu-principal" style="grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));">
+                    ${chamados.length === 0 ? 
+                        `<p style="color:white; text-align:center; grid-column: 1/-1;">Não há chamados abertos no momento.</p>` : 
+                        chamados.map(c => `
+                        <div class="painel-vidro" style="text-align: left; position: relative;">
+                            <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
+                                <img src="${c.modelo === 'mono' ? 'mono.png' : 'color.png'}" style="width: 50px;">
+                                <div>
+                                    <strong style="color: #fbbf24; font-size: 1.1rem;">${c.tipo.toUpperCase()}</strong><br>
+                                    <small style="color: #cbd5e1;">${c.escola_nome}</small>
+                                </div>
+                            </div>
+                            
+                            <div style="color: white; font-size: 0.9rem; margin-bottom: 15px;">
+                                <strong>Motivo:</strong> ${c.motivo || 'N/A'}<br>
+                                ${c.observacoes ? `<p style="background: rgba(0,0,0,0.2); padding: 8px; border-radius: 5px; margin-top: 5px;">"${c.observacoes}"</p>` : ''}
+                                <small style="color: #94a3b8;">Aberto em: ${new Date(c.data_abertura).toLocaleString('pt-BR')}</small>
+                            </div>
+
+                            <button onclick="finalizarAtendimento(${c.id})" 
+                                    class="btn-sair-vidro" 
+                                    style="background: #059669; width: 100%; padding: 10px;">
+                                ✅ FINALIZAR ATENDIMENTO
+                            </button>
+                        </div>
+                    `).join('')}
+                </div>
+                <button onclick="carregarDashboard()" class="btn-sair-vidro" style="margin-top: 20px; background: #475569;">VOLTAR</button>
+            </div>
+        `;
+    } catch (err) {
+        alert("Erro ao carregar chamados.");
+    }
+}
+
+async function finalizarAtendimento(chamadoId) {
+    if (!confirm("Confirmar que o serviço foi realizado e encerrar o chamado?")) return;
+
+    try {
+        const res = await fetch(`${API_URL}/impressoras/fechar-chamado/${chamadoId}`, {
+            method: 'PATCH',
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+
+        if (res.ok) {
+            alert("✅ Chamado encerrado! O tempo de atendimento foi registrado.");
+            telaListarChamadosAbertos(); // Recarrega a lista
+        } else {
+            alert("Erro ao encerrar chamado.");
+        }
+    } catch (err) {
+        alert("Erro de conexão.");
+    }
+}
+async function telaCadastroImpressoras() {
+    const container = document.getElementById('app-content');
+    container.innerHTML = '<div style="padding:20px; text-align:center; color:white;">🔍 Carregando lista de locais...</div>';
+
+    try {
+        // 1. Procura os locais cadastrados no sistema
+        const resLocais = await fetch(`${API_URL}/locais`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const locais = await resLocais.json();
+
+        // 2. Monta a interface vitrificada
+        container.innerHTML = `
+            <div class="painel-vidro" style="max-width: 500px; margin: 0 auto; text-align: left;">
+                <h2 style="color: white; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 10px; text-align:center;">
+                    🖨️ CADASTRAR IMPRESSORA
+                </h2>
+                
+                <div style="margin-top: 25px;">
+                    <label style="color: white; display: block; margin-bottom: 8px;">Unidade Escolar / Local:</label>
+                    <select id="reg-imp-local" class="input-vidro" style="width: 100%;">
+                        <option value="">Selecione o local...</option>
+                        ${locais.map(l => `<option value="${l.id}">${l.nome}</option>`).join('')}
+                    </select>
+                </div>
+
+                <div style="margin-top: 20px;">
+                    <label style="color: white; display: block; margin-bottom: 8px;">Modelo da Impressora:</label>
+                    <select id="reg-imp-modelo" class="input-vidro" style="width: 100%;">
+                        <option value="">Selecione o tipo...</option>
+                        <option value="mono">MONOCROMÁTICA (Preto e Branco)</option>
+                        <option value="color">COLORIDA</option>
+                        <option value="duplicadora">DUPLICADORA</option>
+                    </select>
+                </div>
+
+                <div style="margin-top: 35px; display: flex; gap: 10px;">
+                    <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background: #475569;">VOLTAR</button>
+                    <button onclick="executarCadastroImpressora()" class="btn-sair-vidro" style="background: #059669; flex: 1;">
+                        SALVAR EQUIPAMENTO
+                    </button>
+                </div>
+            </div>
+        `;
+    } catch (err) {
+        alert("Erro ao carregar locais para cadastro.");
+    }
+}
+
+async function executarCadastroImpressora() {
+    const local_id = document.getElementById('reg-imp-local').value;
+    const modelo = document.getElementById('reg-imp-modelo').value;
+
+    if (!local_id || !modelo) {
+        alert("Por favor, preencha todos os campos.");
+        return;
+    }
+
+    try {
+        const res = await fetch(`${API_URL}/impressoras`, {
+            method: 'POST',
+            headers: { 
+                'Authorization': `Bearer ${TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ local_id, modelo })
+        });
+
+        if (res.ok) {
+            alert("✅ Impressora vinculada ao local com sucesso!");
+            telaCadastroImpressoras(); // Limpa e recarrega a tela
+        } else {
+            const erro = await res.json();
+            alert("Erro: " + erro.error);
+        }
+    } catch (err) {
+        alert("Falha na comunicação com o servidor.");
+    }
+}
+
+async function atualizarDashboardImpressoras() {
+    const inicio = document.getElementById('dash-inicio').value;
+    const fim = document.getElementById('dash-fim').value;
+    const local = document.getElementById('dash-local').value;
+
+    const res = await fetch(`${API_URL}/impressoras/dashboard-stats?inicio=${inicio}&fim=${fim}&local_id=${local}`, {
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+    const d = await res.json();
+
+    // Atualiza Números
+    document.getElementById('stat-recarga').innerText = d.total_recarga;
+    document.getElementById('stat-manutencao').innerText = d.total_manutencao;
+    document.getElementById('stat-atendidos').innerText = d.atendidos;
+    document.getElementById('stat-pendentes').innerText = d.pendentes;
+
+    // Destrói gráficos antigos para não sobrepor
+    if (chart1) chart1.destroy();
+    if (chart2) chart2.destroy();
+
+    // Gráfico de Tipos (Recarga vs Manutenção)
+    chart1 = new Chart(document.getElementById('chartTipos'), {
+        type: 'bar',
+        data: {
+            labels: ['Recarga', 'Manutenção'],
+            datasets: [{
+                label: 'Quantidade',
+                data: [d.total_recarga, d.total_manutencao],
+                backgroundColor: ['#3b82f6', '#fbbf24']
+            }]
+        },
+        options: { plugins: { legend: { display: false } }, scales: { y: { ticks: { color: 'white' } } } }
+    });
+
+    // Gráfico de Status (Pizza %)
+    chart2 = new Chart(document.getElementById('chartStatus'), {
+        type: 'doughnut',
+        data: {
+            labels: ['Atendidos', 'Pendentes'],
+            datasets: [{
+                data: [d.atendidos, d.pendentes],
+                backgroundColor: ['#4ade80', '#fb7185']
+            }]
+        }
+    });
+}
+
+async function atualizarnovoDashboardImpressoras() {
+    const inicio = document.getElementById('dash-inicio').value;
+    const fim = document.getElementById('dash-fim').value;
+    const local1 = document.getElementById('dash-local').value;
+    const local2 = modoComparacao ? document.getElementById('dash-local-2').value : null;
+
+    // Busca dados do Local 1
+    const res1 = await fetch(`${API_URL}/impressoras/dashboard-stats?inicio=${inicio}&fim=${fim}&local_id=${local1}`, {
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+    const d1 = await res1.json();
+
+    let d2 = null;
+    if (modoComparacao && local2) {
+        // Busca dados do Local 2
+        const res2 = await fetch(`${API_URL}/impressoras/dashboard-stats?inicio=${inicio}&fim=${fim}&local_id=${local2}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        d2 = await res2.json();
+    }
+
+    renderizarGraficosComparativos(d1, d2, local1, local2);
+}
+
+function gerarPDFDashboard() {
+    const area = document.getElementById('relatorio-pdf-area');
+    const local1 = document.getElementById('dash-local').options[document.getElementById('dash-local').selectedIndex].text;
+    const local2 = modoComparacao ? " vs " + document.getElementById('dash-local-2').options[document.getElementById('dash-local-2').selectedIndex].text : "";
+
+    const opt = {
+        margin: 10,
+        filename: `Relatorio_Manutencao_${local1}${local2}.pdf`,
+        image: { type: 'jpeg', quality: 1 },
+        html2canvas: { scale: 2, useCORS: true },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' } // Horizontal fica melhor para gráficos lado a lado
+    };
+
+    html2pdf().set(opt).from(area).save();
+}
+
+function habilitarComparacao() {
+    modoComparacao = true;
+    const areaFiltros = document.querySelector('.painel-vidro');
+    
+    // Adiciona o segundo seletor de local se ele não existir
+    if (!document.getElementById('dash-local-2')) {
+        const divFiltro2 = document.createElement('div');
+        divFiltro2.id = 'container-local-2';
+        divFiltro2.innerHTML = `
+            <label style="color:#fbbf24; display:block; font-size:0.8rem;">COMPARAR COM:</label>
+            <select id="dash-local-2" class="input-vidro" onchange="atualizarDashboardImpressoras()">
+                <option value="">Selecione outro local...</option>
+                ${Array.from(document.getElementById('dash-local').options)
+                    .filter(opt => opt.value !== 'TODAS')
+                    .map(opt => `<option value="${opt.value}">${opt.text}</option>`).join('')}
+            </select>
+        `;
+        // Insere antes do botão PDF
+        areaFiltros.insertBefore(divFiltro2, document.querySelector('button[onclick="gerarPDFDashboard()"]'));
+        
+        // Alerta visual de que o modo mudou
+        document.getElementById('dash-local').previousElementSibling.innerText = "LOCAL A";
+        document.getElementById('dash-local').style.borderColor = "#3b82f6";
+    }
+}
+
+function renderizarGraficosComparativos(d1, d2, id1, id2) {
+    const ctxTipos = document.getElementById('chartTipos');
+    const nomeLocal1 = document.getElementById('dash-local').options[document.getElementById('dash-local').selectedIndex].text;
+    const nomeLocal2 = d2 ? document.getElementById('dash-local-2').options[document.getElementById('dash-local-2').selectedIndex].text : '';
+
+    if (chart1) chart1.destroy();
+
+    const datasets = [
+        {
+            label: d2 ? nomeLocal1 : 'Total',
+            data: [d1.total_recarga, d1.total_manutencao],
+            backgroundColor: '#3b82f6'
+        }
+    ];
+
+    // Se houver comparação, adicionamos o segundo conjunto de barras
+    if (d2) {
+        datasets.push({
+            label: nomeLocal2,
+            data: [d2.total_recarga, d2.total_manutencao],
+            backgroundColor: '#fbbf24'
+        });
+    }
+
+    chart1 = new Chart(ctxTipos, {
+        type: 'bar',
+        data: {
+            labels: ['Recargas de Toner', 'Manutenções'],
+            datasets: datasets
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { display: true, labels: { color: 'white' } }
+            },
+            scales: {
+                y: { beginAtZero: true, ticks: { color: 'white' } },
+                x: { ticks: { color: 'white' } }
+            }
+        }
+    });
+
+    // Atualiza os cards numéricos com a soma ou apenas Local 1
+    document.getElementById('stat-recarga').innerText = d2 ? (parseInt(d1.total_recarga) + parseInt(d2.total_recarga)) : d1.total_recarga;
+    document.getElementById('stat-manutencao').innerText = d2 ? (parseInt(d1.total_manutencao) + parseInt(d2.total_manutencao)) : d1.total_manutencao;
+}
+
+async function telaRelatorioGeralAtivos() {
+    const container = document.getElementById('app-content');
+    container.innerHTML = '<div style="padding:20px; text-align:center; color:white;">🔍 Gerando inventário consolidado...</div>';
+
+    try {
+        const res = await fetch(`${API_URL}/impressoras/relatorio-geral`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const ativos = await res.json();
+
+        container.innerHTML = `
+            <div style="padding:20px;">
+                <div class="painel-vidro" style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+                    <h2 style="color: white; margin:0;">🖨️ INVENTÁRIO GERAL DE ATIVOS</h2>
+                    <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background: #475569;">VOLTAR</button>
+                </div>
+
+                <div class="painel-vidro">
+                    <table style="width:100%; border-collapse:collapse; color:white; text-align:left;">
+                        <thead>
+                            <tr style="border-bottom:2px solid rgba(255,255,255,0.2);">
+                                <th style="padding:12px;">ID</th>
+                                <th style="padding:12px;">Localidade</th>
+                                <th style="padding:12px;">Modelo</th>
+                                <th style="padding:12px;">Situação Atual</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${ativos.map(a => {
+                                // Lógica de cores para o Status
+                                let corStatus = '#4ade80'; // Verde (Operacional)
+                                let textoStatus = '✅ OPERACIONAL';
+
+                                if (a.status_chamado === 'recarga') {
+                                    corStatus = '#fbbf24'; // Amarelo
+                                    textoStatus = '💧 AGUARDANDO RECARGA';
+                                } else if (a.status_chamado === 'manutencao') {
+                                    corStatus = '#f87171'; // Vermelho
+                                    textoStatus = '🛠️ EM MANUTENÇÃO';
+                                }
+
+                                return `
+                                    <tr style="border-bottom:1px solid rgba(255,255,255,0.1); transition: 0.3s;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'">
+                                        <td style="padding:12px;">#${a.id}</td>
+                                        <td style="padding:12px; font-weight:bold;">${a.local_nome}</td>
+                                        <td style="padding:12px;">${a.modelo.toUpperCase()}</td>
+                                        <td style="padding:12px;">
+                                            <span style="background:${corStatus}; color:black; padding:4px 10px; border-radius:15px; font-size:0.75rem; font-weight:bold;">
+                                                ${textoStatus}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                `;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+    } catch (err) {
+        alert("Erro ao carregar relatório de ativos.");
+    }
+}
+
+async function buscarProdutosParaPedido(categoria) {
+    const localDestino = document.getElementById('admin_local_destino').value;
+    if (!localDestino) return alert("Selecione primeiro o local de destino!");
+
+    // Busca produtos da categoria para o usuário escolher
+    const res = await fetch(`${API_URL}/estoque/geral`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+    const produtos = await res.json();
+    const filtrados = produtos.filter(p => p.tipo === categoria && p.quantidade_estoque > 0);
+
+    // Abre um prompt simples para teste (ou você pode criar um modal bonito)
+    let lista = filtrados.map((p, i) => `${i}) ${p.nome} (Disp: ${p.quantidade_estoque})`).join('\n');
+    let escolha = prompt("Digite o número do produto:\n" + lista);
+    
+    if (escolha !== null && filtrados[escolha]) {
+        let qtd = prompt(`Quantos itens de ${filtrados[escolha].nome}?`, "1");
+        if (qtd > 0 && qtd <= filtrados[escolha].quantidade_estoque) {
+            adicionarAoCarrinhoAdmin(filtrados[escolha], qtd);
+        } else {
+            alert("Quantidade inválida ou superior ao estoque!");
+        }
+    }
+}
+
+function adicionarAoCarrinhoAdmin(produto, qtd) {
+    carrinhoAdmin.push({ produto_id: produto.id, nome: produto.nome, quantidade: parseInt(qtd) });
+    const area = document.getElementById('lista-carrinho-admin');
+    area.style.display = 'block';
+    
+    document.getElementById('itens-carrinho').innerHTML = carrinhoAdmin.map(i => 
+        `<div style="color:white; padding:5px 0;">• ${i.nome} - <b>${i.quantidade} un</b></div>`
+    ).join('');
+}
+
+async function telaConsultaPatrimonio() {
+    const container = document.getElementById('app-content');
+    
+    container.innerHTML = `
+        <div style="padding:20px;">
+            <div class="painel-usuario-vidro" style="position:relative; width:100%; top:0; right:0; margin-bottom:25px; display:flex; justify-content:space-between; align-items:center;">
+                <h2 style="color:white; margin:0;">🔍 CONSULTA DE PATRIMÔNIO</h2>
+                <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background:#64748b;">⬅ VOLTAR</button>
+            </div>
+
+            <div class="container-busca-estoque">
+                <span class="icone-lupa-busca">🏷️</span>
+                <input type="text" id="input-busca-serie" class="input-busca-vidro" 
+                       placeholder="Bipe o Número de Série ou Plaqueta..." 
+                       onkeypress="if(event.key === 'Enter') executarBuscaPatrimonio()">
+            </div>
+
+            <div id="resultado-consulta-patrimonio" style="margin-top: 30px;">
+                </div>
+        </div>
+    `;
+
+    // Foca automaticamente no campo para o leitor de código de barras
+    setTimeout(() => document.getElementById('input-busca-serie').focus(), 500);
+}
+
+async function executarBuscaPatrimonio() {
+    const serie = document.getElementById('input-busca-serie').value.trim();
+    const display = document.getElementById('resultado-consulta-patrimonio');
+
+    if (!serie) return;
+
+    display.innerHTML = '<div class="painel-vidro">🔎 Pesquisando nos registros...</div>';
+
+    try {
+        const res = await fetch(`${API_URL}/estoque/consulta-patrimonio/${serie}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        
+        const data = await res.json();
+
+        if (!res.ok) {
+            display.innerHTML = `<div class="painel-vidro" style="border-left: 5px solid #ef4444;">⚠️ ${data.error}</div>`;
+            return;
+        }
+
+        display.innerHTML = `
+            <div class="painel-vidro" style="text-align: left; animation: fadeIn 0.5s ease;">
+                <h3 style="color:#fbbf24; margin-top:0;">DETALHES DO ITEM: ${data.numero_serie}</h3>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div style="color: white;">
+                        <p><b>📦 PRODUTO:</b><br> ${data.produto_nome}</p>
+                        <p><b>🚦 STATUS ATUAL:</b><br> 
+                            <span style="background:${data.status === 'DISPONIVEL' ? '#10b981' : '#3b82f6'}; color:white; padding:2px 8px; border-radius:5px; font-size:0.8rem;">
+                                ${data.status}
+                            </span>
+                        </p>
+                    </div>
+                    <div style="color: white; border-left: 1px solid rgba(255,255,255,0.1); padding-left: 20px;">
+                        <p><b>📄 DOCUMENTO FISCAL:</b><br> NF: ${data.numero_doc} / SÉRIE: ${data.serie_doc}</p>
+                        <p><b>📅 DATA DE ENTRADA:</b><br> ${data.data_entrada_formatada}</p>
+                        <p><b>🔑 CHAVE NFe:</b><br> <small>${data.chave_nfe}</small></p>
+                    </div>
+                </div>
+                <div style="margin-top:20px; font-size:0.8rem; color:#94a3b8; text-align:right;">
+                    Registrado por: ${data.cadastrado_por}
+                </div>
+            </div>
+        `;
+
+        // Limpa o campo para a próxima consulta
+        document.getElementById('input-busca-serie').value = '';
+        document.getElementById('input-busca-serie').focus();
+
+    } catch (err) {
+        display.innerHTML = `<div class="painel-vidro" style="color:#ef4444;">Erro ao conectar com o servidor.</div>`;
+    }
+}
 
 // Isso garante que o onclick="funcao()" funcione sempre
 window.telaVisualizarEstoque = telaVisualizarEstoque;

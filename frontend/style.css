@@ -1335,3 +1335,93 @@ body.login-body {
     background: #dc2626;
     transform: scale(1.05);
 }
+
+.input-vidro {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 8px;
+    padding: 10px;
+    color: white;
+    outline: none;
+    font-size: 1rem;
+}
+
+.input-vidro option {
+    background: #1e3a8a; /* Cor sólida para leitura das opções */
+    color: white;
+}
+
+.painel-vidro {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 25px;
+    border-radius: 20px;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+}
+
+.container-abas {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.aba-item {
+    padding: 12px 25px;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: white;
+    border-radius: 12px 12px 0 0;
+    cursor: pointer;
+    font-weight: bold;
+    transition: all 0.3s ease;
+}
+
+.aba-item.ativa {
+    background: rgba(255, 255, 255, 0.3);
+    border-bottom: 3px solid #fbbf24; /* Destaque amarelo */
+    transform: translateY(-5px);
+}
+
+.aba-item:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.container-busca-estoque {
+    max-width: 600px;
+    margin: 0 auto 20px auto;
+    position: relative;
+}
+
+.input-busca-vidro {
+    width: 100%;
+    padding: 15px 20px 15px 45px; /* Espaço para o ícone de lupa */
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 50px; /* Estilo pílula para busca */
+    color: white;
+    font-size: 1rem;
+    outline: none;
+    transition: all 0.3s ease;
+}
+
+.input-busca-vidro:focus {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: #fbbf24;
+    box-shadow: 0 0 15px rgba(251, 191, 36, 0.3);
+}
+
+.icone-lupa-busca {
+    position: absolute;
+    left: 18px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 1.2rem;
+}
+

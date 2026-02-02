@@ -1,5 +1,6 @@
 const API_URL = 'https://patrimoniosemed.paiva.api.br';
 let TOKEN = localStorage.getItem('token');
+const tokenParaUso = localStorage.getItem('token');
 
 function prepararContainerPrincipal() {
     const app = document.getElementById('app-content');
@@ -227,9 +228,6 @@ async function carregarDashboard() {
 
     // --- 1. FERRAMENTAS COMUNS (Todos os perfis) ---
     const menuComum = `
-        <button class="btn-grande btn-vidro" onclick="abrirCalculadoraConversao()">
-            <i>🧮</i><span>CALCULADORA</span>
-        </button>
         <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()">
             <i>🔑</i><span>ALTERAR MINHA SENHA</span>
         </button>
@@ -246,6 +244,9 @@ async function carregarDashboard() {
             </button>
             <button class="btn-grande btn-vidro" onclick="telaVisualizarEstoque()">
                 <i>🔍</i><span>VISUALIZAR ESTOQUE</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="telaHistoricoMovimentacoes()">
+                <i>📜</i><span>HISTÓRICO</span>
             </button>
         `;
     }
@@ -313,18 +314,16 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="telaAdminCriarPedido()">
                 <i>➕</i><span>CRIAR PEDIDO</span>
             </button>
-            <button class="btn-grande btn-breve">
-                <i>🏷️</i><span>LANÇAR PATRIMÔNIO</span>
-            </button>
-            <button class="btn-grande" onclick="telaEntradaPatrimonioLote()">
-                <i>🏷️</i><span>LANÇAR ENTRADA PATRIMÔNIO</span>
-            </button>
             <button class="btn-grande btn-vidro" onclick="telaVisualizarEstoque()">
                 <i>🔍</i><span>VISUALIZAR ESTOQUE</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()">
                 <i>📈</i><span>PAINEL DE PEDIDOS</span>
             </button>
+            <button class="btn-grande btn-vidro" onclick="telaHistoricoMovimentacoes()">
+                <i>📜</i><span>HISTÓRICO</span>
+            </button>
+
         `;
         // Chama alertas de novas solicitações de Escolas e Logística
         setTimeout(() => verificarSolicitacoesPendentes(), 500);
@@ -353,6 +352,12 @@ async function carregarDashboard() {
             </button>
             <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()">
                 <i>📈</i><span>PAINEL DE PEDIDOS</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="telaHistoricoMovimentacoes()">
+                <i>📜</i><span>HISTÓRICO</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="abrirCalculadoraConversao()">
+                <i>🧮</i><span>CALCULADORA</span>
             </button>
         `;
         // Chama alertas de pedidos aguardando separação
@@ -6554,12 +6559,11 @@ let carrinhoAdmin = [];
 
 async function telaAdminCriarPedido() {
     const container = document.getElementById('app-content');
-    container.innerHTML = '<div class="painel-vidro">🔍 Carregando recursos do sistema...</div>';
+    container.innerHTML = '<div class="painel-vidro">🔍 Sincronizando dados de produtos e locais...</div>';
     
-    carrinhoAdminDireto = []; // Limpa o carrinho ao abrir
+    carrinhoAdminDireto = []; 
 
     try {
-        // Busca Locais e Produtos simultaneamente
         const [resLocais, resProdutos] = await Promise.all([
             fetch(`${API_URL}/locais/dropdown`, { headers: {'Authorization': `Bearer ${TOKEN}`} }),
             fetch(`${API_URL}/estoque/geral`, { headers: {'Authorization': `Bearer ${TOKEN}`} })
@@ -6570,26 +6574,26 @@ async function telaAdminCriarPedido() {
 
         container.innerHTML = `
             <div style="padding:20px;">
-                <div class="painel-usuario-vidro" style="position:relative; width:100%; top:0; right:0; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center;">
+                <div class="painel-usuario-vidro" style="position:relative; width:100%; top:0; right:0; margin-bottom:25px; display:flex; justify-content:space-between; align-items:center;">
                     <h2 style="color:white; margin:0;">📝 PEDIDO DIRETO (ADMIN)</h2>
-                    <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background:#64748b;">⬅️ VOLTAR</button>
+                    <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background:#64748b;">⬅ VOLTAR</button>
                 </div>
 
                 <div class="grid-menu-principal" style="grid-template-columns: 1fr 1.2fr; gap: 20px; align-items: start; max-width: 1200px;">
                     
                     <div class="painel-vidro" style="text-align: left;">
-                        <h3 style="color: #4ade80; margin-top:0;">1. Destino e Item</h3>
+                        <h3 style="color: #4ade80; margin-top:0;">1. Configurar Envio</h3>
                         
-                        <label style="color:white; display:block; margin-bottom:8px;">UNIDADE DESTINO:</label>
+                        <label style="color:white; display:block; margin-bottom:8px;">DESTINO:</label>
                         <select id="admin_direto_local" class="input-vidro" style="width:100%; margin-bottom:15px;">
-                            <option value="">-- SELECIONE A ESCOLA --</option>
+                            <option value="">-- SELECIONE A UNIDADE --</option>
                             ${locais.map(l => `<option value="${l.id}">${l.nome}</option>`).join('')}
                         </select>
 
                         <label style="color:white; display:block; margin-bottom:8px;">PRODUTO:</label>
                         <select id="admin_direto_produto" class="input-vidro" style="width:100%; margin-bottom:15px;">
-                            <option value="">-- SELECIONE O PRODUTO --</option>
-                            ${produtos.map(p => `<option value="${p.id}" data-tipo="${p.tipo}">${p.nome} (Disp: ${p.quantidade_estoque})</option>`).join('')}
+                            <option value="">-- SELECIONE O ITEM --</option>
+                            ${produtos.map(p => `<option value="${p.id}">${p.nome} (Saldo: ${p.quantidade_estoque})</option>`).join('')}
                         </select>
 
                         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:20px;">
@@ -6598,7 +6602,7 @@ async function telaAdminCriarPedido() {
                                 <select id="admin_direto_tamanho" class="input-vidro" style="width:100%;">
                                     <option value="UNICO">ÚNICO</option>
                                     <option value="P">P</option><option value="M">M</option>
-                                    <option value="G">G</option><option value="GG</option>
+                                    <option value="G">G</option><option value="GG">GG</option>
                                 </select>
                             </div>
                             <div>
@@ -6607,29 +6611,26 @@ async function telaAdminCriarPedido() {
                             </div>
                         </div>
 
-                        <button onclick="adicionarAoCarrinhoAdminDireto()" class="btn-grande btn-vidro" style="background: #10b981; color:white; border:none;">
-                            ➕ ADICIONAR À LISTA
+                        <button onclick="adicionarAoCarrinhoAdminDireto()" class="btn-grande btn-vidro" style="background: #10b981;">
+                            ➕ ADICIONAR AO PEDIDO
                         </button>
                     </div>
 
                     <div class="painel-vidro">
-                        <h3 style="color: white; margin-top:0;">2. Itens do Pedido</h3>
+                        <h3 style="color: white; margin-top:0;">2. Resumo do Pedido</h3>
                         <div id="display-carrinho-admin" style="min-height: 150px; color: #cbd5e1; text-align: left;">
-                            Sua lista está vazia.
+                            Aguardando itens...
                         </div>
-                        
                         <hr style="border:0; border-top:1px solid rgba(255,255,255,0.1); margin:20px 0;">
-                        
                         <button id="btnFinalizarAdmin" onclick="enviarPedidoAdminDireto()" disabled class="btn-grande btn-vidro" style="width:100%; opacity:0.5;">
-                            🚀 FINALIZAR E DAR BAIXA NO ESTOQUE
+                            🚀 ENVIAR PARA EXPEDIÇÃO
                         </button>
                     </div>
                 </div>
             </div>
         `;
-
     } catch (err) {
-        alert("Erro ao carregar dados do pedido.");
+        alert("Erro ao sincronizar tabelas: produtos/locais.");
     }
 }
 
@@ -6663,32 +6664,18 @@ function adicionarAoCarrinhoAdminDireto() {
     const tamanho = document.getElementById('admin_direto_tamanho').value;
     const qtd = parseInt(document.getElementById('admin_direto_qtd').value);
 
-    if (!produtoId || qtd <= 0) return alert("Selecione um produto e a quantidade.");
+    if (!produtoId || qtd <= 0) return alert("Selecione um produto válido.");
 
-    // --- O PULO DO GATO: Verificação de Duplicidade ---
-    // Procuramos se já existe um item com o MESMO ID e MESMO TAMANHO
-    const itemExistente = carrinhoAdminDireto.find(item => 
-        item.produto_id === produtoId && item.tamanho === tamanho
-    );
+    // Verifica se já existe a combinação ID + TAMANHO no carrinho
+    const itemExistente = carrinhoAdminDireto.find(i => i.produto_id === produtoId && i.tamanho === tamanho);
 
     if (itemExistente) {
-        // Se já existe, apenas somamos a quantidade ao item que já está lá
-        itemExistente.quantidade += qtd;
-        console.log(`Produto duplicado detectado. Nova quantidade para ${nome}: ${itemExistente.quantidade}`);
+        itemExistente.quantidade += qtd; // Soma a quantidade ao item já existente
     } else {
-        // Se for um item novo, adicionamos normalmente
-        carrinhoAdminDireto.push({ 
-            produto_id: produtoId, 
-            nome, 
-            tamanho, 
-            quantidade: qtd 
-        });
+        carrinhoAdminDireto.push({ produto_id: produtoId, nome, tamanho, quantidade: qtd });
     }
 
-    // Limpa os campos para a próxima inserção (opcional, mas melhora a experiência)
     document.getElementById('admin_direto_qtd').value = 1;
-    
-    // Atualiza a visualização da lista na tela
     atualizarVisualCarrinhoAdmin();
 }
 
@@ -8590,10 +8577,13 @@ async function telaDashboardImpressoras() {
                         ${locais.map(l => `<option value="${l.id}">${l.nome}</option>`).join('')}
                     </select>
                 </div>
-                <button onclick="gerarPDFDashboard()" class="btn-sair-vidro" style="background:#059669; height:45px;">📄 PDF</button>
-                <button onclick="prepararComparacao()" class="btn-sair-vidro" style="background:#3b82f6; height:45px;">⚖️ COMPARAR</button>
+                
+                <div style="display: flex; gap: 8px;">
+                    <button onclick="gerarPDFDashboard()" class="btn-sair-vidro" style="background:#dc2626; height:45px;" title="Salvar PDF">📄 PDF</button>
+                    <button onclick="compartilharDashboardPDF()" class="btn-sair-vidro" style="background:#3b82f6; height:45px;" title="Compartilhar">🔗 ENVIAR</button>
+                    <button onclick="habilitarComparacao()" class="btn-sair-vidro" style="background:#fbbf24; height:45px; color:black;">⚖️ COMPARAR</button>
+                </div>
             </div>
-
             <div id="relatorio-pdf-area">
                 <div class="grid-menu-principal" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-top:0;">
                     <div class="painel-vidro">
@@ -8797,6 +8787,7 @@ async function finalizarAtendimento(chamadoId) {
 }
 async function telaCadastroImpressoras() {
     const container = document.getElementById('app-content');
+    const tokenParaUso = localStorage.getItem('token');
     container.innerHTML = '<div style="padding:20px; text-align:center; color:white;">🔍 Carregando lista de locais...</div>';
 
     try {
@@ -8845,6 +8836,7 @@ async function telaCadastroImpressoras() {
 }
 
 async function executarCadastroImpressora() {
+    const tokenParaUso = localStorage.getItem('token');
     const local_id = document.getElementById('reg-imp-local').value;
     const modelo = document.getElementById('reg-imp-modelo').value;
 
@@ -9209,6 +9201,204 @@ async function executarBuscaPatrimonio() {
 
     } catch (err) {
         display.innerHTML = `<div class="painel-vidro" style="color:#ef4444;">Erro ao conectar com o servidor.</div>`;
+    }
+}
+
+async function telaHistoricoMovimentacoes() {
+    const container = document.getElementById('app-content');
+    container.innerHTML = '<div class="painel-vidro">🔍 Sincronizando logs e usuários...</div>';
+
+    try {
+        // Carrega logs e lista de usuários para o filtro
+        const [resHist, resUsers] = await Promise.all([
+            fetch(`${API_URL}/estoque/historico-movimentacoes`, { headers: { 'Authorization': `Bearer ${TOKEN}` } }),
+            fetch(`${API_URL}/usuarios/lista`, { headers: { 'Authorization': `Bearer ${TOKEN}` } })
+        ]);
+
+        const historico = await resHist.json();
+        const usuarios = await resUsers.json();
+
+        container.innerHTML = `
+            <div style="padding:20px;">
+                <div class="painel-usuario-vidro" style="position:relative; width:100%; top:0; right:0; margin-bottom:25px; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:15px;">
+                    <h2 style="color:white; margin:0;">📜 LOGS DE ESTOQUE</h2>
+                    
+                    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                        <select id="filtro-user-log" class="input-vidro" onchange="atualizarTabelaLogs()" style="min-width:180px;">
+                            <option value="TODOS">TODOS OS USUÁRIOS</option>
+                            ${usuarios.map(u => `<option value="${u.id}">${u.nome.toUpperCase()}</option>`).join('')}
+                        </select>
+
+                        <button onclick="exportarLogsExcel()" class="btn-sair-vidro" style="background:#059669;" title="Exportar Excel">📊 EXCEL</button>
+                        <button onclick="exportarLogsPDF()" class="btn-sair-vidro" style="background:#dc2626;" title="Salvar PDF">📄 PDF</button>
+                        <button onclick="compartilharLogsPDF()" class="btn-sair-vidro" style="background:#3b82f6;" title="Compartilhar">🔗 ENVIAR</button>
+                        <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background:#64748b;">⬅ VOLTAR</button>
+                    </div>
+                </div>
+
+                <div id="area-tabela-logs" class="painel-vidro" style="padding:0; overflow:hidden;">
+                    ${renderizarLinhasLog(historico)}
+                </div>
+            </div>
+        `;
+    } catch (err) {
+        alert("Erro ao carregar o histórico.");
+    }
+}
+
+function renderizarLinhasLog(dados) {
+    if (dados.length === 0) return '<div style="padding:40px; color:#cbd5e1; text-align:center;">Nenhum registro encontrado para este filtro.</div>';
+
+    return `
+        <table style="width:100%; border-collapse:collapse; color:white; text-align:left;">
+            <thead style="background:rgba(255,255,255,0.1);">
+                <tr>
+                    <th style="padding:15px;">Data/Hora</th>
+                    <th style="padding:15px;">Produto</th>
+                    <th style="padding:15px; text-align:center;">Qtd</th>
+                    <th style="padding:15px; text-align:center;">Operação</th>
+                    <th style="padding:15px;">Responsável</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${dados.map(h => `
+                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                        <td style="padding:15px; font-size:0.85rem; color:#cbd5e1;">${h.data_formatada}</td>
+                        <td style="padding:15px; font-weight:bold;">${h.produto_nome}</td>
+                        <td style="padding:15px; text-align:center;">${h.quantidade}</td>
+                        <td style="padding:15px; text-align:center;">
+                            <span style="color:${h.tipo_movimentacao === 'ENTRADA' ? '#4ade80' : '#f87171'}; font-weight:bold; font-size:0.75rem;">
+                                ${h.tipo_movimentacao}
+                            </span>
+                        </td>
+                        <td style="padding:15px;">👤 ${h.usuario_nome.toUpperCase()}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
+}
+
+async function atualizarTabelaLogs() {
+    const userId = document.getElementById('filtro-user-log').value;
+    const area = document.getElementById('area-tabela-logs');
+    area.innerHTML = '<div style="padding:20px; text-align:center; color:white;">🔄 Filtrando...</div>';
+
+    try {
+        const res = await fetch(`${API_URL}/estoque/historico-movimentacoes?usuario_id=${userId}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const dados = await res.json();
+        area.innerHTML = renderizarLinhasLog(dados);
+    } catch (err) {
+        alert("Erro ao filtrar logs.");
+    }
+}
+
+function exportarLogsExcel() {
+    const tabela = document.querySelector("#area-tabela-logs table");
+    if (!tabela) return alert("Nenhum dado para exportar.");
+
+    let csv = [];
+    const linhas = tabela.querySelectorAll("tr");
+    
+    for (let i = 0; i < linhas.length; i++) {
+        const colunas = linhas[i].querySelectorAll("td, th");
+        const linha = Array.from(colunas).map(col => `"${col.innerText}"`).join(",");
+        csv.push(linha);
+    }
+
+    const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + csv.join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `Historico_Estoque_${new Date().toLocaleDateString()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+function exportarLogsPDF() {
+    const elemento = document.getElementById('area-tabela-logs');
+    const user = document.getElementById('filtro-user-log').options[document.getElementById('filtro-user-log').selectedIndex].text;
+
+    const opcoes = {
+        margin: 10,
+        filename: `LOG_ESTOQUE_${user.replace(" ", "_")}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, backgroundColor: '#004a99' },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
+    };
+
+    html2pdf().set(opcoes).from(elemento).save();
+}
+
+async function compartilharLogsPDF() {
+    const elemento = document.getElementById('area-tabela-logs');
+    const user = document.getElementById('filtro-user-log').options[document.getElementById('filtro-user-log').selectedIndex].text;
+
+    if (!navigator.share) {
+        return alert("Seu navegador não suporta compartilhamento nativo. Use a opção PDF.");
+    }
+
+    const opcoes = {
+        margin: 10,
+        filename: 'relatorio.pdf',
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2 },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
+    };
+
+    // Gera o PDF como um Blob para poder enviar
+    const pdfBlob = await html2pdf().set(opcoes).from(elemento).output('blob');
+    const arquivo = new File([pdfBlob], `Logs_Estoque_${user}.pdf`, { type: 'application/pdf' });
+
+    try {
+        await navigator.share({
+            title: 'Relatório de Movimentação de Estoque',
+            text: `Segue o log de estoque filtrado para: ${user}`,
+            files: [arquivo]
+        });
+    } catch (err) {
+        console.log("Compartilhamento cancelado ou falhou:", err);
+    }
+}
+
+async function compartilharDashboardPDF() {
+    const elemento = document.getElementById('relatorio-pdf-area');
+    const local = document.getElementById('dash-local').options[document.getElementById('dash-local').selectedIndex].text;
+
+    // Verifica suporte ao compartilhamento nativo
+    if (!navigator.share) {
+        return alert("Seu navegador não suporta compartilhamento nativo. Utilize a função PDF para salvar o arquivo.");
+    }
+
+    // Configurações do PDF para compartilhamento (Layout Paisagem para os gráficos)
+    const opcoes = {
+        margin: 10,
+        filename: 'relatorio_manutencao.pdf',
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, backgroundColor: '#004a99' }, 
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
+    };
+
+    // Gera o Blob do PDF
+    try {
+        const pdfBlob = await html2pdf().set(opcoes).from(elemento).output('blob');
+        const arquivo = new File([pdfBlob], `Dashboard_Impressoras_${local.replace(" ", "_")}.pdf`, { type: 'application/pdf' });
+
+        await navigator.share({
+            title: 'Relatório Técnico - Manutenção de Impressoras',
+            text: `Segue o relatório de chamados e manutenções da unidade: ${local}`,
+            files: [arquivo]
+        });
+        
+        console.log("Compartilhamento realizado com sucesso.");
+    } catch (err) {
+        if (err.name !== 'AbortError') {
+            console.error("Erro ao compartilhar:", err);
+            alert("Não foi possível processar o compartilhamento.");
+        }
     }
 }
 

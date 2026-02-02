@@ -1312,13 +1312,12 @@ router.get('/produtos/lista', verificarToken, async (req, res) => {
 
 router.post('/estoque/entrada-patrimonio-lote', verificarToken, async (req, res) => {
     const { doc, itens } = req.body; 
-    // itens = { produto_id, quantidade, series: [] }
     const client = await db.connect();
 
     try {
         await client.query('BEGIN');
 
-        // 1. Registra o Documento Fiscal
+        // 1. Registra o Documento Fiscal (DANFE ou Chave)
         const docRes = await client.query(
             `INSERT INTO documentos_fiscais (tipo_doc, numero_doc, serie_doc, chave_nfe, usuario_id) 
              VALUES ($1, $2, $3, $4, $5) RETURNING id`,
@@ -1326,27 +1325,21 @@ router.post('/estoque/entrada-patrimonio-lote', verificarToken, async (req, res)
         );
         const documentoId = docRes.rows[0].id;
 
-        // 2. Atualiza Saldo Geral na tabela de produtos
-        await client.query(
-            "UPDATE produtos_estoque SET quantidade_estoque = quantidade_estoque + $1 WHERE id = $2",
-            [itens.quantidade, itens.produto_id]
-        );
-
-        // 3. Insere cada item individual com seu número de série
+        // 2. Insere cada item na sua tabela 'patrimonios' existente
         for (const serie of itens.series) {
             await client.query(
-                `INSERT INTO patrimonios_individuais (produto_id, documento_id, numero_serie) 
-                 VALUES ($1, $2, $3)`,
-                [itens.produto_id, documentoId, serie]
+                `INSERT INTO patrimonios (produto_id, documento_id, numero_serie, status, nota_fiscal) 
+                 VALUES ($1, $2, $3, 'ESTOQUE', $4)`,
+                [itens.produto_id, documentoId, serie, doc.numero || doc.chave.substring(0,20)]
             );
         }
 
         await client.query('COMMIT');
-        res.json({ message: "Entrada de lote realizada com sucesso!" });
+        res.json({ message: "Lote de patrimônio registrado com sucesso!" });
 
     } catch (err) {
         await client.query('ROLLBACK');
-        res.status(500).json({ error: "Erro na entrada: " + err.message });
+        res.status(500).json({ error: "Erro no banco: " + err.message });
     } finally {
         client.release();
     }
@@ -2291,7 +2284,7 @@ router.post('/pedidos/admin-direto-final', verificarToken, async (req, res) => {
     try {
         await client.query('BEGIN');
 
-        // 1. Cria o pedido já com status 'APROVADO' (vai direto para separação)
+        // 1. Cria o pedido já 'APROVADO' para cair na separação
         const pedidoRes = await client.query(
             `INSERT INTO pedidos (local_destino_id, status, usuario_origem_id, data_criacao) 
              VALUES ($1, 'APROVADO', $2, NOW()) RETURNING id`,
@@ -2299,11 +2292,10 @@ router.post('/pedidos/admin-direto-final', verificarToken, async (req, res) => {
         );
         const pedidoId = pedidoRes.rows[0].id;
 
-        // 2. Itera sobre os itens para baixar estoque e vincular ao pedido
+        // 2. Itera sobre os itens (Usa a tabela 'produtos' conforme seu banco)
         for (const item of itens) {
-            // Tenta dar a baixa no estoque verificando disponibilidade
             const baixaRes = await client.query(
-                `UPDATE produtos_estoque 
+                `UPDATE produtos 
                  SET quantidade_estoque = quantidade_estoque - $1 
                  WHERE id = $2 AND quantidade_estoque >= $1
                  RETURNING nome`,
@@ -2314,7 +2306,7 @@ router.post('/pedidos/admin-direto-final', verificarToken, async (req, res) => {
                 throw new Error(`Estoque insuficiente para o produto ID: ${item.produto_id}`);
             }
 
-            // Registra o item no pedido (com tamanho, se houver)
+            // 3. Registra os itens do pedido
             await client.query(
                 `INSERT INTO pedido_itens (pedido_id, produto_id, quantidade, tamanho) 
                  VALUES ($1, $2, $3, $4)`,
@@ -2323,44 +2315,66 @@ router.post('/pedidos/admin-direto-final', verificarToken, async (req, res) => {
         }
 
         await client.query('COMMIT');
-        res.json({ message: "Pedido gerado com sucesso! Estoque atualizado.", pedido_id: pedidoId });
+        res.json({ message: "Pedido gerado e estoque atualizado com sucesso!" });
 
     } catch (err) {
         await client.query('ROLLBACK');
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: "Erro na transação: " + err.message });
     } finally {
         client.release();
     }
 });
 
 router.get('/estoque/consulta-patrimonio/:serie', verificarToken, async (req, res) => {
-    const { serie } = req.params;
     try {
         const query = `
             SELECT 
-                pi.numero_serie,
-                pi.status,
-                p.nome AS produto_nome,
+                pa.numero_serie,
+                pa.status,
+                pr.nome AS produto_nome,
                 df.numero_doc,
-                df.serie_doc,
                 df.chave_nfe,
-                to_char(df.data_entrada, 'DD/MM/YYYY HH24:MI') as data_entrada_formatada,
-                u.nome as cadastrado_por
-            FROM patrimonios_individuais pi
-            JOIN produtos_estoque p ON pi.produto_id = p.id
-            JOIN documentos_fiscais df ON pi.documento_id = df.id
-            JOIN usuarios u ON df.usuario_id = u.id
-            WHERE pi.numero_serie = $1
+                to_char(pa.data_atualizacao, 'DD/MM/YYYY HH24:MI') as data_formatada
+            FROM patrimonios pa
+            JOIN produtos pr ON pa.produto_id = pr.id
+            LEFT JOIN documentos_fiscais df ON pa.documento_id = df.id
+            WHERE pa.numero_serie = $1
         `;
-        const { rows } = await db.query(query, [serie]);
+        const { rows } = await db.query(query, [req.params.serie]);
 
-        if (rows.length === 0) {
-            return res.status(404).json({ error: "Patrimônio não localizado no sistema." });
-        }
-
+        if (rows.length === 0) return res.status(404).json({ error: "Patrimônio não encontrado." });
         res.json(rows[0]);
     } catch (err) {
         res.status(500).json({ error: err.message });
+    }
+});
+
+router.get('/estoque/historico-movimentacoes', verificarToken, async (req, res) => {
+    const { usuario_id } = req.query;
+    
+    try {
+        let filtroUser = usuario_id && usuario_id !== 'TODOS' ? `AND hm.usuario_id = ${usuario_id}` : '';
+        
+        const query = `
+            SELECT 
+                hm.id,
+                p.nome as produto_nome,
+                hm.quantidade,
+                hm.tipo_movimentacao, 
+                u.nome as usuario_nome,
+                to_char(hm.data_movimentacao, 'DD/MM/YYYY HH24:MI') as data_formatada,
+                hm.observacao
+            FROM historico_movimentacoes hm
+            JOIN produtos p ON hm.produto_id = p.id
+            JOIN usuarios u ON hm.usuario_id = u.id
+            WHERE 1=1 ${filtroUser}
+            ORDER BY hm.data_movimentacao DESC
+            LIMIT 150
+        `;
+        const { rows } = await db.query(query);
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao buscar histórico: " + err.message });
     }
 });
 

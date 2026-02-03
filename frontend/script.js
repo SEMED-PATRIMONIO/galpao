@@ -8785,53 +8785,38 @@ async function finalizarAtendimento(chamadoId) {
         alert("Erro de conexão.");
     }
 }
+
 async function telaCadastroImpressoras() {
-    const container = document.getElementById('app-content');
-    const tokenParaUso = localStorage.getItem('token');
-    container.innerHTML = '<div style="padding:20px; text-align:center; color:white;">🔍 Carregando lista de locais...</div>';
+    // 1. Antes de carregar a tela, sincronizamos os dados
+    await sincronizarDadosUsuario();
+
+    const app = document.getElementById('app-content');
+    const token = localStorage.getItem('token');
+    const perfil = localStorage.getItem('usuario_perfil');
 
     try {
-        // 1. Procura os locais cadastrados no sistema
-        const resLocais = await fetch(`${API_URL}/locais`, {
-            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        // Chamamos a rota simples de locais que você já tem
+        const res = await fetch(`${API_URL}/locais/lista-simples`, {
+            headers: { 'Authorization': `Bearer ${token}` }
         });
-        const locais = await resLocais.json();
+        const locais = await res.json();
 
-        // 2. Monta a interface vitrificada
-        container.innerHTML = `
-            <div class="painel-vidro" style="max-width: 500px; margin: 0 auto; text-align: left;">
-                <h2 style="color: white; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 10px; text-align:center;">
-                    🖨️ CADASTRAR IMPRESSORA
-                </h2>
+        app.innerHTML = `
+            <div class="painel-vidro">
+                <h2>🖨️ CADASTRO DE EQUIPAMENTO</h2>
+                <p style="font-size: 0.8rem; color: #cbd5e1;">Logado como: ${localStorage.getItem('usuario_local_nome')}</p>
                 
-                <div style="margin-top: 25px;">
-                    <label style="color: white; display: block; margin-bottom: 8px;">Unidade Escolar / Local:</label>
-                    <select id="reg-imp-local" class="input-vidro" style="width: 100%;">
-                        <option value="">Selecione o local...</option>
+                <div style="margin-top: 20px;">
+                    <label>Selecione o Local de Instalação:</label>
+                    <select id="imp_local_id" class="input-vidro" style="width:100%;">
+                        <option value="">-- SELECIONE A UNIDADE --</option>
                         ${locais.map(l => `<option value="${l.id}">${l.nome}</option>`).join('')}
                     </select>
                 </div>
-
-                <div style="margin-top: 20px;">
-                    <label style="color: white; display: block; margin-bottom: 8px;">Modelo da Impressora:</label>
-                    <select id="reg-imp-modelo" class="input-vidro" style="width: 100%;">
-                        <option value="">Selecione o tipo...</option>
-                        <option value="mono">MONOCROMÁTICA (Preto e Branco)</option>
-                        <option value="color">COLORIDA</option>
-                        <option value="duplicadora">DUPLICADORA</option>
-                    </select>
                 </div>
-
-                <div style="margin-top: 35px; display: flex; gap: 10px;">
-                    <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background: #475569;">VOLTAR</button>
-                    <button onclick="executarCadastroImpressora()" class="btn-sair-vidro" style="background: #059669; flex: 1;">
-                        SALVAR EQUIPAMENTO
-                    </button>
-                </div>
-            </div>
         `;
-    } catch (err) {
-        alert("Erro ao carregar locais para cadastro.");
+    } catch (e) {
+        alert("Erro ao carregar locais. Verifique sua conexão.");
     }
 }
 
@@ -9401,6 +9386,36 @@ async function compartilharDashboardPDF() {
         }
     }
 }
+
+async function sincronizarDadosUsuario() {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    try {
+        const res = await fetch(`${API_URL}/auth/sincronizar-identidade`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (res.status === 401) {
+            console.error("Sessão inválida.");
+            return;
+        }
+
+        const info = await res.json();
+
+        // Guardamos TUDO de forma organizada
+        localStorage.setItem('usuario_id', info.id);
+        localStorage.setItem('usuario_perfil', info.perfil);
+        localStorage.setItem('usuario_local_id', info.local_id || 'NULL'); // Se for Admin, pode ser NULL
+        localStorage.setItem('usuario_local_nome', info.local_nome || 'ADMINISTRAÇÃO');
+
+        console.log("✅ Identidade Sincronizada:", info.nome, "| Perfil:", info.perfil);
+    } catch (err) {
+        console.error("Falha ao cercar informações do usuário:", err);
+    }
+}
+
+
 
 // Isso garante que o onclick="funcao()" funcione sempre
 window.telaVisualizarEstoque = telaVisualizarEstoque;

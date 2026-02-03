@@ -2378,4 +2378,30 @@ router.get('/estoque/historico-movimentacoes', verificarToken, async (req, res) 
     }
 });
 
+router.get('/auth/sincronizar-identidade', verificarToken, async (req, res) => {
+    try {
+        // Buscamos o usuário, o local dele e o perfil real gravado no banco
+        const result = await db.query(`
+            SELECT 
+                u.id, 
+                u.nome, 
+                u.perfil, 
+                u.local_id, 
+                l.nome as local_nome 
+            FROM usuarios u 
+            LEFT JOIN locais l ON u.local_id = l.id
+            WHERE u.id = $1
+        `, [req.usuario.id]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: "Usuário não encontrado." });
+        }
+
+        // Retornamos um objeto completo para o frontend "se localizar"
+        res.json(result.rows[0]);
+    } catch (err) {
+        res.status(500).json({ error: "Erro na sincronização: " + err.message });
+    }
+});
+
 module.exports = router;

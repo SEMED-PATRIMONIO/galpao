@@ -8787,36 +8787,75 @@ async function finalizarAtendimento(chamadoId) {
 }
 
 async function telaCadastroImpressoras() {
-    // 1. Antes de carregar a tela, sincronizamos os dados
-    await sincronizarDadosUsuario();
+    const container = document.getElementById('app-content');
+    // 1. Limpa e mostra carregando
+    container.innerHTML = '<div class="painel-vidro">🔍 Tentando carregar locais...</div>';
 
-    const app = document.getElementById('app-content');
-    const token = localStorage.getItem('token');
-    const perfil = localStorage.getItem('usuario_perfil');
+    const tokenAtual = localStorage.getItem('token');
 
     try {
-        // Chamamos a rota simples de locais que você já tem
+        // 2. Faz a chamada para a rota correta do seu api.routes.js
         const res = await fetch(`${API_URL}/locais/lista-simples`, {
-            headers: { 'Authorization': `Bearer ${token}` }
+            method: 'GET',
+            headers: { 
+                'Authorization': `Bearer ${tokenAtual}`,
+                'Content-Type': 'application/json'
+            }
         });
+
+        // DEBUG: Se não estiver OK, vamos ver o que aconteceu
+        if (!res.ok) {
+            const erroTexto = await res.text(); // Tenta ler a mensagem do servidor
+            throw new Error(`Servidor respondeu com status ${res.status}: ${erroTexto}`);
+        }
+
         const locais = await res.json();
 
-        app.innerHTML = `
-            <div class="painel-vidro">
-                <h2>🖨️ CADASTRO DE EQUIPAMENTO</h2>
-                <p style="font-size: 0.8rem; color: #cbd5e1;">Logado como: ${localStorage.getItem('usuario_local_nome')}</p>
+        // 3. Se chegou aqui, deu certo. Monta a tela:
+        container.innerHTML = `
+            <div class="painel-vidro" style="max-width: 500px; margin: 0 auto; text-align: left;">
+                <h2 style="color: white; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 10px; text-align:center;">
+                    🖨️ CADASTRAR IMPRESSORA
+                </h2>
                 
-                <div style="margin-top: 20px;">
-                    <label>Selecione o Local de Instalação:</label>
-                    <select id="imp_local_id" class="input-vidro" style="width:100%;">
-                        <option value="">-- SELECIONE A UNIDADE --</option>
+                <div style="margin-top: 25px;">
+                    <label style="color: white; display: block; margin-bottom: 8px;">Unidade Escolar / Local:</label>
+                    <select id="reg-imp-local" class="input-vidro" style="width: 100%;">
+                        <option value="">-- SELECIONE O LOCAL --</option>
                         ${locais.map(l => `<option value="${l.id}">${l.nome}</option>`).join('')}
                     </select>
                 </div>
+
+                <div style="margin-top: 20px;">
+                    <label style="color: white; display: block; margin-bottom: 8px;">Modelo da Impressora:</label>
+                    <select id="reg-imp-modelo" class="input-vidro" style="width: 100%;">
+                        <option value="">Selecione o tipo...</option>
+                        <option value="mono">MONOCROMÁTICA</option>
+                        <option value="color">COLORIDA</option>
+                        <option value="duplicadora">DUPLICADORA</option>
+                    </select>
                 </div>
+
+                <div style="margin-top: 35px; display: flex; gap: 10px;">
+                    <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background: #475569;">VOLTAR</button>
+                    <button onclick="executarCadastroImpressora()" class="btn-sair-vidro" style="background: #059669; flex: 1;">
+                        SALVAR
+                    </button>
+                </div>
+            </div>
         `;
-    } catch (e) {
-        alert("Erro ao carregar locais. Verifique sua conexão.");
+
+    } catch (err) {
+        // 4. Se der erro, tira o "Carregando..." e mostra o erro real na tela
+        console.error("Erro detalhado:", err);
+        container.innerHTML = `
+            <div class="painel-vidro" style="border: 2px solid #ef4444;">
+                <h3 style="color: #ef4444;">⚠️ Erro de Comunicação</h3>
+                <p style="color: white;">${err.message}</p>
+                <button onclick="telaCadastroImpressoras()" class="btn-vidro" style="margin-top:10px;">Tentar Novamente</button>
+                <button onclick="carregarDashboard()" class="btn-vidro" style="margin-top:10px; background: #64748b;">Voltar</button>
+            </div>
+        `;
     }
 }
 

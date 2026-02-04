@@ -156,16 +156,20 @@ async function inicializarSessaoUsuario() {
         const res = await fetch(`${API_URL}/auth/quem-sou-eu`, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         });
-        const usuario = await res.json();
-
+        
         if (res.ok) {
-            // Guarda as informações na "variável permanente" do navegador
-            localStorage.setItem('minha_unidade_id', usuario.local_id);
-            localStorage.setItem('minha_unidade_nome', usuario.local_nome || "Sede/Admin");
-            console.log("Sessão inicializada: " + usuario.local_nome);
+            const user = await res.json();
+            localStorage.setItem('nome', user.nome);
+            localStorage.setItem('perfil', user.perfil);
+            localStorage.setItem('local_id', user.local_id);
+            
+            // --- LINHA ADICIONADA: Salva o ID do técnico (usuário) ---
+            localStorage.setItem('usuario_id', user.id); 
+            
+            console.log(`Sessão sincronizada: ${user.nome} (ID: ${user.id})`);
         }
     } catch (err) {
-        console.error("Erro ao carregar dados da sessão:", err);
+        console.error("Erro ao sincronizar sessão:", err);
     }
 }
 
@@ -192,6 +196,7 @@ async function carregarDashboard() {
     let dadosEstoqueCache = [];
     let categoriaAtual = 'UNIFORMES';
     let carrinhoAdmin = [];
+    let chartTecnicos = null; // Variável global para controle do gráfico
     await inicializarSessaoUsuario();
     const perfil = localStorage.getItem('perfil') ? localStorage.getItem('perfil').toLowerCase() : null;
     const nome = localStorage.getItem('nome');
@@ -228,7 +233,7 @@ async function carregarDashboard() {
 
     // --- 1. FERRAMENTAS COMUNS (Todos os perfis) ---
     const menuComum = `
-        <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()">
+        <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
             <i>🔑</i><span>ALTERAR MINHA SENHA</span>
         </button>
     `;
@@ -255,25 +260,28 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="telaCadastroImpressoras()">
                 <i>🖨️</i><span>CADASTRAR IMPRESSORAS</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="telaListarChamadosAbertos()">
-                <i>📋</i><span>ATENDER CHAMADOS</span>
+            <button class="btn-grande btn-vidro" onclick="telaFilaAtendimentoImpressoras()">
+                <i>📋</i><span>CHAMADOS EM ABERTO</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="telaDashboardImpressoras()">
                 <i>📈</i><span>DASHBOARD TÉCNICO</span>
             </button>
+            <button class="btn-grande btn-vidro" onclick="telaConsumoImpressoras()">
+                <i>📊</i><span>UTILIZAÇÃO E CONSUMO</span>
+            </button>
             <button class="btn-grande btn-vidro" onclick="telaRelatorioGeralAtivos()">
-                <i>📋</i><span>INVENTÁRIO DE ATIVOS</span>
+                <i>📋</i><span>IMPRESSORAS DO CONTRATO</span>
             </button>
         `;
     }
     if (perfil === 'impres') {
         html += `
             <button class="btn-grande btn-vidro" onclick="telaListarChamadosAbertos()">
-                <i>📋</i><span>FILA CHAMADOS</span>
+                <i>📋</i><span>FILA DE CHAMADOS</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="telaDashboardImpressoras()">
-                <i>📈</i><span>DASHBOARD TÉCNICO</span>
-            </button>
+            <button class="btn-grande btn-vidro" onclick="telaConsumoImpressoras()">
+                <i>📊</i><span>UTILIZAÇÃO E CONSUMO</span>
+            </button>            
         `;
     }
     // --- 3. PERFIL: ESCOLA ---
@@ -288,12 +296,12 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="telaDevolucaoUniforme()">
                 <i>🔄</i><span>DEVOLVER UNIFORMES</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="telaSolicitarServicoImpressora('recarga')">
+            <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaSolicitarServicoImpressora('recarga')">
                 <i>💧</i><span>SOLICITAR RECARGA DE TONER</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="telaSolicitarServicoImpressora('manutencao')">
                 <i>🛠️</i><span>SOLICITAR MANUTENÇÃO IMPRESSORA</span>
-            </button>            
+            </button>
         `;
         // Chama alertas específicos da escola (Pedidos em transporte para o localId)
         setTimeout(() => verificarAlertasEscola(), 500);
@@ -316,6 +324,9 @@ async function carregarDashboard() {
             </button>
             <button class="btn-grande btn-vidro" onclick="telaVisualizarEstoque()">
                 <i>🔍</i><span>VISUALIZAR ESTOQUE</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="telaInventarioLocal()">
+                <i>🏷️</i><span>INVENTÁRIO PATRIMÔNIO</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()">
                 <i>📈</i><span>PAINEL DE PEDIDOS</span>
@@ -344,9 +355,6 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="telaReceberDevolucoes()">
                 <i>🔄</i><span>RECEBER DEVOLUÇÕES</span>
             </button>
-             <button class="btn-grande btn-breve">
-                <i>🏷️</i><span>LANÇAR PATRIMÔNIO</span>
-            </button>
             <button class="btn-grande btn-vidro" onclick="telaVisualizarEstoque()">
                 <i>🔍</i><span>VISUALIZAR ESTOQUE</span>
             </button>
@@ -356,6 +364,18 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="telaHistoricoMovimentacoes()">
                 <i>📜</i><span>HISTÓRICO</span>
             </button>
+            <button class="btn-grande btn-vidro" onclick="telaEntradaPatrimonioLote()">
+                <i>🏷️</i><span>LANÇAR ENTRADA PATRIMÔNIO</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="telaGerenciarPatrimonio()">
+                <i>🏷️</i><span>CONSULTAR / MOVER PATRIMÔNIO</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="abrirModalBaixa(patrimonioId, produtoId, numeroSerie)">
+                <i>🏷️</i><span>BAIXAR PATRIMÔNIO (INSERVÍVEL)</span>
+            </button> 
+            <button class="btn-grande btn-vidro" onclick="telaResumoBaixasAnual()">
+                <i>🏷️</i><span>RELATÓRIO ANUAL BAIXA DE PATRIMÔNIO</span>
+            </button> 
             <button class="btn-grande btn-vidro" onclick="abrirCalculadoraConversao()">
                 <i>🧮</i><span>CALCULADORA</span>
             </button>
@@ -2053,35 +2073,6 @@ async function processarAprovacaoAdmin(pedidoId, acao) {
 
 // --- FUNÇÕES DE CADASTROS BÁSICOS (ADMIN) ---
 
-async function antigotelaCadastrosBase() {
-    const container = document.getElementById('app-content');
-    
-    let html = `
-        <button onclick="carregarDashboard()" style="width: auto; background: #64748b; margin-bottom: 20px;">⬅ VOLTAR</button>
-        <h2 style="color: white; text-align: center;">CADASTROS BÁSICOS DO SISTEMA</h2>
-        
-        <div class="grid-menu">
-            <button class="btn-grande" onclick="formGenerico('categorias', 'CATEGORIA')">
-                <i>📁</i><span>CATEGORIAS</span>
-            </button>
-            <button class="btn-grande" onclick="formGenerico('locais', 'LOCAL')">
-                <i>📍</i><span>LOCAIS (ESCOLAS)</span>
-            </button>
-            <button class="btn-grande" onclick="formGenerico('setores', 'SETOR')">
-                <i>🏢</i><span>SETORES</span>
-            </button>
-            <button class="btn-grande" onclick="formProduto()">
-                <i>📦</i><span>PRODUTOS</span>
-            </button>
-            <button class="btn-grande" onclick="formPatrimonioLote()">
-                <i>🏷️</i><span>PATRIMÔNIOS (LOTE)</span>
-            </button>
-        </div>
-        <div id="area-formulario-cadastro" style="margin-top: 30px;"></div>
-    `;
-    container.innerHTML = html;
-}
-
 // Formulário para Categorias, Locais e Setores
 function formGenerico(tabela, label) {
     const area = document.getElementById('area-formulario-cadastro');
@@ -2111,47 +2102,6 @@ async function salvarGenerico(tabela) {
 }
 
 // Formulário de Produtos com lógica de Uniformes e Materiais
-async function formProduto() {
-    const area = document.getElementById('area-formulario-cadastro');
-    
-    // Busca categorias cadastradas para o Select
-    const resCat = await fetch(`${API_URL}/api/cadastros/categorias`, {
-        headers: { 'Authorization': `Bearer ${TOKEN}` }
-    });
-    const categorias = await resCat.json();
-
-    area.innerHTML = `
-        <div class="card-login" style="max-width: 100%;">
-            <h3>NOVO PRODUTO</h3>
-            <input type="text" id="prod_nome" placeholder="NOME DO PRODUTO" oninput="ajustarGradeUniforme()">
-            
-            <label style="color: white; display: block; margin-top: 10px;">TIPO DE PRODUTO:</label>
-            <select id="prod_tipo" class="input-grade" style="width: 100%; height: 50px;" onchange="ajustarGradeUniforme()">
-                <option value="MATERIAL">MATERIAL</option>
-                <option value="UNIFORMES">UNIFORMES</option>
-            </select>
-
-            <label style="color: white; display: block; margin-top: 10px;">CATEGORIA:</label>
-            <select id="prod_categoria" class="input-grade" style="width: 100%; height: 50px;">
-                ${categorias.map(c => `<option value="${c.id}">${c.nome}</option>`).join('')}
-            </select>
-
-            <input type="number" id="prod_qtd" placeholder="ESTOQUE INICIAL" style="margin-top: 10px;">
-            
-            <div id="div_alerta_minimo">
-                <input type="number" id="prod_alerta" placeholder="ALERTA MÍNIMO (ESTOQUE)" style="margin-top: 10px;">
-            </div>
-
-            <div id="info_grade" style="display:none; background: #1e3a8a; color: white; padding: 10px; margin-top: 10px; border-radius: 5px; font-size: 0.9rem;">
-                <strong>GRADE DE TAMANHOS QUE SERÁ GERADA:</strong><br>
-                <span id="texto_grade"></span>
-            </div>
-
-            <button onclick="salvarProduto()" style="background: var(--success); margin-top: 20px;">CADASTRAR PRODUTO</button>
-        </div>
-    `;
-}
-
 function ajustarGradeUniforme() {
     const tipo = document.getElementById('prod_tipo').value;
     const nome = document.getElementById('prod_nome').value.toUpperCase();
@@ -2170,46 +2120,6 @@ function ajustarGradeUniforme() {
     } else {
         divAlerta.style.display = 'block';
         infoGrade.style.display = 'none';
-    }
-}
-
-async function funantigassalvarProduto() {
-    const nome = document.getElementById('p_nome').value;
-    const tipo = document.getElementById('p_tipo').value;
-    const alerta_minimo = document.getElementById('p_alerta') ? document.getElementById('p_alerta').value : 0;
-
-    // Validação básica
-    if (!nome) {
-        return alert("Por favor, informe o nome do produto.");
-    }
-
-    const payload = {
-        nome: nome,
-        tipo: tipo,
-        alerta_minimo: alerta_minimo
-    };
-
-    try {
-        const res = await fetch(`${API_URL}/cadastros/produtos`, {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
-            },
-            body: JSON.stringify(payload)
-        });
-
-        if (res.ok) {
-            alert("✅ Produto cadastrado com sucesso!");
-            // Limpa o campo de nome para o próximo cadastro
-            document.getElementById('p_nome').value = ''; 
-        } else {
-            const data = await res.json();
-            alert("❌ Erro ao salvar: " + (data.error || "Erro desconhecido"));
-        }
-    } catch (err) {
-        console.error("Erro na requisição:", err);
-        alert("🚨 Erro de conexão com o servidor.");
     }
 }
 
@@ -2327,33 +2237,42 @@ async function salvarPatrimonioLote() {
 
 // --- FUNÇÕES DE CADASTROS BÁSICOS ---
 
-async function oldtelaCadastrosBase() {
-    const container = document.getElementById('app-content');
-    
-    let html = `
-        <button onclick="carregarDashboard()" style="width: auto; background: #64748b; margin-bottom: 20px;">⬅ VOLTAR</button>
-        <h2 style="color: white; text-align: center; margin-bottom: 20px;">CADASTROS BÁSICOS DO SISTEMA</h2>
-        
-        <div class="grid-menu">
-            <button class="btn-grande" onclick="formGenerico('categorias', 'CATEGORIA')">
-                <i>📁</i><span>CADASTRAR CATEGORIA</span>
-            </button>
-            <button class="btn-grande" onclick="formGenerico('locais', 'LOCAL')">
-                <i>📍</i><span>CADASTRAR LOCAL</span>
-            </button>
-            <button class="btn-grande" onclick="formGenerico('setores', 'SETOR')">
-                <i>🏢</i><span>CADASTRAR SETOR</span>
-            </button>
-            <button class="btn-grande" onclick="formProduto()">
-                <i>📦</i><span>CADASTRAR PRODUTO</span>
-            </button>
-            <button class="btn-grande" onclick="formPatrimonioLote()">
-                <i>🏷️</i><span>PATRIMÔNIOS (LOTE)</span>
+function telaCadastroCategoria() {
+    const area = document.getElementById('area-formulario-cadastro');
+    area.innerHTML = `
+        <div class="card-login" style="max-width: 100%; text-align: left;">
+            <h3 style="color: white;">📁 NOVA CATEGORIA</h3>
+            <label style="color: #cbd5e1; font-size: 0.8rem;">NOME DA CATEGORIA:</label>
+            <input type="text" id="cad_cat_nome" placeholder="Ex: INFORMÁTICA, LIMPEZA..." class="input-vidro" style="width: 100%;">
+            <button onclick="salvarNovaCategoria()" class="btn-grande btn-vidro" style="background: #10b981; margin-top: 15px;">
+                CONFIRMAR CADASTRO
             </button>
         </div>
-        <div id="area-formulario-cadastro" style="margin-top: 30px;"></div>
     `;
-    container.innerHTML = html;
+}
+
+async function salvarNovaCategoria() {
+    const nome = document.getElementById('cad_cat_nome').value;
+    if (!nome) return alert("Digite o nome da categoria!");
+
+    try {
+        const res = await fetch(`${API_URL}/categorias`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify({ nome })
+        });
+
+        if (res.ok) {
+            alert("✅ Categoria salva!");
+            document.getElementById('cad_cat_nome').value = '';
+        } else {
+            const erro = await res.json();
+            alert("❌ Erro: " + erro.error);
+        }
+    } catch (e) { alert("Erro de conexão."); }
 }
 
 async function telaCadastrosBase() {
@@ -2366,9 +2285,9 @@ async function telaCadastrosBase() {
             </div>
 
             <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap:15px; margin-bottom:30px;">
-                <button onclick="formGenerico('categorias', 'CATEGORIA')" class="btn-quadrado-cad">📁<br>CATEGORIA</button>
-                <button onclick="formGenerico('locais', 'LOCAL')" class="btn-quadrado-cad">📍<br>LOCAL</button>
-                <button onclick="formGenerico('setores', 'SETOR')" class="btn-quadrado-cad">🏢<br>SETOR</button>
+                <button onclick="telaCadastroCategoria()" class="btn-quadrado-cad">📁<br>CATEGORIA</button>
+                <button onclick="telaCadastroLocal()" class="btn-quadrado-cad">📍<br>LOCAL</button>
+                <button onclick="telaCadastroSetor()" class="btn-quadrado-cad">🏢<br>SETOR</button>
                 <button onclick="formProduto()" class="btn-quadrado-cad">📦<br>PRODUTO</button>
             </div>
 
@@ -2377,61 +2296,175 @@ async function telaCadastrosBase() {
     `;
 }
 
-function formGenerico(tabela, label) {
+function telaCadastroSetor() {
     const area = document.getElementById('area-formulario-cadastro');
     area.innerHTML = `
-        <div class="card-login" style="max-width: 100%;">
-            <h3>NOVO CADASTRO: ${label}</h3>
-            <input type="text" id="nome_generico" placeholder="NOME DO(A) ${label}">
-            <button onclick="salvarGenerico('${tabela}')" style="background: var(--success); margin-top: 10px;">SALVAR</button>
+        <div class="card-login" style="max-width: 100%; text-align: left; animation: slideIn 0.3s ease-out;">
+            <h3 style="color: white; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;">
+                📂 NOVO SETOR (DETALHAMENTO)
+            </h3>
+            
+            <p style="color: #94a3b8; font-size: 0.85rem; margin-bottom: 20px;">
+                Use para especificar locais internos (Ex: COZINHA, SALA DOS PROFESSORES, TI).
+            </p>
+
+            <div style="margin-top: 10px;">
+                <label style="color: #cbd5e1; font-size: 0.8rem; display: block; margin-bottom: 8px;">
+                    NOME DO SETOR:
+                </label>
+                <input type="text" id="cad_setor_nome" placeholder="Ex: SECRETARIA" 
+                       class="input-vidro" style="width: 100%; text-transform: uppercase;">
+            </div>
+
+            <button onclick="salvarNovoSetor()" class="btn-grande btn-vidro" 
+                    style="background: #10b981; margin-top: 25px; width: 100%;">
+                ✔️ CADASTRAR SETOR
+            </button>
         </div>
     `;
+    setTimeout(() => document.getElementById('cad_setor_nome').focus(), 300);
 }
 
-async function salvarGenerico(tabela) {
-    const nome = document.getElementById('nome_generico').value;
-    if(!nome) return alert("PREENCHA O NOME!");
+async function salvarNovoSetor() {
+    const nome = document.getElementById('cad_setor_nome').value;
+    const token = localStorage.getItem('token');
 
-    const res = await fetch(`${API_URL}/api/cadastros/basico/${tabela}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
-        body: JSON.stringify({ nome })
-    });
+    if (!nome) return alert("Por favor, informe o nome do setor.");
 
-    if(res.ok) {
-        alert("CADASTRADO COM SUCESSO!");
-        document.getElementById('nome_generico').value = '';
+    try {
+        const res = await fetch(`${API_URL}/setores`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ nome })
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+            alert("✅ " + data.message);
+            document.getElementById('cad_setor_nome').value = '';
+        } else {
+            alert("⚠️ " + data.error);
+        }
+    } catch (e) {
+        alert("Erro ao conectar com o servidor.");
     }
 }
 
 async function formProduto() {
     const area = document.getElementById('area-formulario-cadastro');
-    area.innerHTML = `
-        <div style="background:white; padding:25px; border-radius:12px; box-shadow:0 2px 10px rgba(0,0,0,0.1); max-width:500px; margin:auto;">
-            <h3 style="margin-top:0;">📦 Cadastro de Novo Produto</h3>
-            <label style="display:block; margin-bottom:5px; font-weight:bold;">NOME:</label>
-            <input type="text" id="p_nome" style="width:100%; padding:10px; margin-bottom:15px; border:1px solid #ccc; border-radius:6px;">
+    area.innerHTML = `<div class="painel-vidro">🔍 Consultando categorias...</div>`;
 
-            <label style="display:block; margin-bottom:5px; font-weight:bold;">TIPO:</label>
-            <select id="p_tipo" onchange="toggleAlerta()" style="width:100%; padding:10px; margin-bottom:15px; border-radius:6px;">
-                <option value="MATERIAL">MATERIAL (CONSUMO)</option>
-                <option value="PATRIMONIO">PATRIMÔNIO (ATIVO)</option>
-                <option value="UNIFORMES">UNIFORMES</option>
-            </select>
+    try {
+        const res = await fetch(`${API_URL}/categorias`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        const categorias = await res.json();
 
-            <div id="div_p_alerta">
-                <label style="display:block; margin-bottom:5px; font-weight:bold;">ESTOQUE MÍNIMO PARA ALERTA:</label>
-                <input type="number" id="p_alerta" value="0" style="width:100%; padding:10px; margin-bottom:15px; border:1px solid #ccc; border-radius:6px;">
+        area.innerHTML = `
+            <div class="card-login" style="max-width: 100%; text-align: left;">
+                <h3 style="text-align: center; color: white;">CADASTRO DE NOVO ITEM</h3>
+                
+                <label style="color: white; display: block; margin-top: 10px;">NOME DO PRODUTO:</label>
+                <input type="text" id="prod_nome" placeholder="Ex: TENIS, CAMISA, PAPEL A4..." style="text-transform: uppercase;">
+                
+                <label style="color: white; display: block; margin-top: 10px;">TIPO:</label>
+                <select id="prod_tipo" class="input-grade" style="width: 100%; height: 50px;" onchange="ajustarExibicaoAlerta()">
+                    <option value="MATERIAL">MATERIAL</option>
+                    <option value="UNIFORMES">UNIFORMES</option>
+                    <option value="PATRIMONIO">PATRIMÔNIO</option>
+                </select>
+
+                <label style="color: white; display: block; margin-top: 10px;">CATEGORIA:</label>
+                <select id="prod_categoria" class="input-grade" style="width: 100%; height: 50px;">
+                    <option value="">-- SELECIONE --</option>
+                    ${categorias.map(c => `<option value="${c.id}">${c.nome}</option>`).join('')}
+                </select>
+
+                <div id="div_alerta_minimo">
+                    <label style="color: white; display: block; margin-top: 10px;">ALERTA DE ESTOQUE BAIXO:</label>
+                    <input type="number" id="prod_alerta" value="0">
+                </div>
+
+                <button onclick="salvarProdutoNovo()" style="background: var(--success); margin-top: 25px; width: 100%; font-weight: bold;">
+                    CADASTRAR E GERAR GRADE
+                </button>
             </div>
+        `;
+        ajustarExibicaoAlerta();
+    } catch (err) {
+        area.innerHTML = `<div class="painel-vidro" style="color:red;">Erro ao carregar categorias.</div>`;
+    }
+}
 
-            <button onclick="salvarProduto()" style="width:100%; background:#1e40af; color:white; border:none; padding:12px; border-radius:6px; font-weight:bold; cursor:pointer;">SALVAR PRODUTO</button>
-        </div>
-    `;
+async function salvarProdutoNovo() {
+    const nome = document.getElementById('prod_nome').value.toUpperCase().trim();
+    const tipo = document.getElementById('prod_tipo').value;
+    const categoriaSelect = document.getElementById('prod_categoria');
+    const categoria_id = categoriaSelect.value;
+    const alerta_minimo = document.getElementById('prod_alerta').value;
+
+    if (!nome) return alert("O nome do produto é obrigatório!");
+
+    const payload = {
+        nome: nome,
+        tipo: tipo,
+        // Envia null se não houver categoria selecionada
+        categoria_id: categoria_id ? parseInt(categoria_id) : null,
+        alerta_minimo: parseInt(alerta_minimo) || 0
+    };
+
+    try {
+        const res = await fetch(`${API_URL}/cadastros/produtos`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+            alert("✅ Cadastro realizado com sucesso!");
+            formProduto(); // Limpa a tela
+        } else {
+            const erro = await res.json();
+            alert("❌ Erro no Servidor: " + erro.error);
+        }
+    } catch (err) {
+        console.error("Erro de conexão:", err);
+        alert("🚨 Falha de conexão com o servidor.");
+    }
+}
+
+function ajustarExibicaoAlerta() {
+    const tipo = document.getElementById('prod_tipo').value;
+    document.getElementById('div_alerta_minimo').style.display = (tipo === 'PATRIMONIO') ? 'none' : 'block';
+}
+
+function ajustarCamposTipo() {
+    const tipo = document.getElementById('prod_tipo').value;
+    const divAlerta = document.getElementById('div_alerta_minimo');
+    // Só mostra alerta para Material e Uniformes
+    divAlerta.style.display = (tipo === 'PATRIMONIO') ? 'none' : 'block';
 }
 
 function toggleAlerta() {
     const tipo = document.getElementById('p_tipo').value;
-    document.getElementById('div_p_alerta').style.display = (tipo === 'PATRIMONIO') ? 'none' : 'block';
+    const divAlerta = document.getElementById('div_p_alerta');
+    const inputAlerta = document.getElementById('p_alerta');
+
+    if (tipo === 'PATRIMONIO') {
+        // Esconde o campo de alerta e zera o valor
+        divAlerta.style.display = 'none';
+        inputAlerta.value = 0;
+    } else {
+        // Mostra para Materiais e Uniformes
+        divAlerta.style.display = 'block';
+    }
 }
 
 function toggleAlertaEstoque() {
@@ -2472,65 +2505,60 @@ async function salvarNovoProduto(event) {
 }
 
 async function telaEntradaPatrimonioLote() {
-    const app = document.getElementById('app-content');
-    app.innerHTML = '<div class="painel-vidro">🔍 Carregando lista de patrimônios...</div>';
+    const area = document.getElementById('app-content');
+    
+    // Busca produtos do tipo PATRIMONIO
+    const res = await fetch(`${API_URL}/produtos`, { headers: {'Authorization': `Bearer ${TOKEN}`} });
+    const produtos = await res.json();
+    const listaPatrimonios = produtos.filter(p => p.tipo === 'PATRIMONIO');
 
-    try {
-        const res = await fetch(`${API_URL}/produtos/lista-por-tipo?tipo=PATRIMONIO`, {
-            headers: { 'Authorization': `Bearer ${TOKEN}` }
-        });
-        const produtos = await res.json();
-
-        app.innerHTML = `
-            <div style="padding:20px;">
-                <div class="painel-usuario-vidro" style="position:relative; width:100%; top:0; right:0; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center;">
-                    <h2 style="color:white; margin:0;">🏷️ ENTRADA DE PATRIMÔNIO (LOTE)</h2>
-                    <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background:#64748b;">⬅ VOLTAR</button>
-                </div>
-
-                <div class="painel-vidro" style="max-width:900px; margin:auto; text-align:left;">
-                    
-                    <h3 style="color:#fbbf24; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:10px;">1. Dados da Nota Fiscal</h3>
-                    <div style="display:grid; grid-template-columns: 200px 1fr; gap:15px; margin-bottom:25px;">
-                        <div>
-                            <label style="color:white;">TIPO DOC:</label>
-                            <select id="doc_tipo" class="input-vidro" style="width:100%;" onchange="alternarCamposDoc()">
-                                <option value="DANFE">DANFE (Nº/Série)</option>
-                                <option value="CHAVE">CHAVE DE ACESSO (NFe)</option>
-                            </select>
-                        </div>
-                        <div id="container_campos_doc">
-                            </div>
-                    </div>
-
-                    <h3 style="color:#fbbf24; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:10px;">2. Seleção de Itens</h3>
-                    <div style="display:grid; grid-template-columns: 1fr 150px; gap:15px; margin-bottom:25px;">
-                        <div>
-                            <label style="color:white;">PATRIMÔNIO:</label>
-                            <select id="lote_produto" class="input-vidro" style="width:100%;">
-                                <option value="">-- SELECIONE O PRODUTO --</option>
-                                ${produtos.map(p => `<option value="${p.id}">${p.nome}</option>`).join('')}
-                            </select>
-                        </div>
-                        <div>
-                            <label style="color:white;">QUANTIDADE:</label>
-                            <input type="number" id="lote_qtd" min="1" class="input-vidro" style="width:100%;" oninput="gerarInputsSerie()">
-                        </div>
-                    </div>
-
-                    <div id="sessao_series" style="display:none;">
-                        <h3 style="color:#fbbf24; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:10px;">3. Identificação Individual (Bipe as Séries)</h3>
-                        <div id="container_series_lote" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap:12px; margin-bottom:30px;"></div>
-                        
-                        <button onclick="salvarLotePatrimonio()" class="btn-grande btn-vidro" style="background:#10b981; width:100%;">
-                            🚀 CONFIRMAR ENTRADA EM LOTE
-                        </button>
-                    </div>
-                </div>
+    area.innerHTML = `
+        <div class="painel-vidro" style="max-width: 800px; margin: auto;">
+            <h2 style="color:white; text-align:center;">📥 ENTRADA DE PATRIMÔNIO (LOTE)</h2>
+            
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:20px;">
+                <input type="text" id="nf_chave" placeholder="CHAVE DA NFe (44 dígitos)" class="input-vidro" maxlength="44">
+                <input type="text" id="nf_numero" placeholder="NÚMERO DA NF" class="input-vidro">
+                <select id="ent_produto_id" class="input-vidro">
+                    <option value="">-- SELECIONE O PRODUTO --</option>
+                    ${listaPatrimonios.map(p => `<option value="${p.id}">${p.nome}</option>`).join('')}
+                </select>
+                <input type="number" id="ent_qtd" placeholder="QUANTIDADE" class="input-vidro" oninput="gerarCamposSeries()">
             </div>
-        `;
-        alternarCamposDoc(); // Inicializa campos
-    } catch (e) { alert("Erro ao carregar tela."); }
+
+            <div id="container-series" style="max-height: 400px; overflow-y: auto; background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px; display: none;">
+                <h4 style="color: #fbbf24; margin-top:0;">📝 INFORME AS PLAQUETAS/SÉRIES:</h4>
+                <div id="lista-inputs-series" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;"></div>
+            </div>
+
+            <button onclick="salvarEntradaLote()" id="btn-salvar-lote" class="btn-grande btn-vidro" style="background:#059669; margin-top:20px; display:none; width:100%;">
+                FINALIZAR ENTRADA NO ESTOQUE CENTRAL
+            </button>
+        </div>
+    `;
+}
+
+
+
+function gerarCamposSeries() {
+    const qtd = parseInt(document.getElementById('ent_qtd').value);
+    const container = document.getElementById('container-series');
+    const lista = document.getElementById('lista-inputs-series');
+    const btn = document.getElementById('btn-salvar-lote');
+
+    if (qtd > 0) {
+        container.style.display = 'block';
+        btn.style.display = 'block';
+        lista.innerHTML = '';
+        for (let i = 1; i <= qtd; i++) {
+            lista.innerHTML += `
+                <input type="text" class="input-serie-item input-vidro" placeholder="Plaqueta #${i}" required>
+            `;
+        }
+    } else {
+        container.style.display = 'none';
+        btn.style.display = 'none';
+    }
 }
 
 async function salvarLotePatrimonio() {
@@ -2675,29 +2703,6 @@ function monitorarTipoProduto() {
     } else {
         boxAlerta.style.display = 'block';
         boxGrade.style.display = 'none';
-    }
-}
-
-async function funoldsalvarProduto() {
-    const payload = {
-        nome: document.getElementById('prod_nome').value,
-        tipo: document.getElementById('prod_tipo').value,
-        categoria_id: document.getElementById('prod_categoria').value,
-        quantidade_estoque: document.getElementById('prod_qtd').value || 0,
-        alerta_minimo: document.getElementById('prod_tipo').value === 'MATERIAL' ? document.getElementById('prod_alerta').value : null
-    };
-
-    if(!payload.nome || !payload.categoria_id) return alert("PREENCHA NOME E CATEGORIA!");
-
-    const res = await fetch(`${API_URL}/api/cadastros/produtos`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
-        body: JSON.stringify(payload)
-    });
-
-    if(res.ok) {
-        alert("PRODUTO(S) CADASTRADO(S)!");
-        telaCadastrosBase();
     }
 }
 
@@ -2922,6 +2927,40 @@ async function renderizarListaMaterial() {
             <button onclick="salvarEntradaLote('MATERIAL')" class="btn-success">CONFIRMAR ENTRADA NO ESTOQUE</button>
         </div>
     `;
+}
+
+async function salvarEntradaLote() {
+    const seriesInputs = document.querySelectorAll('.input-serie-item');
+    const payload = {
+        tipo_doc: 'NFe',
+        numero_doc: document.getElementById('nf_numero').value,
+        chave_nfe: document.getElementById('nf_chave').value,
+        produto_id: document.getElementById('ent_produto_id').value,
+        series: Array.from(seriesInputs).map(input => input.value).filter(v => v !== '')
+    };
+
+    if (payload.series.length === 0) return alert("Informe as plaquetas!");
+
+    try {
+        const res = await fetch(`${API_URL}/estoque/entrada-patrimonio`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+            alert("✅ Lote registrado com sucesso no Estoque Central!");
+            telaEntradaPatrimonioLote(); // Recarrega tela
+        } else {
+            const err = await res.json();
+            alert("Erro: " + err.error);
+        }
+    } catch (e) {
+        alert("Erro de conexão.");
+    }
 }
 
 function toggleInputMaterial(cb) {
@@ -7538,22 +7577,78 @@ async function telaAcompanhamentoGeral() {
 }
 
 async function telaGerenciarPatrimonio() {
-    const container = document.getElementById('app-content');
-    container.innerHTML = `
-        <div style="padding:20px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1px solid #ddd; padding-bottom:10px;">
-                <h2 style="color:#1e3a8a; margin:0;">🏷️ GERENCIAR PATRIMÔNIO</h2>
-                <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer; font-weight:bold;">⬅️ VOLTAR</button>
+    const area = document.getElementById('app-content');
+    area.innerHTML = `
+        <div class="painel-vidro" style="max-width: 600px; margin: auto;">
+            <h2 style="color:white; text-align:center;">🔍 CONSULTA E TRANSFERÊNCIA</h2>
+            <div style="display:flex; gap:10px; margin-bottom:20px;">
+                <input type="text" id="busca_serie" placeholder="BIPE OU DIGITE A PLAQUETA..." class="input-vidro" style="flex:1;">
+                <button onclick="buscarDadosPatrimonio()" class="btn-vidro" style="background:#3b82f6;">PESQUISAR</button>
             </div>
-            
-            <div style="background:white; padding:20px; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.1);">
-                <p>Aqui você pode gerenciar os números de série e movimentações de itens permanentes.</p>
-                <button class="btn-grande" onclick="abrirModalCadastro('produtos')" style="padding:15px; background:#10b981; color:white; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">
-                    + CADASTRAR NOVO ITEM DE PATRIMÔNIO
-                </button>
-            </div>
+            <div id="resultado-consulta"></div>
         </div>
     `;
+}
+
+async function buscarDadosPatrimonio() {
+    const serie = document.getElementById('busca_serie').value;
+    const res = await fetch(`${API_URL}/estoque/patrimonio/${serie}`, {
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+    
+    if (!res.ok) return alert("Item não localizado.");
+    const item = await res.json();
+    
+    // Carrega locais e setores para a opção de transferência
+    const [resLocais, resSetores] = await Promise.all([
+        fetch(`${API_URL}/locais/lista-simples`, { headers: {'Authorization': `Bearer ${TOKEN}`} }),
+        fetch(`${API_URL}/setores`, { headers: {'Authorization': `Bearer ${TOKEN}`} })
+    ]);
+    const locais = await resLocais.json();
+    const setores = await resSetores.json();
+
+    document.getElementById('resultado-consulta').innerHTML = `
+        <div style="background:rgba(255,255,255,0.1); padding:20px; border-radius:8px; color:white;">
+            <p><strong>Produto:</strong> ${item.produto_nome}</p>
+            <p><strong>Local Atual:</strong> <span style="color:#fbbf24">${item.local_nome}</span></p>
+            <p><strong>Setor:</strong> ${item.setor_nome || 'Não definido'}</p>
+            <p><strong>Nota Fiscal:</strong> ${item.nf_numero || 'S/NF'}</p>
+            
+            <hr style="opacity:0.2; margin:20px 0;">
+            <h4 style="color:#4ade80;">MUDAR LOCALIZAÇÃO:</h4>
+            <select id="transf_local" class="input-vidro" style="width:100%; margin-bottom:10px;">
+                ${locais.map(l => `<option value="${l.id}" ${l.id === item.local_id ? 'selected' : ''}>${l.nome}</option>`).join('')}
+            </select>
+            <select id="transf_setor" class="input-vidro" style="width:100%; margin-bottom:10px;">
+                <option value="">-- SELECIONE O SETOR --</option>
+                ${setores.map(s => `<option value="${s.id}" ${s.id === item.setor_id ? 'selected' : ''}>${s.nome}</option>`).join('')}
+            </select>
+            <input type="text" id="transf_obs" placeholder="Motivo da mudança..." class="input-vidro" style="width:100%; margin-bottom:15px;">
+            <button onclick="executarTransferencia(${item.id}, ${item.produto_id})" class="btn-grande btn-vidro" style="background:#059669; width:100%;">CONFIRMAR TRANSFERÊNCIA</button>
+            <button onclick="abrirModalBaixa(${item.id}, ${item.produto_id}, '${item.numero_serie}')" class="btn-grande btn-vidro" style="background:#991b1b; flex:1;">DAR BAIXA (INSERVÍVEL)</button>
+        </div>
+    `;
+}
+
+async function executarTransferencia(patrimonio_id, produto_id) {
+    const payload = {
+        patrimonio_id,
+        produto_id,
+        novo_local_id: document.getElementById('transf_local').value,
+        novo_setor_id: document.getElementById('transf_setor').value,
+        observacao: document.getElementById('transf_obs').value
+    };
+
+    const res = await fetch(`${API_URL}/estoque/transferir-patrimonio`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+        body: JSON.stringify(payload)
+    });
+
+    if (res.ok) {
+        alert("✅ Movimentação registada!");
+        telaGerenciarPatrimonio();
+    }
 }
 
 function abrirModalCadastro(tipoCadastro) {
@@ -7644,28 +7739,25 @@ async function telaAdminCriarUsuario() {
 }
 
 async function salvarProduto() {
-    // 1. Captura os valores usando os IDs que estão no seu formulário
     const nome = document.getElementById('p_nome').value.trim();
+    const categoria_id = document.getElementById('p_categoria').value;
     const tipo = document.getElementById('p_tipo').value;
-    const alerta_minimo = document.getElementById('p_alerta') ? document.getElementById('p_alerta').value : 0;
-    
-    // Se você tiver um select de categoria, capture o ID aqui. 
-    // Se for apenas texto por enquanto, pode deixar null ou ajustar conforme seu banco.
-    const categoria_id = document.getElementById('p_categoria_id') ? document.getElementById('p_categoria_id').value : null;
+    const alerta_minimo = parseInt(document.getElementById('p_alerta').value) || 0;
 
-    if (!nome) {
-        return alert("O nome do produto é obrigatório!");
+    if (!nome || !categoria_id) {
+        return alert("Por favor, preencha o nome e selecione uma categoria.");
     }
 
     const payload = {
-        nome: nome,
+        nome: nome.toUpperCase(),
+        categoria_id: parseInt(categoria_id),
         tipo: tipo,
-        alerta_minimo: parseInt(alerta_minimo) || 0,
-        categoria_id: categoria_id
+        alerta_minimo: alerta_minimo,
+        quantidade_estoque: 0 // Todo produto novo nasce com saldo zero
     };
 
     try {
-        const res = await fetch(`${API_URL}/cadastros/produtos`, {
+        const res = await fetch(`${API_URL}/produtos`, {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
@@ -7676,16 +7768,31 @@ async function salvarProduto() {
 
         if (res.ok) {
             alert("✅ Produto cadastrado com sucesso!");
-            // Limpa o formulário para o próximo
-            document.getElementById('p_nome').value = '';
-            if (document.getElementById('p_alerta')) document.getElementById('p_alerta').value = '0';
+            formProduto(); // Limpa/Reseta o formulário
         } else {
             const erro = await res.json();
-            alert("❌ Erro ao cadastrar: " + (erro.error || "Verifique os dados"));
+            alert("❌ Erro ao salvar: " + erro.error);
         }
     } catch (err) {
-        console.error("Erro na conexão:", err);
-        alert("🚨 Falha ao conectar com o servidor.");
+        alert("Erro de comunicação com o servidor.");
+    }
+}
+
+function gerarCamposPlaquetas() {
+    const qtd = parseInt(document.getElementById('entrada_qtd').value);
+    const container = document.getElementById('container-plaquetas');
+    container.innerHTML = ''; // Limpa antes de gerar
+
+    if (qtd > 0 && qtd <= 500) { // Limite de segurança
+        for (let i = 1; i <= qtd; i++) {
+            container.innerHTML += `
+                <div style="margin-bottom: 10px;">
+                    <label>Plaqueta/Série #${i}:</label>
+                    <input type="text" class="input-plaqueta-item input-vidro" 
+                           placeholder="Bipe ou digite a identificação..." required>
+                </div>
+            `;
+        }
     }
 }
 
@@ -8532,95 +8639,217 @@ document.addEventListener('click', async (e) => {
 
 async function telaSolicitarServicoImpressora(tipoServico) {
     const container = document.getElementById('app-content');
-    const localId = localStorage.getItem('local_id');
     
-    container.innerHTML = `<div class="painel-vidro"><h2>${tipoServico.toUpperCase()}</h2><p>Selecione a impressora:</p><div id="lista-imp" class="grid-menu-principal"></div></div>`;
+    // 1. Tenta buscar o ID do navegador
+    let localId = localStorage.getItem('local_id');
 
-    // Busca as impressoras do local
-    const res = await fetch(`${API_URL}/impressoras/local/${localId}`, { headers: {'Authorization': `Bearer ${TOKEN}`} });
-    const impressoras = await res.json();
+    // 2. Se o ID for inválido (undefined ou null), tenta atualizar a sessão antes de desistir
+    if (!localId || localId === "undefined" || localId === "null") {
+        await inicializarSessaoUsuario();
+        localId = localStorage.getItem('local_id');
+    }
 
-    const area = document.getElementById('lista-imp');
-    impressoras.map(imp => {
-        const img = imp.modelo === 'mono' ? 'mono.png' : 'color.png';
-        area.innerHTML += `
-            <button class="btn-grande btn-vidro" onclick="abrirChamadoFinal(${imp.id}, '${tipoServico}')">
-                <img src="${img}" style="width:80px; margin-bottom:10px;">
-                <span>${imp.modelo.toUpperCase()}</span>
+    const titulo = tipoServico === 'recarga' ? 'SOLICITAR RECARGA' : 'SOLICITAR MANUTENÇÃO';
+
+    // Monta a estrutura da tela
+    container.innerHTML = `
+        <div class="painel-vidro">
+            <h2 style="color: white; margin-bottom: 20px;">${titulo}</h2>
+            <div id="lista-imp" class="grid-menu-principal">
+                <div style="color: white; grid-column: 1/-1;">🔍 Localizando impressoras para sua unidade...</div>
+            </div>
+            <button onclick="carregarDashboard()" class="btn-sair-vidro" style="margin-top: 30px; background: #475569; width: 200px;">
+                ⬅️ VOLTAR
             </button>
-        `;
-    });
+        </div>
+    `;
+
+    try {
+        // Se após a tentativa de atualização o ID continuar vindo "undefined", paramos aqui
+        if (!localId || localId === "undefined") {
+            throw new Error("Não foi possível identificar sua unidade escolar. Por favor, saia do sistema e entre novamente.");
+        }
+
+        const res = await fetch(`${API_URL}/impressoras/local/${localId}`, { 
+            headers: {'Authorization': `Bearer ${localStorage.getItem('token')}`} 
+        });
+
+        const dados = await res.json();
+        const area = document.getElementById('lista-imp');
+
+        if (!res.ok) throw new Error(dados.error || "Erro ao consultar impressoras.");
+
+        if (dados.length === 0) {
+            area.innerHTML = `<p style="color: #fca5a5; grid-column: 1/-1;">Nenhuma impressora encontrada para o local ${localId}.</p>`;
+            return;
+        }
+
+        area.innerHTML = dados.map(imp => {
+            const img = imp.modelo === 'mono' ? 'mono.png' : 'color.png';
+            return `
+                <button class="btn-grande btn-vidro" onclick="abrirChamadoFinal(${imp.id}, '${tipoServico}')">
+                    <img src="${img}" style="width:80px; margin-bottom:10px;">
+                    <span style="color: #fbbf24;">${imp.modelo.toUpperCase()}</span>
+                </button>
+            `;
+        }).join('');
+
+    } catch (err) {
+        document.getElementById('lista-imp').innerHTML = `
+            <div style="color: #fca5a5; grid-column: 1/-1;">
+                ⚠️ ${err.message}
+            </div>`;
+    }
 }
 
-async function telaDashboardImpressoras() {
-    const container = document.getElementById('app-content');
-    
-    // Busca locais para o select
-    const resLocais = await fetch(`${API_URL}/locais`, { headers: {'Authorization': `Bearer ${TOKEN}`} });
-    const locais = await resLocais.json();
+function telaDashboardImpressoras() {
+    const area = document.getElementById('app-content');
+    const hoje = new Date().toISOString().split('T')[0];
+    const primeiroDia = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
 
-    container.innerHTML = `
-        <div style="padding: 20px;">
-            <div class="painel-vidro" style="margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 15px; align-items: flex-end; justify-content: center;">
-                <div>
-                    <label style="color:white; display:block; font-size:0.8rem;">INÍCIO</label>
-                    <input type="date" id="dash-inicio" class="input-vidro">
-                </div>
-                <div>
-                    <label style="color:white; display:block; font-size:0.8rem;">FIM</label>
-                    <input type="date" id="dash-fim" class="input-vidro">
-                </div>
-                <div>
-                    <label style="color:white; display:block; font-size:0.8rem;">LOCAL</label>
-                    <select id="dash-local" class="input-vidro" onchange="atualizarDashboardImpressoras()">
-                        <option value="TODAS">TODAS AS UNIDADES</option>
-                        ${locais.map(l => `<option value="${l.id}">${l.nome}</option>`).join('')}
-                    </select>
-                </div>
-                
-                <div style="display: flex; gap: 8px;">
-                    <button onclick="gerarPDFDashboard()" class="btn-sair-vidro" style="background:#dc2626; height:45px;" title="Salvar PDF">📄 PDF</button>
-                    <button onclick="compartilharDashboardPDF()" class="btn-sair-vidro" style="background:#3b82f6; height:45px;" title="Compartilhar">🔗 ENVIAR</button>
-                    <button onclick="habilitarComparacao()" class="btn-sair-vidro" style="background:#fbbf24; height:45px; color:black;">⚖️ COMPARAR</button>
+    area.innerHTML = `
+        <div class="painel-vidro" style="max-width: 1300px; margin: auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background:#475569; margin:0; width:100px; font-size:0.8rem;">⬅️ VOLTAR</button>
+                <h2 style="color:white; margin:0; font-size:1.3rem;">📊 GESTÃO TÉCNICA DE ATENDIMENTOS</h2>
+                <button onclick="telaComparativoLocais()" class="btn-vidro btn-breve" style="background:#0ea5e9; font-size:0.75rem; padding:0 15px; height:38px; margin:0;">⚖️ COMPARATIVO</button>
+            </div>
+            
+            <div style="display:flex; gap:10px; justify-content:center; align-items:center; margin-bottom:25px; background:rgba(255,255,255,0.05); padding:10px; border-radius:10px;">
+                <div style="display:flex; align-items:center; gap:5px;">
+                    <label style="color:white; font-size:0.7rem;">DE:</label>
+                    <input type="date" id="dash_data_inicio" value="${primeiroDia}" class="input-vidro" style="width:125px; font-size:0.8rem; height:32px; padding:0 5px;">
+                    <label style="color:white; font-size:0.7rem;">ATÉ:</label>
+                    <input type="date" id="dash_data_fim" value="${hoje}" class="input-vidro" style="width:125px; font-size:0.8rem; height:32px; padding:0 5px;">
+                    <button onclick="atualizarStatsImpressoras()" class="btn-vidro" style="background:#3b82f6; font-size:0.7rem; width:80px; height:32px; margin:0;">🔍 FILTRAR</button>
                 </div>
             </div>
-            <div id="relatorio-pdf-area">
-                <div class="grid-menu-principal" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-top:0;">
-                    <div class="painel-vidro">
-                        <small style="color:#cbd5e1;">RECARGAS</small>
-                        <h2 id="stat-recarga" style="color:white; margin:0;">0</h2>
-                    </div>
-                    <div class="painel-vidro">
-                        <small style="color:#cbd5e1;">MANUTENÇÕES</small>
-                        <h2 id="stat-manutencao" style="color:white; margin:0;">0</h2>
-                    </div>
-                    <div class="painel-vidro">
-                        <small style="color:#cbd5e1;">ATENDIDOS</small>
-                        <h2 id="stat-atendidos" style="color:#4ade80; margin:0;">0</h2>
-                    </div>
-                    <div class="painel-vidro">
-                        <small style="color:#cbd5e1;">PENDENTES</small>
-                        <h2 id="stat-pendentes" style="color:#fb7185; margin:0;">0</h2>
-                    </div>
-                </div>
 
-                <div style="margin-top:20px; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap:20px;">
-                    <div class="painel-vidro">
-                        <canvas id="chartTipos"></canvas>
-                    </div>
-                    <div class="painel-vidro">
-                        <canvas id="chartStatus"></canvas>
-                    </div>
-                </div>
+            <div id="container-lista-atendimentos" style="max-height:500px; overflow-y:auto; background:rgba(0,0,0,0.2); border-radius:8px;">
+                <table style="width:100%; border-collapse: collapse; color:white; font-size:0.75rem;">
+                    <thead style="background:rgba(0,0,0,0.5); position:sticky; top:0; z-index:10;">
+                        <tr>
+                            <th style="padding:10px; text-align:left;">ABERTURA</th>
+                            <th style="padding:10px; text-align:center;">SLA UTIL</th>
+                            <th style="padding:10px; text-align:left;">ATENDIMENTO</th>
+                            <th style="padding:10px; text-align:left;">UNIDADE</th>
+                            <th style="padding:10px; text-align:left;">MODELO</th>
+                            <th style="padding:10px; text-align:left;">TÉCNICO</th>
+                            <th style="padding:10px; text-align:center;">CONTADOR</th>
+                            <th style="padding:10px; text-align:left;">OBSERVAÇÕES</th>
+                        </tr>
+                    </thead>
+                    <tbody id="corpo-tabela-atendimentos"></tbody>
+                </table>
             </div>
         </div>
     `;
+    atualizarStatsImpressoras();
+}
+
+async function atualizarStatsImpressoras() {
+    const inicio = document.getElementById('dash_data_inicio').value;
+    const fim = document.getElementById('dash_data_fim').value;
+
+    try {
+        const res = await fetch(`${API_URL}/impressoras/dashboard-stats?inicio=${inicio}&fim=${fim}`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        const data = await res.json();
+        const corpo = document.getElementById('corpo-tabela-atendimentos');
+
+        if (!data.atendimentos || data.atendimentos.length === 0) {
+            corpo.innerHTML = `<tr><td colspan="8" style="padding:20px; text-align:center; color:#94a3b8;">Nenhum registro encontrado.</td></tr>`;
+            return;
+        }
+
+        corpo.innerHTML = data.atendimentos.map(at => {
+            const dataAbertura = new Date(at.data_abertura).toLocaleString('pt-BR', {day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit'});
+            const dataFechamento = new Date(at.data_fechamento).toLocaleString('pt-BR', {day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit'});
+            
+            // Obtém o objeto com o texto formatado e a cor do alerta
+            const sla = calcularSLAUtil(at.data_abertura, at.data_fechamento);
+
+            return `
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.05); transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
+                    <td style="padding:10px;">${dataAbertura}</td>
+                    <td style="padding:10px; text-align:center; color:${sla.cor}; font-weight:bold; text-shadow: 0 0 10px ${sla.cor}44;">
+                        ${sla.texto}
+                    </td>
+                    <td style="padding:10px;">${dataFechamento}</td>
+                    <td style="padding:10px; color:#fbbf24; font-weight:bold;">${at.unidade}</td>
+                    <td style="padding:10px;">${at.modelo.toUpperCase()}</td>
+                    <td style="padding:10px;">${at.tecnico || '---'}</td>
+                    <td style="padding:10px; text-align:center;">${at.contador || 0}</td>
+                    <td style="padding:10px; max-width:180px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:help; color:#cbd5e1;" title="${at.obs}">
+                        ${at.obs || '-'}
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    } catch (err) {
+        console.error("Erro ao atualizar dashboard:", err);
+    }
+}
+
+async function compartilharStatusImpressoras() {
+    const inicio = document.getElementById('dash_data_inicio').value;
+    const fim = document.getElementById('dash_data_fim').value;
     
-    // Define datas padrão (mês atual)
-    document.getElementById('dash-inicio').value = new Date(new Date().setDate(1)).toISOString().split('T')[0];
-    document.getElementById('dash-fim').value = new Date().toISOString().split('T')[0];
+    // Captura os valores que já estão nos cards
+    const recargas = document.getElementById('kpi-recargas').innerText;
+    const abertos = document.getElementById('kpi-abertos').innerText;
+    const tempo = document.getElementById('kpi-tempo').innerText;
+
+    const areaOculta = document.getElementById('area-pdf-oculta');
     
-    atualizarDashboardImpressoras();
+    // Monta o layout do PDF
+    areaOculta.innerHTML = `
+        <div style="text-align:center; border-bottom:2px solid #1e40af; padding-bottom:10px; margin-bottom:20px;">
+            <h2 style="margin:0; color:#1e40af;">SEMED - GESTÃO DE IMPRESSORAS</h2>
+            <p style="margin:5px 0; font-weight:bold;">Relatório de Desempenho Técnico</p>
+            <p style="font-size:0.8rem; color:#666;">Período: ${inicio.split('-').reverse().join('/')} até ${fim.split('-').reverse().join('/')}</p>
+        </div>
+        
+        <div style="margin-bottom:20px;">
+            <p><strong>🔹 Recargas Realizadas:</strong> ${recargas}</p>
+            <p><strong>🔹 Chamados em Aberto:</strong> ${abertos}</p>
+            <p><strong>🔹 Tempo Médio de Atendimento:</strong> ${tempo}</p>
+        </div>
+        
+        <div style="font-size:0.7rem; color:#999; margin-top:30px; border-top:1px solid #eee; padding-top:10px;">
+            Relatório gerado automaticamente pelo Sistema de Logística em ${new Date().toLocaleString()}
+        </div>
+    `;
+
+    // 1. Gera o PDF como um Blob
+    const opt = {
+        margin: 10,
+        filename: 'Resumo_Impressoras.pdf',
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2 },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+
+    try {
+        const pdfBlob = await html2pdf().set(opt).from(areaOculta).output('blob');
+        const arquivo = new File([pdfBlob], "Resumo_Atendimento_Impressoras.pdf", { type: 'application/pdf' });
+
+        // 2. Aciona o compartilhamento nativo
+        if (navigator.share) {
+            await navigator.share({
+                title: 'Relatório SEMED - Impressoras',
+                text: `Resumo de atendimentos e recargas (${inicio} a ${fim})`,
+                files: [arquivo]
+            });
+        } else {
+            // Fallback: Se o navegador não suportar share (ex: PCs antigos), apenas baixa o PDF
+            html2pdf().set(opt).from(areaOculta).save();
+            alert("Compartilhamento nativo não suportado. O PDF foi baixado.");
+        }
+    } catch (err) {
+        console.error("Erro ao compartilhar:", err);
+    }
 }
 
 async function abrirChamadoFinal(impressoraId, tipoServico) {
@@ -8750,7 +8979,7 @@ async function telaListarChamadosAbertos() {
                                 <small style="color: #94a3b8;">Aberto em: ${new Date(c.data_abertura).toLocaleString('pt-BR')}</small>
                             </div>
 
-                            <button onclick="finalizarAtendimento(${c.id})" 
+                            <button onclick="abrirModalConclusao(${c.id})" 
                                     class="btn-sair-vidro" 
                                     style="background: #059669; width: 100%; padding: 10px;">
                                 ✅ FINALIZAR ATENDIMENTO
@@ -8766,23 +8995,27 @@ async function telaListarChamadosAbertos() {
     }
 }
 
-async function finalizarAtendimento(chamadoId) {
-    if (!confirm("Confirmar que o serviço foi realizado e encerrar o chamado?")) return;
-
+async function executarEncerramentoChamado(chamadoId, dados) {
     try {
-        const res = await fetch(`${API_URL}/impressoras/fechar-chamado/${chamadoId}`, {
+        const res = await fetch(`${API_URL}/impressoras/concluir-chamado/${chamadoId}`, {
             method: 'PATCH',
-            headers: { 'Authorization': `Bearer ${TOKEN}` }
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${TOKEN}` 
+            },
+            body: JSON.stringify(dados)
         });
 
         if (res.ok) {
-            alert("✅ Chamado encerrado! O tempo de atendimento foi registrado.");
-            telaListarChamadosAbertos(); // Recarrega a lista
+            alert("✅ Chamado encerrado e contador registrado!");
+            document.getElementById('modal-conclusao').remove();
+            telaListarChamadosAbertos(); // Recarrega a lista para remover o item concluído
         } else {
-            alert("Erro ao encerrar chamado.");
+            const erro = await res.json();
+            alert("Erro: " + erro.error);
         }
     } catch (err) {
-        alert("Erro de conexão.");
+        alert("Erro de conexão com o servidor.");
     }
 }
 
@@ -9454,7 +9687,595 @@ async function sincronizarDadosUsuario() {
     }
 }
 
+function telaCadastroLocal() {
+    const area = document.getElementById('area-formulario-cadastro');
+    area.innerHTML = `
+        <div class="card-login" style="max-width: 100%; text-align: left; animation: fadeIn 0.3s ease;">
+            <h3 style="color: white; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;">
+                🏫 NOVO LOCAL / UNIDADE ESCOLAR
+            </h3>
+            
+            <div style="margin-top: 20px;">
+                <label style="color: #cbd5e1; font-size: 0.8rem; display: block; margin-bottom: 8px;">
+                    NOME DA UNIDADE (Ex: ESCOLA MUNICIPAL EXEMPLO):
+                </label>
+                <input type="text" id="cad_local_nome" placeholder="Digite o nome completo..." 
+                       class="input-vidro" style="width: 100%; text-transform: uppercase;">
+            </div>
 
+            <button onclick="salvarNovoLocal()" class="btn-grande btn-vidro" 
+                    style="background: #10b981; margin-top: 25px; width: 100%;">
+                💾 SALVAR UNIDADE NO SISTEMA
+            </button>
+        </div>
+    `;
+    // Foca automaticamente no campo de nome
+    setTimeout(() => document.getElementById('cad_local_nome').focus(), 300);
+}
+
+async function salvarNovoLocal() {
+    const nome = document.getElementById('cad_local_nome').value;
+    const token = localStorage.getItem('token');
+
+    if (!nome || nome.length < 3) {
+        return alert("Por favor, insira um nome válido para o local.");
+    }
+
+    try {
+        const res = await fetch(`${API_URL}/locais`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ nome })
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+            alert("✅ " + data.message);
+            document.getElementById('cad_local_nome').value = '';
+            // Opcional: se houver uma lista de locais na tela, você pode disparar a função que a recarrega aqui
+        } else {
+            alert("⚠️ " + data.error);
+        }
+    } catch (e) {
+        alert("Erro crítico de conexão com o servidor.");
+    }
+}
+
+async function telaInventarioLocal() {
+    const app = document.getElementById('app-content');
+    app.innerHTML = '<div class="painel-vidro">🔍 Carregando lista de unidades...</div>';
+
+    try {
+        const resLocais = await fetch(`${API_URL}/locais/lista-simples`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const locais = await resLocais.json();
+
+        app.innerHTML = `
+            <div class="painel-vidro" style="max-width: 900px; margin: auto;">
+                <h2 style="color:white; text-align:center;">📋 INVENTÁRIO POR UNIDADE</h2>
+                
+                <div style="display:flex; gap:15px; margin-bottom:30px; justify-content:center; align-items:flex-end;">
+                    <div style="flex:1;">
+                        <label style="color:white; font-size:0.8rem;">SELECIONE A ESCOLA / LOCAL:</label>
+                        <select id="inv_local_id" class="input-vidro" style="width:100%;">
+                            <option value="">-- SELECIONE UMA UNIDADE --</option>
+                            ${locais.map(l => `<option value="${l.id}">${l.nome}</option>`).join('')}
+                        </select>
+                    </div>
+                    <button onclick="gerarRelatorioInventario()" class="btn-vidro" style="background:#3b82f6; height:45px;">
+                        GERAR RELATÓRIO
+                    </button>
+                    <button onclick="exportarInventarioPDF()" id="btn-pdf-inv" class="btn-vidro" style="background:#dc2626; height:45px; display:none;">
+                        📄 EXPORTAR PDF
+                    </button>
+                </div>
+
+                <div id="resultado-inventario" class="area-relatorio" style="background:white; border-radius:8px; overflow:hidden; display:none; color:#333;">
+                    </div>
+            </div>
+        `;
+    } catch (e) { alert("Erro ao carregar locais."); }
+}
+
+async function gerarRelatorioInventario() {
+    const localId = document.getElementById('inv_local_id').value;
+    if (!localId) return alert("Selecione um local!");
+
+    const res = await fetch(`${API_URL}/estoque/inventario/${localId}`, {
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+    const data = await res.json();
+
+    const area = document.getElementById('resultado-inventario');
+    const btnPdf = document.getElementById('btn-pdf-inv');
+    
+    area.style.display = 'block';
+    btnPdf.style.display = 'block';
+
+    area.innerHTML = `
+        <div id="pdf-content" style="padding:30px;">
+            <div style="text-align:center; border-bottom:2px solid #1e3a8a; padding-bottom:15px; margin-bottom:20px;">
+                <h3 style="margin:0; color:#1e3a8a;">PREFEITURA MUNICIPAL - SEMED</h3>
+                <h4 style="margin:5px 0; color:#64748b;">Relatório de Inventário de Patrimônio</h4>
+                <p style="margin:0; font-weight:bold;">UNIDADE: ${data.unidade}</p>
+                <p style="font-size:0.8rem;">Total de Bens Localizados: ${data.total_itens}</p>
+            </div>
+
+            <table style="width:100%; border-collapse:collapse; font-size:0.85rem;">
+                <thead>
+                    <tr style="background:#f1f5f9;">
+                        <th style="padding:10px; border:1px solid #cbd5e1; text-align:left;">PRODUTO</th>
+                        <th style="padding:10px; border:1px solid #cbd5e1; text-align:left;">PLAQUETA/SÉRIE</th>
+                        <th style="padding:10px; border:1px solid #cbd5e1; text-align:left;">SETOR</th>
+                        <th style="padding:10px; border:1px solid #cbd5e1; text-align:center;">STATUS</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${data.itens.map(i => `
+                        <tr>
+                            <td style="padding:8px; border:1px solid #cbd5e1;">${i.produto_nome}</td>
+                            <td style="padding:8px; border:1px solid #cbd5e1; font-family:monospace;">${i.numero_serie}</td>
+                            <td style="padding:8px; border:1px solid #cbd5e1;">${i.setor_nome || 'GERAL'}</td>
+                            <td style="padding:8px; border:1px solid #cbd5e1; text-align:center;">
+                                <span style="font-size:0.7rem; padding:2px 6px; border-radius:4px; background:#dcfce7; color:#166534;">${i.status}</span>
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+            
+            <div style="margin-top:50px; display:flex; justify-content:space-between;">
+                <div style="text-align:center; width:200px; border-top:1px solid #333; font-size:0.7rem;">Responsável pela Unidade</div>
+                <div style="text-align:center; width:200px; border-top:1px solid #333; font-size:0.7rem;">Diretoria de Patrimônio</div>
+            </div>
+        </div>
+    `;
+}
+
+function exportarInventarioPDF() {
+    const element = document.getElementById('pdf-content');
+    const localNome = document.getElementById('inv_local_id').options[document.getElementById('inv_local_id').selectedIndex].text;
+    
+    const opt = {
+        margin: 10,
+        filename: `Inventario_${localNome.replace(/ /g, '_')}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2 },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+
+    html2pdf().set(opt).from(element).save();
+}
+
+function abrirModalBaixa(patrimonioId, produtoId, numeroSerie) {
+    const modalHtml = `
+        <div id="modal-baixa" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); display:flex; justify-content:center; align-items:center; z-index:1000;">
+            <div class="painel-vidro" style="max-width:450px; width:90%; border:1px solid #ef4444;">
+                <h3 style="color:#ef4444; margin-top:0;">⚠️ BAIXA DE PATRIMÓNIO</h3>
+                <p style="color:white; font-size:0.9rem;">Você está prestes a marcar o item <strong>${numeroSerie}</strong> como <strong>INSERVÍVEL</strong>.</p>
+                
+                <label style="color:#cbd5e1; font-size:0.8rem;">MOTIVO DA BAIXA:</label>
+                <select id="baixa_motivo" class="input-vidro" style="width:100%; margin-bottom:15px;">
+                    <option value="QUEBRADO/SEM CONSERTO">QUEBRADO / SEM CONSERTO</option>
+                    <option value="FURTO/ROUBO">FURTO OU ROUBO (C/ B.O.)</option>
+                    <option value="LEILOADO">ENCAMINHADO PARA LEILÃO</option>
+                    <option value="DESCARTE TÉCNICO">DESCARTE TÉCNICO (LIXO ELETRÓNICO)</option>
+                </select>
+
+                <label style="color:#cbd5e1; font-size:0.8rem;">OBSERVAÇÕES ADICIONAIS:</label>
+                <textarea id="baixa_obs" class="input-vidro" style="width:100%; height:80px; margin-bottom:20px;" placeholder="Ex: Número do processo de baixa ou BO..."></textarea>
+
+                <div style="display:flex; gap:10px;">
+                    <button onclick="confirmarBaixa(${patrimonioId}, ${produtoId})" class="btn-vidro" style="background:#dc2626; flex:1;">CONFIRMAR BAIXA</button>
+                    <button onclick="document.getElementById('modal-baixa').remove()" class="btn-vidro" style="flex:1;">CANCELAR</button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+async function confirmarBaixa(patrimonioId, produtoId) {
+    const payload = {
+        patrimonio_id: patrimonioId,
+        produto_id: produtoId,
+        motivo_especifico: document.getElementById('baixa_motivo').value,
+        observacao: document.getElementById('baixa_obs').value
+    };
+
+    try {
+        const res = await fetch(`${API_URL}/estoque/baixa-patrimonio`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+            alert("✅ Património registado como INSERVÍVEL.");
+            document.getElementById('modal-baixa').remove();
+            buscarDadosPatrimonio(); // Recarrega a consulta
+        } else {
+            alert("Erro ao processar baixa.");
+        }
+    } catch (e) {
+        alert("Erro de conexão.");
+    }
+}
+
+async function telaResumoBaixasAnual() {
+    const area = document.getElementById('app-content');
+    area.innerHTML = '<div class="painel-vidro">📊 Gerando consolidação de dados...</div>';
+
+    try {
+        const res = await fetch(`${API_URL}/estoque/baixas/resumo-anual`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const dados = await res.json();
+
+        if (dados.length === 0) {
+            area.innerHTML = `
+                <div class="painel-vidro" style="text-align:center;">
+                    <h2 style="color:white;">📉 RESUMO DE BAIXAS (INSERVÍVEIS)</h2>
+                    <p style="color:#cbd5e1;">Nenhum registro de baixa encontrado no histórico.</p>
+                    <button onclick="carregarDashboard()" class="btn-vidro">VOLTAR</button>
+                </div>`;
+            return;
+        }
+
+        area.innerHTML = `
+            <div class="painel-vidro" style="max-width: 1000px; margin: auto;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:25px;">
+                    <h2 style="color:white; margin:0;">📉 RESUMO DE BAIXAS (INSERVÍVEIS)</h2>
+                    <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background:#64748b;">⬅ VOLTAR</button>
+                </div>
+
+                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap:20px;">
+                    ${renderizarCardsBaixas(dados)}
+                </div>
+            </div>
+        `;
+    } catch (e) {
+        alert("Erro ao carregar o resumo.");
+    }
+}
+
+function renderizarCardsBaixas(dados) {
+    // Agrupa por ano para criar seções
+    const anos = [...new Set(dados.map(d => d.ano))];
+    
+    return anos.map(ano => `
+        <div style="background:rgba(255,255,255,0.05); padding:20px; border-radius:12px; border-left:4px solid #ef4444;">
+            <h3 style="color:#ef4444; margin-top:0;">ANO BASE: ${ano}</h3>
+            <table style="width:100%; color:white; font-size:0.9rem; border-collapse:collapse;">
+                <thead>
+                    <tr style="border-bottom:1px solid rgba(255,255,255,0.1); text-align:left;">
+                        <th style="padding:10px 0;">CATEGORIA</th>
+                        <th style="padding:10px 0; text-align:right;">ITENS</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${dados.filter(d => d.ano === ano).map(d => `
+                        <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                            <td style="padding:10px 0;">${d.categoria}</td>
+                            <td style="padding:10px 0; text-align:right; font-weight:bold;">${d.total_itens}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+    `).join('');
+}
+
+function formatarIntervalo(intervalo) {
+    if (!intervalo) return "N/A";
+    const dias = intervalo.days || 0;
+    const horas = intervalo.hours || 0;
+    const minutos = intervalo.minutes || 0;
+    
+    let texto = "";
+    if (dias > 0) texto += `${dias}d `;
+    texto += `${String(horas).padStart(2, '0')}:${String(minutos).padStart(2, '0')}h`;
+    return texto;
+}
+
+function abrirModalConclusao(chamadoId) {
+    // Removi as funções intermediárias para evitar confusão de IDs
+    const modalHtml = `
+        <div id="modal-conclusao" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); display:flex; justify-content:center; align-items:center; z-index:2000;">
+            <div class="painel-vidro" style="max-width:400px; width:90%; border:1px solid #10b981;">
+                <h3 style="color:#10b981; margin-top:0;">📋 DADOS DA RECARGA</h3>
+                
+                <div style="margin-top:15px;">
+                    <label style="color:white; display:block; font-size:0.8rem; margin-bottom:5px;">CONTADOR DA IMPRESSORA:</label>
+                    <input type="number" id="final_contador" placeholder="Digite o total de páginas..." class="input-vidro" style="width:100%;">
+                </div>
+
+                <div style="margin-top:15px;">
+                    <label style="color:white; display:block; font-size:0.8rem; margin-bottom:5px;">RELATÓRIO TÉCNICO:</label>
+                    <textarea id="final_relatorio" class="input-vidro" style="width:100%; height:60px;" placeholder="Obs. sobre o estado da máquina..."></textarea>
+                </div>
+
+                <div style="display:flex; gap:10px; margin-top:20px;">
+                    <button onclick="enviarEncerramento(${chamadoId})" class="btn-vidro" style="background:#059669; flex:1;">CONFIRMAR</button>
+                    <button onclick="document.getElementById('modal-conclusao').remove()" class="btn-vidro" style="flex:1;">CANCELAR</button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+async function enviarEncerramento(id) {
+    const contador = document.getElementById('final_contador').value;
+    const relatorio = document.getElementById('final_relatorio').value;
+    
+    // Recupera o ID que a função inicializarSessaoUsuario salvou
+    const tecnicoId = localStorage.getItem('usuario_id');
+
+    if (!contador) return alert("O número do contador é obrigatório!");
+    if (!relatorio || relatorio.trim().length === 0) {
+        return alert("O Relatório Técnico é obrigatório! Descreva brevemente o serviço realizado.");
+    }
+    try {
+        const res = await fetch(`${API_URL}/impressoras/v2/finalizar-recarga/${id}`, {
+            method: 'PATCH',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify({ 
+                contador: parseInt(contador), 
+                relatorio: relatorio,
+                usuario_id: tecnicoId ? parseInt(tecnicoId) : null
+            })
+        });
+
+        if (res.ok) {
+            alert("✅ Recarga registrada com sucesso!");
+            const modal = document.getElementById('modal-conclusao');
+            if (modal) modal.remove();
+            telaListarChamadosAbertos(); 
+        } else {
+            const erro = await res.json();
+            alert("Erro: " + erro.error);
+        }
+    } catch (e) {
+        alert("Erro de conexão com o servidor.");
+    }
+}
+
+async function telaComparativoLocais() {
+    const area = document.getElementById('app-content');
+    area.innerHTML = '<div class="painel-vidro">📊 Processando dados de rendimento...</div>';
+
+    try {
+        const res = await fetch(`${API_URL}/impressoras/comparativo-rendimento`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const dados = await res.json();
+
+        area.innerHTML = `
+            <div class="painel-vidro" style="max-width: 1000px; margin: auto;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:30px;">
+                    <h2 style="color:white; margin:0;">⚖️ COMPARATIVO DE RENDIMENTO POR UNIDADE</h2>
+                    <button onclick="carregarDashboard()" class="btn-sair-vidro">VOLTAR</button>
+                </div>
+
+                <div style="background:rgba(255,255,255,0.05); border-radius:12px; overflow:hidden;">
+                    <table style="width:100%; color:white; border-collapse:collapse; text-align:left;">
+                        <thead>
+                            <tr style="background:rgba(255,255,255,0.1);">
+                                <th style="padding:15px;">UNIDADE ESCOLAR</th>
+                                <th style="padding:15px; text-align:center;">TOTAL PÁGINAS</th>
+                                <th style="padding:15px; text-align:center;">QTD RECARGAS</th>
+                                <th style="padding:15px; text-align:right;">MÉDIA PÁG/TONER</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${dados.map((d, index) => `
+                                <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                                    <td style="padding:15px;">
+                                        <span style="color:#94a3b8; margin-right:10px;">#${index + 1}</span>
+                                        <strong>${d.local_nome}</strong>
+                                    </td>
+                                    <td style="padding:15px; text-align:center;">${Number(d.total_paginas).toLocaleString()}</td>
+                                    <td style="padding:15px; text-align:center;">${d.total_recargas}</td>
+                                    <td style="padding:15px; text-align:right; font-weight:bold; color:${d.media_paginas_por_toner > 2500 ? '#4ade80' : '#fbbf24'};">
+                                        ${Number(d.media_paginas_por_toner).toLocaleString()} pág.
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+                <p style="color:#94a3b8; font-size:0.75rem; margin-top:15px;">* Médias baseadas na diferença entre contadores registrados no encerramento de cada recarga.</p>
+            </div>
+        `;
+    } catch (e) {
+        alert("Erro ao gerar comparativo.");
+    }
+}
+
+async function telaFilaAtendimentoImpressoras() {
+    const container = document.getElementById('app-content');
+    
+    container.innerHTML = `
+        <div class="painel-vidro" style="max-width: 1200px; margin: auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:15px;">
+                <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background:#475569; margin:0; width:100px; font-size:0.8rem;">⬅️ VOLTAR</button>
+                <h2 style="color:white; margin:0; font-size:1.3rem;">📋 FILA DE ATENDIMENTO (AGUARDANDO)</h2>
+                <div style="width:100px;"></div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div id="coluna-recarga">
+                    <h3 style="color:#3b82f6; border-bottom:2px solid #3b82f6; padding-bottom:5px; font-size:1rem;">💧 RECARGAS</h3>
+                    <div id="lista-fila-recarga" style="margin-top:15px;"></div>
+                </div>
+                <div id="coluna-manutencao">
+                    <h3 style="color:#fbbf24; border-bottom:2px solid #fbbf24; padding-bottom:5px; font-size:1rem;">🛠️ MANUTENÇÃO</h3>
+                    <div id="lista-fila-manutencao" style="margin-top:15px;"></div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    try {
+        const res = await fetch(`${API_URL}/impressoras/fila-atendimento`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        const chamados = await res.json();
+
+        const renderizarCards = (tipo) => {
+            const filtrados = chamados.filter(c => c.tipo === tipo);
+            if (filtrados.length === 0) return '<p style="color:#94a3b8; font-size:0.8rem;">Nenhum chamado pendente.</p>';
+
+            return filtrados.map(c => `
+                <div class="card-kpi" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); padding:12px; margin-bottom:12px; border-radius:8px;">
+                    <div style="display:flex; justify-content:space-between; font-size:0.75rem; color:#94a3b8; margin-bottom:8px;">
+                        <span>📅 ${c.data_formatada}</span>
+                        <span style="color:#fbbf24; font-weight:bold;">#${c.id}</span>
+                    </div>
+                    <div style="color:white; font-weight:bold; margin-bottom:5px; font-size:0.9rem;">📍 ${c.unidade_nome}</div>
+                    <div style="color:#cbd5e1; font-size:0.8rem; margin-bottom:8px;">
+                        🖨️ <b>Modelo:</b> ${c.impressora_modelo.toUpperCase()}<br>
+                        👤 <b>Solicitante:</b> ${c.solicitado_por || 'Não identificado'}
+                    </div>
+                    <div style="background:rgba(0,0,0,0.2); padding:8px; border-radius:4px; font-size:0.75rem; color:#fff; border-left:3px solid ${tipo === 'recarga' ? '#3b82f6' : '#fbbf24'};">
+                        <b>Motivo:</b> ${c.motivo || 'N/A'}
+                    </div>
+                </div>
+            `).join('');
+        };
+
+        document.getElementById('lista-fila-recarga').innerHTML = renderizarCards('recarga');
+        document.getElementById('lista-fila-manutencao').innerHTML = renderizarCards('manutencao');
+
+    } catch (err) {
+        console.error("Erro ao processar fila:", err);
+    }
+}
+
+function calcularSLAUtil(dataInicio, dataFim) {
+    let inicio = new Date(dataInicio);
+    let fim = new Date(dataFim);
+    let horasUteis = 0;
+
+    // Percorre o período contando apenas horas em dias úteis
+    let temp = new Date(inicio);
+    while (temp < fim) {
+        let diaSemana = temp.getDay();
+        if (diaSemana !== 0 && diaSemana !== 6) { // Pula Domingo(0) e Sábado(6)
+            horasUteis += 1;
+        }
+        temp.setHours(temp.getHours() + 1);
+    }
+
+    // Define a cor baseada nos limites da Diretoria
+    let cor = '#4ade80'; // Verde (Padrão)
+    if (horasUteis >= 48) {
+        cor = '#f87171'; // Vermelho (Crítico)
+    } else if (horasUteis >= 36) {
+        cor = '#fbbf24'; // Laranja/Amarelo (Atenção)
+    }
+
+    // Formatação do texto (Dias e Horas)
+    let texto = horasUteis + "h";
+    if (horasUteis >= 24) {
+        const dias = Math.floor(horasUteis / 24);
+        const restos = horasUteis % 24;
+        texto = `${dias}d ${restos}h`;
+    }
+
+    return { texto, cor };
+}
+
+async function telaConsumoImpressoras() {
+    const container = document.getElementById('app-content');
+    
+    container.innerHTML = `
+        <div class="painel-vidro" style="max-width: 1300px; margin: auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background:#475569; width:100px;">⬅️ VOLTAR</button>
+                <h2 style="color:white; margin:0;">📈 RELATÓRIO DE CONSUMO E UTILIZAÇÃO</h2>
+                <div style="display:flex; gap:10px;">
+                    <button onclick="window.print()" class="btn-vidro" style="background:#dc2626; font-size:0.75rem;">📄 PDF</button>
+                    <button onclick="compartilharConsumoZap()" class="btn-vidro" style="background:#16a34a; font-size:0.75rem;">📱 WHATSAPP</button>
+                </div>
+            </div>
+
+            <div style="overflow-x:auto; background:rgba(0,0,0,0.2); border-radius:10px;">
+                <table id="tabela-consumo" style="width:100%; border-collapse: collapse; color:white; font-size:0.8rem;">
+                    <thead style="background:rgba(255,255,255,0.1);">
+                        <tr>
+                            <th style="padding:12px; text-align:left;">UNIDADE ESCOLAR</th>
+                            <th style="padding:12px; text-align:left;">MODELO</th>
+                            <th style="padding:12px; text-align:center;">PENÚLTIMA (A)</th>
+                            <th style="padding:12px; text-align:center;">ÚLTIMA (B)</th>
+                            <th style="padding:12px; text-align:center;">INTERVALO</th>
+                            <th style="padding:12px; text-align:center;">CONSUMO (B-A)</th>
+                            <th style="padding:12px; text-align:center;">MÉDIA MENSAL</th>
+                        </tr>
+                    </thead>
+                    <tbody id="corpo-consumo"></tbody>
+                </table>
+            </div>
+        </div>
+    `;
+
+    try {
+        const res = await fetch(`${API_URL}/impressoras/relatorio-consumo`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        const dados = await res.json();
+        const corpo = document.getElementById('corpo-consumo');
+
+        corpo.innerHTML = dados.map(item => {
+            const d1 = new Date(item.data_penultima);
+            const d2 = new Date(item.data_ultima);
+            const diffDias = Math.max(1, Math.floor((d2 - d1) / (1000 * 60 * 60 * 24)));
+            const consumo = item.ultima_leitura - item.penultima_leitura;
+            const mediaMensal = Math.round((consumo / diffDias) * 30);
+
+            return `
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                    <td style="padding:10px; font-weight:bold;">${item.unidade}</td>
+                    <td style="padding:10px;">${item.modelo.toUpperCase()}</td>
+                    <td style="padding:10px; text-align:center; color:#94a3b8;">${item.penultima_leitura}</td>
+                    <td style="padding:10px; text-align:center; font-weight:bold;">${item.ultima_leitura}</td>
+                    <td style="padding:10px; text-align:center;">${diffDias} dias</td>
+                    <td style="padding:10px; text-align:center; color:#4ade80; font-weight:bold;">${consumo} pags</td>
+                    <td style="padding:10px; text-align:center; background:rgba(255,255,255,0.03); color:#fbbf24;">${mediaMensal} pags/mês</td>
+                </tr>
+            `;
+        }).join('');
+    } catch (err) { console.error(err); }
+}
+
+function compartilharConsumoZap() {
+    let texto = "*📊 RELATÓRIO DE CONSUMO DE IMPRESSORAS*\n\n";
+    const linhas = document.querySelectorAll("#corpo-consumo tr");
+    
+    linhas.forEach(linha => {
+        const colunas = linha.querySelectorAll("td");
+        if(colunas.length > 0) {
+            texto += `📍 *${colunas[0].innerText}*\n`;
+            texto += `└ Consumo: ${colunas[5].innerText} em ${colunas[4].innerText}\n`;
+            texto += `└ Média: ${colunas[6].innerText}\n\n`;
+        }
+    });
+
+    const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(texto)}`;
+    window.open(url, '_blank');
+}
 
 // Isso garante que o onclick="funcao()" funcione sempre
 window.telaVisualizarEstoque = telaVisualizarEstoque;

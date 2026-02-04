@@ -6,6 +6,8 @@
     --success: #16a34a;
 }
 
+.linha { display: flex; justify-content: center; /* centraliza os botões */ gap: 10px; /* espaço entre eles */ margin-bottom: 15px; /* espaço entre linhas */ flex-wrap: wrap; /* permite quebrar em telas pequenas */ }
+
 /* Container Principal (Telas) */
 .painel-principal {
     background: rgba(248, 250, 252, 0.95); /* Fundo claro com leve transparência */

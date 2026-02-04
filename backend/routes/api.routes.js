@@ -1310,38 +1310,44 @@ router.get('/produtos/lista', verificarToken, async (req, res) => {
     }
 });
 
-router.post('/estoque/entrada-patrimonio-lote', verificarToken, async (req, res) => {
-    const { doc, itens } = req.body; 
-    const client = await db.connect();
+router.post('/estoque/entrada-patrimonio', verificarToken, async (req, res) => {
+    const { 
+        tipo_doc, numero_doc, serie_doc, chave_nfe, 
+        produto_id, series 
+    } = req.body;
+
+    const cliente = await db.connect();
 
     try {
-        await client.query('BEGIN');
+        await cliente.query('BEGIN'); // Inicia transação para segurança total
 
-        // 1. Registra o Documento Fiscal (DANFE ou Chave)
-        const docRes = await client.query(
+        // 1. Insere o Documento Fiscal
+        const resDoc = await cliente.query(
             `INSERT INTO documentos_fiscais (tipo_doc, numero_doc, serie_doc, chave_nfe, usuario_id) 
              VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-            [doc.tipo, doc.numero, doc.serie, doc.chave, req.usuario.id]
+            [tipo_doc, numero_doc, serie_doc, chave_nfe, req.usuario.id]
         );
-        const documentoId = docRes.rows[0].id;
+        const documento_id = resDoc.rows[0].id;
 
-        // 2. Insere cada item na sua tabela 'patrimonios' existente
-        for (const serie of itens.series) {
-            await client.query(
-                `INSERT INTO patrimonios (produto_id, documento_id, numero_serie, status, nota_fiscal) 
+        // 2. Insere cada Patrimônio individualmente
+        const local_central_id = 37; // Padrão solicitado
+        
+        for (let num_serie of series) {
+            await cliente.query(
+                `INSERT INTO patrimonios (produto_id, numero_serie, local_id, status, documento_id) 
                  VALUES ($1, $2, $3, 'ESTOQUE', $4)`,
-                [itens.produto_id, documentoId, serie, doc.numero || doc.chave.substring(0,20)]
+                [produto_id, num_serie.toUpperCase().trim(), local_central_id, documento_id]
             );
         }
 
-        await client.query('COMMIT');
-        res.json({ message: "Lote de patrimônio registrado com sucesso!" });
+        await cliente.query('COMMIT');
+        res.json({ message: `${series.length} itens de patrimônio registrados com sucesso!` });
 
     } catch (err) {
-        await client.query('ROLLBACK');
-        res.status(500).json({ error: "Erro no banco: " + err.message });
+        await cliente.query('ROLLBACK'); // Se um falhar, cancela tudo
+        res.status(500).json({ error: "Erro na entrada em lote: " + err.message });
     } finally {
-        client.release();
+        cliente.release();
     }
 });
 
@@ -1373,23 +1379,53 @@ router.post('/produtos/cadastrar', verificarToken, async (req, res) => {
 });
 
 router.post('/cadastros/produtos', verificarToken, async (req, res) => {
-    const { nome, tipo, alerta_minimo, categoria_id } = req.body;
+    const { nome, tipo, categoria_id, alerta_minimo } = req.body;
+    
+    // Tratamento crucial: se a categoria for inválida ou vazia, vira NULL para o Postgres
+    const catId = (categoria_id && !isNaN(categoria_id)) ? categoria_id : null;
 
     try {
-        // Usamos toUpperCase() para padronizar e COALESCE ou || 0 para evitar erros de valor nulo
-        await db.query(
-            "INSERT INTO produtos (nome, tipo, alerta_minimo, categoria_id) VALUES ($1, $2, $3, $4)",
-            [
-                nome.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase(), 
-                tipo, 
-                alerta_minimo || 0, 
-                categoria_id || null
-            ]
+        await db.query('BEGIN');
+
+        // 1. Inserção na tabela produtos (quantidade_estoque inicia em 0 conforme solicitado)
+        const resProd = await db.query(
+            `INSERT INTO produtos (nome, tipo, categoria_id, alerta_minimo, quantidade_estoque) 
+             VALUES ($1, $2, $3, $4, 0) RETURNING id`,
+            [nome.toUpperCase(), tipo, catId, alerta_minimo || 0]
         );
-        res.status(201).json({ message: "Produto cadastrado com sucesso!" });
+        const produto_id = resProd.rows[0].id;
+
+        // 2. Geração da Grade Estrita para UNIFORMES
+        if (tipo === 'UNIFORMES') {
+            let grade = [];
+            
+            // Lógica para TENIS (Grade 22-43) ou Outros (Grade 2-EGG)
+            if (nome.includes('TENIS') || nome.includes('TÊNIS')) {
+                grade = ['22','23','24','25','26','27','28','29','30','31','32','33','34','35','36','37','38','39','40','41','42','43'];
+            } else {
+                grade = ['2','4','6','8','10','12','14','16','PP','P','M','G','GG','EGG'];
+            }
+
+            // Gravação em ambas as tabelas de grade que você utiliza
+            for (let tam of grade) {
+                await db.query(
+                    "INSERT INTO estoque_grades (produto_id, tamanho, quantidade) VALUES ($1, $2, 0)",
+                    [produto_id, tam]
+                );
+                await db.query(
+                    "INSERT INTO estoque_tamanhos (produto_id, tamanho, quantidade) VALUES ($1, $2, 0)",
+                    [produto_id, tam]
+                );
+            }
+        }
+
+        await db.query('COMMIT');
+        res.json({ message: "Cadastro realizado com sucesso!", id: produto_id });
+
     } catch (err) {
-        console.error("Erro ao cadastrar produto:", err.message);
-        res.status(500).json({ error: "Erro ao inserir no banco: " + err.message });
+        await db.query('ROLLBACK');
+        console.error("ERRO NO BANCO:", err.message); // Verifique isso no terminal do seu servidor
+        res.status(500).json({ error: "Erro interno: " + err.message });
     }
 });
 
@@ -2184,25 +2220,34 @@ router.post('/impressoras', verificarToken, async (req, res) => {
 });
 
 router.get('/impressoras/dashboard-stats', verificarToken, async (req, res) => {
-    const { inicio, fim, local_id } = req.query;
-    
+    const { inicio, fim } = req.query;
     try {
-        let filtroLocal = local_id && local_id !== 'TODAS' ? `AND i.local_id = ${local_id}` : '';
-        
-        const query = `
+        const stats = await db.query(`
             SELECT 
-                COUNT(*) FILTER (WHERE tipo = 'recarga') as total_recarga,
-                COUNT(*) FILTER (WHERE tipo = 'manutencao') as total_manutencao,
-                COUNT(*) FILTER (WHERE status = 'FECHADO') as atendidos,
-                COUNT(*) FILTER (WHERE status = 'ABERTO') as pendentes
+                COUNT(*) FILTER (WHERE status = 'FECHADO') as total_recargas,
+                COUNT(*) FILTER (WHERE status = 'ABERTO') as total_abertos
+            FROM chamados_impressora
+            WHERE data_abertura::date BETWEEN $1 AND $2
+        `, [inicio, fim]);
+
+        const lista = await db.query(`
+            SELECT 
+                c.data_abertura,
+                c.data_fechamento,
+                l.nome as unidade,
+                i.modelo,
+                u.nome as tecnico,
+                c.contador_encerramento as contador,
+                c.relatorio_tecnico as obs
             FROM chamados_impressora c
             JOIN impressoras i ON c.impressora_id = i.id
-            WHERE c.data_abertura::date BETWEEN $1 AND $2
-            ${filtroLocal}
-        `;
-        
-        const { rows } = await db.query(query, [inicio, fim]);
-        res.json(rows[0]);
+            JOIN locais l ON i.local_id = l.id
+            LEFT JOIN usuarios u ON c.tecnico_id = u.id
+            WHERE c.status = 'FECHADO' AND c.data_fechamento::date BETWEEN $1 AND $2
+            ORDER BY c.data_fechamento DESC
+        `, [inicio, fim]);
+
+        res.json({ stats: stats.rows[0], atendimentos: lista.rows });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -2401,6 +2446,414 @@ router.get('/auth/sincronizar-identidade', verificarToken, async (req, res) => {
         res.json(result.rows[0]);
     } catch (err) {
         res.status(500).json({ error: "Erro na sincronização: " + err.message });
+    }
+});
+
+// CADASTRO DE CATEGORIA
+router.post('/categorias', verificarToken, verificarPerfil(['admin', 'dti']), async (req, res) => {
+    const { nome } = req.body;
+    try {
+        await db.query("INSERT INTO categorias (nome) VALUES ($1)", [nome.toUpperCase()]);
+        res.json({ message: "Categoria cadastrada com sucesso!" });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/categorias', verificarToken, async (req, res) => {
+    try {
+        const result = await db.query("SELECT id, nome FROM categorias ORDER BY nome ASC");
+        res.json(result.rows);
+    } catch (err) {
+        console.error("Erro ao buscar categorias:", err);
+        res.status(500).json({ error: "Erro ao listar categorias do banco de dados." });
+    }
+});
+
+// CADASTRO DE LOCAL
+router.post('/locais', verificarToken, async (req, res) => {
+    const { nome } = req.body;
+
+    if (!nome) {
+        return res.status(400).json({ error: "O nome do local é obrigatório." });
+    }
+
+    try {
+        // Inserimos o nome sempre em MAIÚSCULAS para manter o padrão do banco
+        await db.query("INSERT INTO locais (nome) VALUES ($1)", [nome.toUpperCase().trim()]);
+        res.json({ message: "Local cadastrado com sucesso!" });
+    } catch (err) {
+        // Tratamento para o erro de Unique Constraint (Código 23505 no Postgres)
+        if (err.code === '23505') {
+            return res.status(400).json({ error: "Este local/escola já está cadastrado no sistema." });
+        }
+        res.status(500).json({ error: "Erro ao salvar no banco: " + err.message });
+    }
+});
+
+// CADASTRO DE SETOR
+router.post('/setores', verificarToken, verificarPerfil(['admin', 'dti']), async (req, res) => {
+    const { nome } = req.body;
+
+    if (!nome) {
+        return res.status(400).json({ error: "O nome do setor é obrigatório." });
+    }
+
+    try {
+        // Padronização para evitar "Secretaria" e "SECRETARIA" como duplicados
+        await db.query("INSERT INTO setores (nome) VALUES ($1)", [nome.toUpperCase().trim()]);
+        res.json({ message: "Setor cadastrado com sucesso!" });
+    } catch (err) {
+        if (err.code === '23505') {
+            return res.status(400).json({ error: "Este setor já existe no sistema." });
+        }
+        res.status(500).json({ error: "Erro ao salvar setor: " + err.message });
+    }
+});
+
+router.get('/locais/lista-geral', verificarToken, async (req, res) => {
+    try {
+        // Buscamos apenas ID e NOME para ser leve e rápido
+        const query = "SELECT id, nome FROM locais ORDER BY nome ASC";
+        const { rows } = await db.query(query);
+        res.json(rows);
+    } catch (err) {
+        console.error("Erro ao buscar locais:", err);
+        res.status(500).json({ error: "Erro interno ao buscar locais" });
+    }
+});
+
+router.get('/estoque/patrimonio/:serie', verificarToken, async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                pa.*, 
+                pr.nome as produto_nome, 
+                l.nome as local_nome, 
+                s.nome as setor_nome,
+                df.numero_doc as nf_numero
+            FROM patrimonios pa
+            JOIN produtos pr ON pa.produto_id = pr.id
+            LEFT JOIN locais l ON pa.local_id = l.id
+            LEFT JOIN setores s ON pa.setor_id = s.id
+            LEFT JOIN documentos_fiscais df ON pa.documento_id = df.id
+            WHERE pa.numero_serie = $1
+        `;
+        const { rows } = await db.query(query, [req.params.serie.toUpperCase()]);
+        if (rows.length === 0) return res.status(404).json({ error: "Património não encontrado." });
+        res.json(rows[0]);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/estoque/transferir-patrimonio', verificarToken, async (req, res) => {
+    const { patrimonio_id, produto_id, novo_local_id, novo_setor_id, observacao } = req.body;
+    const cliente = await db.connect();
+
+    try {
+        await cliente.query('BEGIN');
+
+        // Atualiza a localização do item
+        await cliente.query(
+            "UPDATE patrimonios SET local_id = $1, setor_id = $2, data_atualizacao = now() WHERE id = $3",
+            [novo_local_id, novo_setor_id, patrimonio_id]
+        );
+
+        // Grava no histórico de movimentações para auditoria
+        await cliente.query(
+            `INSERT INTO historico_movimentacoes (produto_id, quantidade, tipo_movimentacao, usuario_id, observacao) 
+             VALUES ($1, 1, 'TRANSFERENCIA', $2, $3)`,
+            [produto_id, req.usuario.id, observacao]
+        );
+
+        await cliente.query('COMMIT');
+        res.json({ message: "Transferência concluída e registada no histórico!" });
+    } catch (err) {
+        await cliente.query('ROLLBACK');
+        res.status(500).json({ error: "Erro na transferência: " + err.message });
+    } finally { cliente.release(); }
+});
+
+router.get('/estoque/inventario/:local_id', verificarToken, async (req, res) => {
+    const { local_id } = req.params;
+    try {
+        const query = `
+            SELECT 
+                p.nome as produto_nome,
+                pa.numero_serie,
+                s.nome as setor_nome,
+                pa.status,
+                to_char(pa.data_atualizacao, 'DD/MM/YYYY') as ultima_movimentacao
+            FROM patrimonios pa
+            JOIN produtos p ON pa.produto_id = p.id
+            LEFT JOIN setores s ON pa.setor_id = s.id
+            WHERE pa.local_id = $1
+            ORDER BY s.nome ASC, p.nome ASC
+        `;
+        const { rows } = await db.query(query, [local_id]);
+        
+        // Buscamos o nome do local para o cabeçalho do relatório
+        const localNome = await db.query("SELECT nome FROM locais WHERE id = $1", [local_id]);
+        
+        res.json({
+            unidade: localNome.rows[0]?.nome || "Não Localizado",
+            total_itens: rows.length,
+            itens: rows
+        });
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao gerar inventário: " + err.message });
+    }
+});
+
+router.post('/estoque/baixa-patrimonio', verificarToken, verificarPerfil(['admin', 'dti']), async (req, res) => {
+    const { patrimonio_id, produto_id, motivo_especifico, observacao } = req.body;
+    const cliente = await db.connect();
+
+    try {
+        await cliente.query('BEGIN');
+
+        // 1. Atualiza o status para 'INSERVÍVEL'
+        // Certifique-se de que o enum 'status_patrimonio_enum' aceita este valor
+        await cliente.query(
+            "UPDATE patrimonios SET status = 'INSERVÍVEL', data_atualizacao = now() WHERE id = $1",
+            [patrimonio_id]
+        );
+
+        // 2. Regista a Baixa no Histórico para Auditoria
+        const msgHistorico = `BAIXA POR MOTIVO: ${motivo_especifico}. OBS: ${observacao}`;
+        await cliente.query(
+            `INSERT INTO historico_movimentacoes (produto_id, quantidade, tipo_movimentacao, usuario_id, observacao) 
+             VALUES ($1, 1, 'BAIXA', $2, $3)`,
+            [produto_id, req.usuario.id, msgHistorico.toUpperCase()]
+        );
+
+        await cliente.query('COMMIT');
+        res.json({ message: "O item foi marcado como INSERVÍVEL e retirado do inventário ativo." });
+    } catch (err) {
+        await cliente.query('ROLLBACK');
+        res.status(500).json({ error: "Erro ao processar baixa: " + err.message });
+    } finally {
+        cliente.release();
+    }
+});
+
+router.get('/estoque/baixas/resumo-anual', verificarToken, verificarPerfil(['admin', 'dti']), async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                c.nome as categoria,
+                EXTRACT(YEAR FROM hm.data_movimentacao) as ano,
+                COUNT(*) as total_itens,
+                string_agg(DISTINCT hm.observacao, ' | ') as motivos_comuns
+            FROM historico_movimentacoes hm
+            JOIN produtos p ON hm.produto_id = p.id
+            JOIN categorias c ON p.categoria_id = c.id
+            WHERE hm.tipo_movimentacao = 'BAIXA'
+            GROUP BY c.nome, ano
+            ORDER BY ano DESC, total_itens DESC
+        `;
+        const { rows } = await db.query(query);
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao processar resumo de baixas: " + err.message });
+    }
+});
+
+router.get('/impressoras/estatisticas', verificarToken, async (req, res) => {
+    const { inicio, fim } = req.query;
+
+    try {
+        const query = `
+            SELECT 
+                COUNT(*) FILTER (WHERE tipo = 'RECARGA' AND data_abertura >= $1 AND data_abertura <= $2) as total_recargas,
+                COUNT(*) FILTER (WHERE status = 'ABERTO') as total_abertos,
+                AVG(data_conclusao - data_abertura) FILTER (WHERE status = 'CONCLUIDO' AND data_abertura >= $1 AND data_abertura <= $2) as tempo_medio
+            FROM chamados_impressora
+        `;
+        
+        const { rows } = await db.query(query, [inicio, fim]);
+        
+        // Formata o intervalo de tempo para algo legível (ex: "2 dias 04:30")
+        const stats = rows[0];
+        res.json({
+            total_recargas: stats.total_recargas || 0,
+            total_abertos: stats.total_abertos || 0,
+            tempo_medio: stats.tempo_medio ? formatarIntervalo(stats.tempo_medio) : "N/A"
+        });
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao calcular estatísticas: " + err.message });
+    }
+});
+
+router.patch('/impressoras/concluir-chamado/:id', verificarToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { contador_encerramento, relatorio_tecnico } = req.body;
+
+        // Tenta pegar o ID de várias formas comuns (id, userId, sub)
+        const tecnicoId = req.user?.id || req.user?.userId || req.user?.sub;
+
+        if (!tecnicoId) {
+            console.error("DEBUG: Objeto req.user veio vazio ou sem ID:", req.user);
+            return res.status(401).json({ error: "Sessão expirada ou usuário não identificado." });
+        }
+
+        const query = `
+            UPDATE chamados_impressora 
+            SET status = 'FECHADO', 
+                data_fechamento = NOW(),
+                contador_encerramento = $1,
+                relatorio_tecnico = $2,
+                tecnico_id = $3
+            WHERE id = $4 AND status = 'ABERTO'
+        `;
+        
+        const result = await db.query(query, [contador_encerramento, relatorio_tecnico, tecnicoId, id]);
+        
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: "Chamado não encontrado ou já está fechado." });
+        }
+        
+        res.json({ message: "Chamado finalizado com sucesso!" });
+    } catch (err) {
+        console.error("ERRO NO BACK-END:", err.message);
+        res.status(500).json({ error: "Erro interno: " + err.message });
+    }
+});
+
+router.patch('/impressoras/v2/finalizar-recarga/:id', verificarToken, async (req, res) => {
+    const { id } = req.params;
+    const { contador, relatorio, usuario_id } = req.body;
+
+    try {
+        // Prioridade para o ID que vem do Front-end, depois o do Token
+        const tecnicoId = usuario_id || req.user?.id || req.usuario?.id;
+
+        if (!tecnicoId) {
+            return res.status(401).json({ error: "Identificação do técnico não encontrada." });
+        }
+
+        const query = `
+            UPDATE chamados_impressora 
+            SET status = 'FECHADO', 
+                data_fechamento = NOW(),
+                contador_encerramento = $1,
+                relatorio_tecnico = $2,
+                tecnico_id = $3
+            WHERE id = $4 AND status = 'ABERTO'
+        `;
+        
+        const result = await db.query(query, [
+            parseInt(contador), 
+            relatorio || 'Recarga realizada.', 
+            tecnicoId, 
+            id
+        ]);
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: "Chamado não encontrado ou já fechado." });
+        }
+
+        res.json({ message: "Recarga registrada com sucesso!" });
+    } catch (err) {
+        console.error("Erro ao gravar recarga:", err.message);
+        res.status(500).json({ error: "Erro no banco: " + err.message });
+    }
+});
+
+router.get('/impressoras/comparativo-rendimento', verificarToken, async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                l.nome as unidade,
+                COUNT(c.id) as total_atendimentos,
+                SUM(c.contador_encerramento) as volume_total
+            FROM chamados_impressora c
+            JOIN impressoras i ON c.impressora_id = i.id
+            JOIN locais l ON i.local_id = l.id
+            WHERE c.status = 'FECHADO'
+            GROUP BY l.nome
+            ORDER BY total_atendimentos DESC
+        `;
+        const { rows } = await db.query(query);
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao processar comparativo: " + err.message });
+    }
+});
+
+router.get('/impressoras/local/:localId', verificarToken, async (req, res) => {
+    try {
+        const { localId } = req.params;
+        console.log(`[SQL Query] Buscando impressoras para local_id: ${localId}`);
+
+        const result = await db.query(
+            "SELECT id, modelo, local_id FROM impressoras WHERE local_id = $1", 
+            [parseInt(localId)]
+        );
+
+        console.log(`[SQL Result] Encontradas ${result.rowCount} impressoras.`);
+        res.json(result.rows);
+    } catch (err) {
+        console.error("ERRO CRÍTICO NA ROTA:", err.message);
+        res.status(500).json({ error: "Erro interno no servidor" });
+    }
+});
+
+router.get('/impressoras/fila-atendimento', verificarToken, async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                c.id, 
+                c.tipo, 
+                c.motivo, 
+                c.observacoes, 
+                TO_CHAR(c.data_abertura, 'DD/MM/YY HH24:MI') as data_formatada,
+                i.modelo as impressora_modelo,
+                l.nome as unidade_nome,
+                u.nome as solicitado_por
+            FROM chamados_impressora c
+            JOIN impressoras i ON c.impressora_id = i.id
+            JOIN locais l ON i.local_id = l.id
+            -- Usando tecnico_id para identificar o solicitante, conforme sua estrutura
+            LEFT JOIN usuarios u ON c.tecnico_id = u.id
+            WHERE c.status = 'ABERTO'
+            ORDER BY c.data_abertura ASC
+        `;
+        const { rows } = await db.query(query);
+        res.json(rows);
+    } catch (err) {
+        console.error("Erro ao buscar fila:", err);
+        res.status(500).json({ error: "Erro interno ao carregar a fila." });
+    }
+});
+
+router.get('/impressoras/relatorio-consumo', verificarToken, async (req, res) => {
+    try {
+        const query = `
+            WITH UltimasLeituras AS (
+                SELECT 
+                    c.impressora_id,
+                    c.contador_encerramento,
+                    c.data_fechamento,
+                    ROW_NUMBER() OVER (PARTITION BY c.impressora_id ORDER BY c.data_fechamento DESC) as ordem
+                FROM chamados_impressora c
+                WHERE c.status = 'FECHADO' AND c.contador_encerramento > 0
+            )
+            SELECT 
+                l.nome as unidade,
+                i.modelo,
+                u1.contador_encerramento as ultima_leitura,
+                u1.data_fechamento as data_ultima,
+                u2.contador_encerramento as penultima_leitura,
+                u2.data_fechamento as data_penultima
+            FROM impressoras i
+            JOIN locais l ON i.local_id = l.id
+            JOIN UltimasLeituras u1 ON i.id = u1.impressora_id AND u1.ordem = 1
+            JOIN UltimasLeituras u2 ON i.id = u2.impressora_id AND u2.ordem = 2
+            ORDER BY l.nome ASC;
+        `;
+        const { rows } = await db.query(query);
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao gerar relatório de consumo." });
     }
 });
 

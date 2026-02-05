@@ -414,48 +414,41 @@ async function carregarDashboard() {
 }
 
 async function telaVisualizarEstoque() {
-    // 1. Prepara o container principal com o estilo original do app
-    const app = prepararContainerPrincipal();
+    // Mantém sua função original de preparação para não perder o estilo visual
+    const app = prepararContainerPrincipal(); 
     
-    // 2. Define a categoria fixa para garantir que o filtro funcione
+    // Força a categoria para UNIFORMES para que o filtro original funcione de primeira
     categoriaAtual = 'UNIFORMES'; 
 
     app.innerHTML = `
-        <div class="painel-vidro" style="max-width: 1100px; margin: 20px auto; padding: 25px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:25px;">
-                <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background:#475569; width:100px; margin:0;">⬅️ VOLTAR</button>
-                <h2 style="color:white; margin:0; font-size:1.4rem; text-shadow: 2px 2px 4px rgba(0,0,0,0.5);">👕 ESTOQUE DE UNIFORMES</h2>
+        <div class="painel-vidro" style="max-width: 1100px; margin: auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background:#475569; width:100px;">⬅️ VOLTAR</button>
+                <h2 style="color:white; margin:0; font-size:1.3rem;">👕 ESTOQUE DE UNIFORMES</h2>
                 <div style="width:100px;"></div>
             </div>
 
-            <div style="margin-bottom:25px;">
-                <input type="text" id="busca-produto" oninput="filtrarEstoque()" placeholder="Pesquisar uniforme..." class="input-vidro" style="width:100%; background: rgba(255,255,255,0.1); color: white;">
+            <div style="margin-bottom:20px;">
+                <input type="text" id="busca-produto" oninput="filtrarEstoque()" placeholder="Pesquisar uniforme..." class="input-vidro" style="width:100%;">
             </div>
 
             <div id="conteudo-estoque">
-                <div style="padding:40px; text-align:center; color:white;">
-                    <div class="spinner"></div>
-                    <p>Sincronizando grade de tamanhos...</p>
-                </div>
+                <div style="padding:40px; text-align:center; color:white;">Sincronizando dados...</div>
             </div>
         </div>
     `;
 
     try {
-        // Busca os dados da rota original que já funcionava
+        // Chamada original para carregar os dados no cache
         const res = await fetch(`${API_URL}/estoque/central`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
-        
-        if (!res.ok) throw new Error("Erro na resposta do servidor");
-        
         dadosEstoqueCache = await res.json();
         
-        // Dispara o filtro para desenhar a tabela com os botões de GRADE
-        filtrarEstoque();
+        // Dispara o seu filtrarEstoque original (aquele que cria os botões de grade)
+        filtrarEstoque(); 
     } catch (err) {
         console.error("Erro ao carregar estoque:", err);
-        document.getElementById('conteudo-estoque').innerHTML = `<div style="color: #f87171; text-align:center;">Erro ao carregar dados.</div>`;
     }
 }
 

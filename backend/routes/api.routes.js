@@ -2857,4 +2857,24 @@ router.get('/impressoras/relatorio-consumo', verificarToken, async (req, res) =>
     }
 });
 
+router.get('/estoque/materiais-e-patrimonios', verificarToken, async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                id, 
+                nome, 
+                tipo, 
+                COALESCE(quantidade_estoque, 0) as saldo, 
+                COALESCE(alerta_minimo, 0) as minimo
+            FROM produtos 
+            WHERE tipo IN ('MATERIAL', 'PATRIMONIO')
+            ORDER BY tipo DESC, nome ASC
+        `;
+        const { rows } = await db.query(query);
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao carregar materiais: " + err.message });
+    }
+});
+
 module.exports = router;

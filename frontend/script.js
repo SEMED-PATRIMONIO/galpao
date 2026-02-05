@@ -437,6 +437,12 @@ async function telaVisualizarEstoque() {
                            oninput="filtrarEstoque()">
                 </div>
 
+                <div class="container-abas">
+                    <div class="aba-item ativa" id="tab-UNIFORMES" onclick="mudarAba('UNIFORMES')">UNIFORMES</div>
+                    <div class="aba-item" id="tab-MATERIAL" onclick="mudarAba('MATERIAL')">MATERIAL</div>
+                    <div class="aba-item" id="tab-PATRIMONIO" onclick="mudarAba('PATRIMONIO')">PATRIMÔNIO</div>
+                </div>
+
                 <div id="conteudo-estoque" class="painel-vidro" style="padding:0; overflow:hidden;"></div>
             </div>
 
@@ -449,7 +455,6 @@ async function telaVisualizarEstoque() {
             </div>
         `;
 
-        // Isso garante que ele carregue os UNIFORMES automaticamente sem precisar clicar em nada
         mudarAba('UNIFORMES');
 
     } catch (err) {

@@ -414,39 +414,51 @@ async function carregarDashboard() {
 }
 
 async function telaVisualizarEstoque() {
-    const conteudo = document.getElementById('conteudo-dinamico');
-    conteudo.innerHTML = '<div class="loader">A carregar stock...</div>';
-    
+    const container = document.getElementById('app-content');
+    container.innerHTML = '<div style="padding:20px; color:white; text-align:center;">🔄 SINCRONIZANDO SALDOS DE ESTOQUE...</div>';
+
     try {
-        // CORREÇÃO DE ROTA: Removido o "/api" para coincidir com o server.js
-        const res = await fetch(`${API_URL}/catalogo/produtos`, {
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        const res = await fetch(`${API_URL}/estoque/geral`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
-        const produtos = await res.json();
-        
-        let html = `
-            <div class="card-historico">
-                <h2>📊 POSIÇÃO ATUAL DO ESTOQUE</h2>
-                <table class="tabela-estilizada">
-                    <thead>
-                        <tr><th>PRODUTO</th><th>CATEGORIA</th><th>SALDO ATUAL</th><th>ALERTA MÍN.</th></tr>
-                    </thead>
-                    <tbody>
-                        ${produtos.map(p => `
-                            <tr style="${p.quantidade_estoque <= p.alerta_minimo ? 'color: red; font-weight: bold;' : ''}">
-                                <td>${p.nome}</td>
-                                <td>${p.categoria_nome || 'GERAL'}</td>
-                                <td>${p.quantidade_estoque}</td>
-                                <td>${p.alerta_minimo}</td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
+        dadosEstoqueCache = await res.json();
+
+        container.innerHTML = `
+            <div style="padding:20px;">
+                <div class="painel-usuario-vidro" style="position:relative; width:100%; top:0; right:0; margin-bottom:25px; display:flex; justify-content:space-between; align-items:center;">
+                    <h2 style="color:white; margin:0; font-size:1.2rem;">📊 GESTÃO DE ESTOQUE REAL</h2>
+                    <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background:#64748b;">⬅️ VOLTAR</button>
+                </div>
+
+                <div class="container-busca-estoque">
+                    <span class="icone-lupa-busca">🔍</span>
+                    <input type="text" id="busca-produto" class="input-busca-vidro" 
+                           placeholder="Pesquisar produto nesta categoria..." 
+                           oninput="filtrarEstoque()">
+                </div>
+
+                <div class="container-abas">
+                    <div class="aba-item ativa" id="tab-UNIFORMES" onclick="mudarAba('UNIFORMES')">UNIFORMES</div>
+                    <div class="aba-item" id="tab-MATERIAL" onclick="mudarAba('MATERIAL')">MATERIAL</div>
+                    <div class="aba-item" id="tab-PATRIMONIO" onclick="mudarAba('PATRIMONIO')">PATRIMÔNIO</div>
+                </div>
+
+                <div id="conteudo-estoque" class="painel-vidro" style="padding:0; overflow:hidden;"></div>
+            </div>
+
+            <div id="modalGrade" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:9999; justify-content:center; align-items:center; backdrop-filter: blur(8px);">
+                <div class="painel-vidro" style="width:95%; max-width:450px; background:white;">
+                    <h3 id="modalTitulo" style="margin-top:0; color:#1e3a8a; border-bottom:2px solid #f1f5f9; padding-bottom:15px; text-align:center;"></h3>
+                    <div id="modalCorpo" style="margin:25px 0; display:grid; grid-template-columns:repeat(3, 1fr); gap:15px; color: #1e3a8a;"></div>
+                    <button onclick="document.getElementById('modalGrade').style.display='none'" class="btn-sair-vidro" style="width:100%; background:#ef4444;">FECHAR VISUALIZAÇÃO</button>
+                </div>
             </div>
         `;
-        conteudo.innerHTML = html;
+
+        mudarAba('UNIFORMES');
+
     } catch (err) {
-        alert("Erro ao carregar dados do stock.");
+        container.innerHTML = "<div class='painel-vidro' style='color:#f87171;'>🚨 Erro ao carregar estoque.</div>";
     }
 }
 

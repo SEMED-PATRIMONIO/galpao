@@ -414,41 +414,39 @@ async function carregarDashboard() {
 }
 
 async function telaVisualizarEstoque() {
-    // Mantém sua função original de preparação para não perder o estilo visual
-    const app = prepararContainerPrincipal(); 
+    const conteudo = document.getElementById('conteudo-dinamico');
+    conteudo.innerHTML = '<div class="loader">A carregar stock...</div>';
     
-    // Força a categoria para UNIFORMES para que o filtro original funcione de primeira
-    categoriaAtual = 'UNIFORMES'; 
-
-    app.innerHTML = `
-        <div class="painel-vidro" style="max-width: 1100px; margin: auto;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background:#475569; width:100px;">⬅️ VOLTAR</button>
-                <h2 style="color:white; margin:0; font-size:1.3rem;">👕 ESTOQUE DE UNIFORMES</h2>
-                <div style="width:100px;"></div>
-            </div>
-
-            <div style="margin-bottom:20px;">
-                <input type="text" id="busca-produto" oninput="filtrarEstoque()" placeholder="Pesquisar uniforme..." class="input-vidro" style="width:100%;">
-            </div>
-
-            <div id="conteudo-estoque">
-                <div style="padding:40px; text-align:center; color:white;">Sincronizando dados...</div>
-            </div>
-        </div>
-    `;
-
     try {
-        // Chamada original para carregar os dados no cache
-        const res = await fetch(`${API_URL}/estoque/central`, {
-            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        // CORREÇÃO DE ROTA: Removido o "/api" para coincidir com o server.js
+        const res = await fetch(`${API_URL}/catalogo/produtos`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         });
-        dadosEstoqueCache = await res.json();
+        const produtos = await res.json();
         
-        // Dispara o seu filtrarEstoque original (aquele que cria os botões de grade)
-        filtrarEstoque(); 
+        let html = `
+            <div class="card-historico">
+                <h2>📊 POSIÇÃO ATUAL DO ESTOQUE</h2>
+                <table class="tabela-estilizada">
+                    <thead>
+                        <tr><th>PRODUTO</th><th>CATEGORIA</th><th>SALDO ATUAL</th><th>ALERTA MÍN.</th></tr>
+                    </thead>
+                    <tbody>
+                        ${produtos.map(p => `
+                            <tr style="${p.quantidade_estoque <= p.alerta_minimo ? 'color: red; font-weight: bold;' : ''}">
+                                <td>${p.nome}</td>
+                                <td>${p.categoria_nome || 'GERAL'}</td>
+                                <td>${p.quantidade_estoque}</td>
+                                <td>${p.alerta_minimo}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+        conteudo.innerHTML = html;
     } catch (err) {
-        console.error("Erro ao carregar estoque:", err);
+        alert("Erro ao carregar dados do stock.");
     }
 }
 

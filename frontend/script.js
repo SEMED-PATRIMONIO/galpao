@@ -8285,7 +8285,8 @@ async function telaEscolaConfirmarRecebimento() {
 
         container.innerHTML = `
             <div style="padding:20px;">
-                <h2 style="color:#1e3a8a; margin-bottom:20px;">🚚 RECEBIMENTO DE MERCADORIA</h2>
+                <h2 style="color:white; margin-bottom:20px;">🚚 RECEBIMENTO DE MERCADORIA</h2>
+                <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background:#475569; width:100px; margin:0;">⬅️ VOLTAR</button>
                 <div style="display:grid; gap:15px;">
                     ${dados.length === 0 ? `
                         <div style="background:#f8fafc; padding:40px; text-align:center; border-radius:10px; color:#64748b; border:1px dashed #cbd5e1;">

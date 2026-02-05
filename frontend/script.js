@@ -248,7 +248,10 @@ async function carregarDashboard() {
                 <i>📈</i><span>PAINEL DE PEDIDOS</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="telaVisualizarEstoque()">
-                <i>🔍</i><span>VISUALIZAR ESTOQUE</span>
+                <i>👕</i><span>VER ESTOQUE DE UNIFORMES</span>
+            </button>
+            <button class="btn-grande btn-vidro" style="background:rgba(16, 185, 129, 0.2);" onclick="telaEstoqueMateriaisEPatrimonios()">
+                <i>📦</i><span>VER ESTOQUE DE MATERIAIS</span>
             </button>
             <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaHistoricoMovimentacoes()">
                 <i>📜</i><span>HISTÓRICO</span>
@@ -323,7 +326,10 @@ async function carregarDashboard() {
                 <i>➕</i><span>CRIAR PEDIDO</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="telaVisualizarEstoque()">
-                <i>🔍</i><span>VISUALIZAR ESTOQUE</span>
+                <i>👕</i><span>VER ESTOQUE DE UNIFORMES</span>
+            </button>
+            <button class="btn-grande btn-vidro" style="background:rgba(16, 185, 129, 0.2);" onclick="telaEstoqueMateriaisEPatrimonios()">
+                <i>📦</i><span>VER ESTOQUE DE MATERIAIS</span>
             </button>
             <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaInventarioLocal()">
                 <i>🏷️</i><span>INVENTÁRIO PATRIMÔNIO</span>
@@ -356,7 +362,10 @@ async function carregarDashboard() {
                 <i>🔄</i><span>RECEBER DEVOLUÇÕES</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="telaVisualizarEstoque()">
-                <i>🔍</i><span>VISUALIZAR ESTOQUE</span>
+                <i>👕</i><span>VER ESTOQUE DE UNIFORMES</span>
+            </button>
+            <button class="btn-grande btn-vidro" style="background:rgba(16, 185, 129, 0.2);" onclick="telaEstoqueMateriaisEPatrimonios()">
+                <i>📦</i><span>VER ESTOQUE DE MATERIAIS</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()">
                 <i>📈</i><span>PAINEL DE PEDIDOS</span>
@@ -10279,6 +10288,64 @@ function compartilharConsumoZap() {
 
     const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(texto)}`;
     window.open(url, '_blank');
+}
+
+async function telaEstoqueMateriaisEPatrimonios() {
+    const container = document.getElementById('app-content');
+    
+    // 1. Estrutura da Tela (Independente da tela de Uniformes)
+    container.innerHTML = `
+        <div class="painel-vidro" style="max-width: 1000px; margin: auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background:#475569; width:100px;">⬅️ VOLTAR</button>
+                <h2 style="color:white; margin:0; font-size:1.3rem;">📦 ESTOQUE: MATERIAIS E PATRIMÔNIOS</h2>
+                <div style="width:100px;"></div>
+            </div>
+
+            <div style="background:rgba(0,0,0,0.2); border-radius:10px; overflow:hidden;">
+                <table style="width:100%; border-collapse: collapse; color:white; font-size:0.85rem;">
+                    <thead style="background:rgba(255,255,255,0.1);">
+                        <tr>
+                            <th style="padding:15px; text-align:left;">DESCRIÇÃO DO ITEM</th>
+                            <th style="padding:15px; text-align:center;">TIPO</th>
+                            <th style="padding:15px; text-align:center;">SALDO REAL</th>
+                            <th style="padding:15px; text-align:center;">STATUS</th>
+                        </tr>
+                    </thead>
+                    <tbody id="corpo-tabela-materiais">
+                        <tr><td colspan="4" style="padding:20px; text-align:center;">Carregando dados...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    `;
+
+    try {
+        const res = await fetch(`${API_URL}/estoque/materiais-e-patrimonios`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        const produtos = await res.json();
+        const corpo = document.getElementById('corpo-tabela-materiais');
+
+        corpo.innerHTML = produtos.map(p => {
+            const critico = Number(p.saldo) <= Number(p.minimo);
+            return `
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                    <td style="padding:12px 15px; font-weight:bold;">${p.nome}</td>
+                    <td style="padding:12px 15px; text-align:center; color:#94a3b8; font-size:0.75rem;">${p.tipo}</td>
+                    <td style="padding:12px 15px; text-align:center;">
+                        <b style="font-size:1.1rem; color:${critico ? '#f87171' : '#4ade80'};">${p.saldo}</b>
+                    </td>
+                    <td style="padding:12px 15px; text-align:center;">
+                        ${critico ? '<span style="color:#f87171;">🔴 ABAIXO DO MÍNIMO</span>' : '<span style="color:#4ade80;">🟢 DISPONÍVEL</span>'}
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+    } catch (err) {
+        console.error("Erro ao carregar materiais:", err);
+    }
 }
 
 // Isso garante que o onclick="funcao()" funcione sempre

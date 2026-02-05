@@ -414,15 +414,16 @@ async function carregarDashboard() {
 }
 
 async function telaVisualizarEstoque() {
-    const app = prepararContainerPrincipal();
+    // 1. Reutiliza sua função original para manter o CSS e o Fundo intactos
+    const app = prepararContainerPrincipal(); 
     
-    // Forçamos a categoria para UNIFORMES e limpamos a busca
+    // 2. Forçamos a categoria para UNIFORMES para sua função filtrarEstoque() funcionar
     categoriaAtual = 'UNIFORMES'; 
-    
+
     app.innerHTML = `
-        <div class="painel-vidro" style="max-width: 1000px; margin: auto;">
+        <div class="painel-vidro" style="max-width: 1100px; margin: auto;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background:#475569; width:100px;">⬅️ VOLTAR</button>
+                <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background:#475569; width:100px; cursor:pointer;">⬅️ VOLTAR</button>
                 <h2 style="color:white; margin:0; font-size:1.3rem;">👕 ESTOQUE DE UNIFORMES</h2>
                 <div style="width:100px;"></div>
             </div>
@@ -431,23 +432,22 @@ async function telaVisualizarEstoque() {
                 <input type="text" id="busca-produto" oninput="filtrarEstoque()" placeholder="Pesquisar uniforme..." class="input-vidro" style="width:100%;">
             </div>
 
-            <div id="conteudo-estoque" style="background:rgba(0,0,0,0.2); border-radius:10px; min-height:200px;">
-                <div style="padding:40px; text-align:center; color:white;">Sincronizando grade...</div>
+            <div id="conteudo-estoque">
+                <div style="padding:40px; text-align:center; color:white;">Sincronizando dados...</div>
             </div>
         </div>
     `;
 
     try {
-        // Busca os dados (mantendo sua lógica original que já funciona)
         const res = await fetch(`${API_URL}/estoque/central`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
         dadosEstoqueCache = await res.json();
         
-        // Chama o filtro para renderizar a tabela imediatamente
-        filtrarEstoque();
+        // Chama sua função original. Ela vai injetar a tabela com os botões 🔍 de grade aqui dentro.
+        filtrarEstoque(); 
     } catch (err) {
-        console.error("Erro ao carregar uniformes:", err);
+        console.error("Erro ao carregar estoque:", err);
     }
 }
 

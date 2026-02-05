@@ -250,7 +250,7 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="telaVisualizarEstoque()">
                 <i>🔍</i><span>VISUALIZAR ESTOQUE</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="telaHistoricoMovimentacoes()">
+            <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaHistoricoMovimentacoes()">
                 <i>📜</i><span>HISTÓRICO</span>
             </button>
         `;
@@ -293,7 +293,7 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="telaSolicitarUniforme()">
                 <i>👕</i><span>SOLICITAR UNIFORMES</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="telaDevolucaoUniforme()">
+            <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaDevolucaoUniforme()">
                 <i>🔄</i><span>DEVOLVER UNIFORMES</span>
             </button>
             <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaSolicitarServicoImpressora('recarga')">
@@ -325,13 +325,13 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="telaVisualizarEstoque()">
                 <i>🔍</i><span>VISUALIZAR ESTOQUE</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="telaInventarioLocal()">
+            <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaInventarioLocal()">
                 <i>🏷️</i><span>INVENTÁRIO PATRIMÔNIO</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()">
                 <i>📈</i><span>PAINEL DE PEDIDOS</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="telaHistoricoMovimentacoes()">
+            <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaHistoricoMovimentacoes()">
                 <i>📜</i><span>HISTÓRICO</span>
             </button>
 
@@ -361,19 +361,19 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()">
                 <i>📈</i><span>PAINEL DE PEDIDOS</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="telaHistoricoMovimentacoes()">
+            <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaHistoricoMovimentacoes()">
                 <i>📜</i><span>HISTÓRICO</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="telaEntradaPatrimonioLote()">
+            <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaEntradaPatrimonioLote()">
                 <i>🏷️</i><span>LANÇAR ENTRADA PATRIMÔNIO</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="telaGerenciarPatrimonio()">
+            <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaGerenciarPatrimonio()">
                 <i>🏷️</i><span>CONSULTAR / MOVER PATRIMÔNIO</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="abrirModalBaixa(patrimonioId, produtoId, numeroSerie)">
+            <button class="btn-grande btn-vidro btn-breve" onclick="abrirModalBaixa(patrimonioId, produtoId, numeroSerie)">
                 <i>🏷️</i><span>BAIXAR PATRIMÔNIO (INSERVÍVEL)</span>
             </button> 
-            <button class="btn-grande btn-vidro" onclick="telaResumoBaixasAnual()">
+            <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaResumoBaixasAnual()">
                 <i>🏷️</i><span>RELATÓRIO ANUAL BAIXA DE PATRIMÔNIO</span>
             </button> 
             <button class="btn-grande btn-vidro" onclick="abrirCalculadoraConversao()">
@@ -487,26 +487,30 @@ function filtrarEstoque() {
         <table style="width:100%; border-collapse:collapse; color:white;">
             <thead>
                 <tr style="background:rgba(255,255,255,0.1);">
-                    <th style="padding:15px; text-align:left;">PRODUTO</th>
-                    <th style="padding:15px; text-align:center;">SALDO REAL</th>
-                    <th style="padding:15px; text-align:center;">STATUS</th>
+                    <th style="padding:15px; text-align:left; font-size:0.8rem;">PRODUTO</th>
+                    <th style="padding:15px; text-align:center; font-size:0.8rem;">SALDO REAL</th>
+                    <th style="padding:15px; text-align:center; font-size:0.8rem;">STATUS</th>
                 </tr>
             </thead>
             <tbody>
                 ${produtosExibidos.map(p => {
-                    const status = Number(p.quantidade_estoque) <= Number(p.alerta_minimo) 
-                        ? '<span style="color:#f87171; font-weight:bold;">🔴 CRÍTICO</span>' 
-                        : '<span style="color:#4ade80; font-weight:bold;">🟢 OK</span>';
+                    // Garantimos que os valores sejam tratados como números para a comparação
+                    const saldo = Number(p.quantidade_estoque) || 0;
+                    const minimo = Number(p.alerta_minimo) || 0;
+
+                    const status = saldo <= minimo 
+                        ? '<span style="color:#f87171; font-weight:bold; font-size:0.75rem;">🔴 CRÍTICO</span>' 
+                        : '<span style="color:#4ade80; font-weight:bold; font-size:0.75rem;">🟢 OK</span>';
                     
                     return `
-                        <tr style="border-bottom:1px solid rgba(255,255,255,0.1);">
-                            <td style="padding:15px; font-weight:500;">${p.nome}</td>
+                        <tr style="border-bottom:1px solid rgba(255,255,255,0.1); transition: 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
+                            <td style="padding:15px; font-weight:500; font-size:0.9rem;">${p.nome}</td>
                             <td style="padding:15px; text-align:center;">
                                 ${p.tipo === 'UNIFORMES' ? 
-                                    `<button onclick="abrirModalGrade(${p.id}, '${p.nome}')" class="btn-sair-vidro" style="background:rgba(59,130,246,0.3); border:1px solid #3b82f6; font-size:0.8rem;">
-                                        🔍 ${p.quantidade_estoque} (GRADE)
-                                     </button>` : 
-                                    `<strong style="font-size:1.1rem;">${p.quantidade_estoque}</strong>`
+                                    `<button onclick="abrirModalGrade(${p.id}, '${p.nome}')" class="btn-sair-vidro" style="background:rgba(59,130,246,0.3); border:1px solid #3b82f6; font-size:0.75rem; padding: 5px 12px; cursor:pointer; width: auto; height: auto; margin: 0;">
+                                        🔍 ${saldo} (GRADE)
+                                    </button>` : 
+                                    `<strong style="font-size:1.1rem; color: #fbbf24;">${saldo}</strong> <small style="color:#94a3b8; font-size:0.7rem;">unid.</small>`
                                 }
                             </td>
                             <td style="padding:15px; text-align:center;">${status}</td>

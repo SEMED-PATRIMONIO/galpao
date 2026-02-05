@@ -5355,13 +5355,13 @@ async function telaSolicitarUniforme() {
         });
         const produtos = await res.json();
 
-        const tituloTela = "👕 NOVA SOLICITAÇÃO DE UNIFORMES";
+        const tituloTela = "👕 SOLICITAÇÃO DE UNIFORMES";
 
         container.innerHTML = `
             <div style="padding:20px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1px solid #ddd; padding-bottom:10px;">
-                    <h2 style="color:#1e3a8a; margin:0;">${tituloTela}</h2>
-                    <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer; font-weight:bold;">⬅️ VOLTAR</button>
+                <div class="painel-usuario-vidro" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; padding: 15px; border-radius: 10px;">
+                    <h2 style="color:white; margin:0;">${tituloTela}</h2>
+                    <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background:#475569; width:100px; margin:0;">⬅️ VOLTAR</button>
                 </div>
                 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">

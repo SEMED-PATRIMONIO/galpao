@@ -433,14 +433,8 @@ async function telaVisualizarEstoque() {
                 <div class="container-busca-estoque">
                     <span class="icone-lupa-busca">🔍</span>
                     <input type="text" id="busca-produto" class="input-busca-vidro" 
-                           placeholder="Pesquisar produto nesta categoria..." 
+                           placeholder="Pesquisar produto..." 
                            oninput="filtrarEstoque()">
-                </div>
-
-                <div class="container-abas">
-                    <div class="aba-item ativa" id="tab-UNIFORMES" onclick="mudarAba('UNIFORMES')">UNIFORMES</div>
-                    <div class="aba-item" id="tab-MATERIAL" onclick="mudarAba('MATERIAL')">MATERIAL</div>
-                    <div class="aba-item" id="tab-PATRIMONIO" onclick="mudarAba('PATRIMONIO')">PATRIMÔNIO</div>
                 </div>
 
                 <div id="conteudo-estoque" class="painel-vidro" style="padding:0; overflow:hidden;"></div>
@@ -465,12 +459,14 @@ async function telaVisualizarEstoque() {
 function mudarAba(novaCategoria) {
     categoriaAtual = novaCategoria;
     
-    // Atualiza visual das abas
+    // Atualiza visual das abas (apenas se elas existirem na tela)
     document.querySelectorAll('.aba-item').forEach(aba => aba.classList.remove('ativa'));
-    document.getElementById(`tab-${novaCategoria}`).classList.add('ativa');
+    const aba = document.getElementById(`tab-${novaCategoria}`);
+    if (aba) aba.classList.add('ativa');
 
-    // Limpa o campo de busca ao trocar de categoria para não confundir o usuário
-    document.getElementById('busca-produto').value = '';
+    // Limpa o campo de busca
+    const busca = document.getElementById('busca-produto');
+    if (busca) busca.value = '';
     
     filtrarEstoque();
 }

@@ -449,7 +449,7 @@ async function telaVisualizarEstoque() {
             </div>
         `;
 
-        // Mantemos esta chamada para que ele carregue os UNIFORMES automaticamente ao abrir
+        // Isso garante que ele carregue os UNIFORMES automaticamente sem precisar clicar em nada
         mudarAba('UNIFORMES');
 
     } catch (err) {

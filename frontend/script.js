@@ -414,51 +414,40 @@ async function carregarDashboard() {
 }
 
 async function telaVisualizarEstoque() {
-    const container = document.getElementById('app-content');
-    container.innerHTML = '<div style="padding:20px; color:white; text-align:center;">🔄 SINCRONIZANDO SALDOS DE ESTOQUE...</div>';
+    const app = prepararContainerPrincipal();
+    
+    // Forçamos a categoria para UNIFORMES e limpamos a busca
+    categoriaAtual = 'UNIFORMES'; 
+    
+    app.innerHTML = `
+        <div class="painel-vidro" style="max-width: 1000px; margin: auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background:#475569; width:100px;">⬅️ VOLTAR</button>
+                <h2 style="color:white; margin:0; font-size:1.3rem;">👕 ESTOQUE DE UNIFORMES</h2>
+                <div style="width:100px;"></div>
+            </div>
+
+            <div style="margin-bottom:20px;">
+                <input type="text" id="busca-produto" oninput="filtrarEstoque()" placeholder="Pesquisar uniforme..." class="input-vidro" style="width:100%;">
+            </div>
+
+            <div id="conteudo-estoque" style="background:rgba(0,0,0,0.2); border-radius:10px; min-height:200px;">
+                <div style="padding:40px; text-align:center; color:white;">Sincronizando grade...</div>
+            </div>
+        </div>
+    `;
 
     try {
-        const res = await fetch(`${API_URL}/estoque/geral`, {
+        // Busca os dados (mantendo sua lógica original que já funciona)
+        const res = await fetch(`${API_URL}/estoque/central`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
         dadosEstoqueCache = await res.json();
-
-        container.innerHTML = `
-            <div style="padding:20px;">
-                <div class="painel-usuario-vidro" style="position:relative; width:100%; top:0; right:0; margin-bottom:25px; display:flex; justify-content:space-between; align-items:center;">
-                    <h2 style="color:white; margin:0; font-size:1.2rem;">📊 GESTÃO DE ESTOQUE REAL</h2>
-                    <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background:#64748b;">⬅️ VOLTAR</button>
-                </div>
-
-                <div class="container-busca-estoque">
-                    <span class="icone-lupa-busca">🔍</span>
-                    <input type="text" id="busca-produto" class="input-busca-vidro" 
-                           placeholder="Pesquisar produto nesta categoria..." 
-                           oninput="filtrarEstoque()">
-                </div>
-
-                <div class="container-abas">
-                    <div class="aba-item ativa" id="tab-UNIFORMES" onclick="mudarAba('UNIFORMES')">UNIFORMES</div>
-                    <div class="aba-item" id="tab-MATERIAL" onclick="mudarAba('MATERIAL')">MATERIAL</div>
-                    <div class="aba-item" id="tab-PATRIMONIO" onclick="mudarAba('PATRIMONIO')">PATRIMÔNIO</div>
-                </div>
-
-                <div id="conteudo-estoque" class="painel-vidro" style="padding:0; overflow:hidden;"></div>
-            </div>
-
-            <div id="modalGrade" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:9999; justify-content:center; align-items:center; backdrop-filter: blur(8px);">
-                <div class="painel-vidro" style="width:95%; max-width:450px; background:white;">
-                    <h3 id="modalTitulo" style="margin-top:0; color:#1e3a8a; border-bottom:2px solid #f1f5f9; padding-bottom:15px; text-align:center;"></h3>
-                    <div id="modalCorpo" style="margin:25px 0; display:grid; grid-template-columns:repeat(3, 1fr); gap:15px; color: #1e3a8a;"></div>
-                    <button onclick="document.getElementById('modalGrade').style.display='none'" class="btn-sair-vidro" style="width:100%; background:#ef4444;">FECHAR VISUALIZAÇÃO</button>
-                </div>
-            </div>
-        `;
-
-        mudarAba('UNIFORMES');
-
+        
+        // Chama o filtro para renderizar a tabela imediatamente
+        filtrarEstoque();
     } catch (err) {
-        container.innerHTML = "<div class='painel-vidro' style='color:#f87171;'>🚨 Erro ao carregar estoque.</div>";
+        console.error("Erro ao carregar uniformes:", err);
     }
 }
 

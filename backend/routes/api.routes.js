@@ -2923,4 +2923,23 @@ router.get('/estoque/historico/detalhes/:id', verificarToken, async (req, res) =
     }
 });
 
+router.get('/admin/dashboard/stats', verificarToken, async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                COUNT(*) FILTER (WHERE status = 'SOLICITADO') as qtd_solicitado,
+                COUNT(*) FILTER (WHERE status = 'AUTORIZADO') as qtd_autorizado,
+                COUNT(*) FILTER (WHERE status = 'EM SEPARAÇÃO') as qtd_separacao,
+                COUNT(*) FILTER (WHERE status = 'PRONTO') as qtd_pronto,
+                COUNT(*) FILTER (WHERE status = 'EM_TRANSPORTE') as qtd_transporte,
+                COUNT(*) FILTER (WHERE status = 'ENTREGUE') as qtd_entregue
+            FROM pedidos;
+        `;
+        const { rows } = await db.query(query);
+        res.json(rows[0]);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao carregar estatísticas do dashboard." });
+    }
+});
+
 module.exports = router;

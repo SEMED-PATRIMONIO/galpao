@@ -5345,7 +5345,8 @@ let carrinhoSolicitacao = [];
 
 async function telaSolicitarUniforme() {
     const container = prepararContainerPrincipal();
-    container.innerHTML = '<div style="padding:20px; color:white; text-align:center;">Carregando produtos...</div>';
+    container.innerHTML = '<div style="padding:20px; color:white; text-align:center;">🔄 Carregando produtos...</div>';
+    
     carrinhoSolicitacao = [];
 
     try {
@@ -5356,38 +5357,55 @@ async function telaSolicitarUniforme() {
         const tituloTela = "👕 SOLICITAÇÃO DE UNIFORMES";
 
         container.innerHTML = `
-            <div class="painel-vidro" style="max-width: 1200px; margin: auto; padding: 20px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                    <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background:#475569; width:100px; margin:0;">⬅️ VOLTAR</button>
-                    <h2 style="color:white; margin:0; font-size:1.3rem;">${tituloTela}</h2>
+            <div class="painel-vidro" style="max-width: 1200px; margin: auto; padding: 25px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:25px;">
+                    <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background:#475569; width:100px; margin:0; border-radius: 8px;">⬅️ VOLTAR</button>
+                    <h2 style="color:white; margin:0; font-size:1.3rem; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);">${tituloTela}</h2>
                     <div style="width:100px;"></div>
                 </div>
                 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                    <div style="background:rgba(255,255,255,0.1); padding:20px; border-radius:10px; color:white;">
-                        <h3 style="margin-top:0;">Adicionar Item</h3>
-                        <label style="display:block; margin-bottom:5px;">PRODUTO:</label>
-                        <select id="solicitar_produto_id" onchange="configurarGradeTamanhosDinamicamente()" class="input-vidro" style="width:100%; margin-bottom:15px;">
+                    <div style="background: rgba(255, 255, 255, 0.2); padding:20px; border-radius:10px; height: fit-content; color: #1e3a8a; border: 1px solid rgba(255,255,255,0.2);">
+                        <h3 style="margin-top:0; color:#1e3a8a; border-bottom: 1px solid rgba(30, 58, 138, 0.2); padding-bottom:10px;">Adicionar Item</h3>
+                        
+                        <label style="display:block; margin-top:15px; font-weight:bold;">PRODUTO:</label>
+                        <select id="solicitar_produto_id" onchange="configurarGradeTamanhosDinamicamente()" style="width:100%; padding:10px; margin-bottom:15px; border-radius:5px; border:1px solid #1e3a8a; background:white;">
                             ${produtos.map(p => `<option value="${p.id}">${p.nome}</option>`).join('')}
                         </select>
-                        <label style="display:block; margin-bottom:5px;">TAMANHO:</label>
-                        <select id="solicitar_tamanho" class="input-vidro" style="width:100%; margin-bottom:15px;"></select>
-                        <label style="display:block; margin-bottom:5px;">QUANTIDADE:</label>
-                        <input type="number" id="solicitar_qtd" value="1" min="1" class="input-vidro" style="width:100%; margin-bottom:15px;">
-                        <button onclick="adicionarAoCarrinhoSolicitacao()" class="btn-vidro" style="width:100%; background:#10b981;">➕ ADICIONAR À LISTA</button>
+
+                        <label style="display:block; font-weight:bold;">TAMANHO:</label>
+                        <select id="solicitar_tamanho" style="width:100%; padding:10px; margin-bottom:15px; border-radius:5px; border:1px solid #1e3a8a; background:white;">
+                            <option>P</option><option>M</option><option>G</option><option>GG</option>
+                        </select>
+
+                        <label style="display:block; font-weight:bold;">QUANTIDADE:</label>
+                        <input type="number" id="solicitar_qtd" value="1" min="1" style="width:100%; padding:10px; margin-bottom:15px; border-radius:5px; border:1px solid #1e3a8a; background:white;">
+
+                        <button onclick="adicionarAoCarrinhoSolicitacao()" style="width:100%; padding:12px; background:#10b981; color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer;">
+                            ➕ ADICIONAR À LISTA
+                        </button>
                     </div>
 
-                    <div style="background:rgba(255,255,255,0.1); padding:20px; border-radius:10px; color:white;">
-                        <h3 style="margin-top:0;">Itens na Solicitação</h3>
-                        <div id="lista_carrinho_solicitacao" style="min-height:100px;">Nenhum item adicionado ainda.</div>
-                        <hr style="border:0; border-top:1px solid rgba(255,255,255,0.1); margin:20px 0;">
-                        <button id="btnEnviarSolicitacao" onclick="enviarPedidoEscola('SOLICITACAO')" disabled class="btn-vidro" style="width:100%; background:#1e40af; opacity:0.5;">🚀 ENVIAR SOLICITAÇÃO COMPLETA</button>
+                    <div style="background: rgba(255, 255, 255, 0.2); padding:20px; border-radius:10px; color: #1e3a8a; border: 1px solid rgba(255,255,255,0.2);">
+                        <h3 style="margin-top:0; color:#1e3a8a; border-bottom: 1px solid rgba(30, 58, 138, 0.2); padding-bottom:10px;">Itens na Solicitação</h3>
+                        <div id="lista_carrinho_solicitacao" style="margin-top:15px;">
+                            <p style="color:#1e3a8a; font-weight:500;">Nenhum item adicionado ainda.</p>
+                        </div>
+                        <hr style="border:0; border-top:1px solid rgba(30, 58, 138, 0.2); margin:20px 0;">
+                        <button id="btnEnviarSolicitacao" onclick="enviarPedidoEscola('SOLICITACAO')" disabled style="width:100%; padding:15px; background:#1e40af; color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer; opacity:0.5;">
+                            🚀 ENVIAR SOLICITAÇÃO COMPLETA
+                        </button>
                     </div>
                 </div>
             </div>
         `;
+
         configurarGradeTamanhosDinamicamente();
-    } catch (e) { console.error(e); }
+
+    } catch (e) { 
+        console.error(e);
+        alert("Erro ao carregar formulário de solicitação."); 
+    }
 }
 
 function configurarGradeTamanhosDinamicamente() {

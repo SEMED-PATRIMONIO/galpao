@@ -9510,43 +9510,106 @@ async function executarBuscaPatrimonio() {
 
 async function telaHistoricoMovimentacoes() {
     const container = document.getElementById('app-content');
-    container.innerHTML = '<div class="painel-vidro">🔍 Sincronizando logs e usuários...</div>';
+    container.innerHTML = '<div class="painel-vidro">🔍 Carregando registros de auditoria...</div>';
 
     try {
-        // Carrega logs e lista de usuários para o filtro
-        const [resHist, resUsers] = await Promise.all([
-            fetch(`${API_URL}/estoque/historico-movimentacoes`, { headers: { 'Authorization': `Bearer ${TOKEN}` } }),
-            fetch(`${API_URL}/usuarios/lista`, { headers: { 'Authorization': `Bearer ${TOKEN}` } })
-        ]);
-
-        const historico = await resHist.json();
-        const usuarios = await resUsers.json();
+        const res = await fetch(`${API_URL}/estoque/historico/lista`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const historico = await res.json();
 
         container.innerHTML = `
-            <div style="padding:20px;">
-                <div class="painel-usuario-vidro" style="position:relative; width:100%; top:0; right:0; margin-bottom:25px; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:15px;">
-                    <h2 style="color:white; margin:0;">📜 LOGS DE ESTOQUE</h2>
+            <div class="painel-vidro" style="max-width: 1000px; margin: auto;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
                     <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background:#475569; width:100px;">⬅️ VOLTAR</button>
-                    <div style="display:flex; gap:10px; flex-wrap:wrap;">
-                        <select id="filtro-user-log" class="input-vidro" onchange="atualizarTabelaLogs()" style="min-width:180px;">
-                            <option value="TODOS">TODOS OS USUÁRIOS</option>
-                            ${usuarios.map(u => `<option value="${u.id}">${u.nome.toUpperCase()}</option>`).join('')}
-                        </select>
-
-                        <button onclick="exportarLogsExcel()" class="btn-sair-vidro" style="background:#059669;" title="Exportar Excel">📊 EXCEL</button>
-                        <button onclick="exportarLogsPDF()" class="btn-sair-vidro" style="background:#dc2626;" title="Salvar PDF">📄 PDF</button>
-                        <button onclick="compartilharLogsPDF()" class="btn-sair-vidro" style="background:#3b82f6;" title="Compartilhar">🔗 ENVIAR</button>
-                    </div>
+                    <h2 style="color:white; margin:0; font-size:1.3rem;">📜 AUDITORIA DE MOVIMENTAÇÕES</h2>
+                    <div style="width:100px;"></div>
                 </div>
 
-                <div id="area-tabela-logs" class="painel-vidro" style="padding:0; overflow:hidden;">
-                    ${renderizarLinhasLog(historico)}
+                <div style="background:rgba(0,0,0,0.2); border-radius:10px; overflow:hidden;">
+                    <table style="width:100%; border-collapse: collapse; color:white; font-size:0.85rem;">
+                        <thead style="background:rgba(255,255,255,0.1);">
+                            <tr>
+                                <th style="padding:15px; text-align:left;">DATA/HORA</th>
+                                <th style="padding:15px; text-align:left;">AÇÃO / TIPO</th>
+                                <th style="padding:15px; text-align:center;">QTD</th>
+                                <th style="padding:15px; text-align:left;">LOCAL / ORIGEM</th>
+                                <th style="padding:15px; text-align:left;">RESPONSÁVEL</th>
+                                <th style="padding:15px; text-align:center;">AÇÕES</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${historico.map(h => `
+                                <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                                    <td style="padding:12px 15px;">${new Date(h.data).toLocaleString('pt-BR')}</td>
+                                    <td style="padding:12px 15px;">
+                                        <b style="color:${h.tipo === 'ENTRADA' ? '#4ade80' : '#f87171'};">${h.tipo}</b><br>
+                                        <span style="font-size:0.75rem; opacity:0.7;">${h.acao}</span>
+                                    </td>
+                                    <td style="padding:12px 15px; text-align:center; font-weight:bold;">${h.quantidade_total}</td>
+                                    <td style="padding:12px 15px;">${h.local_nome || 'ESTOQUE CENTRAL'}</td>
+                                    <td style="padding:12px 15px; font-size:0.75rem;">${h.usuario_nome}</td>
+                                    <td style="padding:12px 15px; text-align:center;">
+                                        <button onclick="abrirDetalhesHistorico(${h.id}, '${h.observacoes || ''}')" 
+                                                class="btn-vidro" style="padding:5px 10px; font-size:0.7rem; background:#1e40af;">🔍 DETALHES</button>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
                 </div>
             </div>
+            <div id="modal-detalhes-hist" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:2000; justify-content:center; align-items:center; backdrop-filter:blur(10px);"></div>
         `;
-    } catch (err) {
-        alert("Erro ao carregar o histórico.");
-    }
+    } catch (err) { console.error(err); }
+}
+
+async function abrirDetalhesHistorico(id, obs) {
+    const modal = document.getElementById('modal-detalhes-hist');
+    modal.style.display = 'flex';
+    modal.innerHTML = '<div style="color:white;">Carregando itens...</div>';
+
+    try {
+        const res = await fetch(`${API_URL}/estoque/historico/detalhes/${id}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const itens = await res.json();
+
+        modal.innerHTML = `
+            <div class="painel-vidro" style="max-width: 700px; width: 90%;">
+                <h3 style="color:white; margin-top:0; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:10px;">📦 Detalhes da Movimentação #${id}</h3>
+                
+                <div style="background:rgba(0,0,0,0.2); border-radius:8px; margin:15px 0; overflow:hidden;">
+                    <table style="width:100%; border-collapse: collapse; color:white; font-size:0.85rem;">
+                        <thead style="background:rgba(255,255,255,0.1);">
+                            <tr>
+                                <th style="padding:10px; text-align:left;">PRODUTO</th>
+                                <th style="padding:10px; text-align:center;">TAMANHO</th>
+                                <th style="padding:10px; text-align:center;">QUANTIDADE</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${itens.map(i => `
+                                <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                                    <td style="padding:8px 10px;">${i.produto_nome}</td>
+                                    <td style="padding:8px 10px; text-align:center;">${i.tamanho || '---'}</td>
+                                    <td style="padding:8px 10px; text-align:center; font-weight:bold;">${i.quantidade}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div style="color:rgba(255,255,255,0.8); font-size:0.85rem; margin-bottom:20px;">
+                    <b>📝 Observações:</b><br>
+                    ${obs || 'Nenhuma observação registrada.'}
+                </div>
+
+                <button onclick="document.getElementById('modal-detalhes-hist').style.display='none'" 
+                        class="btn-vidro" style="width:100%; background:#475569;">FECHAR DETALHES</button>
+            </div>
+        `;
+    } catch (err) { modal.innerHTML = "Erro ao carregar detalhes."; }
 }
 
 function renderizarLinhasLog(dados) {

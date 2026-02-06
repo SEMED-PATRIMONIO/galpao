@@ -334,7 +334,7 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="telaInventarioLocal()">
                 <i>🏷️</i><span>INVENTÁRIO PATRIMÔNIO</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()">
+            <button class="btn-grande btn-vidro btn-breve" // ---onclick="telaAdminDashboard()">
                 <i>📈</i><span>PAINEL DE PEDIDOS</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="telaHistoricoMovimentacoes()">
@@ -367,13 +367,13 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" style="background:rgba(16, 185, 129, 0.2);" onclick="telaEstoqueMateriaisEPatrimonios()">
                 <i>📦</i><span>VER ESTOQUE DE MATERIAIS</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()">
+            <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaAdminDashboard()">
                 <i>📈</i><span>PAINEL DE PEDIDOS</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="telaHistoricoMovimentacoes()">
                 <i>📜</i><span>HISTÓRICO</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="telaEntradaPatrimonioLote()">
+            <button class="btn-grande btn-vidro btn-breve" //  --- onclick="telaEntradaPatrimonioLote()">
                 <i>🏷️</i><span>LANÇAR ENTRADA PATRIMÔNIO</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="telaGerenciarPatrimonio()">

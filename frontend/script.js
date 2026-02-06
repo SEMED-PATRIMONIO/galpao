@@ -8035,36 +8035,51 @@ async function imprimirRomaneio(remessaId) {
 
 async function telaAdminDashboard() {
     const container = document.getElementById('app-content');
-    container.innerHTML = '<div style="text-align:center; padding:50px;">🔄 Sincronizando fluxo logístico...</div>';
+    container.innerHTML = '<div style="text-align:center; padding:50px; color: white;">🔄 Sincronizando fluxo logístico...</div>';
 
     try {
         const res = await fetch(`${API_URL}/admin/dashboard/stats`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
+        
+        // Verifica se o servidor retornou erro antes de tentar converter para JSON
+        if (!res.ok) throw new Error("Rota não encontrada no servidor.");
         const s = await res.json();
 
         container.innerHTML = `
-            <div style="padding:20px;">
-                <h2 style="text-align:center; color:#1e3a8a; margin-bottom:30px;">🔄 CICLO DE ATENDIMENTO SEMED</h2>
-                <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background:#475569; width:100px;">⬅️ VOLTAR</button>
-                <div class="fluxo-container">
-                    ${renderCirculo('SOLICITADO', s.qtd_solicitado, '📩', '#ef4444')}
-                    ${renderCirculo('AUTORIZADO', s.qtd_autorizado, '⚖️', '#f59e0b')}
-                    ${renderCirculo('EM SEPARAÇÃO', s.qtd_separacao, '📦', '#8b5cf6')}
-                    ${renderCirculo('PRONTO', s.qtd_pronto, '✅', '#3b82f6')}
-                    ${renderCirculo('EM_TRANSPORTE', s.qtd_transporte, '🚚', '#06b6d4')}
-                    ${renderCirculo('ENTREGUE', s.qtd_entregue, '🏠', '#10b981')}
+            <div class="painel-vidro" style="max-width: 1100px; margin: auto;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                    <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background:#475569; width:100px;">⬅️ VOLTAR</button>
+                    <h2 style="color:white; margin:0; font-size:1.3rem;">🔄 CICLO DE ATENDIMENTO SEMED</h2>
+                    <div style="width:100px;"></div>
                 </div>
 
-                <div id="detalhes-dashboard" style="margin-top:40px; background:white; border-radius:15px; padding:25px; box-shadow:0 10px 25px rgba(0,0,0,0.05); min-height:300px;">
-                    <h3 id="titulo-fase" style="color:#1e3a8a; border-bottom:2px solid #f1f5f9; padding-bottom:10px;">📊 Detalhes da Operação</h3>
-                    <div id="lista-fase-conteudo" style="margin-top:15px;">
-                        <p style="text-align:center; color:#94a3b8;">Clique em uma fase do círculo para investigar os pedidos.</p>
+                <div style="background:rgba(0,0,0,0.2); border-radius:10px; padding: 30px;">
+                    <div class="fluxo-container" style="display: flex; justify-content: space-around; flex-wrap: wrap; gap: 15px;">
+                        ${renderCirculo('SOLICITADO', s.qtd_solicitado || 0, '📩', '#ef4444')}
+                        ${renderCirculo('AUTORIZADO', s.qtd_autorizado || 0, '⚖️', '#f59e0b')}
+                        ${renderCirculo('EM SEPARAÇÃO', s.qtd_separacao || 0, '📦', '#8b5cf6')}
+                        ${renderCirculo('PRONTO', s.qtd_pronto || 0, '✅', '#3b82f6')}
+                        ${renderCirculo('EM_TRANSPORTE', s.qtd_transporte || 0, '🚚', '#06b6d4')}
+                        ${renderCirculo('ENTREGUE', s.qtd_entregue || 0, '🏠', '#10b981')}
+                    </div>
+
+                    <div id="detalhes-dashboard" style="margin-top:40px; background:rgba(255,255,255,0.05); border-radius:15px; padding:25px; border: 1px solid rgba(255,255,255,0.1); min-height:300px; color: white;">
+                        <h3 id="titulo-fase" style="color:white; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:10px; font-size: 1.1rem;">📊 Detalhes da Operação</h3>
+                        <div id="lista-fase-conteudo" style="margin-top:15px;">
+                            <p style="text-align:center; opacity: 0.6;">Clique em uma fase do círculo para investigar os pedidos.</p>
+                        </div>
                     </div>
                 </div>
             </div>
         `;
-    } catch (err) { console.error(err); }
+    } catch (err) { 
+        console.error(err);
+        // Usa a nova função de alerta que criamos
+        if (typeof alertaVidro === 'function') {
+            alertaVidro("Erro ao carregar dashboard. Verifique se a rota foi adicionada ao servidor.", "erro");
+        }
+    }
 }
 
 function renderCirculo(fase, qtd, icone, cor) {

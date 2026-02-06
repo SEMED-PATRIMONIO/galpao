@@ -2936,9 +2936,9 @@ router.get('/admin/dashboard/stats', verificarToken, async (req, res) => {
             FROM pedidos;
         `;
         const { rows } = await db.query(query);
-        res.json(rows[0]);
+        res.json(rows[0]); // Retorna o objeto com as contagens
     } catch (err) {
-        res.status(500).json({ error: "Erro ao carregar estatísticas do dashboard." });
+        res.status(500).json({ error: "Erro ao processar estatísticas." });
     }
 });
 

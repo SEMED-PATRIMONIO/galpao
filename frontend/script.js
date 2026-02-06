@@ -5379,12 +5379,10 @@ async function telaSolicitarUniforme() {
                                 ${produtos.map(p => `<option value="${p.id}" style="background:#1e3a8a;">${p.nome}</option>`).join('')}
                             </select>
 
-                            <label style="display:block; font-weight:bold; font-size:0.85rem;">TAMANHO:</label>
-                            <select id="solicitar_tamanho" class="input-busca-vidro" style="width:100%; margin-bottom:15px; background: rgba(255,255,255,0.1); color: white;">
-                                <option style="background:#1e3a8a;">P</option>
-                                <option style="background:#1e3a8a;">M</option>
-                                <option style="background:#1e3a8a;">G</option>
-                                <option style="background:#1e3a8a;">GG</option>
+                            <label style="display:block; font-weight:bold; font-size:0.85rem; color: #94a3b8;">TAMANHO:</label>
+                            <select id="solicitar_tamanho" class="input-busca-vidro" 
+                                    style="width:100%; margin-bottom:15px; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2);">
+                                <option value="" style="background:#1e3a8a; color: white;">Aguardando produto...</option>
                             </select>
 
                             <label style="display:block; font-weight:bold; font-size:0.85rem;">QUANTIDADE:</label>

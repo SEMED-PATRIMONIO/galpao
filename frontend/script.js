@@ -5365,40 +5365,39 @@ async function telaSolicitarUniforme() {
                 </div>
                 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                    <div style="background:white; padding:20px; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.1); height: fit-content;">
-                        <h3 style="margin-top:0;">Adicionar Item</h3>
-                        <label>PRODUTO:</label>
-                        <select id="solicitar_produto_id" onchange="configurarGradeTamanhosDinamicamente()" style="width:100%; padding:10px; margin-bottom:15px;">
+                    <div class="painel-vidro" style="padding:20px; border-radius:8px; height: fit-content; color: white;">
+                        <h3 style="margin-top:0; color: white;">Adicionar Item</h3>
+                        <label style="display:block; margin-bottom:5px;">PRODUTO:</label>
+                        <select id="solicitar_produto_id" onchange="configurarGradeTamanhosDinamicamente()" class="input-vidro" style="width:100%; margin-bottom:15px;">
                             ${produtos.map(p => `<option value="${p.id}">${p.nome}</option>`).join('')}
                         </select>
 
-                        <label>TAMANHO:</label>
-                        <select id="solicitar_tamanho" style="width:100%; padding:10px; margin-bottom:15px;">
+                        <label style="display:block; margin-bottom:5px;">TAMANHO:</label>
+                        <select id="solicitar_tamanho" class="input-vidro" style="width:100%; margin-bottom:15px;">
                             <option>P</option><option>M</option><option>G</option><option>GG</option>
                         </select>
 
-                        <label>QUANTIDADE:</label>
-                        <input type="number" id="solicitar_qtd" value="1" min="1" style="width:100%; padding:10px; margin-bottom:15px;">
+                        <label style="display:block; margin-bottom:5px;">QUANTIDADE:</label>
+                        <input type="number" id="solicitar_qtd" value="1" min="1" class="input-vidro" style="width:100%; margin-bottom:15px;">
 
-                        <button onclick="adicionarAoCarrinhoSolicitacao()" style="width:100%; padding:12px; background:#10b981; color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">
+                        <button onclick="adicionarAoCarrinhoSolicitacao()" class="btn-vidro" style="width:100%; background:#10b981; margin-top: 10px;">
                             ➕ ADICIONAR À LISTA
                         </button>
                     </div>
 
-                    <div style="background:white; padding:20px; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.1);">
-                        <h3 style="margin-top:0;">Itens na Solicitação</h3>
+                    <div class="painel-vidro" style="padding:20px; border-radius:8px; color: white;">
+                        <h3 style="margin-top:0; color: white;">Itens na Solicitação</h3>
                         <div id="lista_carrinho_solicitacao">
-                            <p style="color:#666;">Nenhum item adicionado ainda.</p>
+                            <p style="color:rgba(255,255,255,0.7);">Nenhum item adicionado ainda.</p>
                         </div>
-                        <hr style="border:0; border-top:1px solid #eee; margin:20px 0;">
-                        <button id="btnEnviarSolicitacao" onclick="enviarPedidoEscola('SOLICITACAO')" disabled style="width:100%; padding:15px; background:#1e40af; color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer; opacity:0.5;">
+                        <hr style="border:0; border-top:1px solid rgba(255,255,255,0.2); margin:20px 0;">
+                        <button id="btnEnviarSolicitacao" onclick="enviarPedidoEscola('SOLICITACAO')" disabled class="btn-vidro" style="width:100%; background:#1e40af; opacity:0.5;">
                             🚀 ENVIAR SOLICITAÇÃO COMPLETA
                         </button>
                     </div>
                 </div>
             </div>
         `;
-
         // ADICIONADO: Chama a função uma vez logo após carregar a tela para o primeiro item da lista
         configurarGradeTamanhosDinamicamente();
 
@@ -5426,7 +5425,7 @@ function configurarGradeTamanhosDinamicamente() {
         htmlTamanhos = gradeCalcado.map(t => `<option>${t}</option>`).join('');
     } else {
         // Grade Padrão de Vestuário (Roupas)
-        const gradeVestuario = ['PP', 'P', 'M', 'G', 'GG', '2', '4', '6', '8', '10', '12', '14', '16'];
+        const gradeVestuario = ['PP', 'P', 'M', 'G', 'GG', '02', '04', '06', '08', '10', '12', '14', '16'];
         htmlTamanhos = gradeVestuario.map(t => `<option>${t}</option>`).join('');
     }
 

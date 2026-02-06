@@ -2887,4 +2887,40 @@ router.get('/estoque/materiais-e-patrimonios', verificarToken, async (req, res) 
     }
 });
 
+router.get('/estoque/historico/lista', verificarToken, async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                h.id, h.data, h.acao, h.quantidade_total, h.tipo, h.observacoes,
+                u.nome as usuario_nome,
+                l.nome as local_nome
+            FROM historico h
+            LEFT JOIN usuarios u ON h.usuario_id = u.id
+            LEFT JOIN locais l ON h.local_id = l.id
+            ORDER BY h.data DESC LIMIT 100
+        `;
+        const { rows } = await db.query(query);
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao carregar lista de histórico." });
+    }
+});
+
+router.get('/estoque/historico/detalhes/:id', verificarToken, async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                hd.quantidade, hd.tamanho, hd.tipo_produto,
+                p.nome as produto_nome
+            FROM historico_detalhes hd
+            JOIN produtos p ON hd.produto_id = p.id
+            WHERE hd.historico_id = $1
+        `;
+        const { rows } = await db.query(query, [req.params.id]);
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao carregar detalhes do histórico." });
+    }
+});
+
 module.exports = router;

@@ -140,16 +140,26 @@ router.get('/pedidos/admin/pendentes', verificarToken, async (req, res) => {
 // DETALHES DO PEDIDO VS ESTOQUE ATUAL
 router.get('/pedidos/detalhes-estoque/:id', verificarToken, async (req, res) => {
     try {
-        const result = await db.query(`
+        const query = `
             SELECT 
-                ip.id as item_id, pr.nome as produto, ip.tamanho, ip.quantidade as solicitado,
-                COALESCE(eg.quantidade, 0) as em_estoque
+                p.nome as produto,
+                ip.tamanho,
+                ip.quantidade as solicitado,
+                -- O TRIM remove espaços que impedem o sistema de achar o estoque
+                CASE 
+                    WHEN p.tipo = 'UNIFORMES' THEN COALESCE(eg.quantidade, 0)
+                    ELSE COALESCE(p.quantidade_estoque, 0)
+                END as em_estoque
             FROM itens_pedido ip
-            JOIN produtos pr ON ip.produto_id = pr.id
-            LEFT JOIN estoque_grades eg ON (ip.produto_id = eg.produto_id AND ip.tamanho = eg.tamanho)
-            WHERE ip.pedido_id = $1`, [req.params.id]);
-        res.json(result.rows);
-    } catch (err) { res.status(500).json({ error: err.message }); }
+            JOIN produtos p ON ip.produto_id = p.id
+            LEFT JOIN estoque_grades eg ON (ip.produto_id = eg.produto_id AND TRIM(ip.tamanho) = TRIM(eg.tamanho))
+            WHERE ip.pedido_id = $1
+        `;
+        const { rows } = await db.query(query, [req.params.id]);
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao consultar estoque real." });
+    }
 });
 
 router.put('/pedidos/itens/atualizar', verificarToken, async (req, res) => {

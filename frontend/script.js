@@ -5344,7 +5344,7 @@ window.telaMovimentarPatrimonio = function() {
 let carrinhoSolicitacao = [];
 
 async function telaSolicitarUniforme() {
-    const container = prepararContainerPrincipal();
+    const container = document.getElementById('app-content');
     container.innerHTML = '<div style="padding:20px; color:white; text-align:center;">🔄 Carregando produtos...</div>';
     
     carrinhoSolicitacao = [];
@@ -5356,20 +5356,22 @@ async function telaSolicitarUniforme() {
         const produtos = await res.json();
         const tituloTela = "👕 SOLICITAÇÃO DE UNIFORMES";
 
+        // Seguindo EXATAMENTE a estrutura da sua função de Materiais
         container.innerHTML = `
             <div class="painel-vidro" style="max-width: 1000px; margin: auto;">
+                
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
                     <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background:#475569; width:100px;">⬅️ VOLTAR</button>
                     <h2 style="color:white; margin:0; font-size:1.3rem;">${tituloTela}</h2>
                     <div style="width:100px;"></div>
                 </div>
 
-                <div style="background:rgba(0,0,0,0.2); border-radius:10px; padding: 25px; color: white;">
+                <div style="background:rgba(0,0,0,0.2); border-radius:10px; padding: 30px; color: white;">
                     
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 40px;">
                         
                         <div>
-                            <h3 style="margin-top:0; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom:10px;">Adicionar Item</h3>
+                            <h3 style="margin-top:0; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom:10px; color: white;">Adicionar Item</h3>
                             
                             <label style="display:block; margin-top:15px; font-weight:bold; font-size:0.85rem;">PRODUTO:</label>
                             <select id="solicitar_produto_id" onchange="configurarGradeTamanhosDinamicamente()" 
@@ -5396,7 +5398,7 @@ async function telaSolicitarUniforme() {
                         </div>
 
                         <div style="border-left: 1px solid rgba(255,255,255,0.1); padding-left: 30px;">
-                            <h3 style="margin-top:0; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom:10px;">Itens na Solicitação</h3>
+                            <h3 style="margin-top:0; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom:10px; color: white;">Itens na Solicitação</h3>
                             <div id="lista_carrinho_solicitacao" style="margin-top:15px; min-height: 150px;">
                                 <p style="color:rgba(255,255,255,0.6);">Nenhum item adicionado ainda.</p>
                             </div>
@@ -5415,6 +5417,7 @@ async function telaSolicitarUniforme() {
 
     } catch (e) { 
         console.error(e);
+        alert("Erro ao carregar formulário.");
     }
 }
 

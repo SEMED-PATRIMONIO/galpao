@@ -5383,19 +5383,19 @@ async function telaSolicitarUniforme() {
                             
                             <label style="display:block; margin-top:15px; font-weight:bold; font-size:0.85rem;">PRODUTO:</label>
                             <select id="solicitar_produto_id" onchange="configurarGradeTamanhosDinamicamente()" 
-                                    class="input-busca-vidro" style="width:100%; margin-bottom:15px; background: rgba(255,255,255,0.1); color: white;">
+                                    class="input-vidro" style="width:100%; margin-bottom:15px; background: rgba(255,255,255,0.1); color: white;">
                                 ${produtos.map(p => `<option value="${p.id}" style="background:#1e3a8a;">${p.nome}</option>`).join('')}
                             </select>
 
-                            <label style="display:block; font-weight:bold; font-size:0.85rem; color: #94a3b8;">TAMANHO:</label>
-                            <select id="solicitar_tamanho" class="input-busca-vidro" 
-                                    style="width:100%; margin-bottom:15px; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2);">
+                            <label style="display:block; font-weight:bold; font-size:0.85rem;">TAMANHO:</label>
+                            <select id="solicitar_tamanho" class="input-vidro" 
+                                    style="width:100%; margin-bottom:15px; background: rgba(255,255,255,0.1); color: white;">
                                 <option value="" style="background:#1e3a8a; color: white;">Aguardando produto...</option>
                             </select>
 
                             <label style="display:block; font-weight:bold; font-size:0.85rem;">QUANTIDADE:</label>
                             <input type="number" id="solicitar_qtd" value="1" min="1" 
-                                   class="input-busca-vidro" style="width:100%; margin-bottom:15px; background: rgba(255,255,255,0.1); color: white;">
+                                   class="input-vidro" style="width:100%; margin-bottom:15px; background: rgba(255,255,255,0.1); color: white;">
 
                             <button onclick="adicionarAoCarrinhoSolicitacao()" 
                                     style="width:100%; padding:12px; background:#10b981; color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer;">
@@ -5445,7 +5445,7 @@ function configurarGradeTamanhosDinamicamente() {
         htmlTamanhos = gradeCalcado.map(t => `<option>${t}</option>`).join('');
     } else {
         // Grade Padrão de Vestuário (Roupas)
-        const gradeVestuario = ['PP', 'P', 'M', 'G', 'GG', '2', '4', '6', '8', '10', '12', '14', '16'];
+        const gradeVestuario = ['PP', 'P', 'M', 'G', 'GG', 'XGG', '2', '4', '6', '8', '10', '12', '14', '16'];
         htmlTamanhos = gradeVestuario.map(t => `<option>${t}</option>`).join('');
     }
 
@@ -5475,7 +5475,7 @@ function configurarGradeAdmin(produtoId) {
         ];
         htmlTamanhos = gradeCalcado.map(t => `<option value="${t}">${t}</option>`).join('');
     } else {
-        const gradeVestuario = ['P', 'M', 'G', 'GG', '2', '4', '6', '8', '10', '12', '14', '16'];
+        const gradeVestuario = ['PP', 'P', 'M', 'G', 'GG', 'XGG', '2', '4', '6', '8', '10', '12', '14', '16'];
         htmlTamanhos = gradeVestuario.map(t => `<option value="${t}">${t}</option>`).join('');
     }
 
@@ -5874,8 +5874,8 @@ window.abrirDetalheHistorico = async function(historicoId) {
 
 // Função que transforma a lista do banco na grade visual da "Imagem 2"
 window.gerarTabelaSomenteLeitura = function(itensDB) {
-    const gradeRoupa = ["02", "04", "06", "08", "10", "12", "14", "P", "M", "G", "GG"];
-    const gradeTenis = ["25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40"];
+    const gradeRoupa = ["2", "4", "6", "8", "10", "12", "14", "16", "PP", "P", "M", "G", "GG", "XGG"];
+    const gradeTenis = ["22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43"];
     const roupas = ["BLUSA", "CALÇA", "REGATA", "BERMUDA"];
 
     const buscarQtd = (prod, tam) => {
@@ -6658,18 +6658,16 @@ async function telaAdminCriarPedido() {
                         </select>
 
                         <label style="color:white; display:block; margin-bottom:8px;">PRODUTO:</label>
-                        <select id="admin_direto_produto" class="input-vidro" style="width:100%; margin-bottom:15px;">
-                            <option value="">-- SELECIONE O ITEM --</option>
-                            ${produtos.map(p => `<option value="${p.id}">${p.nome} (Saldo: ${p.quantidade_estoque})</option>`).join('')}
+                        <select id="admin_direto_produto" class="input-vidro" onchange="configurarGradeAdminDireto()" style="width:100%; margin-bottom:15px; background: rgba(255,255,255,0.1); color: white;">
+                            <option value="" style="background: #1e3a8a;">-- SELECIONE O ITEM --</option>
+                            ${produtos.map(p => `<option value="${p.id}" style="background: #1e3a8a;">${p.nome} (Total: ${p.quantidade_estoque})</option>`).join('')}
                         </select>
 
                         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:20px;">
                             <div>
-                                <label style="color:white; display:block; margin-bottom:8px;">TAMANHO:</label>
-                                <select id="admin_direto_tamanho" class="input-vidro" style="width:100%;">
-                                    <option value="UNICO">ÚNICO</option>
-                                    <option value="P">P</option><option value="M">M</option>
-                                    <option value="G">G</option><option value="GG">GG</option>
+                                <label style="color:white; display:block; margin-bottom:8px;">TAMANHO / GRADE:</label>
+                                <select id="admin_direto_tamanho" class="input-vidro" style="width:100%; background: rgba(255,255,255,0.1); color: white;">
+                                    <option value="" style="background: #1e3a8a;">Selecione o produto...</option>
                                 </select>
                             </div>
                             <div>
@@ -6698,6 +6696,29 @@ async function telaAdminCriarPedido() {
         `;
     } catch (err) {
         alert("Erro ao sincronizar tabelas: produtos/locais.");
+    }
+}
+
+async function configurarGradeAdminDireto() {
+    const produtoId = document.getElementById('admin_direto_produto').value;
+    const selectTamanho = document.getElementById('admin_direto_tamanho');
+    
+    if (!produtoId) return;
+
+    try {
+        // Busca a grade real deste produto no estoque
+        const res = await fetch(`${API_URL}/estoque/produto/${produtoId}/grades`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const grades = await res.json();
+
+        selectTamanho.innerHTML = grades.map(g => 
+            `<option value="${g.tamanho}" style="background: #1e3a8a; color: white;">${g.tamanho} (Disp: ${g.quantidade})</option>`
+        ).join('') || '<option value="UNICO" style="background: #1e3a8a;">ÚNICO / SEM GRADE</option>';
+
+    } catch (err) {
+        console.error("Erro ao carregar grade:", err);
+        selectTamanho.innerHTML = '<option value="UNICO" style="background: #1e3a8a;">ERRO AO CARREGAR</option>';
     }
 }
 

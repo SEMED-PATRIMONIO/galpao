@@ -5445,7 +5445,7 @@ function configurarGradeTamanhosDinamicamente() {
         htmlTamanhos = gradeCalcado.map(t => `<option>${t}</option>`).join('');
     } else {
         // Grade Padrão de Vestuário (Roupas)
-        const gradeVestuario = ['PP', 'P', 'M', 'G', 'GG', '02', '04', '06', '08', '10', '12', '14', '16'];
+        const gradeVestuario = ['PP', 'P', 'M', 'G', 'GG', '2', '4', '6', '8', '10', '12', '14', '16'];
         htmlTamanhos = gradeVestuario.map(t => `<option>${t}</option>`).join('');
     }
 

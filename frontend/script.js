@@ -8041,8 +8041,9 @@ async function telaAdminDashboard() {
         const res = await fetch(`${API_URL}/admin/dashboard/stats`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
-
-        if (!res.ok) throw new Error("Rota não encontrada no servidor.");
+        
+        if (!res.ok) throw new Error("A rota não foi encontrada no servidor (Erro 404).");
+        
         const s = await res.json();
 
         container.innerHTML = `
@@ -8063,10 +8064,10 @@ async function telaAdminDashboard() {
                         ${renderCirculo('ENTREGUE', s.qtd_entregue || 0, '🏠', '#10b981')}
                     </div>
 
-                    <div id="detalhes-dashboard" style="margin-top:30px; background:rgba(255,255,255,0.05); border-radius:10px; padding:20px; border:1px solid rgba(255,255,255,0.1); min-height:200px; color:white;">
-                        <h3 id="titulo-fase" style="color:white; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:10px;">📊 Detalhes da Operação</h3>
+                    <div id="detalhes-dashboard" style="margin-top:40px; background:rgba(255,255,255,0.05); border-radius:12px; padding:25px; border: 1px solid rgba(255,255,255,0.1); min-height:200px; color: white;">
+                        <h3 id="titulo-fase" style="color:white; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:10px; font-size: 1.1rem;">📊 Detalhes da Operação</h3>
                         <div id="lista-fase-conteudo" style="margin-top:15px; text-align:center; opacity:0.6;">
-                            Clique em uma fase acima para investigar os pedidos.
+                            Clique numa fase do círculo para investigar os pedidos.
                         </div>
                     </div>
                 </div>
@@ -8075,7 +8076,7 @@ async function telaAdminDashboard() {
     } catch (err) { 
         console.error(err);
         if (typeof alertaVidro === 'function') {
-            alertaVidro("O servidor não reconheceu a rota de estatísticas. Verifique se salvou o arquivo e reiniciou o back-end.", "erro");
+            alertaVidro("Erro ao carregar Dashboard. Verifique se o servidor foi reiniciado após adicionar a nova rota.", "erro");
         }
     }
 }

@@ -426,7 +426,8 @@ body.login-body {
 
 /* Outros componentes mantidos */
 .alerta-card {
-    background: #fee2e2;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(5px);
     border: 3px solid var(--danger);
     color: var(--danger);
     padding: 20px;
@@ -435,6 +436,26 @@ body.login-body {
     font-weight: bold;
     cursor: pointer;
 }
+
+/* Container da Notificação */
+.notificacao-vidro-overlay {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(5px);
+    display: flex; justify-content: center; align-items: center;
+    z-index: 9999; animation: fadeIn 0.3s ease;
+}
+
+.alerta-vidro {
+    max-width: 400px;
+    width: 90%;
+    text-align: center;
+    animation: scaleUp 0.3s ease;
+}
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes scaleUp { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 
 .item-estoque {
     background: white;

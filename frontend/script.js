@@ -719,18 +719,26 @@ async function telaAdminGerenciarSolicitacoes() {
 
 async function analisarPedidoEstoque(pedidoId) {
     const modal = document.getElementById('modal-analise');
-    const res = await fetch(`${API_URL}/pedidos/detalhes-estoque/${pedidoId}`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+    // Busca os dados da rota que acabamos de corrigir
+    const res = await fetch(`${API_URL}/pedidos/detalhes-estoque/${pedidoId}`, { 
+        headers: { 'Authorization': `Bearer ${TOKEN}` } 
+    });
     const itens = await res.json();
 
     let saldoSuficiente = true;
     const linhas = itens.map(i => {
-        const falta = i.solicitado > i.em_estoque;
+        // Garantindo que a comparação seja numérica
+        const solicitado = Number(i.solicitado);
+        const emEstoque = Number(i.em_estoque);
+        const falta = solicitado > emEstoque;
+        
         if (falta) saldoSuficiente = false;
+
         return `
             <tr style="border-bottom: 1px solid #eee; background: ${falta ? '#fff1f2' : 'transparent'}">
-                <td style="padding:15px; color:#1e3a8a; font-weight:bold;">${i.produto} (${i.tamanho})</td>
-                <td style="padding:15px; text-align:center;">${i.solicitado}</td>
-                <td style="padding:15px; text-align:center; color:${falta ? '#e11d48' : '#16a34a'}; font-weight:bold;">${i.em_estoque}</td>
+                <td style="padding:15px; color:#1e3a8a; font-weight:bold;">${i.produto} ${i.tamanho ? `(${i.tamanho})` : ''}</td>
+                <td style="padding:15px; text-align:center;">${solicitado}</td>
+                <td style="padding:15px; text-align:center; color:${falta ? '#e11d48' : '#16a34a'}; font-weight:bold;">${emEstoque}</td>
                 <td style="padding:15px; text-align:right;">${falta ? '❌ SEM SALDO' : '✅ OK'}</td>
             </tr>
         `;

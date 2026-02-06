@@ -5363,41 +5363,46 @@ async function telaSolicitarUniforme() {
                     <h2 style="color:white; margin:0; font-size:1.3rem;">${tituloTela}</h2>
                     <div style="width:100px;"></div>
                 </div>
-                
-                <div style="background:rgba(0,0,0,0.2); border-radius:10px; padding: 30px;">
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 40px;">
+
+                <div style="background:rgba(0,0,0,0.2); border-radius:10px; padding: 25px; color: white;">
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px;">
                         
-                        <div style="color: white;">
-                            <h3 style="margin-top:0; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom:10px; font-size: 1.1rem;">Adicionar Item</h3>
+                        <div>
+                            <h3 style="margin-top:0; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom:10px;">Adicionar Item</h3>
                             
-                            <label style="display:block; margin-top:15px; font-weight:bold; font-size:0.8rem; color: #94a3b8;">PRODUTO:</label>
-                            <select id="solicitar_produto_id" onchange="configurarGradeTamanhosDinamicamente()" style="width:100%; padding:12px; margin-bottom:20px; border-radius:8px; border:1px solid rgba(255,255,255,0.2); background:rgba(255,255,255,0.05); color:white; outline:none;">
+                            <label style="display:block; margin-top:15px; font-weight:bold; font-size:0.85rem;">PRODUTO:</label>
+                            <select id="solicitar_produto_id" onchange="configurarGradeTamanhosDinamicamente()" 
+                                    class="input-busca-vidro" style="width:100%; margin-bottom:15px; background: rgba(255,255,255,0.1); color: white;">
                                 ${produtos.map(p => `<option value="${p.id}" style="background:#1e3a8a;">${p.nome}</option>`).join('')}
                             </select>
 
-                            <label style="display:block; font-weight:bold; font-size:0.8rem; color: #94a3b8;">TAMANHO:</label>
-                            <select id="solicitar_tamanho" style="width:100%; padding:12px; margin-bottom:20px; border-radius:8px; border:1px solid rgba(255,255,255,0.2); background:rgba(255,255,255,0.05); color:white; outline:none;">
+                            <label style="display:block; font-weight:bold; font-size:0.85rem;">TAMANHO:</label>
+                            <select id="solicitar_tamanho" class="input-busca-vidro" style="width:100%; margin-bottom:15px; background: rgba(255,255,255,0.1); color: white;">
                                 <option style="background:#1e3a8a;">P</option>
                                 <option style="background:#1e3a8a;">M</option>
                                 <option style="background:#1e3a8a;">G</option>
                                 <option style="background:#1e3a8a;">GG</option>
                             </select>
 
-                            <label style="display:block; font-weight:bold; font-size:0.8rem; color: #94a3b8;">QUANTIDADE:</label>
-                            <input type="number" id="solicitar_qtd" value="1" min="1" style="width:100%; padding:12px; margin-bottom:25px; border-radius:8px; border:1px solid rgba(255,255,255,0.2); background:rgba(255,255,255,0.05); color:white; outline:none;">
+                            <label style="display:block; font-weight:bold; font-size:0.85rem;">QUANTIDADE:</label>
+                            <input type="number" id="solicitar_qtd" value="1" min="1" 
+                                   class="input-busca-vidro" style="width:100%; margin-bottom:15px; background: rgba(255,255,255,0.1); color: white;">
 
-                            <button onclick="adicionarAoCarrinhoSolicitacao()" class="btn-vidro" style="width:100%; padding:15px; background:#10b981; color:white; border:none; border-radius:10px; font-weight:bold; cursor:pointer; transition: 0.3s;">
+                            <button onclick="adicionarAoCarrinhoSolicitacao()" 
+                                    style="width:100%; padding:12px; background:#10b981; color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer;">
                                 ➕ ADICIONAR À LISTA
                             </button>
                         </div>
 
-                        <div style="color: white; border-left: 1px solid rgba(255,255,255,0.1); padding-left: 40px;">
-                            <h3 style="margin-top:0; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom:10px; font-size: 1.1rem;">Itens na Solicitação</h3>
-                            <div id="lista_carrinho_solicitacao" style="margin-top:15px; min-height: 200px;">
-                                <p style="color:#94a3b8; font-size:0.9rem;">Nenhum item adicionado ainda.</p>
+                        <div style="border-left: 1px solid rgba(255,255,255,0.1); padding-left: 30px;">
+                            <h3 style="margin-top:0; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom:10px;">Itens na Solicitação</h3>
+                            <div id="lista_carrinho_solicitacao" style="margin-top:15px; min-height: 150px;">
+                                <p style="color:rgba(255,255,255,0.6);">Nenhum item adicionado ainda.</p>
                             </div>
-                            <hr style="border:0; border-top:1px solid rgba(255,255,255,0.1); margin:25px 0;">
-                            <button id="btnEnviarSolicitacao" onclick="enviarPedidoEscola('SOLICITACAO')" disabled style="width:100%; padding:18px; background:#1e40af; color:white; border:none; border-radius:10px; font-weight:bold; cursor:pointer; opacity:0.5; transition: 0.3s;">
+                            <hr style="border:0; border-top:1px solid rgba(255,255,255,0.1); margin:20px 0;">
+                            <button id="btnEnviarSolicitacao" onclick="enviarPedidoEscola('SOLICITACAO')" disabled 
+                                    style="width:100%; padding:15px; background:#1e40af; color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer; opacity:0.5;">
                                 🚀 ENVIAR SOLICITAÇÃO COMPLETA
                             </button>
                         </div>

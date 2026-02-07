@@ -6703,48 +6703,41 @@ async function telaAdminCriarPedido() {
 async function configurarGradeAdminDireto() {
     const selectProd = document.getElementById('admin_direto_produto');
     const selectTam = document.getElementById('admin_direto_tamanho');
-    const opcaoSelecionada = selectProd.options[selectProd.selectedIndex];
-    const tipo = opcaoSelecionada.getAttribute('data-tipo');
+    const opcaoProd = selectProd.options[selectProd.selectedIndex];
+    const tipo = opcaoProd.getAttribute('data-tipo');
     const produtoId = selectProd.value;
 
     if (!produtoId) return;
 
-    // LÓGICA DE BLOQUEIO: Só ativa grade para UNIFORMES
     if (tipo !== 'UNIFORMES') {
-        selectTam.innerHTML = '<option value="UNICO" style="background: #1e3a8a;">TAMANHO ÚNICO</option>';
+        // Para materiais, buscamos o saldo total que já está no texto da opção ou no objeto original
+        // Vou extrair o saldo do texto "(Total: X)" ou você pode usar um atributo data-estoque no select de produtos
+        const saldoGeral = parseInt(opcaoProd.text.match(/Total: (\d+)/)[1]);
+        selectTam.innerHTML = `<option value="UNICO" data-estoque="${saldoGeral}" style="background: #1e3a8a;">TAMANHO ÚNICO (Disp: ${saldoGeral})</option>`;
         selectTam.disabled = true;
-        selectTam.style.opacity = "0.5";
         return;
     }
 
-    // Se for UNIFORME, ativa e busca no banco
     selectTam.disabled = false;
-    selectTam.style.opacity = "1";
     selectTam.innerHTML = '<option value="" style="background: #1e3a8a;">Carregando grade...</option>';
 
     try {
         const res = await fetch(`${API_URL}/estoque/produto/${produtoId}/grades`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
-        
         const grades = await res.json();
 
-        if (grades.length === 0) {
-            selectTam.innerHTML = '<option value="" style="background: #1e3a8a;">❌ SEM ESTOQUE DE GRADE</option>';
-        } else {
-            selectTam.innerHTML = grades.map(g => `
-                <option value="${g.tamanho}" style="background: #1e3a8a;">
-                    ${g.tamanho} (Disponível: ${g.quantidade})
-                </option>
-            `).join('');
-        }
+        selectTam.innerHTML = grades.map(g => `
+            <option value="${g.tamanho}" data-estoque="${g.quantidade}" style="background: #1e3a8a;">
+                ${g.tamanho} (Disponível: ${g.quantidade})
+            </option>
+        `).join('') || '<option value="" data-estoque="0" style="background: #1e3a8a;">❌ SEM ESTOQUE</option>';
     } catch (err) {
-        console.error("Erro ao carregar grade:", err);
-        if (typeof alertaVidro === 'function') {
-            alertaVidro("Erro de comunicação com o servidor ao buscar grade.", "erro");
-        }
+        console.error(err);
     }
 }
+
+
 
 async function enviarPedidoAdminDireto() {
     const localId = document.getElementById('admin_direto_local').value;
@@ -6770,25 +6763,55 @@ async function enviarPedidoAdminDireto() {
 }
 
 function adicionarAoCarrinhoAdminDireto() {
-    const select = document.getElementById('admin_direto_produto');
-    const produtoId = select.value;
-    const nome = select.options[select.selectedIndex].text;
-    const tamanho = document.getElementById('admin_direto_tamanho').value;
-    const qtd = parseInt(document.getElementById('admin_direto_qtd').value);
+    const selectProd = document.getElementById('admin_direto_produto');
+    const selectTam = document.getElementById('admin_direto_tamanho');
+    const inputQtd = document.getElementById('admin_direto_qtd');
 
-    if (!produtoId || qtd <= 0) return alert("Selecione um produto válido.");
+    const produtoId = selectProd.value;
+    const produtoNome = selectProd.options[selectProd.selectedIndex].text.split(' (')[0];
+    const tamanho = selectTam.value;
+    const qtdSolicitada = parseInt(inputQtd.value);
+    
+    // Pegamos o estoque real que guardamos no atributo data-estoque do tamanho selecionado
+    const estoqueDisponivel = parseInt(selectTam.options[selectTam.selectedIndex]?.getAttribute('data-estoque') || 0);
 
-    // Verifica se já existe a combinação ID + TAMANHO no carrinho
-    const itemExistente = carrinhoAdminDireto.find(i => i.produto_id === produtoId && i.tamanho === tamanho);
-
-    if (itemExistente) {
-        itemExistente.quantidade += qtd; // Soma a quantidade ao item já existente
-    } else {
-        carrinhoAdminDireto.push({ produto_id: produtoId, nome, tamanho, quantidade: qtd });
+    // 1. Validação de seleção básica
+    if (!produtoId || !tamanho || isNaN(qtdSolicitada) || qtdSolicitada <= 0) {
+        alertaVidro("Preencha todos os campos corretamente.", "erro");
+        return;
     }
 
-    document.getElementById('admin_direto_qtd').value = 1;
-    atualizarVisualCarrinhoAdmin();
+    // 2. TRAVA: Validação de Estoque insuficiente
+    if (qtdSolicitada > estoqueDisponivel) {
+        alertaVidro(`Saldo insuficiente! Você solicitou ${qtdSolicitada}, mas temos apenas ${estoqueDisponivel} em estoque.`, "erro");
+        return;
+    }
+
+    // 3. TRAVA: Validação de Duplicidade (Mesmo ID + Mesmo Tamanho)
+    const jaExiste = carrinhoAdminDireto.find(item => 
+        item.produto_id === produtoId && item.tamanho === tamanho
+    );
+
+    if (jaExiste) {
+        alertaVidro(`O item "${produtoNome}" (${tamanho}) já está na sua lista. Se quiser mudar a quantidade, remova-o e adicione novamente.`, "erro");
+        return;
+    }
+
+    // Se passou por todas as travas, adiciona ao carrinho
+    carrinhoAdminDireto.push({
+        produto_id: produtoId,
+        nome: produtoNome,
+        tamanho: tamanho,
+        quantidade: qtdSolicitada,
+        estoque_momento: estoqueDisponivel
+    });
+
+    // Limpa os campos para o próximo item e atualiza a visão
+    inputQtd.value = 1;
+    renderizarCarrinhoAdmin();
+    
+    // Pequeno feedback visual de sucesso
+    console.log("Item adicionado com sucesso!");
 }
 
 function atualizarVisualCarrinhoAdmin() {

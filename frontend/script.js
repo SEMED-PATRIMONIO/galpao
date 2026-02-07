@@ -10854,9 +10854,7 @@ function addCarrinhoMateriais() {
 
 async function finalizarPedidoUniformes() {
     const localId = document.getElementById('uni_local').value;
-    if (!localId) return alertaVidro("Por favor, selecione a unidade de destino.", "erro");
-
-    if (carrinhoAdminDireto.length === 0) return alertaVidro("O carrinho está vazio.", "erro");
+    if (!localId) return alertaVidro("Selecione o destino.", "erro");
 
     try {
         const res = await fetch(`${API_URL}/pedidos/admin/v2/uniformes`, {
@@ -10868,22 +10866,20 @@ async function finalizarPedidoUniformes() {
             body: JSON.stringify({ local_id: localId, itens: carrinhoAdminDireto })
         });
 
+        // Se o servidor responder 500, ele envia um JSON com a chave "error"
         const data = await res.json();
 
         if (!res.ok) {
-            // Agora o erro virá detalhado do banco (ex: falta de estoque)
-            throw new Error(data.error || "Erro ao processar pedido.");
+            throw new Error(data.error || "Erro desconhecido no servidor.");
         }
         
-        alertaVidro("Pedido finalizado com sucesso! O estoque foi atualizado.", "sucesso");
-        
-        // Limpa e volta para o dashboard
-        carrinhoAdminDireto = [];
+        alertaVidro("Pedido finalizado com sucesso!", "sucesso");
         carregarDashboard();
 
     } catch (err) {
-        console.error("Falha na finalização:", err);
+        // Agora o alertaVidro vai mostrar o erro REAL do banco (ex: "coluna x não existe")
         alertaVidro("Falha: " + err.message, "erro");
+        console.error("Detalhes:", err);
     }
 }
 

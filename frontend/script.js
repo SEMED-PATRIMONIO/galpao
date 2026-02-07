@@ -322,7 +322,7 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="telaAbastecerEstoque()">
                 <i>📥</i><span>ENTRADA ESTOQUE</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="telaAdminCriarPedido()">
+            <button class="btn-grande btn-vidro" onclick="modalEscolhaTipoPedido()">
                 <i>➕</i><span>CRIAR PEDIDO</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="telaVisualizarEstoque()">
@@ -6889,46 +6889,35 @@ function atualizarVisualCarrinhoAdmin() {
 
 function renderizarCarrinhoAdmin() {
     const display = document.getElementById('display-carrinho-admin');
-    const btnEnviar = document.getElementById('btnFinalizarAdmin');
+    const btnFinalizar = document.getElementById('btnFinalizar');
 
     if (carrinhoAdminDireto.length === 0) {
-        display.innerHTML = '<p style="text-align:center; opacity:0.6;">Aguardando itens...</p>';
-        btnEnviar.disabled = true;
-        btnEnviar.style.opacity = "0.5";
+        display.innerHTML = '<p style="text-align:center; opacity:0.5;">Aguardando itens...</p>';
+        btnFinalizar.disabled = true;
+        btnFinalizar.style.opacity = "0.5";
         return;
     }
 
-    btnEnviar.disabled = false;
-    btnEnviar.style.opacity = "1";
+    btnFinalizar.disabled = false;
+    btnFinalizar.style.opacity = "1";
+
+    const linhas = carrinhoAdminDireto.map((item, index) => `
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+            <td style="padding:10px;">${item.nome}</td>
+            <td style="text-align:center;">${item.tamanho}</td>
+            <td style="text-align:center;">${item.quantidade}</td>
+            <td style="text-align:right;">
+                <button onclick="carrinhoAdminDireto.splice(${index},1); renderizarCarrinhoAdmin();" 
+                        style="background:#f87171; border:none; color:white; padding:5px; border-radius:4px; cursor:pointer;">🗑️</button>
+            </td>
+        </tr>
+    `).join('');
 
     display.innerHTML = `
-        <div style="background:rgba(0,0,0,0.2); border-radius:10px; overflow:hidden;">
-            <table style="width:100%; border-collapse: collapse; color:white; font-size:0.85rem;">
-                <thead style="background:rgba(255,255,255,0.1);">
-                    <tr>
-                        <th style="padding:12px; text-align:left;">PRODUTO</th>
-                        <th style="padding:12px; text-align:center;">TAM.</th>
-                        <th style="padding:12px; text-align:center;">QTD</th>
-                        <th style="padding:12px; text-align:right;">AÇÃO</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${carrinhoAdminDireto.map((item, index) => `
-                        <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                            <td style="padding:10px 12px; font-weight:bold;">${item.nome}</td>
-                            <td style="padding:10px 12px; text-align:center;">${item.tamanho}</td>
-                            <td style="padding:10px 12px; text-align:center;">${item.quantidade}</td>
-                            <td style="padding:10px 12px; text-align:right;">
-                                <button onclick="removerItemCarrinhoAdmin(${index})" 
-                                        style="background:#f87171; color:white; border:none; padding:5px 10px; border-radius:5px; cursor:pointer; font-size:0.7rem;">
-                                    🗑️ REMOVER
-                                </button>
-                            </td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>
-        </div>
+        <table style="width:100%; color:white; font-size:0.85rem;">
+            <thead><tr style="opacity:0.6;"><th>ITEM</th><th>TAM.</th><th>QTD</th><th></th></tr></thead>
+            <tbody>${linhas}</tbody>
+        </table>
     `;
 }
 
@@ -10636,6 +10625,344 @@ function alertaVidro(mensagem, tipo = 'info') {
     `;
 
     document.body.appendChild(overlay);
+}
+
+function modalEscolhaTipoPedido() {
+    const overlay = document.createElement('div');
+    overlay.className = 'notificacao-vidro-overlay';
+    overlay.id = 'modal-escolha-pedido';
+
+    overlay.innerHTML = `
+        <div class="painel-vidro" style="max-width: 500px; text-align: center;">
+            <h2 style="color: white; margin-bottom: 25px;">O QUE DESEJA ENVIAR?</h2>
+            
+            <div style="display: flex; flex-direction: column; gap: 15px;">
+                <button onclick="telaAdminPedidoUniformes()" class="btn-vidro" style="background: #3b82f6; padding: 20px;">👕 UNIFORMES (Grade de Tamanhos)</button>
+                <button onclick="telaAdminPedidoMateriais()" class="btn-vidro" style="background: #10b981; padding: 20px;">📦 MATERIAIS (Consumíveis)</button>
+                <button onclick="telaAdminPedidoPatrimonios()" class="btn-vidro" style="background: #f59e0b; padding: 20px;">🪑 PATRIMÔNIO (Plaqueta Individual)</button>
+            </div>
+
+            <button onclick="document.getElementById('modal-escolha-pedido').remove()" 
+                    class="btn-sair-vidro" style="margin-top: 25px; background: #475569; width: 100%;">CANCELAR</button>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+}
+
+async function telaAdminPedidoPatrimonios() {
+    document.getElementById('modal-escolha-pedido')?.remove();
+    const container = document.getElementById('app-content');
+    
+    // 1. Busca produtos do tipo PATRIMONIO e Locais
+    const [resP, resL] = await Promise.all([
+        fetch(`${API_URL}/estoque/produtos-por-tipo/PATRIMONIO`, { headers: { 'Authorization': `Bearer ${TOKEN}` } }),
+        fetch(`${API_URL}/locais/dropdown`, { headers: { 'Authorization': `Bearer ${TOKEN}` } })
+    ]);
+    const produtos = await resP.json();
+    const locais = await resL.json();
+
+    container.innerHTML = `
+        <div class="painel-vidro" style="max-width: 1000px; margin: auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <button onclick="modalEscolhaTipoPedido()" class="btn-sair-vidro" style="background:#475569; width:100px;">⬅️ VOLTAR</button>
+                <h2 style="color:white; margin:0; font-size:1.3rem;">🪑 ENVIO DE PATRIMÔNIO</h2>
+                <div style="width:100px;"></div>
+            </div>
+
+            <div style="background:rgba(0,0,0,0.2); border-radius:10px; padding: 25px; display: grid; grid-template-columns: 1fr 1fr; gap: 30px;">
+                <div style="color: white;">
+                    <label>UNIDADE DESTINO:</label>
+                    <select id="pat_destino" class="input-vidro" style="width:100%; margin-bottom:15px;">
+                        ${locais.map(l => `<option value="${l.id}">${l.nome}</option>`).join('')}
+                    </select>
+
+                    <label>PRODUTO:</label>
+                    <select id="pat_produto" class="input-vidro" onchange="buscarPlaquetasDisponiveis(this.value)" style="width:100%; margin-bottom:15px;">
+                        <option value="">-- SELECIONE O MODELO --</option>
+                        ${produtos.map(p => `<option value="${p.id}">${p.nome}</option>`).join('')}
+                    </select>
+
+                    <label>SELECIONE A PLAQUETA / TAG:</label>
+                    <select id="pat_individual_id" class="input-vidro" style="width:100%; margin-bottom:15px;">
+                        <option value="">Aguardando produto...</option>
+                    </select>
+
+                    <button onclick="addCarrinhoPatrimonio()" class="btn-vidro" style="background:#f59e0b; width:100%;">➕ ADICIONAR ITEM</button>
+                </div>
+
+                <div id="carrinho-patrimonio-lista" style="border-left: 1px solid rgba(255,255,255,0.1); padding-left: 20px;">
+                    </div>
+            </div>
+        </div>
+    `;
+}
+
+async function telaAdminPedidoUniformes() {
+    fecharModais(); // Função para limpar o modal de escolha
+    const container = document.getElementById('app-content');
+    const [resP, resL] = await Promise.all([
+        fetch(`${API_URL}/estoque/produtos-por-tipo/UNIFORMES`, { headers: { 'Authorization': `Bearer ${TOKEN}` } }),
+        fetch(`${API_URL}/locais/dropdown`, { headers: { 'Authorization': `Bearer ${TOKEN}` } })
+    ]);
+    const produtos = await resP.json();
+    const locais = await resL.json();
+    carrinhoAdminDireto = [];
+
+    container.innerHTML = `
+        <div class="painel-vidro" style="max-width: 1000px; margin: auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <button onclick="modalEscolhaTipoPedido()" class="btn-sair-vidro" style="background:#475569; width:100px;">⬅️ VOLTAR</button>
+                <h2 style="color:white; margin:0; font-size:1.3rem;">👕 PEDIDO DE UNIFORMES</h2>
+                <div style="width:100px;"></div>
+            </div>
+
+            <div style="background:rgba(0,0,0,0.2); border-radius:10px; padding: 25px; display: grid; grid-template-columns: 1fr 1.2fr; gap: 30px;">
+                <div style="color: white;">
+                    <label>DESTINO:</label>
+                    <select id="uni_local" class="input-vidro" style="width:100%; margin-bottom:15px;">
+                        ${locais.map(l => `<option value="${l.id}">${l.nome}</option>`).join('')}
+                    </select>
+
+                    <label>PRODUTO:</label>
+                    <select id="uni_produto" class="input-vidro" onchange="buscarGradeUniformes(this.value)" style="width:100%; margin-bottom:15px;">
+                        <option value="">-- SELECIONE O UNIFORME --</option>
+                        ${produtos.map(p => `<option value="${p.id}">${p.nome}</option>`).join('')}
+                    </select>
+
+                    <label>TAMANHO DISPONÍVEL:</label>
+                    <select id="uni_tamanho" class="input-vidro" style="width:100%; margin-bottom:15px;"></select>
+
+                    <label>QUANTIDADE:</label>
+                    <input type="number" id="uni_qtd" value="1" min="1" class="input-vidro" style="width:100%; margin-bottom:20px;">
+
+                    <button onclick="addCarrinhoUniformes()" class="btn-vidro" style="background:#10b981; width:100%;">➕ ADICIONAR</button>
+                </div>
+                <div id="display-carrinho-admin" style="color:white; border-left: 1px solid rgba(255,255,255,0.1); padding-left: 20px;">
+                    <p style="text-align:center; opacity:0.5;">Aguardando itens...</p>
+                </div>
+            </div>
+            <button id="btnFinalizar" onclick="finalizarPedidoUniformes()" disabled class="btn-vidro" style="width:100%; margin-top:20px; opacity:0.5;">🚀 FINALIZAR ENVIO DE UNIFORMES</button>
+        </div>
+    `;
+}
+
+async function telaAdminPedidoMateriais() {
+    fecharModais();
+    const container = document.getElementById('app-content');
+    const [resP, resL] = await Promise.all([
+        fetch(`${API_URL}/estoque/produtos-por-tipo/MATERIAL`, { headers: { 'Authorization': `Bearer ${TOKEN}` } }),
+        fetch(`${API_URL}/locais/dropdown`, { headers: { 'Authorization': `Bearer ${TOKEN}` } })
+    ]);
+    const produtos = await resP.json();
+    const locais = await resL.json();
+    carrinhoAdminDireto = [];
+
+    container.innerHTML = `
+        <div class="painel-vidro" style="max-width: 1000px; margin: auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <button onclick="modalEscolhaTipoPedido()" class="btn-sair-vidro" style="background:#475569; width:100px;">⬅️ VOLTAR</button>
+                <h2 style="color:white; margin:0; font-size:1.3rem;">📦 PEDIDO DE MATERIAIS</h2>
+                <div style="width:100px;"></div>
+            </div>
+
+            <div style="background:rgba(0,0,0,0.2); border-radius:10px; padding: 25px; display: grid; grid-template-columns: 1fr 1.2fr; gap: 30px;">
+                <div style="color: white;">
+                    <label>DESTINO:</label>
+                    <select id="mat_local" class="input-vidro" style="width:100%; margin-bottom:15px;">
+                        ${locais.map(l => `<option value="${l.id}">${l.nome}</option>`).join('')}
+                    </select>
+
+                    <label>PRODUTO (Saldo em estoque):</label>
+                    <select id="mat_produto" class="input-vidro" style="width:100%; margin-bottom:15px;">
+                        <option value="">-- SELECIONE O MATERIAL --</option>
+                        ${produtos.map(p => `<option value="${p.id}" data-estoque="${p.saldo}">${p.nome} (Saldo: ${p.saldo})</option>`).join('')}
+                    </select>
+
+                    <label>QUANTIDADE SOLICITADA:</label>
+                    <input type="number" id="mat_qtd" value="1" min="1" class="input-vidro" style="width:100%; margin-bottom:20px;">
+
+                    <button onclick="addCarrinhoMateriais()" class="btn-vidro" style="background:#10b981; width:100%;">➕ ADICIONAR</button>
+                </div>
+                <div id="display-carrinho-admin" style="color:white; border-left: 1px solid rgba(255,255,255,0.1); padding-left: 20px;">
+                    <p style="text-align:center; opacity:0.5;">Aguardando itens...</p>
+                </div>
+            </div>
+            <button id="btnFinalizar" onclick="finalizarPedidoMateriais()" disabled class="btn-vidro" style="width:100%; margin-top:20px; opacity:0.5;">🚀 FINALIZAR ENVIO DE MATERIAIS</button>
+        </div>
+    `;
+}
+
+async function buscarGradeUniformes(produtoId) {
+    const selectTam = document.getElementById('uni_tamanho');
+    if (!produtoId) {
+        selectTam.innerHTML = '<option value="">Selecione o produto...</option>';
+        return;
+    }
+
+    selectTam.innerHTML = '<option value="">A carregar...</option>';
+
+    try {
+        const res = await fetch(`${API_URL}/estoque/produto/${produtoId}/grades`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const grades = await res.json();
+
+        // Filtra apenas o que tem saldo e guarda o stock no 'data-estoque'
+        selectTam.innerHTML = grades.map(g => `
+            <option value="${g.tamanho}" data-estoque="${g.quantidade}" style="background: #1e3a8a;">
+                ${g.tamanho} (Disp: ${g.quantidade})
+            </option>
+        `).join('') || '<option value="">❌ SEM STOCK</option>';
+    } catch (err) {
+        alertaVidro("Erro ao carregar grade de tamanhos.", "erro");
+    }
+}
+
+function addCarrinhoUniformes() {
+    const selectProd = document.getElementById('uni_produto');
+    const selectTam = document.getElementById('uni_tamanho');
+    const inputQtd = document.getElementById('uni_qtd');
+
+    const produtoId = selectProd.value;
+    const produtoNome = selectProd.options[selectProd.selectedIndex].text;
+    const tamanho = selectTam.value;
+    const qtd = parseInt(inputQtd.value);
+    const stockDisp = parseInt(selectTam.options[selectTam.selectedIndex]?.dataset.estoque || 0);
+
+    if (!produtoId || !tamanho || qtd <= 0) return alertaVidro("Preencha todos os campos.", "erro");
+    
+    // TRAVA 1: Stock insuficiente
+    if (qtd > stockDisp) return alertaVidro(`Stock insuficiente. Disponível: ${stockDisp}`, "erro");
+
+    // TRAVA 2: Duplicidade
+    if (carrinhoAdminDireto.some(i => i.produto_id === produtoId && i.tamanho === tamanho)) {
+        return alertaVidro("Este item já está no carrinho.", "erro");
+    }
+
+    carrinhoAdminDireto.push({ produto_id: produtoId, nome: produtoNome, tamanho: tamanho, quantidade: qtd });
+    renderizarCarrinhoAdmin();
+}
+
+function addCarrinhoMateriais() {
+    const selectProd = document.getElementById('mat_produto');
+    const inputQtd = document.getElementById('mat_qtd');
+
+    const produtoId = selectProd.value;
+    const opcaoProd = selectProd.options[selectProd.selectedIndex];
+    const produtoNome = opcaoProd.text.split(' (')[0];
+    const qtd = parseInt(inputQtd.value);
+    const stockDisp = parseInt(opcaoProd.dataset.estoque || 0);
+
+    if (!produtoId || qtd <= 0) return alertaVidro("Selecione o produto e a quantidade.", "erro");
+
+    // TRAVA 1: Stock insuficiente
+    if (qtd > stockDisp) return alertaVidro(`Stock insuficiente. Disponível: ${stockDisp}`, "erro");
+
+    // TRAVA 2: Duplicidade
+    if (carrinhoAdminDireto.some(i => i.produto_id === produtoId)) {
+        return alertaVidro("Este material já está no carrinho.", "erro");
+    }
+
+    carrinhoAdminDireto.push({ produto_id: produtoId, nome: produtoNome, tamanho: 'UNICO', quantidade: qtd });
+    renderizarCarrinhoAdmin();
+}
+
+async function finalizarPedidoUniformes() {
+    const localId = document.getElementById('uni_local').value;
+    enviarAoServidor('/pedidos/admin/finalizar/uniformes', { local_id: localId, itens: carrinhoAdminDireto });
+}
+
+async function finalizarPedidoMateriais() {
+    const localId = document.getElementById('mat_local').value;
+    enviarAoServidor('/pedidos/admin/finalizar/materiais', { local_id: localId, itens: carrinhoAdminDireto });
+}
+
+// Função genérica de envio para evitar repetição de código
+async function enviarAoServidor(endpoint, dados) {
+    try {
+        const res = await fetch(`${API_URL}${endpoint}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify(dados)
+        });
+        if (!res.ok) throw new Error();
+        alertaVidro("Pedido realizado com sucesso!", "sucesso");
+        carregarDashboard();
+    } catch (err) {
+        alertaVidro("Erro ao processar pedido no servidor.", "erro");
+    }
+}
+
+async function buscarPlaquetasDisponiveis(produtoId) {
+    const selectPlaqueta = document.getElementById('pat_individual_id');
+    if (!produtoId) {
+        selectPlaqueta.innerHTML = '<option value="">Selecione o produto...</option>';
+        return;
+    }
+
+    selectPlaqueta.innerHTML = '<option value="">A procurar tags...</option>';
+
+    try {
+        const res = await fetch(`${API_URL}/estoque/patrimonios-disponiveis/${produtoId}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const plaquetas = await res.json();
+
+        if (plaquetas.length === 0) {
+            selectPlaqueta.innerHTML = '<option value="">❌ NENHUM DISPONÍVEL</option>';
+            return;
+        }
+
+        selectPlaqueta.innerHTML = plaquetas.map(p => `
+            <option value="${p.id}" data-tag="${p.plaqueta}" style="background: #1e3a8a;">
+                PLAQUETA: ${p.plaqueta} ${p.numero_serie ? `(S/N: ${p.numero_serie})` : ''}
+            </option>
+        `).join('');
+    } catch (err) {
+        alertaVidro("Erro ao carregar lista de plaquetas.", "erro");
+    }
+}
+
+function addCarrinhoPatrimonio() {
+    const selectProd = document.getElementById('pat_produto');
+    const selectPlaqueta = document.getElementById('pat_individual_id');
+    
+    const produtoId = selectProd.value;
+    const produtoNome = selectProd.options[selectProd.selectedIndex].text;
+    const patrimonioId = selectPlaqueta.value;
+    const tagNome = selectPlaqueta.options[selectPlaqueta.selectedIndex]?.dataset.tag;
+
+    if (!produtoId || !patrimonioId) {
+        return alertaVidro("Selecione o modelo e a plaqueta individual.", "erro");
+    }
+
+    // TRAVA: Não permite a mesma plaqueta duas vezes no carrinho
+    if (carrinhoAdminDireto.some(i => i.patrimonio_id === patrimonioId)) {
+        return alertaVidro("Esta plaqueta já está na lista.", "erro");
+    }
+
+    // Adiciona ao carrinho com ID individual do património
+    carrinhoAdminDireto.push({
+        produto_id: produtoId,
+        nome: `${produtoNome} (TAG: ${tagNome})`,
+        patrimonio_id: patrimonioId,
+        tamanho: 'PATRIMONIO', // Usado apenas para compatibilidade de tabela
+        quantidade: 1
+    });
+
+    renderizarCarrinhoAdmin();
+}
+
+async function finalizarPedidoPatrimonios() {
+    const localId = document.getElementById('pat_destino').value;
+    if (!localId) return alertaVidro("Selecione o destino.", "erro");
+
+    if (carrinhoAdminDireto.length === 0) return alertaVidro("Carrinho vazio.", "erro");
+
+    enviarAoServidor('/pedidos/admin/finalizar/patrimonios', { 
+        local_id: localId, 
+        itens: carrinhoAdminDireto 
+    });
 }
 
 // Isso garante que o onclick="funcao()" funcione sempre

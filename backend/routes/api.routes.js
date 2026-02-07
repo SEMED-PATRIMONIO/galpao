@@ -3001,17 +3001,46 @@ router.post('/pedidos/admin/finalizar/uniformes', verificarToken, async (req, re
     try {
         await client.query('BEGIN');
         const { local_id, itens } = req.body;
+        const usuario_id = req.user.id;
+
+        // 1. Cria o Pedido Mestre
         const resPed = await client.query(
             `INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, tipo_pedido) 
              VALUES ($1, $2, 'AUTORIZADO', 'UNIFORMES') RETURNING id`,
-            [req.user.id, local_id]
+            [usuario_id, local_id]
         );
+        const pedidoId = resPed.rows[0].id;
+
+        // 2. Processa cada item do carrinho
         for (const it of itens) {
-            await client.query(`UPDATE estoque_grades SET quantidade = quantidade - $1 WHERE produto_id = $2 AND tamanho = $3`, [it.quantidade, it.produto_id, it.tamanho]);
+            // Insere o item vinculado ao pedido
+            await client.query(
+                `INSERT INTO pedido_itens (pedido_id, produto_id, quantidade_solicitada, tamanho) 
+                 VALUES ($1, $2, $3, $4)`,
+                [pedidoId, it.produto_id, it.quantidade, it.tamanho]
+            );
+
+            // Baixa no estoque da grade específica
+            const resUpdate = await client.query(
+                `UPDATE estoque_grades 
+                 SET quantidade = quantidade - $1 
+                 WHERE produto_id = $2 AND tamanho = $3 AND quantidade >= $1`,
+                [it.quantidade, it.produto_id, it.tamanho]
+            );
+
+            if (resUpdate.rowCount === 0) {
+                throw new Error(`Estoque insuficiente para o produto ID ${it.produto_id} tamanho ${it.tamanho}`);
+            }
         }
+
         await client.query('COMMIT');
-        res.json({ message: "Pedido de Uniformes realizado!" });
-    } catch (err) { await client.query('ROLLBACK'); res.status(500).json({ error: err.message }); } finally { client.release(); }
+        res.json({ success: true, message: "Pedido de Uniformes finalizado!", id: pedidoId });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
 });
 
 router.post('/pedidos/admin/finalizar/materiais', verificarToken, async (req, res) => {
@@ -3021,54 +3050,31 @@ router.post('/pedidos/admin/finalizar/materiais', verificarToken, async (req, re
         const { local_id, itens } = req.body;
         const resPed = await client.query(
             `INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, tipo_pedido) 
-             VALUES ($1, $2, 'AUTORIZADO', 'MATERIAIS') RETURNING id`,
-            [req.user.id, local_id]
+             VALUES ($1, $2, 'AUTORIZADO', 'MATERIAL') RETURNING id`, [req.user.id, local_id]
         );
         for (const it of itens) {
             await client.query(`UPDATE produtos SET quantidade_estoque = quantidade_estoque - $1 WHERE id = $2`, [it.quantidade, it.produto_id]);
         }
         await client.query('COMMIT');
-        res.json({ message: "Pedido de Materiais realizado!" });
-    } catch (err) { await client.query('ROLLBACK'); res.status(500).json({ error: err.message }); } finally { client.release(); }
+        res.json({ message: "Sucesso" });
+    } catch (err) { await client.query('ROLLBACK'); res.status(500).send(err.message); } finally { client.release(); }
 });
 
 router.post('/pedidos/admin/finalizar/patrimonios', verificarToken, async (req, res) => {
     const client = await db.connect();
     try {
         await client.query('BEGIN');
-        const { local_id, itens } = req.body; // it.tamanho aqui será o ID do património individual
-
-        // Cria o registo do pedido
+        const { local_id, itens } = req.body;
         const resPed = await client.query(
             `INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, tipo_pedido) 
-             VALUES ($1, $2, 'RECEBIDO', 'PATRIMONIO') RETURNING id`,
-            [req.user.id, local_id]
+             VALUES ($1, $2, 'RECEBIDO', 'PATRIMONIO') RETURNING id`, [req.user.id, local_id]
         );
-        const pedidoId = resPed.rows[0].id;
-
         for (const it of itens) {
-            // Regista o item no pedido
-            await client.query(
-                `INSERT INTO pedido_itens (pedido_id, produto_id, patrimonio_id, quantidade_solicitada) 
-                 VALUES ($1, $2, $3, 1)`,
-                [pedidoId, it.produto_id, it.patrimonio_id]
-            );
-
-            // ATUALIZA O PATRIMÓNIO: Muda o local e o status
-            await client.query(
-                `UPDATE patrimonios 
-                 SET local_id = $1, status = 'ALOCADO', data_ultima_movimentacao = NOW() 
-                 WHERE id = $2`,
-                [local_id, it.patrimonio_id]
-            );
+            await client.query(`UPDATE patrimonios SET local_id = $1, status = 'ALOCADO' WHERE id = $2`, [local_id, it.patrimonio_id]);
         }
-
         await client.query('COMMIT');
-        res.json({ message: "Patrimónios transferidos com sucesso!" });
-    } catch (err) {
-        await client.query('ROLLBACK');
-        res.status(500).json({ error: err.message });
-    } finally { client.release(); }
+        res.json({ message: "Sucesso" });
+    } catch (err) { await client.query('ROLLBACK'); res.status(500).send(err.message); } finally { client.release(); }
 });
 
 module.exports = router;

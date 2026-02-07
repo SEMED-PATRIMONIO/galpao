@@ -10854,20 +10854,37 @@ function addCarrinhoMateriais() {
 
 async function finalizarPedidoUniformes() {
     const localId = document.getElementById('uni_local').value;
-    if (!localId) return alertaVidro("Selecione o destino.", "erro");
+    if (!localId) return alertaVidro("Por favor, selecione a unidade de destino.", "erro");
+
+    if (carrinhoAdminDireto.length === 0) return alertaVidro("O carrinho está vazio.", "erro");
 
     try {
-        const res = await fetch(`${API_URL}/pedidos/admin/finalizar/uniformes`, {
+        const res = await fetch(`${API_URL}/pedidos/admin/v2/uniformes`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${TOKEN}` 
+            },
             body: JSON.stringify({ local_id: localId, itens: carrinhoAdminDireto })
         });
+
         const data = await res.json();
-        if (data.error) throw new Error(data.error);
+
+        if (!res.ok) {
+            // Agora o erro virá detalhado do banco (ex: falta de estoque)
+            throw new Error(data.error || "Erro ao processar pedido.");
+        }
         
-        alertaVidro("Pedido de Uniformes finalizado com sucesso!", "sucesso");
+        alertaVidro("Pedido finalizado com sucesso! O estoque foi atualizado.", "sucesso");
+        
+        // Limpa e volta para o dashboard
+        carrinhoAdminDireto = [];
         carregarDashboard();
-    } catch (err) { alertaVidro("Erro ao processar: " + err.message, "erro"); }
+
+    } catch (err) {
+        console.error("Falha na finalização:", err);
+        alertaVidro("Falha: " + err.message, "erro");
+    }
 }
 
 async function finalizarPedidoMateriais() {

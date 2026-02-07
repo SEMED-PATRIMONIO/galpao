@@ -2333,48 +2333,47 @@ router.post('/pedidos/admin-direto', verificarToken, async (req, res) => {
 });
 
 router.post('/pedidos/admin-direto-final', verificarToken, async (req, res) => {
-    const { local_destino_id, itens } = req.body; 
     const client = await db.connect();
-
     try {
         await client.query('BEGIN');
+        const { local_id, itens } = req.body;
+        const usuario_id = req.user.id;
 
-        // 1. Cria o pedido já 'APROVADO' para cair na separação
-        const pedidoRes = await client.query(
-            `INSERT INTO pedidos (local_destino_id, status, usuario_origem_id, data_criacao) 
-             VALUES ($1, 'APROVADO', $2, NOW()) RETURNING id`,
-            [local_destino_id, req.usuario.id]
+        // Cria o registro mestre do pedido
+        const resPed = await client.query(
+            `INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, tipo_pedido) 
+             VALUES ($1, $2, 'AUTORIZADO', 'ADMIN_DIRETO') RETURNING id`,
+            [usuario_id, local_id]
         );
-        const pedidoId = pedidoRes.rows[0].id;
+        const pedidoId = resPed.rows[0].id;
 
-        // 2. Itera sobre os itens (Usa a tabela 'produtos' conforme seu banco)
-        for (const item of itens) {
-            const baixaRes = await client.query(
-                `UPDATE produtos 
-                 SET quantidade_estoque = quantidade_estoque - $1 
-                 WHERE id = $2 AND quantidade_estoque >= $1
-                 RETURNING nome`,
-                [item.quantidade, item.produto_id]
-            );
-
-            if (baixaRes.rowCount === 0) {
-                throw new Error(`Estoque insuficiente para o produto ID: ${item.produto_id}`);
-            }
-
-            // 3. Registra os itens do pedido
+        for (const it of itens) {
+            // Insere na tabela de itens
             await client.query(
-                `INSERT INTO pedido_itens (pedido_id, produto_id, quantidade, tamanho) 
+                `INSERT INTO pedido_itens (pedido_id, produto_id, quantidade_solicitada, tamanho) 
                  VALUES ($1, $2, $3, $4)`,
-                [pedidoId, item.produto_id, item.quantidade, item.tamanho || 'UNICO']
+                [pedidoId, it.produto_id, it.quantidade, it.tamanho]
             );
+
+            // Baixa no estoque correto
+            if (it.tamanho === 'UNICO') {
+                await client.query(
+                    `UPDATE produtos SET quantidade_estoque = quantidade_estoque - $1 WHERE id = $2`,
+                    [it.quantidade, it.produto_id]
+                );
+            } else {
+                await client.query(
+                    `UPDATE estoque_grades SET quantidade = quantidade - $1 WHERE produto_id = $2 AND tamanho = $3`,
+                    [it.quantidade, it.produto_id, it.tamanho]
+                );
+            }
         }
 
         await client.query('COMMIT');
-        res.json({ message: "Pedido gerado e estoque atualizado com sucesso!" });
-
+        res.json({ message: "Pedido finalizado com sucesso!", id: pedidoId });
     } catch (err) {
         await client.query('ROLLBACK');
-        res.status(500).json({ error: "Erro na transação: " + err.message });
+        res.status(500).json({ error: err.message });
     } finally {
         client.release();
     }

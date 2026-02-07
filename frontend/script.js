@@ -10628,18 +10628,27 @@ function alertaVidro(mensagem, tipo = 'info') {
 }
 
 function modalEscolhaTipoPedido() {
+    // 1. Remove se já existir um aberto para evitar duplicação
+    const antigo = document.getElementById('modal-escolha-pedido');
+    if (antigo) antigo.remove();
+
     const overlay = document.createElement('div');
     overlay.className = 'notificacao-vidro-overlay';
     overlay.id = 'modal-escolha-pedido';
 
     overlay.innerHTML = `
-        <div class="painel-vidro" style="max-width: 500px; text-align: center;">
+        <div class="painel-vidro" style="max-width: 500px; text-align: center; border: 1px solid rgba(255,255,255,0.2);">
             <h2 style="color: white; margin-bottom: 25px;">O QUE DESEJA ENVIAR?</h2>
             
             <div style="display: flex; flex-direction: column; gap: 15px;">
-                <button onclick="telaAdminPedidoUniformes()" class="btn-vidro" style="background: #3b82f6; padding: 20px;">👕 UNIFORMES (Grade de Tamanhos)</button>
-                <button onclick="telaAdminPedidoMateriais()" class="btn-vidro" style="background: #10b981; padding: 20px;">📦 MATERIAIS (Consumíveis)</button>
-                <button onclick="telaAdminPedidoPatrimonios()" class="btn-vidro" style="background: #f59e0b; padding: 20px;">🪑 PATRIMÔNIO (Plaqueta Individual)</button>
+                <button onclick="document.getElementById('modal-escolha-pedido').remove(); telaAdminPedidoUniformes();" 
+                        class="btn-vidro" style="background: #3b82f6; padding: 20px;">👕 UNIFORMES</button>
+                
+                <button onclick="document.getElementById('modal-escolha-pedido').remove(); telaAdminPedidoMateriais();" 
+                        class="btn-vidro" style="background: #10b981; padding: 20px;">📦 MATERIAIS</button>
+                
+                <button onclick="document.getElementById('modal-escolha-pedido').remove(); telaAdminPedidoPatrimonios();" 
+                        class="btn-vidro" style="background: #f59e0b; padding: 20px;">🪑 PATRIMÔNIO</button>
             </div>
 
             <button onclick="document.getElementById('modal-escolha-pedido').remove()" 

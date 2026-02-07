@@ -3208,4 +3208,57 @@ router.post('/pedidos/admin/uniformes/finalizar', verificarToken, async (req, re
     }
 });
 
+router.post('/pedidos/admin/uniformes/direto', verificarToken, async (req, res) => {
+    try {
+        const { local_id, itens } = req.body;
+        const usuario_id = req.user.id;
+
+        // Iniciamos a transação para garantir que ou grava tudo ou nada
+        await db.query('BEGIN');
+
+        // 1. Criar o Pedido (conforme seu \d pedidos)
+        // Usamos o status que você confirmou que funciona no fluxo de autorização
+        const resPed = await db.query(
+            `INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, tipo_pedido) 
+             VALUES ($1, $2, 'AGUARDANDO SEPARAÇÃO', 'UNIFORMES') RETURNING id`,
+            [usuario_id, local_id]
+        );
+        const pedidoId = resPed.rows[0].id;
+
+        for (const it of itens) {
+            // 2. Inserir na tabela pedido_itens (conforme seu \d pedido_itens)
+            // Preenchemos quantidade_solicitada e quantidade (valor total enviado)
+            await db.query(
+                `INSERT INTO pedido_itens (pedido_id, produto_id, quantidade_solicitada, quantidade, tamanho) 
+                 VALUES ($1, $2, $3, $4, $5)`,
+                [pedidoId, it.produto_id, it.quantidade, it.quantidade, it.tamanho]
+            );
+
+            // 3. Baixa na Grade (conforme seu \d estoque_grades)
+            await db.query(
+                `UPDATE estoque_grades 
+                 SET quantidade = quantidade - $1 
+                 WHERE produto_id = $2 AND tamanho = $3`,
+                [it.quantidade, it.produto_id, it.tamanho]
+            );
+
+            // 4. Sincronizar o total na tabela produtos (conforme seu \d produtos)
+            await db.query(
+                `UPDATE produtos 
+                 SET quantidade_estoque = (SELECT SUM(quantidade) FROM estoque_grades WHERE produto_id = $1)
+                 WHERE id = $1`,
+                [it.produto_id]
+            );
+        }
+
+        await db.query('COMMIT');
+        res.json({ success: true, message: "Pedido de Uniformes finalizado com sucesso!" });
+
+    } catch (err) {
+        if (db) await db.query('ROLLBACK');
+        console.error("ERRO REAL NO BANCO:", err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;

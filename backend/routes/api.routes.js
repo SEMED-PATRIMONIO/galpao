@@ -3093,4 +3093,61 @@ router.get('/estoque/produtos-por-tipo/UNIFORMES', verificarToken, async (req, r
     }
 });
 
+router.post('/pedidos/admin/v2/uniformes', verificarToken, async (req, res) => {
+    const client = await db.connect();
+    try {
+        await client.query('BEGIN');
+        const { local_id, itens } = req.body;
+        const usuario_id = req.user.id;
+
+        // 1. Criar o Pedido - Usando o status padrão do seu ENUM para evitar erro 500
+        const resPed = await client.query(
+            `INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, tipo_pedido) 
+             VALUES ($1, $2, 'AGUARDANDO_AUTORIZACAO', 'UNIFORMES') RETURNING id`,
+            [usuario_id, local_id]
+        );
+        const pedidoId = resPed.rows[0].id;
+
+        for (const it of itens) {
+            // 2. Registrar o item no pedido
+            await client.query(
+                `INSERT INTO pedido_itens (pedido_id, produto_id, quantidade_solicitada, tamanho) 
+                 VALUES ($1, $2, $3, $4)`,
+                [pedidoId, it.produto_id, it.quantidade, it.tamanho]
+            );
+
+            // 3. Baixa na Grade (estoque_grades)
+            const resGrade = await client.query(
+                `UPDATE estoque_grades 
+                 SET quantidade = quantidade - $1 
+                 WHERE produto_id = $2 AND tamanho = $3 AND quantidade >= $1`,
+                [it.quantidade, it.produto_id, it.tamanho]
+            );
+
+            if (resGrade.rowCount === 0) {
+                throw new Error(`Estoque insuficiente na grade: Produto ${it.produto_id}, Tamanho ${it.tamanho}`);
+            }
+
+            // 4. Baixa no Total do Produto (produtos.quantidade_estoque)
+            // Isso garante que o saldo geral que aparece na listagem também diminua
+            await client.query(
+                `UPDATE produtos 
+                 SET quantidade_estoque = quantidade_estoque - $1 
+                 WHERE id = $2`,
+                [it.quantidade, it.produto_id]
+            );
+        }
+
+        await client.query('COMMIT');
+        res.json({ success: true, message: "Pedido de Uniformes gravado com sucesso!", pedidoId });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error("ERRO CRÍTICO NO BANCO:", err.message);
+        res.status(500).json({ error: "Erro interno: " + err.message });
+    } finally {
+        client.release();
+    }
+});
+
 module.exports = router;

@@ -3155,4 +3155,57 @@ router.post('/pedidos/admin/v2/uniformes', verificarToken, async (req, res) => {
     }
 });
 
+router.post('/pedidos/admin/uniformes/finalizar', verificarToken, async (req, res) => {
+    try {
+        const { local_id, itens } = req.body;
+        const usuario_id = req.user.id;
+
+        // 1. Inicia a transação
+        await db.query('BEGIN');
+
+        // 2. Criar o cabeçalho do pedido
+        const queryPedido = `
+            INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, tipo_pedido) 
+            VALUES ($1, $2, 'AGUARDANDO_AUTORIZACAO', 'UNIFORMES') 
+            RETURNING id
+        `;
+        const resPed = await db.query(queryPedido, [usuario_id, local_id]);
+        const pedidoId = resPed.rows[0].id;
+
+        // 3. Processar os itens
+        for (const it of itens) {
+            // Grava o item no pedido
+            await db.query(
+                `INSERT INTO pedido_itens (pedido_id, produto_id, quantidade_solicitada, tamanho) 
+                 VALUES ($1, $2, $3, $4)`,
+                [pedidoId, it.produto_id, it.quantidade, it.tamanho]
+            );
+
+            // Baixa na Grade (estoque_grades)
+            await db.query(
+                `UPDATE estoque_grades 
+                 SET quantidade = quantidade - $1 
+                 WHERE produto_id = $2 AND tamanho = $3`,
+                [it.quantidade, it.produto_id, it.tamanho]
+            );
+
+            // Baixa no Saldo Geral (produtos)
+            await db.query(
+                `UPDATE produtos 
+                 SET quantidade_estoque = quantidade_estoque - $1 
+                 WHERE id = $2`,
+                [it.quantidade, it.produto_id]
+            );
+        }
+
+        await db.query('COMMIT');
+        res.json({ success: true, message: "Pedido gravado!" });
+
+    } catch (err) {
+        await db.query('ROLLBACK');
+        console.error("ERRO NO BANCO:", err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;

@@ -10856,10 +10856,10 @@ async function finalizarPedidoUniformes() {
     const localId = document.getElementById('uni_local').value;
     if (!localId) return alertaVidro("Selecione a unidade de destino.", "erro");
 
-    if (carrinhoAdminDireto.length === 0) return alertaVidro("Adicione itens ao carrinho primeiro.", "erro");
+    if (carrinhoAdminDireto.length === 0) return alertaVidro("O carrinho está vazio.", "erro");
 
     try {
-        const res = await fetch(`${API_URL}/pedidos/admin/uniformes/finalizar`, {
+        const res = await fetch(`${API_URL}/pedidos/admin/uniformes/direto`, {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
@@ -10868,18 +10868,24 @@ async function finalizarPedidoUniformes() {
             body: JSON.stringify({ local_id: localId, itens: carrinhoAdminDireto })
         });
 
+        // Verificamos se a resposta é JSON antes de ler
+        const contentType = res.headers.get("content-type");
+        if (!contentType || !contentType.includes("application/json")) {
+            throw new Error("O servidor não respondeu com JSON. Verifique o terminal do Node.");
+        }
+
         const data = await res.json();
 
-        if (!res.ok) throw new Error(data.error || "Erro no servidor.");
+        if (!res.ok) throw new Error(data.error || "Erro desconhecido.");
         
-        alertaVidro("Pedido de Uniformes enviado com sucesso!", "sucesso");
+        alertaVidro("✅ Pedido de Uniformes realizado e estoque baixado!", "sucesso");
         
-        // Limpa o estado e volta
         carrinhoAdminDireto = [];
         carregarDashboard();
 
     } catch (err) {
-        alertaVidro("Falha ao finalizar: " + err.message, "erro");
+        console.error("Erro na finalização:", err.message);
+        alertaVidro("🚨 Falha: " + err.message, "erro");
     }
 }
 
@@ -11003,8 +11009,6 @@ function abrirModalPadrao(conteudoHtml, largura = '800px') {
 
     document.body.appendChild(overlay);
 }
-
-
 
 // Isso garante que o onclick="funcao()" funcione sempre
 window.telaVisualizarEstoque = telaVisualizarEstoque;

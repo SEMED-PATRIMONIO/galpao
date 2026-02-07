@@ -2337,46 +2337,46 @@ router.post('/pedidos/admin-direto-final', verificarToken, async (req, res) => {
     try {
         await client.query('BEGIN');
         const { local_id, itens } = req.body;
-        const usuario_id = req.user.id;
-
-        // Cria o registro mestre do pedido
-        const resPed = await client.query(
-            `INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, tipo_pedido) 
-             VALUES ($1, $2, 'AUTORIZADO', 'ADMIN_DIRETO') RETURNING id`,
-            [usuario_id, local_id]
-        );
-        const pedidoId = resPed.rows[0].id;
 
         for (const it of itens) {
-            // Insere na tabela de itens
-            await client.query(
-                `INSERT INTO pedido_itens (pedido_id, produto_id, quantidade_solicitada, tamanho) 
-                 VALUES ($1, $2, $3, $4)`,
-                [pedidoId, it.produto_id, it.quantidade, it.tamanho]
-            );
+            const tipoRes = await client.query('SELECT tipo FROM produtos WHERE id = $1', [it.produto_id]);
+            const tipo = tipoRes.rows[0].tipo;
 
-            // Baixa no estoque correto
-            if (it.tamanho === 'UNICO') {
+            if (tipo === 'PATRIMONIO') {
+                // REGRA PATRIMÔNIO: Atualiza localização e status do item individual
+                // it.tamanho aqui carrega o ID da tabela patrimonios
                 await client.query(
-                    `UPDATE produtos SET quantidade_estoque = quantidade_estoque - $1 WHERE id = $2`,
-                    [it.quantidade, it.produto_id]
+                    `UPDATE patrimonios 
+                     SET local_id = $1, status = 'ALOCADO', data_ultima_movimentacao = NOW() 
+                     WHERE id = $2`,
+                    [local_id, it.tamanho] 
                 );
-            } else {
+            } 
+            else if (tipo === 'UNIFORMES') {
+                // REGRA UNIFORME: Baixa na grade
                 await client.query(
-                    `UPDATE estoque_grades SET quantidade = quantidade - $1 WHERE produto_id = $2 AND tamanho = $3`,
+                    `UPDATE estoque_grades SET quantidade = quantidade - $1 
+                     WHERE produto_id = $2 AND tamanho = $3`,
                     [it.quantidade, it.produto_id, it.tamanho]
+                );
+                // Opcional: Trigger no banco deve atualizar o total em 'produtos'
+            } 
+            else {
+                // REGRA MATERIAL: Baixa na quantidade geral
+                await client.query(
+                    `UPDATE produtos SET quantidade_estoque = quantidade_estoque - $1 
+                     WHERE id = $2`,
+                    [it.quantidade, it.produto_id]
                 );
             }
         }
 
         await client.query('COMMIT');
-        res.json({ message: "Pedido finalizado com sucesso!", id: pedidoId });
+        res.json({ message: "Movimentação concluída com sucesso!" });
     } catch (err) {
         await client.query('ROLLBACK');
         res.status(500).json({ error: err.message });
-    } finally {
-        client.release();
-    }
+    } finally { client.release(); }
 });
 
 router.get('/estoque/consulta-patrimonio/:serie', verificarToken, async (req, res) => {
@@ -2955,6 +2955,120 @@ router.get('/estoque/produto/:id/grades', verificarToken, async (req, res) => {
     } catch (err) {
         res.status(500).json({ error: "Erro ao buscar grade: " + err.message });
     }
+});
+
+router.get('/estoque/produtos-por-tipo/:tipo', verificarToken, async (req, res) => {
+    try {
+        const { tipo } = req.params;
+        // Se for UNIFORME, verificamos se há saldo em QUALQUER grade. 
+        // Se for MATERIAL/PATRIMONIO, olhamos a quantidade_estoque direta.
+        const query = tipo === 'UNIFORMES' 
+            ? `SELECT DISTINCT p.id, p.nome, p.tipo 
+               FROM produtos p 
+               JOIN estoque_grades eg ON p.id = eg.produto_id 
+               WHERE p.tipo = 'UNIFORMES' AND eg.quantidade > 0 
+               ORDER BY p.nome ASC`
+            : `SELECT id, nome, tipo, quantidade_estoque as saldo 
+               FROM produtos 
+               WHERE tipo = $1 AND quantidade_estoque > 0 
+               ORDER BY nome ASC`;
+
+        const { rows } = await db.query(query, tipo === 'UNIFORMES' ? [] : [tipo]);
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.get('/estoque/patrimonios-disponiveis/:produto_id', verificarToken, async (req, res) => {
+    try {
+        const { produto_id } = req.params;
+        const query = `
+            SELECT id, plaqueta, numero_serie 
+            FROM patrimonios 
+            WHERE produto_id = $1 AND status = 'DISPONIVEL'
+            ORDER BY plaqueta ASC
+        `;
+        const { rows } = await db.query(query, [produto_id]);
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao procurar plaquetas." });
+    }
+});
+
+router.post('/pedidos/admin/finalizar/uniformes', verificarToken, async (req, res) => {
+    const client = await db.connect();
+    try {
+        await client.query('BEGIN');
+        const { local_id, itens } = req.body;
+        const resPed = await client.query(
+            `INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, tipo_pedido) 
+             VALUES ($1, $2, 'AUTORIZADO', 'UNIFORMES') RETURNING id`,
+            [req.user.id, local_id]
+        );
+        for (const it of itens) {
+            await client.query(`UPDATE estoque_grades SET quantidade = quantidade - $1 WHERE produto_id = $2 AND tamanho = $3`, [it.quantidade, it.produto_id, it.tamanho]);
+        }
+        await client.query('COMMIT');
+        res.json({ message: "Pedido de Uniformes realizado!" });
+    } catch (err) { await client.query('ROLLBACK'); res.status(500).json({ error: err.message }); } finally { client.release(); }
+});
+
+router.post('/pedidos/admin/finalizar/materiais', verificarToken, async (req, res) => {
+    const client = await db.connect();
+    try {
+        await client.query('BEGIN');
+        const { local_id, itens } = req.body;
+        const resPed = await client.query(
+            `INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, tipo_pedido) 
+             VALUES ($1, $2, 'AUTORIZADO', 'MATERIAIS') RETURNING id`,
+            [req.user.id, local_id]
+        );
+        for (const it of itens) {
+            await client.query(`UPDATE produtos SET quantidade_estoque = quantidade_estoque - $1 WHERE id = $2`, [it.quantidade, it.produto_id]);
+        }
+        await client.query('COMMIT');
+        res.json({ message: "Pedido de Materiais realizado!" });
+    } catch (err) { await client.query('ROLLBACK'); res.status(500).json({ error: err.message }); } finally { client.release(); }
+});
+
+router.post('/pedidos/admin/finalizar/patrimonios', verificarToken, async (req, res) => {
+    const client = await db.connect();
+    try {
+        await client.query('BEGIN');
+        const { local_id, itens } = req.body; // it.tamanho aqui será o ID do património individual
+
+        // Cria o registo do pedido
+        const resPed = await client.query(
+            `INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, tipo_pedido) 
+             VALUES ($1, $2, 'RECEBIDO', 'PATRIMONIO') RETURNING id`,
+            [req.user.id, local_id]
+        );
+        const pedidoId = resPed.rows[0].id;
+
+        for (const it of itens) {
+            // Regista o item no pedido
+            await client.query(
+                `INSERT INTO pedido_itens (pedido_id, produto_id, patrimonio_id, quantidade_solicitada) 
+                 VALUES ($1, $2, $3, 1)`,
+                [pedidoId, it.produto_id, it.patrimonio_id]
+            );
+
+            // ATUALIZA O PATRIMÓNIO: Muda o local e o status
+            await client.query(
+                `UPDATE patrimonios 
+                 SET local_id = $1, status = 'ALOCADO', data_ultima_movimentacao = NOW() 
+                 WHERE id = $2`,
+                [local_id, it.patrimonio_id]
+            );
+        }
+
+        await client.query('COMMIT');
+        res.json({ message: "Patrimónios transferidos com sucesso!" });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    } finally { client.release(); }
 });
 
 module.exports = router;

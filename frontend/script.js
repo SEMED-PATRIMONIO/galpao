@@ -6657,10 +6657,10 @@ async function telaAdminCriarPedido() {
 
                         <label style="color:white; display:block; margin-bottom:8px;">PRODUTO:</label>
                         <select id="admin_direto_produto" class="input-vidro" onchange="configurarGradeAdminDireto()" style="width:100%; margin-bottom:15px; background: rgba(255,255,255,0.1); color: white;">
-                            <option value="" data-tipo="">-- SELECIONE O ITEM --</option>
+                            <option value="" data-tipo="" data-estoque="0">-- SELECIONE O ITEM --</option>
                             ${produtos.map(p => `
-                                <option value="${p.id}" data-tipo="${p.tipo}" style="background: #1e3a8a;">
-                                    ${p.nome} (${p.tipo}) - Saldo: ${p.quantidade_estoque}
+                                <option value="${p.id}" data-tipo="${p.tipo}" data-estoque="${p.quantidade_estoque || 0}" style="background: #1e3a8a;">
+                                    ${p.nome} (${p.tipo}) - Saldo: ${p.quantidade_estoque || 0}
                                 </option>
                             `).join('')}
                         </select>
@@ -6704,16 +6704,14 @@ async function configurarGradeAdminDireto() {
     const selectProd = document.getElementById('admin_direto_produto');
     const selectTam = document.getElementById('admin_direto_tamanho');
     const opcaoProd = selectProd.options[selectProd.selectedIndex];
+    const saldoFixo = opcaoProd.getAttribute('data-estoque');
     const tipo = opcaoProd.getAttribute('data-tipo');
     const produtoId = selectProd.value;
 
     if (!produtoId) return;
 
     if (tipo !== 'UNIFORMES') {
-        // Para materiais, buscamos o saldo total que já está no texto da opção ou no objeto original
-        // Vou extrair o saldo do texto "(Total: X)" ou você pode usar um atributo data-estoque no select de produtos
-        const saldoGeral = parseInt(opcaoProd.text.match(/Total: (\d+)/)[1]);
-        selectTam.innerHTML = `<option value="UNICO" data-estoque="${saldoGeral}" style="background: #1e3a8a;">TAMANHO ÚNICO (Disp: ${saldoGeral})</option>`;
+        selectTam.innerHTML = `<option value="UNICO" data-estoque="${saldoFixo}" style="background: #1e3a8a;">TAMANHO ÚNICO (Disp: ${saldoFixo})</option>`;
         selectTam.disabled = true;
         return;
     }
@@ -6741,25 +6739,25 @@ async function configurarGradeAdminDireto() {
 
 async function enviarPedidoAdminDireto() {
     const localId = document.getElementById('admin_direto_local').value;
-    if (!localId) return alert("Selecione o local de destino.");
-
-    if (!confirm("Isso gerará baixa imediata no estoque e enviará o pedido para a expedição. Confirma?")) return;
+    if (!localId) return alertaVidro("Selecione a unidade de destino.", "erro");
 
     try {
         const res = await fetch(`${API_URL}/pedidos/admin-direto-final`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
-            body: JSON.stringify({ local_destino_id: localId, itens: carrinhoAdminDireto })
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${TOKEN}` 
+            },
+            body: JSON.stringify({ local_id: localId, itens: carrinhoAdminDireto })
         });
 
-        if (res.ok) {
-            alert("✅ Pedido finalizado com sucesso!");
-            carregarDashboard();
-        } else {
-            const erro = await res.json();
-            alert("Erro: " + erro.error);
-        }
-    } catch (err) { alert("Falha na comunicação com o servidor."); }
+        if (!res.ok) throw new Error("Falha no processamento.");
+        
+        alertaVidro("Pedido enviado e estoque atualizado!", "sucesso");
+        carregarDashboard();
+    } catch (err) {
+        alertaVidro("Erro ao finalizar pedido no servidor.", "erro");
+    }
 }
 
 function adicionarAoCarrinhoAdminDireto() {
@@ -6848,7 +6846,6 @@ function renderizarCarrinhoAdmin() {
         return;
     }
 
-    // Ativa o botão de envio pois agora há itens
     btnEnviar.disabled = false;
     btnEnviar.style.opacity = "1";
 

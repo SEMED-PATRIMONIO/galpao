@@ -3077,4 +3077,20 @@ router.post('/pedidos/admin/finalizar/patrimonios', verificarToken, async (req, 
     } catch (err) { await client.query('ROLLBACK'); res.status(500).send(err.message); } finally { client.release(); }
 });
 
+router.get('/estoque/produtos-por-tipo/UNIFORMES', verificarToken, async (req, res) => {
+    try {
+        const query = `
+            SELECT DISTINCT p.id, p.nome 
+            FROM produtos p
+            INNER JOIN estoque_grades eg ON p.id = eg.produto_id
+            WHERE p.tipo = 'UNIFORMES' AND eg.quantidade > 0
+            ORDER BY p.nome ASC
+        `;
+        const { rows } = await db.query(query);
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao filtrar uniformes." });
+    }
+});
+
 module.exports = router;

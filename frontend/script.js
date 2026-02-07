@@ -6837,6 +6837,59 @@ function atualizarVisualCarrinhoAdmin() {
     btn.style.background = "#3b82f6";
 }
 
+function renderizarCarrinhoAdmin() {
+    const display = document.getElementById('display-carrinho-admin');
+    const btnEnviar = document.getElementById('btnFinalizarAdmin');
+
+    if (carrinhoAdminDireto.length === 0) {
+        display.innerHTML = '<p style="text-align:center; opacity:0.6;">Aguardando itens...</p>';
+        btnEnviar.disabled = true;
+        btnEnviar.style.opacity = "0.5";
+        return;
+    }
+
+    // Ativa o botão de envio pois agora há itens
+    btnEnviar.disabled = false;
+    btnEnviar.style.opacity = "1";
+
+    display.innerHTML = `
+        <div style="background:rgba(0,0,0,0.2); border-radius:10px; overflow:hidden;">
+            <table style="width:100%; border-collapse: collapse; color:white; font-size:0.85rem;">
+                <thead style="background:rgba(255,255,255,0.1);">
+                    <tr>
+                        <th style="padding:12px; text-align:left;">PRODUTO</th>
+                        <th style="padding:12px; text-align:center;">TAM.</th>
+                        <th style="padding:12px; text-align:center;">QTD</th>
+                        <th style="padding:12px; text-align:right;">AÇÃO</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${carrinhoAdminDireto.map((item, index) => `
+                        <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                            <td style="padding:10px 12px; font-weight:bold;">${item.nome}</td>
+                            <td style="padding:10px 12px; text-align:center;">${item.tamanho}</td>
+                            <td style="padding:10px 12px; text-align:center;">${item.quantidade}</td>
+                            <td style="padding:10px 12px; text-align:right;">
+                                <button onclick="removerItemCarrinhoAdmin(${index})" 
+                                        style="background:#f87171; color:white; border:none; padding:5px 10px; border-radius:5px; cursor:pointer; font-size:0.7rem;">
+                                    🗑️ REMOVER
+                                </button>
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+}
+
+function removerItemCarrinhoAdmin(index) {
+    // Remove o item do array pelo índice
+    carrinhoAdminDireto.splice(index, 1);
+    // Atualiza a tela novamente
+    renderizarCarrinhoAdmin();
+}
+
 async function salvarPedidoDiretoAdmin() {
     const local_id = document.getElementById('admin_local_destino').value;
     

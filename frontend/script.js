@@ -10854,10 +10854,12 @@ function addCarrinhoMateriais() {
 
 async function finalizarPedidoUniformes() {
     const localId = document.getElementById('uni_local').value;
-    if (!localId) return alertaVidro("Selecione o destino.", "erro");
+    if (!localId) return alertaVidro("Selecione a unidade de destino.", "erro");
+
+    if (carrinhoAdminDireto.length === 0) return alertaVidro("Adicione itens ao carrinho primeiro.", "erro");
 
     try {
-        const res = await fetch(`${API_URL}/pedidos/admin/v2/uniformes`, {
+        const res = await fetch(`${API_URL}/pedidos/admin/uniformes/finalizar`, {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
@@ -10866,20 +10868,18 @@ async function finalizarPedidoUniformes() {
             body: JSON.stringify({ local_id: localId, itens: carrinhoAdminDireto })
         });
 
-        // Se o servidor responder 500, ele envia um JSON com a chave "error"
         const data = await res.json();
 
-        if (!res.ok) {
-            throw new Error(data.error || "Erro desconhecido no servidor.");
-        }
+        if (!res.ok) throw new Error(data.error || "Erro no servidor.");
         
-        alertaVidro("Pedido finalizado com sucesso!", "sucesso");
+        alertaVidro("Pedido de Uniformes enviado com sucesso!", "sucesso");
+        
+        // Limpa o estado e volta
+        carrinhoAdminDireto = [];
         carregarDashboard();
 
     } catch (err) {
-        // Agora o alertaVidro vai mostrar o erro REAL do banco (ex: "coluna x não existe")
-        alertaVidro("Falha: " + err.message, "erro");
-        console.error("Detalhes:", err);
+        alertaVidro("Falha ao finalizar: " + err.message, "erro");
     }
 }
 
@@ -11003,6 +11003,8 @@ function abrirModalPadrao(conteudoHtml, largura = '800px') {
 
     document.body.appendChild(overlay);
 }
+
+
 
 // Isso garante que o onclick="funcao()" funcione sempre
 window.telaVisualizarEstoque = telaVisualizarEstoque;

@@ -2942,4 +2942,20 @@ router.get('/admin/dashboard/stats', verificarToken, async (req, res) => {
     }
 });
 
+router.get('/estoque/produto/:id/grades', verificarToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const query = `
+            SELECT tamanho, quantidade 
+            FROM estoque_grades 
+            WHERE produto_id = $1 AND quantidade > 0
+            ORDER BY tamanho ASC
+        `;
+        const { rows } = await db.query(query, [id]);
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao buscar grade: " + err.message });
+    }
+});
+
 module.exports = router;

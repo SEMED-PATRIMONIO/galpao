@@ -6657,10 +6657,13 @@ async function telaAdminCriarPedido() {
 
                         <label style="color:white; display:block; margin-bottom:8px;">PRODUTO:</label>
                         <select id="admin_direto_produto" class="input-vidro" onchange="configurarGradeAdminDireto()" style="width:100%; margin-bottom:15px; background: rgba(255,255,255,0.1); color: white;">
-                            <option value="" style="background: #1e3a8a;">-- SELECIONE O ITEM --</option>
-                            ${produtos.map(p => `<option value="${p.id}" style="background: #1e3a8a;">${p.nome} (Total: ${p.quantidade_estoque})</option>`).join('')}
+                            <option value="" data-tipo="">-- SELECIONE O ITEM --</option>
+                            ${produtos.map(p => `
+                                <option value="${p.id}" data-tipo="${p.tipo}" style="background: #1e3a8a;">
+                                    ${p.nome} (${p.tipo}) - Saldo: ${p.quantidade_estoque}
+                                </option>
+                            `).join('')}
                         </select>
-
                         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:20px;">
                             <div>
                                 <label style="color:white; display:block; margin-bottom:8px;">TAMANHO / GRADE:</label>
@@ -6698,25 +6701,48 @@ async function telaAdminCriarPedido() {
 }
 
 async function configurarGradeAdminDireto() {
-    const produtoId = document.getElementById('admin_direto_produto').value;
-    const selectTamanho = document.getElementById('admin_direto_tamanho');
-    
+    const selectProd = document.getElementById('admin_direto_produto');
+    const selectTam = document.getElementById('admin_direto_tamanho');
+    const opcaoSelecionada = selectProd.options[selectProd.selectedIndex];
+    const tipo = opcaoSelecionada.getAttribute('data-tipo');
+    const produtoId = selectProd.value;
+
     if (!produtoId) return;
 
+    // LÓGICA DE BLOQUEIO: Só ativa grade para UNIFORMES
+    if (tipo !== 'UNIFORMES') {
+        selectTam.innerHTML = '<option value="UNICO" style="background: #1e3a8a;">TAMANHO ÚNICO</option>';
+        selectTam.disabled = true;
+        selectTam.style.opacity = "0.5";
+        return;
+    }
+
+    // Se for UNIFORME, ativa e busca no banco
+    selectTam.disabled = false;
+    selectTam.style.opacity = "1";
+    selectTam.innerHTML = '<option value="" style="background: #1e3a8a;">Carregando grade...</option>';
+
     try {
-        // Busca a grade real deste produto no estoque
         const res = await fetch(`${API_URL}/estoque/produto/${produtoId}/grades`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
+        
         const grades = await res.json();
 
-        selectTamanho.innerHTML = grades.map(g => 
-            `<option value="${g.tamanho}" style="background: #1e3a8a; color: white;">${g.tamanho} (Disp: ${g.quantidade})</option>`
-        ).join('') || '<option value="UNICO" style="background: #1e3a8a;">ÚNICO / SEM GRADE</option>';
-
+        if (grades.length === 0) {
+            selectTam.innerHTML = '<option value="" style="background: #1e3a8a;">❌ SEM ESTOQUE DE GRADE</option>';
+        } else {
+            selectTam.innerHTML = grades.map(g => `
+                <option value="${g.tamanho}" style="background: #1e3a8a;">
+                    ${g.tamanho} (Disponível: ${g.quantidade})
+                </option>
+            `).join('');
+        }
     } catch (err) {
         console.error("Erro ao carregar grade:", err);
-        selectTamanho.innerHTML = '<option value="UNICO" style="background: #1e3a8a;">ERRO AO CARREGAR</option>';
+        if (typeof alertaVidro === 'function') {
+            alertaVidro("Erro de comunicação com o servidor ao buscar grade.", "erro");
+        }
     }
 }
 

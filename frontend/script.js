@@ -10854,9 +10854,9 @@ function addCarrinhoMateriais() {
 
 async function finalizarPedidoUniformes() {
     const localId = document.getElementById('uni_local').value;
-    if (!localId) return alertaVidro("Selecione a unidade de destino.", "erro");
+    if (!localId) return alertaVidro("Selecione o destino.", "erro");
 
-    if (carrinhoAdminDireto.length === 0) return alertaVidro("Adicione itens ao carrinho.", "erro");
+    if (carrinhoAdminDireto.length === 0) return alertaVidro("O carrinho está vazio.", "erro");
 
     try {
         const res = await fetch(`${API_URL}/pedidos/admin/uniformes/finalizar-v3`, {
@@ -10870,16 +10870,16 @@ async function finalizarPedidoUniformes() {
 
         const data = await res.json();
 
-        if (!res.ok) throw new Error(data.error || "Erro no processamento.");
+        if (!res.ok) throw new Error(data.error || "Erro no servidor");
         
-        alertaVidro("✅ Pedido criado e liberado para SEPARAÇÃO!", "sucesso");
+        alertaVidro("✅ Pedido de Uniformes enviado para SEPARAÇÃO!", "sucesso");
         
         carrinhoAdminDireto = [];
-        carregarDashboard(); // Volta para a tela principal
+        carregarDashboard();
 
     } catch (err) {
-        console.error("Erro na finalização V3:", err.message);
-        alertaVidro("🚨 Falha ao salvar: " + err.message, "erro");
+        console.error("Erro:", err.message);
+        alertaVidro("🚨 Erro ao salvar: " + err.message, "erro");
     }
 }
 

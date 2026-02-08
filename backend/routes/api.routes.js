@@ -3286,7 +3286,7 @@ router.post('/pedidos/admin/uniformes/finalizar-v3', verificarToken, async (req,
         for (const it of itens) {
             // 2. Inserir em pedido_itens (usando colunas confirmadas: quantidade_solicitada e quantidade)
             await db.query(
-                `INSERT INTO pedido_itens (pedido_id, produto_id, quantidade_solicitada, quantidade, tamanho) 
+                `INSERT INTO estoque_grades (pedido_id, produto_id, quantidade_solicitada, quantidade, tamanho) 
                  VALUES ($1, $2, $3, $3, $4)`,
                 [pedidoId, it.produto_id, it.quantidade, it.tamanho]
             );

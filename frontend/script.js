@@ -10856,10 +10856,10 @@ async function finalizarPedidoUniformes() {
     const localId = document.getElementById('uni_local').value;
     if (!localId) return alertaVidro("Selecione a unidade de destino.", "erro");
 
-    if (carrinhoAdminDireto.length === 0) return alertaVidro("O carrinho está vazio.", "erro");
+    if (carrinhoAdminDireto.length === 0) return alertaVidro("Adicione itens ao carrinho.", "erro");
 
     try {
-        const res = await fetch(`${API_URL}/pedidos/admin/uniformes/direto`, {
+        const res = await fetch(`${API_URL}/pedidos/admin/uniformes/finalizar-v3`, {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
@@ -10868,24 +10868,18 @@ async function finalizarPedidoUniformes() {
             body: JSON.stringify({ local_id: localId, itens: carrinhoAdminDireto })
         });
 
-        // Verificamos se a resposta é JSON antes de ler
-        const contentType = res.headers.get("content-type");
-        if (!contentType || !contentType.includes("application/json")) {
-            throw new Error("O servidor não respondeu com JSON. Verifique o terminal do Node.");
-        }
-
         const data = await res.json();
 
-        if (!res.ok) throw new Error(data.error || "Erro desconhecido.");
+        if (!res.ok) throw new Error(data.error || "Erro no processamento.");
         
-        alertaVidro("✅ Pedido de Uniformes realizado e estoque baixado!", "sucesso");
+        alertaVidro("✅ Pedido criado e liberado para SEPARAÇÃO!", "sucesso");
         
         carrinhoAdminDireto = [];
-        carregarDashboard();
+        carregarDashboard(); // Volta para a tela principal
 
     } catch (err) {
-        console.error("Erro na finalização:", err.message);
-        alertaVidro("🚨 Falha: " + err.message, "erro");
+        console.error("Erro na finalização V3:", err.message);
+        alertaVidro("🚨 Falha ao salvar: " + err.message, "erro");
     }
 }
 

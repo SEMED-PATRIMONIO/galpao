@@ -3261,4 +3261,60 @@ router.post('/pedidos/admin/uniformes/direto', verificarToken, async (req, res) 
     }
 });
 
+router.post('/pedidos/admin/uniformes/finalizar-v3', verificarToken, async (req, res) => {
+    try {
+        const { local_id, itens } = req.body;
+        const usuario_id = req.user.id;
+
+        // Iniciamos a transação
+        await db.query('BEGIN');
+
+        // 1. Criar o Pedido com status de fluxo logístico
+        const queryPedido = `
+            INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, tipo_pedido, data_criacao) 
+            VALUES ($1, $2, 'AGUARDANDO_SEPARACAO', 'UNIFORMES', NOW()) 
+            RETURNING id
+        `;
+        const resPed = await db.query(queryPedido, [usuario_id, local_id]);
+        const pedidoId = resPed.rows[0].id;
+
+        for (const it of itens) {
+            // 2. Inserir em pedido_itens
+            await db.query(
+                `INSERT INTO pedido_itens (pedido_id, produto_id, quantidade_solicitada, quantidade, tamanho) 
+                 VALUES ($1, $2, $3, $4, $5)`,
+                [pedidoId, it.produto_id, it.quantidade, it.quantidade, it.tamanho]
+            );
+
+            // 3. Baixa na Grade (estoque_grades)
+            const resGrade = await db.query(
+                `UPDATE estoque_grades 
+                 SET quantidade = quantidade - $1 
+                 WHERE produto_id = $2 AND tamanho = $3 AND quantidade >= $1`,
+                [it.quantidade, it.produto_id, it.tamanho]
+            );
+
+            if (resGrade.rowCount === 0) {
+                throw new Error(`Saldo insuficiente para ${it.nome} (${it.tamanho})`);
+            }
+
+            // 4. Atualizar o total na tabela produtos
+            await db.query(
+                `UPDATE produtos 
+                 SET quantidade_estoque = quantidade_estoque - $1 
+                 WHERE id = $2`,
+                [it.quantidade, it.produto_id]
+            );
+        }
+
+        await db.query('COMMIT');
+        res.json({ success: true, message: "Pedido liberado para separação!" });
+
+    } catch (err) {
+        if (db) await db.query('ROLLBACK');
+        console.error("ERRO CRÍTICO V3:", err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;

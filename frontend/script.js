@@ -10857,7 +10857,7 @@ async function finalizarPedidoUniformes() {
     if (!localId) return alertaVidro("Selecione a unidade de destino.", "erro");
 
     try {
-        const res = await fetch(`${API_URL}/pedidos/admin/uniformes/criar`, {
+        const res = await fetch(`${API_URL}/pedidos/admin/uniformes/direto`, {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
@@ -10869,7 +10869,7 @@ async function finalizarPedidoUniformes() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
         
-        alertaVidro("✅ Pedido criado com sucesso!", "sucesso");
+        alertaVidro("✅ Pedido criado e disponível para separação!", "sucesso");
         
         carrinhoAdminDireto = [];
         carregarDashboard();

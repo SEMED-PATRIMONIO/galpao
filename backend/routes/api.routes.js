@@ -3408,4 +3408,55 @@ router.post('/pedidos/admin/direto/uniformes-exclusivo', verificarToken, async (
     }
 });
 
+router.post('/pedidos/admin/uniformes/concluir-direto', verificarToken, async (req, res) => {
+    try {
+        const { local_id, itens } = req.body;
+        const usuario_id = (req.user && req.user.id) ? req.user.id : 1; 
+
+        await db.query('BEGIN');
+
+        // 1. Criar o Pedido (Status AGUARDANDO_SEPARACAO para cair na lista do estoque)
+        const resPed = await db.query(
+            `INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, tipo_pedido, data_criacao) 
+             VALUES ($1, $2, 'AGUARDANDO_SEPARACAO', 'UNIFORMES', NOW()) 
+             RETURNING id`,
+            [usuario_id, local_id]
+        );
+        const pedidoId = resPed.rows[0].id;
+
+        for (const it of itens) {
+            // 2. O PONTO CHAVE: Gravar na itens_pedido (a tabela que você confirmou que funciona)
+            await db.query(
+                `INSERT INTO itens_pedido (pedido_id, produto_id, tamanho, quantidade) 
+                 VALUES ($1, $2, $3, $4)`,
+                [pedidoId, it.produto_id, it.tamanho, it.quantidade]
+            );
+
+            // 3. BAIXA NA GRADE: Atualiza o saldo real da grade
+            await db.query(
+                `UPDATE estoque_grades 
+                 SET quantidade = quantidade - $1 
+                 WHERE produto_id = $2 AND tamanho = $3`,
+                [it.quantidade, it.produto_id, it.tamanho]
+            );
+
+            // 4. SINCRONIZAÇÃO: Atualiza o total na tabela produtos (já que o sistema não faz sozinho)
+            await db.query(
+                `UPDATE produtos 
+                 SET quantidade_estoque = (SELECT SUM(quantidade) FROM estoque_grades WHERE produto_id = $1)
+                 WHERE id = $1`,
+                [it.produto_id]
+            );
+        }
+
+        await db.query('COMMIT');
+        res.json({ success: true, message: "Pedido criado e estoque atualizado!" });
+
+    } catch (err) {
+        if (db) await db.query('ROLLBACK');
+        console.error("ERRO NO BANCO:", err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;

@@ -319,6 +319,9 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="telaAdminGerenciarSolicitacoes()">
                 <i>⚖️</i><span>AUTORIZAR SOLICITAÇÕES</span>
             </button>
+            <button class="btn-grande btn-vidro" onclick="telaAdminGerenciarDevolucoes()">
+                <i>🔄</i><span>AUTORIZAR DEVOLUÇÕES</span>
+            </button>
             <button class="btn-grande btn-vidro" onclick="telaAbastecerEstoque()">
                 <i>📥</i><span>ENTRADA ESTOQUE</span>
             </button>
@@ -331,7 +334,7 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" style="background:rgba(16, 185, 129, 0.2);" onclick="telaEstoqueMateriaisEPatrimonios()">
                 <i>📦</i><span>VER ESTOQUE DE MATERIAIS</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="telaInventarioLocal()">
+            <button class="btn-grande btn-vidro btn-breve" // ---onclick="telaInventarioLocal()">
                 <i>🏷️</i><span>INVENTÁRIO PATRIMÔNIO</span>
             </button>
             <button class="btn-grande btn-vidro btn-breve" // ---onclick="telaAdminDashboard()">
@@ -352,14 +355,14 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="telaEstoquePedidosPendentes()">
                 <i>📦</i><span>SEPARAÇÃO DE VOLUMES</span>
             </button>
+            <button class="btn-grande btn-vidro" onclick="telaAdminGerenciarDevolucoes()">
+                <i>🔄</i><span>RECEBER DEVOLUÇÕES</span>
+            </button>            
             <button class="btn-grande btn-vidro onclick="telaCadastrosBase()">
                 <i>⚙️</i><span>CADASTROS BÁSICOS</span>
             </button>            
             <button class="btn-grande btn-vidro" onclick="telaAbastecerEstoque()">
                 <i>📥</i><span>ENTRADA ESTOQUE</span>
-            </button>
-            <button class="btn-grande btn-vidro" onclick="telaReceberDevolucoes()">
-                <i>🔄</i><span>RECEBER DEVOLUÇÕES</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="telaVisualizarEstoque()">
                 <i>👕</i><span>VER ESTOQUE DE UNIFORMES</span>
@@ -376,15 +379,6 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro btn-breve" //  --- onclick="telaEntradaPatrimonioLote()">
                 <i>🏷️</i><span>LANÇAR ENTRADA PATRIMÔNIO</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="telaGerenciarPatrimonio()">
-                <i>🏷️</i><span>CONSULTAR / MOVER PATRIMÔNIO</span>
-            </button>
-            <button class="btn-grande btn-vidro btn-breve" onclick="abrirModalBaixa(patrimonioId, produtoId, numeroSerie)">
-                <i>🏷️</i><span>BAIXAR PATRIMÔNIO (INSERVÍVEL)</span>
-            </button> 
-            <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaResumoBaixasAnual()">
-                <i>🏷️</i><span>RELATÓRIO ANUAL BAIXA DE PATRIMÔNIO</span>
-            </button> 
             <button class="btn-grande btn-vidro" onclick="abrirCalculadoraConversao()">
                 <i>🧮</i><span>CALCULADORA</span>
             </button>
@@ -7687,22 +7681,26 @@ async function telaReceberDevolucoes() {
     } catch (err) { alert("Erro ao carregar devoluções."); }
 }
 
-async function confirmarRecebimentoDevolucao(id) {
-    if (!confirm("Confirma que todos os itens desta lista chegaram fisicamente ao stock central?")) return;
+async function confirmarRecebimentoDevolucao(pedidoId) {
+    if (!confirm("Você confirma que recebeu estes itens e deseja integrá-los ao estoque?")) return;
 
     try {
-        const res = await fetch(`${API_URL}/pedidos/${id}/confirmar-devolucao`, {
+        const res = await fetch(`${API_URL}/pedidos/admin/devolucoes/confirmar`, {
             method: 'POST',
-            headers: { 'Authorization': `Bearer ${TOKEN}` }
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ pedidoId })
         });
 
         if (res.ok) {
-            alert("✅ STOCK ATUALIZADO COM SUCESSO!");
-            telaReceberDevolucoes();
+            alertaVidro("✅ Estoque atualizado!", "sucesso");
+            telaAdminGerenciarDevolucoes(); // Recarrega a lista
         } else {
-            alert("Erro ao processar a devolução no servidor.");
+            const erro = await res.json();
+            alert("Erro: " + erro.error);
         }
-    } catch (err) { alert("Erro ao processar."); }
+    } catch (err) {
+        alert("Erro de conexão.");
+    }
 }
 
 async function telaAcompanhamentoGeral() {
@@ -10686,7 +10684,7 @@ async function telaAdminPedidoPatrimonios() {
                 </div>
                 <div id="display-carrinho-admin" class="painel-interno-vidro">Aguardando...</div>
             </div>
-            <button id="btnFinalizar" onclick="finalizarPedidoPatrimonios()" disabled class="btn-grande btn-vidro" style="margin-top:20px;">🚀 FINALIZAR PATRIMÔNIOS</button>
+            <button id="btnFinalizar" onclick="finalizarPedidoPatrimonioDireto()" disabled class="btn-grande btn-vidro" style="margin-top:20px;">🚀 FINALIZAR PATRIMÔNIOS</button>
         </div>
     `;
 }
@@ -11027,6 +11025,138 @@ async function finalizarPedidoMateriaisDireto() {
     } catch (err) {
         console.error("Erro materiais:", err.message);
         alertaVidro("🚨 Erro: " + err.message, "erro");
+    }
+}
+
+async function finalizarPedidoPatrimonioDireto() {
+    const localId = document.getElementById('pat_local').value;
+    if (!localId) return alertaVidro("Selecione a unidade de destino.", "erro");
+    if (carrinhoAdminDireto.length === 0) return alertaVidro("Nenhum item no carrinho!", "erro");
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/admin/patrimonio/concluir-direto`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json', 
+                'Authorization': `Bearer ${TOKEN}` 
+            },
+            body: JSON.stringify({ local_id: localId, itens: carrinhoAdminDireto })
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+            alertaVidro("✅ Transferência de Patrimônio iniciada!", "sucesso");
+            carrinhoAdminDireto = []; 
+            carregarDashboard();      
+        } else {
+            throw new Error(data.error || "Erro ao processar patrimônio");
+        }
+
+    } catch (err) {
+        console.error("Erro patrimônio:", err.message);
+        alertaVidro("🚨 Erro: " + err.message, "erro");
+    }
+}
+
+async function telaAdminGerenciarDevolucoes() {
+    const app = document.getElementById('app-content');
+    const res = await fetch(`${API_URL}/pedidos/admin/devolucoes/pendentes`, { 
+        headers: { 'Authorization': `Bearer ${TOKEN}` } 
+    });
+    const de透过olucao = await res.json();
+
+    app.innerHTML = `
+        <div style="padding:20px; background:#f8fafc; min-height:100vh;">
+            <div style="display:flex; justify-content:space-between; margin-bottom:25px;">
+                <h2 style="color:#0f172a; margin:0;">📥 RECEBER DEVOLUÇÕES</h2>
+                <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background:#475569;">VOLTAR</button>
+            </div>
+
+            <div style="display:grid; gap:15px;">
+                ${de透過olucao.map(d => `
+                    <div style="background:white; padding:20px; border-radius:12px; border-left:8px solid #f59e0b; display:flex; justify-content:space-between; align-items:center; box-shadow:0 4px 6px rgba(0,0,0,0.05);">
+                        <div>
+                            <div style="font-weight:bold; color:#d97706; font-size:1.1rem;">📍 ${d.escola_nome}</div>
+                            <div style="color:#475569;">Solicitante: ${d.solicitante}</div>
+                            <div style="color:#94a3b8; font-size:0.8rem;">Enviado em: ${new Date(d.data_criacao).toLocaleString('pt-BR')}</div>
+                        </div>
+                        <button onclick="confirmarRecebimentoDevolucao(${d.id})" style="background:#16a34a; color:white; border:none; padding:15px 25px; border-radius:10px; font-weight:bold; cursor:pointer;">
+                            CONFERIR E RECEBER
+                        </button>
+                    </div>
+                `).join('')}
+                ${de透過olucao.length === 0 ? '<div style="text-align:center; padding:50px; color:#94a3b8;">Nenhuma devolução aguardando recebimento.</div>' : ''}
+            </div>
+        </div>
+    `;
+}
+
+async function analisarDevolucaoEstoque(pedidoId) {
+    const modal = document.getElementById('modal-analise-devolucao');
+    const res = await fetch(`${API_URL}/estoque/devolucao/detalhes/${pedidoId}`, {
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+    const itens = await res.json();
+
+    let htmlItens = itens.map(i => `
+        <tr style="border-bottom: 1px solid #eee;">
+            <td style="padding:12px; font-weight:bold;">${i.produto_nome} (${i.tamanho})</td>
+            <td style="padding:12px; text-align:center; color:#64748b;">${i.quantidade} (Decl.)</td>
+            <td style="padding:12px; text-align:right;">
+                <input type="number" id="qtd_real_${i.id}" value="${i.quantidade}" 
+                       style="width:80px; padding:8px; border:2px solid #2563eb; border-radius:6px; text-align:center; font-weight:bold;">
+            </td>
+        </tr>
+    `).join('');
+
+    modal.style.display = 'flex';
+    modal.innerHTML = `
+        <div style="background:white; padding:30px; border-radius:15px; width:90%; max-width:600px; box-shadow:0 20px 25px rgba(0,0,0,0.3);">
+            <h3 style="color:#1e3a8a; margin-top:0;">📦 Conferência de Devolução #${pedidoId}</h3>
+            <p style="color:#64748b; font-size:0.9rem; margin-bottom:20px;">Confirme as quantidades físicas recebidas abaixo:</p>
+            
+            <table style="width:100%; border-collapse:collapse; margin-bottom:25px;">
+                <thead style="background:#f8fafc;">
+                    <tr><th style="text-align:left; padding:12px;">PRODUTO</th><th>DECLARADO</th><th style="text-align:right;">RECEBIDO</th></tr>
+                </thead>
+                <tbody>${htmlItens}</tbody>
+            </table>
+
+            <div style="display:flex; gap:10px;">
+                <button onclick="salvarRecebimentoDevolucao(${pedidoId}, ${JSON.stringify(itens.map(i => i.id))})" 
+                        style="flex:2; background:#16a34a; color:white; border:none; padding:15px; border-radius:8px; font-weight:bold; cursor:pointer;">
+                    ✅ CONFIRMAR E ATUALIZAR ESTOQUE
+                </button>
+                <button onclick="document.getElementById('modal-analise-devolucao').style.display='none'" 
+                        style="flex:1; background:#64748b; color:white; border:none; padding:15px; border-radius:8px; font-weight:bold; cursor:pointer;">
+                    CANCELAR
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+async function salvarRecebimentoDevolucao(pedidoId, idsItens) {
+    const itensConferidos = idsItens.map(id => ({
+        id: id,
+        quantidade_real: Number(document.getElementById(`qtd_real_${id}`).value)
+    }));
+
+    try {
+        const res = await fetch(`${API_URL}/estoque/devolucao/confirmar-final`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ pedidoId, itensConferidos })
+        });
+
+        if (res.ok) {
+            alertaVidro("✅ Estoque atualizado com as quantidades conferidas!", "sucesso");
+            document.getElementById('modal-analise-devolucao').style.display = 'none';
+            telaEstoqueListarDevolucoes(); // Função que lista as pendentes
+        }
+    } catch (err) {
+        alert("Erro ao processar recebimento.");
     }
 }
 

@@ -3563,20 +3563,39 @@ router.post('/pedidos/admin/patrimonio/concluir-direto', verificarToken, async (
 
 router.get('/pedidos/admin/devolucoes/pendentes', verificarToken, async (req, res) => {
     try {
-        const query = `
+        const resList = await db.query(`
             SELECT p.*, l.nome as escola_nome, u.nome as solicitante 
             FROM pedidos p
-            JOIN locais l ON p.usuario_origem_id = l.id -- Local de origem (Escola)
+            JOIN locais l ON p.usuario_origem_id = l.id
             JOIN usuarios u ON p.usuario_origem_id = u.id
-            WHERE p.tipo_pedido = 'DEVOLUCAO' 
-            AND p.status = 'DEVOLUCAO_PENDENTE'
-            ORDER BY p.data_criacao DESC`;
-            
-        const result = await db.query(query);
-        res.json(result.rows);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
+            WHERE p.tipo_pedido = 'DEVOLUCAO' AND p.status = 'DEVOLUCAO_PENDENTE'
+            ORDER BY p.data_criacao DESC`);
+        res.json(resList.rows);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/pedidos/estoque/devolucoes/para-receber', verificarToken, async (req, res) => {
+    try {
+        const resList = await db.query(`
+            SELECT p.*, l.nome as escola_nome 
+            FROM pedidos p
+            JOIN locais l ON p.usuario_origem_id = l.id
+            WHERE p.tipo_pedido = 'DEVOLUCAO' AND p.status = 'DEVOLUCAO_EM_TRANSITO'
+            ORDER BY p.data_criacao ASC`);
+        res.json(resList.rows);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/pedidos/logistica/devolucoes/para-coletar', verificarToken, async (req, res) => {
+    try {
+        const resList = await db.query(`
+            SELECT p.*, l.nome as escola_nome 
+            FROM pedidos p
+            JOIN locais l ON p.usuario_origem_id = l.id
+            WHERE p.tipo_pedido = 'DEVOLUCAO' AND p.status = 'DEVOLUCAO_AUTORIZADA'
+            ORDER BY p.data_criacao ASC`);
+        res.json(resList.rows);
+    } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 router.post('/pedidos/admin/devolucoes/confirmar', verificarToken, async (req, res) => {
@@ -3668,6 +3687,58 @@ router.post('/estoque/devolucao/confirmar-final', verificarToken, async (req, re
         if (db) await db.query('ROLLBACK');
         res.status(500).json({ error: err.message });
     }
+});
+
+router.post('/pedidos/admin/devolucoes/autorizar', verificarToken, async (req, res) => {
+    try {
+        const { pedidoId } = req.body;
+        // Usando o status permitido: DEVOLUCAO_AUTORIZADA
+        await db.query("UPDATE pedidos SET status = 'DEVOLUCAO_AUTORIZADA' WHERE id = $1", [pedidoId]);
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/pedidos/logistica/devolucoes/coletar', verificarToken, async (req, res) => {
+    try {
+        const { pedidoId } = req.body;
+        // Usando o status permitido: DEVOLUCAO_EM_TRANSITO
+        await db.query("UPDATE pedidos SET status = 'DEVOLUCAO_EM_TRANSITO' WHERE id = $1", [pedidoId]);
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/pedidos/estoque/devolucoes/finalizar-recebimento', verificarToken, async (req, res) => {
+    try {
+        const { pedidoId, itensConferidos } = req.body; 
+        await db.query('BEGIN');
+
+        for (const it of itensConferidos) {
+            // 1. Atualiza a itens_pedido com a quantidade REAL contada pelo estoquista
+            await db.query('UPDATE itens_pedido SET quantidade = $1 WHERE id = $2', [it.quantidade_real, it.id]);
+
+            // 2. Incrementa o estoque na grade (se houver tamanho)
+            if (it.tamanho && it.tamanho !== 'UNICO' && it.tamanho !== 'TAG') {
+                await db.query(
+                    `UPDATE estoque_grades SET quantidade = quantidade + $1 
+                     WHERE produto_id = $2 AND tamanho = $3`,
+                    [it.quantidade_real, it.produto_id, it.tamanho]
+                );
+            }
+
+            // 3. Incrementa o saldo global do produto
+            await db.query(
+                `UPDATE produtos SET quantidade_estoque = quantidade_estoque + $1 
+                 WHERE id = $2`,
+                [it.quantidade_real, it.produto_id]
+            );
+        }
+
+        // 4. Finaliza com o status permitido: DEVOLVIDO
+        await db.query("UPDATE pedidos SET status = 'DEVOLVIDO', data_recebimento = NOW() WHERE id = $1", [pedidoId]);
+
+        await db.query('COMMIT');
+        res.json({ success: true });
+    } catch (err) { if (db) await db.query('ROLLBACK'); res.status(500).json({ error: err.message }); }
 });
 
 module.exports = router;

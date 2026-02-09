@@ -3264,17 +3264,13 @@ router.post('/pedidos/admin/uniformes/direto', verificarToken, async (req, res) 
 router.post('/pedidos/admin/uniformes/finalizar-v3', verificarToken, async (req, res) => {
     try {
         const { local_id, itens } = req.body;
-        
-        // CORREÇÃO DO ERRO 'undefined id':
-        // Se o req.user falhar, pegamos o ID 1 (Admin padrão) para não travar o processo
         const usuario_id = (req.user && req.user.id) ? req.user.id : 1; 
 
-        console.log("LOG: Iniciando gravação para local:", local_id, "Usuário:", usuario_id);
+        console.log("LOG: Iniciando baixa direta em estoque_grades para o local:", local_id);
 
-        // Iniciamos a transação usando db.query direto (sem .connect())
         await db.query('BEGIN');
 
-        // 1. Criar o Pedido com status 'SEPARACAO_INICIADA'
+        // 1. Criar o cabeçalho do Pedido (Apenas registro de movimentação)
         const resPed = await db.query(
             `INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, tipo_pedido, data_criacao) 
              VALUES ($1, $2, 'AGUARDANDO_SEPARACAO', 'UNIFORMES', NOW()) 
@@ -3284,37 +3280,36 @@ router.post('/pedidos/admin/uniformes/finalizar-v3', verificarToken, async (req,
         const pedidoId = resPed.rows[0].id;
 
         for (const it of itens) {
-            // 2. Inserir em pedido_itens (usando colunas confirmadas: quantidade_solicitada e quantidade)
-            await db.query(
-                `INSERT INTO estoque_grades (pedido_id, produto_id, quantidade_solicitada, quantidade, tamanho) 
-                 VALUES ($1, $2, $3, $3, $4)`,
-                [pedidoId, it.produto_id, it.quantidade, it.tamanho]
-            );
-
-            // 3. Baixa na Grade (estoque_grades)
-            await db.query(
+            // 2. BAIXA REAL: Subtrai a quantidade do tamanho específico
+            // A regra "quantidade >= $1" impede que o estoque fique negativo
+            const resGrade = await db.query(
                 `UPDATE estoque_grades 
                  SET quantidade = quantidade - $1 
-                 WHERE produto_id = $2 AND tamanho = $3`,
+                 WHERE produto_id = $2 AND tamanho = $3 AND quantidade >= $1`,
                 [it.quantidade, it.produto_id, it.tamanho]
             );
 
-            // 4. Baixa no Total (produtos)
+            if (resGrade.rowCount === 0) {
+                throw new Error(`Saldo insuficiente na grade: Produto ${it.produto_id}, Tam: ${it.tamanho}`);
+            }
+
+            // 3. SINCRONIZAÇÃO: Atualiza o total na tabela 'produtos'
+            // O total do produto será sempre a soma de todas as suas grades
             await db.query(
                 `UPDATE produtos 
-                 SET quantidade_estoque = quantidade_estoque - $1 
-                 WHERE id = $2`,
-                [it.quantidade, it.produto_id]
+                 SET quantidade_estoque = (SELECT SUM(quantidade) FROM estoque_grades WHERE produto_id = $1)
+                 WHERE id = $1`,
+                [it.produto_id]
             );
         }
 
         await db.query('COMMIT');
-        console.log("LOG: Pedido gravado com sucesso. ID:", pedidoId);
-        res.json({ success: true, message: "Pedido enviado para separação!" });
+        console.log(`LOG: Sucesso! Pedido #${pedidoId} gerado e estoque_grades atualizada.`);
+        res.json({ success: true, message: "Estoque atualizado e pedido registrado!" });
 
     } catch (err) {
         if (db) await db.query('ROLLBACK');
-        console.error("ERRO FINAL NO BANCO:", err.message);
+        console.error("ERRO NA BAIXA DE ESTOQUE:", err.message);
         res.status(500).json({ error: err.message });
     }
 });

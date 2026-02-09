@@ -3459,4 +3459,52 @@ router.post('/pedidos/admin/uniformes/concluir-direto', verificarToken, async (r
     }
 });
 
+router.post('/pedidos/admin/materiais/concluir-direto', verificarToken, async (req, res) => {
+    try {
+        const { local_id, itens } = req.body;
+        const usuario_id = (req.user && req.user.id) ? req.user.id : 1; 
+
+        await db.query('BEGIN');
+
+        // 1. Criar o Pedido
+        const resPed = await db.query(
+            `INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, tipo_pedido, data_criacao) 
+             VALUES ($1, $2, 'AGUARDANDO_SEPARACAO', 'MATERIAL', NOW()) 
+             RETURNING id`,
+            [usuario_id, local_id]
+        );
+        const pedidoId = resPed.rows[0].id;
+
+        for (const it of itens) {
+            // 2. Gravar na itens_pedido (Para o estoque conseguir visualizar na separação)
+            // Usamos 'UNICO' no tamanho para não deixar o campo vazio
+            await db.query(
+                `INSERT INTO itens_pedido (pedido_id, produto_id, tamanho, quantidade) 
+                 VALUES ($1, $2, 'UNICO', $3)`,
+                [pedidoId, it.produto_id, it.quantidade]
+            );
+
+            // 3. BAIXA DIRETA NO ESTOQUE: Como não há grade, alteramos direto na tabela produtos
+            const resBaixa = await db.query(
+                `UPDATE produtos 
+                 SET quantidade_estoque = quantidade_estoque - $1 
+                 WHERE id = $2 AND quantidade_estoque >= $1`,
+                [it.quantidade, it.produto_id]
+            );
+
+            if (resBaixa.rowCount === 0) {
+                throw new Error(`Estoque insuficiente para o produto ID ${it.produto_id}`);
+            }
+        }
+
+        await db.query('COMMIT');
+        res.json({ success: true, message: "Pedido de materiais criado com sucesso!" });
+
+    } catch (err) {
+        if (db) await db.query('ROLLBACK');
+        console.error("ERRO MATERIAIS:", err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;

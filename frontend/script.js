@@ -11064,7 +11064,7 @@ async function telaAdminGerenciarDevolucoes() {
     const res = await fetch(`${API_URL}/pedidos/admin/devolucoes/pendentes`, { 
         headers: { 'Authorization': `Bearer ${TOKEN}` } 
     });
-    const de透过olucao = await res.json();
+    const devolucao = await res.json();
 
     app.innerHTML = `
         <div style="padding:20px; background:#f8fafc; min-height:100vh;">

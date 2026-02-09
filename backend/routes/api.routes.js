@@ -3365,4 +3365,55 @@ router.post('/pedidos/admin/uniformes/direto-final', verificarToken, async (req,
     }
 });
 
+router.post('/pedidos/admin/uniformes/criar', verificarToken, async (req, res) => {
+    try {
+        const { local_id, itens } = req.body;
+        const usuario_id = (req.user && req.user.id) ? req.user.id : 1; 
+
+        await db.query('BEGIN');
+
+        // 1. Criar o Pedido com status padrão para separação
+        const resPed = await db.query(
+            `INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, tipo_pedido, data_criacao) 
+             VALUES ($1, $2, 'AGUARDANDO_SEPARACAO', 'UNIFORMES', NOW()) 
+             RETURNING id`,
+            [usuario_id, local_id]
+        );
+        const pedidoId = resPed.rows[0].id;
+
+        for (const it of itens) {
+            // 2. CORREÇÃO: quantidade_solicitada recebe o valor, e quantidade (enviada) fica 0
+            // Isso faz com que a tela de conferência mostre o item para ser separado
+            await db.query(
+                `INSERT INTO pedido_itens (pedido_id, produto_id, quantidade_solicitada, quantidade, tamanho) 
+                 VALUES ($1, $2, $3, 0, $4)`,
+                [pedidoId, it.produto_id, it.quantidade, it.tamanho]
+            );
+
+            // 3. Baixa na estoque_grades (Garante que o saldo da grade diminua)
+            await db.query(
+                `UPDATE estoque_grades 
+                 SET quantidade = quantidade - $1 
+                 WHERE produto_id = $2 AND tamanho = $3`,
+                [it.quantidade, it.produto_id, it.tamanho]
+            );
+
+            // 4. Sincroniza o total na tabela produtos
+            await db.query(
+                `UPDATE produtos 
+                 SET quantidade_estoque = (SELECT SUM(quantidade) FROM estoque_grades WHERE produto_id = $1)
+                 WHERE id = $1`,
+                [it.produto_id]
+            );
+        }
+
+        await db.query('COMMIT');
+        res.json({ success: true, message: "Pedido criado!" });
+
+    } catch (err) {
+        if (db) await db.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;

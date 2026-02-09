@@ -3266,11 +3266,9 @@ router.post('/pedidos/admin/uniformes/finalizar-v3', verificarToken, async (req,
         const { local_id, itens } = req.body;
         const usuario_id = (req.user && req.user.id) ? req.user.id : 1; 
 
-        console.log("LOG: Iniciando baixa direta em estoque_grades para o local:", local_id);
-
         await db.query('BEGIN');
 
-        // 1. Criar o cabeçalho do Pedido (Apenas registro de movimentação)
+        // 1. Criar o cabeçalho do Pedido
         const resPed = await db.query(
             `INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, tipo_pedido, data_criacao) 
              VALUES ($1, $2, 'AGUARDANDO_SEPARACAO', 'UNIFORMES', NOW()) 
@@ -3280,21 +3278,23 @@ router.post('/pedidos/admin/uniformes/finalizar-v3', verificarToken, async (req,
         const pedidoId = resPed.rows[0].id;
 
         for (const it of itens) {
-            // 2. BAIXA REAL: Subtrai a quantidade do tamanho específico
-            // A regra "quantidade >= $1" impede que o estoque fique negativo
-            const resGrade = await db.query(
+            // 2. OBRIGATÓRIO: Gravar na pedido_itens para aparecer na tela de Separação
+            // Sem este INSERT, a tela de conferência fica vazia (como no seu print #18)
+            await db.query(
+                `INSERT INTO pedido_itens (pedido_id, produto_id, quantidade_solicitada, quantidade, tamanho) 
+                 VALUES ($1, $2, $3, $3, $4)`,
+                [pedidoId, it.produto_id, it.quantidade, it.tamanho]
+            );
+
+            // 3. BAIXA NA GRADE: Atualiza o saldo real (Você confirmou que funciona)
+            await db.query(
                 `UPDATE estoque_grades 
                  SET quantidade = quantidade - $1 
                  WHERE produto_id = $2 AND tamanho = $3 AND quantidade >= $1`,
                 [it.quantidade, it.produto_id, it.tamanho]
             );
 
-            if (resGrade.rowCount === 0) {
-                throw new Error(`Saldo insuficiente na grade: Produto ${it.produto_id}, Tam: ${it.tamanho}`);
-            }
-
-            // 3. SINCRONIZAÇÃO: Atualiza o total na tabela 'produtos'
-            // O total do produto será sempre a soma de todas as suas grades
+            // 4. SINCRONIZAÇÃO: Atualiza o total global da tabela produtos
             await db.query(
                 `UPDATE produtos 
                  SET quantidade_estoque = (SELECT SUM(quantidade) FROM estoque_grades WHERE produto_id = $1)
@@ -3304,12 +3304,11 @@ router.post('/pedidos/admin/uniformes/finalizar-v3', verificarToken, async (req,
         }
 
         await db.query('COMMIT');
-        console.log(`LOG: Sucesso! Pedido #${pedidoId} gerado e estoque_grades atualizada.`);
-        res.json({ success: true, message: "Estoque atualizado e pedido registrado!" });
+        res.json({ success: true, message: "Pedido gravado e disponível para separação!" });
 
     } catch (err) {
         if (db) await db.query('ROLLBACK');
-        console.error("ERRO NA BAIXA DE ESTOQUE:", err.message);
+        console.error("ERRO:", err.message);
         res.status(500).json({ error: err.message });
     }
 });

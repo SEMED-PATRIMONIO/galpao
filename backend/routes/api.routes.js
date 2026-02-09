@@ -3319,4 +3319,38 @@ router.post('/pedidos/admin/uniformes/finalizar-v3', verificarToken, async (req,
     }
 });
 
+router.post('/pedidos/admin/gerar-solicitacao', verificarToken, async (req, res) => {
+    try {
+        const { local_id, itens } = req.body;
+        const usuario_id = req.user.id;
+
+        await db.query('BEGIN');
+
+        // 1. Cria o Pedido (Status: AGUARDANDO_AUTORIZACAO)
+        const resPed = await db.query(
+            `INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, tipo_pedido, data_criacao) 
+             VALUES ($1, $2, 'AGUARDANDO_AUTORIZACAO', 'UNIFORMES', NOW()) 
+             RETURNING id`,
+            [usuario_id, local_id]
+        );
+        const pedidoId = resPed.rows[0].id;
+
+        // 2. Insere os itens (Obrigatório para a tela de análise/separação ler)
+        for (const it of itens) {
+            await db.query(
+                `INSERT INTO pedido_itens (pedido_id, produto_id, quantidade_solicitada, quantidade, tamanho) 
+                 VALUES ($1, $2, $3, 0, $4)`,
+                [pedidoId, it.produto_id, it.quantidade, it.tamanho]
+            );
+        }
+
+        await db.query('COMMIT');
+        res.json({ success: true, pedidoId }); // Retorna o ID para o front autorizar
+
+    } catch (err) {
+        if (db) await db.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;

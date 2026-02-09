@@ -10857,25 +10857,36 @@ async function finalizarPedidoUniformes() {
     if (!localId) return alertaVidro("Selecione a unidade de destino.", "erro");
 
     try {
-        const res = await fetch(`${API_URL}/pedidos/admin/uniformes/direto`, {
+        // PASSO 1: Criar a Solicitação base
+        const resCriar = await fetch(`${API_URL}/pedidos/admin/gerar-solicitacao`, {
             method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${TOKEN}` 
-            },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
             body: JSON.stringify({ local_id: localId, itens: carrinhoAdminDireto })
         });
 
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error);
-        
-        alertaVidro("✅ Pedido criado e disponível para separação!", "sucesso");
-        
-        carrinhoAdminDireto = [];
-        carregarDashboard();
+        const dataCriar = await resCriar.json();
+        if (!resCriar.ok) throw new Error(dataCriar.error);
+
+        const novoPedidoId = dataCriar.pedidoId;
+
+        // PASSO 2: Chamar a SUA rota de autorização (A que funciona!)
+        const resAuto = await fetch(`${API_URL}/pedidos/autorizar-final`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ pedidoId: novoPedidoId })
+        });
+
+        if (resAuto.ok) {
+            alertaVidro("✅ Pedido criado, autorizado e enviado para separação!", "sucesso");
+            carrinhoAdminDireto = [];
+            carregarDashboard();
+        } else {
+            const erroAuto = await resAuto.json();
+            throw new Error("Erro na autorização automática: " + erroAuto.error);
+        }
 
     } catch (err) {
-        alertaVidro("🚨 Falha ao salvar: " + err.message, "erro");
+        alertaVidro("🚨 Falha no processo: " + err.message, "erro");
     }
 }
 

@@ -10783,7 +10783,7 @@ async function telaAdminPedidoMateriais() {
                 </div>
                 <div id="display-carrinho-admin" class="painel-interno-vidro">Aguardando...</div>
             </div>
-            <button id="btnFinalizar" onclick="finalizarPedidoMateriais()" disabled class="btn-grande btn-vidro" style="margin-top:20px;">🚀 FINALIZAR MATERIAIS</button>
+            <button id="btnFinalizar" onclick="finalizarPedidoMateriaisDireto()" disabled class="btn-grande btn-vidro" style="margin-top:20px;">🚀 FINALIZAR MATERIAIS</button>
         </div>
     `;
 }
@@ -10997,6 +10997,37 @@ function abrirModalPadrao(conteudoHtml, largura = '800px') {
     `;
 
     document.body.appendChild(overlay);
+}
+
+async function finalizarPedidoMateriaisDireto() {
+    const localId = document.getElementById('mat_local').value;
+    if (!localId) return alertaVidro("Selecione a unidade de destino.", "erro");
+    if (carrinhoAdminDireto.length === 0) return alertaVidro("Adicione itens ao carrinho!", "erro");
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/admin/materiais/concluir-direto`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json', 
+                'Authorization': `Bearer ${TOKEN}` 
+            },
+            body: JSON.stringify({ local_id: localId, itens: carrinhoAdminDireto })
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+            alertaVidro("✅ Pedido de Materiais realizado!", "sucesso");
+            carrinhoAdminDireto = []; 
+            carregarDashboard();      
+        } else {
+            throw new Error(data.error || "Erro ao processar materiais");
+        }
+
+    } catch (err) {
+        console.error("Erro materiais:", err.message);
+        alertaVidro("🚨 Erro: " + err.message, "erro");
+    }
 }
 
 // Isso garante que o onclick="funcao()" funcione sempre

@@ -10746,7 +10746,7 @@ async function telaAdminPedidoUniformes() {
                     <div id="container-carrinho" style="border-left: 1px solid rgba(255,255,255,0.1); padding-left: 20px;">
                         <h3 style="color: white; margin-top:0; font-size:1rem; opacity:0.8;">Resumo do Envio</h3>
                         <div id="display-carrinho-admin" style="min-height: 150px; color: #cbd5e1;">Aguardando itens...</div>
-                        <button id="btnFinalizar" onclick="finalizarPedidoUniformesDireto()" disabled class="btn-vidro" style="width:100%; margin-top:20px; opacity:0.5; background:#2563eb;">
+                        <button id="btnFinalizar" onclick="finalizarPedidoUniformes()" disabled class="btn-vidro" style="width:100%; margin-top:20px; opacity:0.5; background:#2563eb;">
                             🚀 FINALIZAR E DAR BAIXA
                         </button>
                     </div>
@@ -10857,36 +10857,24 @@ async function finalizarPedidoUniformes() {
     if (!localId) return alertaVidro("Selecione a unidade de destino.", "erro");
 
     try {
-        // PASSO 1: Criar a Solicitação base
-        const resCriar = await fetch(`${API_URL}/pedidos/admin/gerar-solicitacao`, {
+        const res = await fetch(`${API_URL}/pedidos/admin/uniformes/concluir-direto`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            headers: { 
+                'Content-Type': 'application/json', 
+                'Authorization': `Bearer ${TOKEN}` 
+            },
             body: JSON.stringify({ local_id: localId, itens: carrinhoAdminDireto })
         });
 
-        const dataCriar = await resCriar.json();
-        if (!resCriar.ok) throw new Error(dataCriar.error);
-
-        const novoPedidoId = dataCriar.pedidoId;
-
-        // PASSO 2: Chamar a SUA rota de autorização (A que funciona!)
-        const resAuto = await fetch(`${API_URL}/pedidos/autorizar-final`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
-            body: JSON.stringify({ pedidoId: novoPedidoId })
-        });
-
-        if (resAuto.ok) {
-            alertaVidro("✅ Pedido criado, autorizado e enviado para separação!", "sucesso");
-            carrinhoAdminDireto = [];
-            carregarDashboard();
-        } else {
-            const erroAuto = await resAuto.json();
-            throw new Error("Erro na autorização automática: " + erroAuto.error);
-        }
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        
+        alertaVidro("✅ Pedido direto realizado com sucesso!", "sucesso");
+        carrinhoAdminDireto = [];
+        carregarDashboard();
 
     } catch (err) {
-        alertaVidro("🚨 Falha no processo: " + err.message, "erro");
+        alertaVidro("🚨 Erro ao salvar: " + err.message, "erro");
     }
 }
 
@@ -11009,37 +10997,6 @@ function abrirModalPadrao(conteudoHtml, largura = '800px') {
     `;
 
     document.body.appendChild(overlay);
-}
-
-async function finalizarPedidoUniformesDireto() {
-    const localId = document.getElementById('uni_local').value;
-    if (!localId) return alertaVidro("Selecione a unidade de destino.", "erro");
-    if (carrinhoAdminDireto.length === 0) return alertaVidro("Carrinho vazio!", "erro");
-
-    try {
-        const res = await fetch(`${API_URL}/pedidos/admin/direto/uniformes-exclusivo`, {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json', 
-                'Authorization': `Bearer ${TOKEN}` 
-            },
-            body: JSON.stringify({ local_id: localId, itens: carrinhoAdminDireto })
-        });
-
-        const data = await res.json();
-
-        if (res.ok) {
-            alertaVidro("✅ Pedido direto realizado e enviado para o estoque!", "sucesso");
-            carrinhoAdminDireto = []; // Limpa o carrinho
-            carregarDashboard();      // Volta para a home
-        } else {
-            throw new Error(data.error || "Erro desconhecido");
-        }
-
-    } catch (err) {
-        console.error("Erro no processo exclusivo:", err.message);
-        alertaVidro("🚨 Erro: " + err.message, "erro");
-    }
 }
 
 // Isso garante que o onclick="funcao()" funcione sempre

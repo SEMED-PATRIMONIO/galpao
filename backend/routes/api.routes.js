@@ -3507,4 +3507,167 @@ router.post('/pedidos/admin/materiais/concluir-direto', verificarToken, async (r
     }
 });
 
+router.post('/pedidos/admin/patrimonio/concluir-direto', verificarToken, async (req, res) => {
+    try {
+        const { local_id, itens } = req.body;
+        const usuario_id = (req.user && req.user.id) ? req.user.id : 1; 
+
+        await db.query('BEGIN');
+
+        // 1. Criar o Pedido Mestre
+        const resPed = await db.query(
+            `INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, tipo_pedido, data_criacao) 
+             VALUES ($1, $2, 'AGUARDANDO_SEPARACAO', 'PATRIMONIO', NOW()) 
+             RETURNING id`,
+            [usuario_id, local_id]
+        );
+        const pedidoId = resPed.rows[0].id;
+
+        for (const it of itens) {
+            // 2. Gravar na itens_pedido (Necessário para a tela de separação)
+            // Vinculamos o patrimonio_id para que o estoquista saiba qual plaqueta pegar
+            await db.query(
+                `INSERT INTO itens_pedido (pedido_id, produto_id, patrimonio_id, quantidade, tamanho) 
+                 VALUES ($1, $2, $3, 1, 'TAG')`,
+                [pedidoId, it.produto_id, it.patrimonio_id]
+            );
+
+            // 3. ATUALIZAR STATUS DO BEM: Marca como 'EM_TRANSFERENCIA' ou similar
+            // Impede que o mesmo item seja pedido por outra pessoa
+            await db.query(
+                `UPDATE patrimonios 
+                 SET status = 'EM_TRANSFERENCIA', 
+                     data_ultima_movimentacao = NOW() 
+                 WHERE id = $1`,
+                [it.patrimonio_id]
+            );
+
+            // 4. BAIXA NO SALDO GERAL: Diminui 1 unidade do total do produto
+            await db.query(
+                `UPDATE produtos 
+                 SET quantidade_estoque = quantidade_estoque - 1 
+                 WHERE id = $1`,
+                [it.produto_id]
+            );
+        }
+
+        await db.query('COMMIT');
+        res.json({ success: true, message: "Pedido de Patrimônio registrado e bens reservados!" });
+
+    } catch (err) {
+        if (db) await db.query('ROLLBACK');
+        console.error("ERRO PATRIMONIO:", err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.get('/pedidos/admin/devolucoes/pendentes', verificarToken, async (req, res) => {
+    try {
+        const query = `
+            SELECT p.*, l.nome as escola_nome, u.nome as solicitante 
+            FROM pedidos p
+            JOIN locais l ON p.usuario_origem_id = l.id -- Local de origem (Escola)
+            JOIN usuarios u ON p.usuario_origem_id = u.id
+            WHERE p.tipo_pedido = 'DEVOLUCAO' 
+            AND p.status = 'DEVOLUCAO_PENDENTE'
+            ORDER BY p.data_criacao DESC`;
+            
+        const result = await db.query(query);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/pedidos/admin/devolucoes/confirmar', verificarToken, async (req, res) => {
+    try {
+        const { pedidoId } = req.body;
+        await db.query('BEGIN');
+
+        // 1. Busca os itens da devolução na tabela que confirmamos (itens_pedido)
+        const itens = await db.query('SELECT * FROM itens_pedido WHERE pedido_id = $1', [pedidoId]);
+
+        for (const it of itens.rows) {
+            // 2. Se for Uniforme (tem tamanho específico), aumenta na grade
+            if (it.tamanho && it.tamanho !== 'UNICO' && it.tamanho !== 'TAG') {
+                await db.query(
+                    `UPDATE estoque_grades SET quantidade = quantidade + $1 
+                     WHERE produto_id = $2 AND tamanho = $3`,
+                    [it.quantidade, it.produto_id, it.tamanho]
+                );
+            }
+
+            // 3. Em todos os casos, aumenta o saldo global na tabela produtos
+            await db.query(
+                `UPDATE produtos SET quantidade_estoque = quantidade_estoque + $1 
+                 WHERE id = $2`,
+                [it.quantidade, it.produto_id]
+            );
+        }
+
+        // 4. Finaliza o status do pedido
+        await db.query("UPDATE pedidos SET status = 'CONCLUIDO', data_recebimento = NOW() WHERE id = $1", [pedidoId]);
+
+        await db.query('COMMIT');
+        res.json({ success: true, message: "Itens incorporados ao estoque com sucesso!" });
+    } catch (err) {
+        if (db) await db.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.get('/estoque/devolucao/detalhes/:pedidoId', verificarToken, async (req, res) => {
+    try {
+        const { pedidoId } = params;
+        const query = `
+            SELECT i.*, p.nome as produto_nome 
+            FROM itens_pedido i
+            JOIN produtos p ON i.produto_id = p.id
+            WHERE i.pedido_id = $1`;
+        const result = await db.query(query, [pedidoId]);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/estoque/devolucao/confirmar-final', verificarToken, async (req, res) => {
+    try {
+        const { pedidoId, itensConferidos } = req.body; // itensConferidos: [{id, quantidade_real}]
+        await db.query('BEGIN');
+
+        for (const it of itensConferidos) {
+            // 1. Busca os dados originais do item para saber produto e tamanho
+            const resItem = await db.query('SELECT * FROM itens_pedido WHERE id = $1', [it.id]);
+            const original = resItem.rows[0];
+
+            // 2. Atualiza a quantidade na itens_pedido para o que foi realmente recebido
+            await db.query('UPDATE itens_pedido SET quantidade = $1 WHERE id = $2', [it.quantidade_real, it.id]);
+
+            // 3. Atualiza o ESTOQUE REAL (Grade e Global)
+            if (original.tamanho && original.tamanho !== 'UNICO' && original.tamanho !== 'TAG') {
+                await db.query(
+                    `UPDATE estoque_grades SET quantidade = quantidade + $1 
+                     WHERE produto_id = $2 AND tamanho = $3`,
+                    [it.quantidade_real, original.produto_id, original.tamanho]
+                );
+            }
+
+            await db.query(
+                `UPDATE produtos SET quantidade_estoque = quantidade_estoque + $1 WHERE id = $2`,
+                [it.quantidade_real, original.produto_id]
+            );
+        }
+
+        // 4. Finaliza o status do pedido
+        await db.query("UPDATE pedidos SET status = 'CONCLUIDO', data_recebimento = NOW() WHERE id = $1", [pedidoId]);
+
+        await db.query('COMMIT');
+        res.json({ success: true });
+    } catch (err) {
+        if (db) await db.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;

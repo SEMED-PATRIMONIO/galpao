@@ -1707,29 +1707,28 @@ router.get('/pedidos/escola/a-caminho', verificarToken, async (req, res) => {
 });
 
 router.get('/pedidos/escola/limite-devolucao', verificarToken, async (req, res) => {
-    const usuario_id = req.userId;
-
     try {
-        const result = await db.query(`
-            SELECT 
-                prod.id AS produto_id, 
-                prod.nome AS produto_nome, 
-                pri.tamanho, 
-                SUM(pri.quantidade_enviada)::integer AS total_recebido
-            FROM pedido_remessa_itens pri
-            JOIN pedido_remessas pr ON pri.remessa_id = pr.id
-            JOIN pedidos p ON pr.pedido_id = p.id
-            JOIN produtos prod ON pri.produto_id = prod.id
-            WHERE p.local_destino_id = (SELECT local_id FROM usuarios WHERE id = $1)
-              AND p.data_criacao >= NOW() - INTERVAL '30 days'
-              AND p.status IN ('ENTREGUE', 'EM_TRANSPORTE', 'COLETA_LIBERADA')
-            GROUP BY prod.id, prod.nome, pri.tamanho
-            HAVING SUM(pri.quantidade_enviada) > 0
-        `, [usuario_id]);
+        const escolaId = req.user.local_id; // ID da escola logada
 
+        const query = `
+            SELECT 
+                ip.produto_id, 
+                p.nome as produto_nome, 
+                ip.tamanho, 
+                SUM(ip.quantidade) as total_recebido
+            FROM pedidos ped
+            JOIN itens_pedido ip ON ped.id = ip.pedido_id -- O erro costuma estar aqui (usando pedido_itens)
+            JOIN produtos p ON ip.produto_id = p.id
+            WHERE ped.local_destino_id = $1 
+              AND ped.status = 'ENTREGUE' -- Só o que já foi entregue pode ser devolvido
+              AND ped.data_recebimento >= NOW() - INTERVAL '30 days'
+            GROUP BY ip.produto_id, p.nome, ip.tamanho
+            HAVING SUM(ip.quantidade) > 0`;
+
+        const result = await db.query(query, [escolaId]);
         res.json(result.rows);
     } catch (err) {
-        res.status(500).json({ error: "Erro ao calcular limite: " + err.message });
+        res.status(500).json({ error: err.message });
     }
 });
 

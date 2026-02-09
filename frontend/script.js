@@ -319,7 +319,7 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="telaAdminGerenciarSolicitacoes()">
                 <i>⚖️</i><span>AUTORIZAR SOLICITAÇÕES</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="telaAdminGerenciarDevolucoes()">
+            <button class="btn-grande btn-vidro" onclick="listarDevolucoesAdmin()">
                 <i>🔄</i><span>AUTORIZAR DEVOLUÇÕES</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="telaAbastecerEstoque()">
@@ -355,7 +355,7 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="telaEstoquePedidosPendentes()">
                 <i>📦</i><span>SEPARAÇÃO DE VOLUMES</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="telaAdminGerenciarDevolucoes()">
+            <button class="btn-grande btn-vidro" onclick="listarDevolucoesEstoque()">
                 <i>🔄</i><span>RECEBER DEVOLUÇÕES</span>
             </button>            
             <button class="btn-grande btn-vidro onclick="telaCadastrosBase()">
@@ -391,7 +391,10 @@ async function carregarDashboard() {
     if (perfil === 'logistica') {
         html += `
             <button class="btn-grande btn-vidro" onclick="telaLogisticaEntregas()">
-                <i>🚚</i><span>RECOLHER E TRANSPORTAR PEDIDO</span>
+                <i>🚚</i><span>RECOLHER NO GALPÃO E TRANSPORTAR PEDIDO</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="listarDevolucoesLogistica()">
+                <i>🔄</i><span>RECOLHER NA ESCOLA E TRANSPORTAR DEVOLUÇÃO</span>
             </button>
             <button class="btn-grande btn-breve">
                 <i>🏷️</i><span>SOLICITAR PATRIMÔNIO</span>
@@ -11158,6 +11161,99 @@ async function salvarRecebimentoDevolucao(pedidoId, idsItens) {
     } catch (err) {
         alert("Erro ao processar recebimento.");
     }
+}
+
+async function confirmarColetaEscola(pedidoId) {
+    if (!confirm("Confirmar que os itens foram coletados na unidade escolar?")) return;
+    const res = await fetch(`${API_URL}/pedidos/logistica/devolucoes/coletar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+        body: JSON.stringify({ pedidoId })
+    });
+    if (res.ok) {
+        alertaVidro("🚚 Status: DEVOLUÇÃO EM TRÂNSITO", "sucesso");
+        carregarDashboard();
+    }
+}
+
+async function finalizarDevolucaoEstoque(pedidoId, itens) {
+    // Coleta as quantidades dos inputs criados no modal
+    const itensConferidos = itens.map(i => ({
+        id: i.id,
+        produto_id: i.produto_id,
+        tamanho: i.tamanho,
+        quantidade_real: Number(document.getElementById(`input_qtd_${i.id}`).value)
+    }));
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/estoque/devolucoes/finalizar-recebimento`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ pedidoId, itensConferidos })
+        });
+
+        if (res.ok) {
+            alertaVidro("📦 Devolução concluída! Estoque atualizado.", "sucesso");
+            carregarDashboard();
+        }
+    } catch (err) { alertaVidro("Erro ao processar devolução", "erro"); }
+}
+
+async function listarDevolucoesAdmin() {
+    const res = await fetch(`${API_URL}/pedidos/admin/devolucoes/pendentes`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+    const lista = await res.json();
+    
+    const html = lista.map(d => `
+        <div class="card-devolucao" style="border-left: 8px solid #f59e0b; padding: 15px; background: white; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border-radius: 8px;">
+            <div>
+                <strong>📍 ${d.escola_nome}</strong><br>
+                <small>Solicitante: ${d.solicitante} | Data: ${new Date(d.data_criacao).toLocaleDateString()}</small>
+            </div>
+            <button onclick="autorizarColetaDevolucao(${d.id})" style="background: #2563eb; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer;">
+                ✅ AUTORIZAR COLETA
+            </button>
+        </div>
+    `).join('');
+    
+    document.getElementById('container-devolucoes').innerHTML = html || '<p>Nenhuma devolução pendente.</p>';
+}
+
+async function listarDevolucoesEstoque() {
+    const res = await fetch(`${API_URL}/pedidos/estoque/devolucoes/para-receber`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+    const lista = await res.json();
+    
+    const html = lista.map(d => `
+        <div class="card-devolucao" style="border-left: 8px solid #16a34a; padding: 15px; background: white; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border-radius: 8px;">
+            <div>
+                <strong>📥 RECEBER DE: ${d.escola_nome}</strong><br>
+                <small>Status: Em trânsito para o Galpão</small>
+            </div>
+            <button onclick="abrirModalConferenciaEstoque(${d.id})" style="background: #0f172a; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer;">
+                🔍 CONFERIR ITENS
+            </button>
+        </div>
+    `).join('');
+    
+    document.getElementById('container-estoque').innerHTML = html || '<p>Nenhuma carga em trânsito para recebimento.</p>';
+}
+
+async function listarDevolucoesLogistica() {
+    const res = await fetch(`${API_URL}/pedidos/logistica/devolucoes/para-coletar`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+    const lista = await res.json();
+    
+    const html = lista.map(d => `
+        <div class="card-devolucao" style="border-left: 8px solid #2563eb; padding: 15px; background: white; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border-radius: 8px;">
+            <div>
+                <strong>🚚 COLETAR EM: ${d.escola_nome}</strong><br>
+                <small>Status: Aguardando Motorista</small>
+            </div>
+            <button onclick="confirmarColetaEscola(${d.id})" style="background: #16a34a; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer;">
+                📦 CONFIRMAR COLETA
+            </button>
+        </div>
+    `).join('');
+    
+    document.getElementById('container-logistica').innerHTML = html || '<p>Nada para coletar no momento.</p>';
 }
 
 // Isso garante que o onclick="funcao()" funcione sempre

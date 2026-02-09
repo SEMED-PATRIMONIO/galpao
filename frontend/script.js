@@ -10746,7 +10746,7 @@ async function telaAdminPedidoUniformes() {
                     <div id="container-carrinho" style="border-left: 1px solid rgba(255,255,255,0.1); padding-left: 20px;">
                         <h3 style="color: white; margin-top:0; font-size:1rem; opacity:0.8;">Resumo do Envio</h3>
                         <div id="display-carrinho-admin" style="min-height: 150px; color: #cbd5e1;">Aguardando itens...</div>
-                        <button id="btnFinalizar" onclick="finalizarPedidoUniformes()" disabled class="btn-vidro" style="width:100%; margin-top:20px; opacity:0.5; background:#2563eb;">
+                        <button id="btnFinalizar" onclick="finalizarPedidoUniformesDireto()" disabled class="btn-vidro" style="width:100%; margin-top:20px; opacity:0.5; background:#2563eb;">
                             🚀 FINALIZAR E DAR BAIXA
                         </button>
                     </div>
@@ -11009,6 +11009,37 @@ function abrirModalPadrao(conteudoHtml, largura = '800px') {
     `;
 
     document.body.appendChild(overlay);
+}
+
+async function finalizarPedidoUniformesDireto() {
+    const localId = document.getElementById('uni_local').value;
+    if (!localId) return alertaVidro("Selecione a unidade de destino.", "erro");
+    if (carrinhoAdminDireto.length === 0) return alertaVidro("Carrinho vazio!", "erro");
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/admin/direto/uniformes-exclusivo`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json', 
+                'Authorization': `Bearer ${TOKEN}` 
+            },
+            body: JSON.stringify({ local_id: localId, itens: carrinhoAdminDireto })
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+            alertaVidro("✅ Pedido direto realizado e enviado para o estoque!", "sucesso");
+            carrinhoAdminDireto = []; // Limpa o carrinho
+            carregarDashboard();      // Volta para a home
+        } else {
+            throw new Error(data.error || "Erro desconhecido");
+        }
+
+    } catch (err) {
+        console.error("Erro no processo exclusivo:", err.message);
+        alertaVidro("🚨 Erro: " + err.message, "erro");
+    }
 }
 
 // Isso garante que o onclick="funcao()" funcione sempre

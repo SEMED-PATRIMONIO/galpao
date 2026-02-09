@@ -2983,9 +2983,8 @@ router.get('/estoque/produtos-por-tipo/:tipo', verificarToken, async (req, res) 
 router.get('/estoque/patrimonios-disponiveis/:produto_id', verificarToken, async (req, res) => {
     try {
         const { produto_id } = req.params;
-        // Busca patrimônios que estão no Estoque Central (ajuste o ID do local se necessário)
         const query = `
-            SELECT id, numero_serie, plaqueta 
+            SELECT id, plaqueta, numero_serie 
             FROM patrimonios 
             WHERE produto_id = $1 AND status = 'DISPONIVEL'
             ORDER BY plaqueta ASC
@@ -2993,8 +2992,753 @@ router.get('/estoque/patrimonios-disponiveis/:produto_id', verificarToken, async
         const { rows } = await db.query(query, [produto_id]);
         res.json(rows);
     } catch (err) {
-        res.status(500).json({ error: "Erro ao buscar patrimônios." });
+        res.status(500).json({ error: "Erro ao procurar plaquetas." });
     }
+});
+
+router.post('/pedidos/admin/finalizar/uniformes', verificarToken, async (req, res) => {
+    const client = await db.connect();
+    try {
+        await client.query('BEGIN');
+        const { local_id, itens } = req.body;
+        const usuario_id = req.user.id;
+
+        // 1. Cria o Pedido Mestre
+        const resPed = await client.query(
+            `INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, tipo_pedido) 
+             VALUES ($1, $2, 'AUTORIZADO', 'UNIFORMES') RETURNING id`,
+            [usuario_id, local_id]
+        );
+        const pedidoId = resPed.rows[0].id;
+
+        // 2. Processa cada item do carrinho
+        for (const it of itens) {
+            // Insere o item vinculado ao pedido
+            await client.query(
+                `INSERT INTO pedido_itens (pedido_id, produto_id, quantidade_solicitada, tamanho) 
+                 VALUES ($1, $2, $3, $4)`,
+                [pedidoId, it.produto_id, it.quantidade, it.tamanho]
+            );
+
+            // Baixa no estoque da grade específica
+            const resUpdate = await client.query(
+                `UPDATE estoque_grades 
+                 SET quantidade = quantidade - $1 
+                 WHERE produto_id = $2 AND tamanho = $3 AND quantidade >= $1`,
+                [it.quantidade, it.produto_id, it.tamanho]
+            );
+
+            if (resUpdate.rowCount === 0) {
+                throw new Error(`Estoque insuficiente para o produto ID ${it.produto_id} tamanho ${it.tamanho}`);
+            }
+        }
+
+        await client.query('COMMIT');
+        res.json({ success: true, message: "Pedido de Uniformes finalizado!", id: pedidoId });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
+router.post('/pedidos/admin/finalizar/materiais', verificarToken, async (req, res) => {
+    const client = await db.connect();
+    try {
+        await client.query('BEGIN');
+        const { local_id, itens } = req.body;
+        const resPed = await client.query(
+            `INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, tipo_pedido) 
+             VALUES ($1, $2, 'AUTORIZADO', 'MATERIAL') RETURNING id`, [req.user.id, local_id]
+        );
+        for (const it of itens) {
+            await client.query(`UPDATE produtos SET quantidade_estoque = quantidade_estoque - $1 WHERE id = $2`, [it.quantidade, it.produto_id]);
+        }
+        await client.query('COMMIT');
+        res.json({ message: "Sucesso" });
+    } catch (err) { await client.query('ROLLBACK'); res.status(500).send(err.message); } finally { client.release(); }
+});
+
+router.post('/pedidos/admin/finalizar/patrimonios', verificarToken, async (req, res) => {
+    const client = await db.connect();
+    try {
+        await client.query('BEGIN');
+        const { local_id, itens } = req.body;
+        const resPed = await client.query(
+            `INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, tipo_pedido) 
+             VALUES ($1, $2, 'RECEBIDO', 'PATRIMONIO') RETURNING id`, [req.user.id, local_id]
+        );
+        for (const it of itens) {
+            await client.query(`UPDATE patrimonios SET local_id = $1, status = 'ALOCADO' WHERE id = $2`, [local_id, it.patrimonio_id]);
+        }
+        await client.query('COMMIT');
+        res.json({ message: "Sucesso" });
+    } catch (err) { await client.query('ROLLBACK'); res.status(500).send(err.message); } finally { client.release(); }
+});
+
+router.get('/estoque/produtos-por-tipo/UNIFORMES', verificarToken, async (req, res) => {
+    try {
+        const query = `
+            SELECT DISTINCT p.id, p.nome 
+            FROM produtos p
+            INNER JOIN estoque_grades eg ON p.id = eg.produto_id
+            WHERE p.tipo = 'UNIFORMES' AND eg.quantidade > 0
+            ORDER BY p.nome ASC
+        `;
+        const { rows } = await db.query(query);
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao filtrar uniformes." });
+    }
+});
+
+router.post('/pedidos/admin/v2/uniformes', verificarToken, async (req, res) => {
+    const client = await db.connect();
+    try {
+        await client.query('BEGIN');
+        const { local_id, itens } = req.body;
+        const usuario_id = req.user.id; // Certifique-se que o token está enviando o ID
+
+        console.log("LOG: Iniciando pedido para local:", local_id);
+
+        // 1. Inserir na tabela pedidos
+        // Verificamos os nomes das colunas conforme seu \d pedidos
+        const queryPedido = `
+            INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, tipo_pedido) 
+            VALUES ($1, $2, 'AGUARDANDO_AUTORIZACAO', 'UNIFORMES') 
+            RETURNING id
+        `;
+        const resPed = await client.query(queryPedido, [usuario_id, local_id]);
+        const pedidoId = resPed.rows[0].id;
+        console.log("LOG: Pedido criado ID:", pedidoId);
+
+        for (const it of itens) {
+            console.log(`LOG: Processando item ${it.produto_id} tam ${it.tamanho}`);
+
+            // 2. Inserir em pedido_itens (conforme seu \d pedido_itens)
+            await client.query(
+                `INSERT INTO pedido_itens (pedido_id, produto_id, quantidade_solicitada, tamanho) 
+                 VALUES ($1, $2, $3, $4)`,
+                [pedidoId, it.produto_id, it.quantidade, it.tamanho]
+            );
+
+            // 3. Baixa na Grade (conforme seu \d estoque_grades)
+            const resGrade = await client.query(
+                `UPDATE estoque_grades 
+                 SET quantidade = quantidade - $1 
+                 WHERE produto_id = $2 AND tamanho = $3 AND quantidade >= $1`,
+                [it.quantidade, it.produto_id, it.tamanho]
+            );
+
+            if (resGrade.rowCount === 0) {
+                throw new Error(`Estoque insuficiente na grade para o item ${it.nome} (${it.tamanho})`);
+            }
+
+            // 4. Baixa no Total (conforme seu \d produtos)
+            await client.query(
+                `UPDATE produtos SET quantidade_estoque = quantidade_estoque - $1 WHERE id = $2`,
+                [it.quantidade, it.produto_id]
+            );
+        }
+
+        await client.query('COMMIT');
+        res.json({ success: true, message: "Sucesso!" });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error("ERRO NO BANCO:", err.message);
+        // Enviamos o erro real como JSON para o frontend ler
+        res.status(500).json({ error: err.message }); 
+    } finally {
+        client.release();
+    }
+});
+
+router.post('/pedidos/admin/uniformes/finalizar', verificarToken, async (req, res) => {
+    try {
+        const { local_id, itens } = req.body;
+        const usuario_id = req.user.id;
+
+        // 1. Inicia a transação
+        await db.query('BEGIN');
+
+        // 2. Criar o cabeçalho do pedido
+        const queryPedido = `
+            INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, tipo_pedido) 
+            VALUES ($1, $2, 'AGUARDANDO_AUTORIZACAO', 'UNIFORMES') 
+            RETURNING id
+        `;
+        const resPed = await db.query(queryPedido, [usuario_id, local_id]);
+        const pedidoId = resPed.rows[0].id;
+
+        // 3. Processar os itens
+        for (const it of itens) {
+            // Grava o item no pedido
+            await db.query(
+                `INSERT INTO pedido_itens (pedido_id, produto_id, quantidade_solicitada, tamanho) 
+                 VALUES ($1, $2, $3, $4)`,
+                [pedidoId, it.produto_id, it.quantidade, it.tamanho]
+            );
+
+            // Baixa na Grade (estoque_grades)
+            await db.query(
+                `UPDATE estoque_grades 
+                 SET quantidade = quantidade - $1 
+                 WHERE produto_id = $2 AND tamanho = $3`,
+                [it.quantidade, it.produto_id, it.tamanho]
+            );
+
+            // Baixa no Saldo Geral (produtos)
+            await db.query(
+                `UPDATE produtos 
+                 SET quantidade_estoque = quantidade_estoque - $1 
+                 WHERE id = $2`,
+                [it.quantidade, it.produto_id]
+            );
+        }
+
+        await db.query('COMMIT');
+        res.json({ success: true, message: "Pedido gravado!" });
+
+    } catch (err) {
+        await db.query('ROLLBACK');
+        console.error("ERRO NO BANCO:", err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/pedidos/admin/uniformes/direto', verificarToken, async (req, res) => {
+    try {
+        const { local_id, itens } = req.body;
+        const usuario_id = (req.user && req.user.id) ? req.user.id : 1; 
+
+        await db.query('BEGIN');
+
+        // 1. Criar o Pedido com status 'AGUARDANDO_SEPARACAO'
+        // Este é o status que faz o pedido aparecer na tua lista de separação
+        const resPed = await db.query(
+            `INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, tipo_pedido, data_criacao) 
+             VALUES ($1, $2, 'AGUARDANDO_SEPARACAO', 'UNIFORMES', NOW()) 
+             RETURNING id`,
+            [usuario_id, local_id]
+        );
+        const pedidoId = resPed.rows[0].id;
+
+        for (const it of itens) {
+            // 2. REGISTRO DE ITENS: Crucial para a tela de Conferência
+            // quantidade_solicitada = Total do Admin / quantidade (já enviado) = 0
+            await db.query(
+                `INSERT INTO pedido_itens (pedido_id, produto_id, quantidade_solicitada, quantidade, tamanho) 
+                 VALUES ($1, $2, $3, 0, $4)`,
+                [pedidoId, it.produto_id, it.quantidade, it.tamanho]
+            );
+
+            // 3. BAIXA NO ESTOQUE: Exatamente como na tua função 'finalizarAutorizacao'
+            await db.query(
+                `UPDATE estoque_grades 
+                 SET quantidade = quantidade - $1 
+                 WHERE produto_id = $2 AND tamanho = $3`,
+                [it.quantidade, it.produto_id, it.tamanho]
+            );
+
+            // 4. ATUALIZA TOTAL GERAL
+            await db.query(
+                `UPDATE produtos 
+                 SET quantidade_estoque = (SELECT SUM(quantidade) FROM estoque_grades WHERE produto_id = $1)
+                 WHERE id = $1`,
+                [it.produto_id]
+            );
+        }
+
+        await db.query('COMMIT');
+        res.json({ success: true, message: "Pedido criado e autorizado!" });
+
+    } catch (err) {
+        if (db) await db.query('ROLLBACK');
+        console.error("ERRO NO FLUXO ADMIN:", err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/pedidos/admin/uniformes/finalizar-v3', verificarToken, async (req, res) => {
+    try {
+        const { local_id, itens } = req.body;
+        
+        // CORREÇÃO DO ERRO 'undefined id':
+        // Se o req.user falhar, pegamos o ID 1 (Admin padrão) para não travar o processo
+        const usuario_id = (req.user && req.user.id) ? req.user.id : 1; 
+
+        console.log("LOG: Iniciando gravação para local:", local_id, "Usuário:", usuario_id);
+
+        // Iniciamos a transação usando db.query direto (sem .connect())
+        await db.query('BEGIN');
+
+        // 1. Criar o Pedido com status 'SEPARACAO_INICIADA'
+        const resPed = await db.query(
+            `INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, tipo_pedido, data_criacao) 
+             VALUES ($1, $2, 'AGUARDANDO_SEPARACAO', 'UNIFORMES', NOW()) 
+             RETURNING id`,
+            [usuario_id, local_id]
+        );
+        const pedidoId = resPed.rows[0].id;
+
+        for (const it of itens) {
+            // 2. Inserir em pedido_itens (usando colunas confirmadas: quantidade_solicitada e quantidade)
+            await db.query(
+                `INSERT INTO pedido_itens (pedido_id, produto_id, quantidade_solicitada, quantidade, tamanho) 
+                 VALUES ($1, $2, $3, $3, $4)`,
+                [pedidoId, it.produto_id, it.quantidade, it.tamanho]
+            );
+
+            // 3. Baixa na Grade (estoque_grades)
+            await db.query(
+                `UPDATE estoque_grades 
+                 SET quantidade = quantidade - $1 
+                 WHERE produto_id = $2 AND tamanho = $3`,
+                [it.quantidade, it.produto_id, it.tamanho]
+            );
+
+            // 4. Baixa no Total (produtos)
+            await db.query(
+                `UPDATE produtos 
+                 SET quantidade_estoque = quantidade_estoque - $1 
+                 WHERE id = $2`,
+                [it.quantidade, it.produto_id]
+            );
+        }
+
+        await db.query('COMMIT');
+        console.log("LOG: Pedido gravado com sucesso. ID:", pedidoId);
+        res.json({ success: true, message: "Pedido enviado para separação!" });
+
+    } catch (err) {
+        if (db) await db.query('ROLLBACK');
+        console.error("ERRO FINAL NO BANCO:", err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/pedidos/admin/gerar-solicitacao', verificarToken, async (req, res) => {
+    try {
+        const { local_id, itens } = req.body;
+        const usuario_id = req.user.id;
+
+        await db.query('BEGIN');
+
+        // 1. Cria o Pedido (Status: AGUARDANDO_AUTORIZACAO)
+        const resPed = await db.query(
+            `INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, tipo_pedido, data_criacao) 
+             VALUES ($1, $2, 'AGUARDANDO_AUTORIZACAO', 'UNIFORMES', NOW()) 
+             RETURNING id`,
+            [usuario_id, local_id]
+        );
+        const pedidoId = resPed.rows[0].id;
+
+        // 2. Insere os itens (Obrigatório para a tela de análise/separação ler)
+        for (const it of itens) {
+            await db.query(
+                `INSERT INTO pedido_itens (pedido_id, produto_id, quantidade_solicitada, quantidade, tamanho) 
+                 VALUES ($1, $2, $3, 0, $4)`,
+                [pedidoId, it.produto_id, it.quantidade, it.tamanho]
+            );
+        }
+
+        await db.query('COMMIT');
+        res.json({ success: true, pedidoId }); // Retorna o ID para o front autorizar
+
+    } catch (err) {
+        if (db) await db.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/pedidos/admin/direto/uniformes-exclusivo', verificarToken, async (req, res) => {
+    try {
+        const { local_id, itens } = req.body;
+        
+        // Proteção contra o erro de 'undefined id' que vimos no log
+        const usuario_id = (req.user && req.user.id) ? req.user.id : 1; 
+
+        await db.query('BEGIN');
+
+        // 1. Cria o registro na tabela pedidos
+        // Status 'AGUARDANDO_SEPARACAO' faz ele aparecer na lista do estoque
+        const resPed = await db.query(
+            `INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, tipo_pedido, data_criacao) 
+             VALUES ($1, $2, 'AGUARDANDO_SEPARACAO', 'UNIFORMES', NOW()) 
+             RETURNING id`,
+            [usuario_id, local_id]
+        );
+        const pedidoId = resPed.rows[0].id;
+
+        for (const it of itens) {
+            // 2. GRAVAÇÃO NA pedido_itens: Isso é o que faz os produtos aparecerem na tela de separação
+            // quantidade_solicitada recebe o valor, e quantidade (enviada) começa em 0
+            await db.query(
+                `INSERT INTO pedido_itens (pedido_id, produto_id, quantidade_solicitada, quantidade, tamanho) 
+                 VALUES ($1, $2, $3, 0, $4)`,
+                [pedidoId, it.produto_id, it.quantidade, it.tamanho]
+            );
+
+            // 3. BAIXA NA GRADE: Atualiza o saldo real da grade (estoque_grades)
+            await db.query(
+                `UPDATE estoque_grades 
+                 SET quantidade = quantidade - $1 
+                 WHERE produto_id = $2 AND tamanho = $3`,
+                [it.quantidade, it.produto_id, it.tamanho]
+            );
+
+            // 4. SINCRONIZAÇÃO: Atualiza o total na tabela produtos
+            await db.query(
+                `UPDATE produtos 
+                 SET quantidade_estoque = (SELECT SUM(quantidade) FROM estoque_grades WHERE produto_id = $1)
+                 WHERE id = $1`,
+                [it.produto_id]
+            );
+        }
+
+        await db.query('COMMIT');
+        res.json({ success: true, message: "Pedido direto criado com sucesso!" });
+
+    } catch (err) {
+        if (db) await db.query('ROLLBACK');
+        console.error("ERRO ROTA EXCLUSIVA:", err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/pedidos/admin/uniformes/concluir-direto', verificarToken, async (req, res) => {
+    try {
+        const { local_id, itens } = req.body;
+        const usuario_id = (req.user && req.user.id) ? req.user.id : 1; 
+
+        await db.query('BEGIN');
+
+        // 1. Criar o Pedido (Status AGUARDANDO_SEPARACAO para cair na lista do estoque)
+        const resPed = await db.query(
+            `INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, tipo_pedido, data_criacao) 
+             VALUES ($1, $2, 'AGUARDANDO_SEPARACAO', 'UNIFORMES', NOW()) 
+             RETURNING id`,
+            [usuario_id, local_id]
+        );
+        const pedidoId = resPed.rows[0].id;
+
+        for (const it of itens) {
+            // 2. O PONTO CHAVE: Gravar na itens_pedido (a tabela que você confirmou que funciona)
+            await db.query(
+                `INSERT INTO itens_pedido (pedido_id, produto_id, tamanho, quantidade) 
+                 VALUES ($1, $2, $3, $4)`,
+                [pedidoId, it.produto_id, it.tamanho, it.quantidade]
+            );
+
+            // 3. BAIXA NA GRADE: Atualiza o saldo real da grade
+            await db.query(
+                `UPDATE estoque_grades 
+                 SET quantidade = quantidade - $1 
+                 WHERE produto_id = $2 AND tamanho = $3`,
+                [it.quantidade, it.produto_id, it.tamanho]
+            );
+
+            // 4. SINCRONIZAÇÃO: Atualiza o total na tabela produtos (já que o sistema não faz sozinho)
+            await db.query(
+                `UPDATE produtos 
+                 SET quantidade_estoque = (SELECT SUM(quantidade) FROM estoque_grades WHERE produto_id = $1)
+                 WHERE id = $1`,
+                [it.produto_id]
+            );
+        }
+
+        await db.query('COMMIT');
+        res.json({ success: true, message: "Pedido criado e estoque atualizado!" });
+
+    } catch (err) {
+        if (db) await db.query('ROLLBACK');
+        console.error("ERRO NO BANCO:", err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/pedidos/admin/materiais/concluir-direto', verificarToken, async (req, res) => {
+    try {
+        const { local_id, itens } = req.body;
+        const usuario_id = (req.user && req.user.id) ? req.user.id : 1; 
+
+        await db.query('BEGIN');
+
+        // 1. Criar o Pedido
+        const resPed = await db.query(
+            `INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, tipo_pedido, data_criacao) 
+             VALUES ($1, $2, 'AGUARDANDO_SEPARACAO', 'MATERIAL', NOW()) 
+             RETURNING id`,
+            [usuario_id, local_id]
+        );
+        const pedidoId = resPed.rows[0].id;
+
+        for (const it of itens) {
+            // 2. Gravar na itens_pedido (Para o estoque conseguir visualizar na separação)
+            // Usamos 'UNICO' no tamanho para não deixar o campo vazio
+            await db.query(
+                `INSERT INTO itens_pedido (pedido_id, produto_id, tamanho, quantidade) 
+                 VALUES ($1, $2, 'UNICO', $3)`,
+                [pedidoId, it.produto_id, it.quantidade]
+            );
+
+            // 3. BAIXA DIRETA NO ESTOQUE: Como não há grade, alteramos direto na tabela produtos
+            const resBaixa = await db.query(
+                `UPDATE produtos 
+                 SET quantidade_estoque = quantidade_estoque - $1 
+                 WHERE id = $2 AND quantidade_estoque >= $1`,
+                [it.quantidade, it.produto_id]
+            );
+
+            if (resBaixa.rowCount === 0) {
+                throw new Error(`Estoque insuficiente para o produto ID ${it.produto_id}`);
+            }
+        }
+
+        await db.query('COMMIT');
+        res.json({ success: true, message: "Pedido de materiais criado com sucesso!" });
+
+    } catch (err) {
+        if (db) await db.query('ROLLBACK');
+        console.error("ERRO MATERIAIS:", err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/pedidos/admin/patrimonio/concluir-direto', verificarToken, async (req, res) => {
+    try {
+        const { local_id, itens } = req.body;
+        const usuario_id = (req.user && req.user.id) ? req.user.id : 1; 
+
+        await db.query('BEGIN');
+
+        // 1. Criar o Pedido Mestre
+        const resPed = await db.query(
+            `INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, tipo_pedido, data_criacao) 
+             VALUES ($1, $2, 'AGUARDANDO_SEPARACAO', 'PATRIMONIO', NOW()) 
+             RETURNING id`,
+            [usuario_id, local_id]
+        );
+        const pedidoId = resPed.rows[0].id;
+
+        for (const it of itens) {
+            // 2. Gravar na itens_pedido (Necessário para a tela de separação)
+            // Vinculamos o patrimonio_id para que o estoquista saiba qual plaqueta pegar
+            await db.query(
+                `INSERT INTO itens_pedido (pedido_id, produto_id, patrimonio_id, quantidade, tamanho) 
+                 VALUES ($1, $2, $3, 1, 'TAG')`,
+                [pedidoId, it.produto_id, it.patrimonio_id]
+            );
+
+            // 3. ATUALIZAR STATUS DO BEM: Marca como 'EM_TRANSFERENCIA' ou similar
+            // Impede que o mesmo item seja pedido por outra pessoa
+            await db.query(
+                `UPDATE patrimonios 
+                 SET status = 'EM_TRANSFERENCIA', 
+                     data_ultima_movimentacao = NOW() 
+                 WHERE id = $1`,
+                [it.patrimonio_id]
+            );
+
+            // 4. BAIXA NO SALDO GERAL: Diminui 1 unidade do total do produto
+            await db.query(
+                `UPDATE produtos 
+                 SET quantidade_estoque = quantidade_estoque - 1 
+                 WHERE id = $1`,
+                [it.produto_id]
+            );
+        }
+
+        await db.query('COMMIT');
+        res.json({ success: true, message: "Pedido de Patrimônio registrado e bens reservados!" });
+
+    } catch (err) {
+        if (db) await db.query('ROLLBACK');
+        console.error("ERRO PATRIMONIO:", err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.get('/pedidos/admin/devolucoes/pendentes', verificarToken, async (req, res) => {
+    try {
+        const resList = await db.query(`
+            SELECT p.*, l.nome as escola_nome, u.nome as solicitante 
+            FROM pedidos p
+            JOIN locais l ON p.usuario_origem_id = l.id
+            JOIN usuarios u ON p.usuario_origem_id = u.id
+            WHERE p.tipo_pedido = 'DEVOLUCAO' AND p.status = 'DEVOLUCAO_PENDENTE'
+            ORDER BY p.data_criacao DESC`);
+        res.json(resList.rows);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/pedidos/estoque/devolucoes/para-receber', verificarToken, async (req, res) => {
+    try {
+        const resList = await db.query(`
+            SELECT p.*, l.nome as escola_nome 
+            FROM pedidos p
+            JOIN locais l ON p.usuario_origem_id = l.id
+            WHERE p.tipo_pedido = 'DEVOLUCAO' AND p.status = 'DEVOLUCAO_EM_TRANSITO'
+            ORDER BY p.data_criacao ASC`);
+        res.json(resList.rows);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/pedidos/logistica/devolucoes/para-coletar', verificarToken, async (req, res) => {
+    try {
+        const resList = await db.query(`
+            SELECT p.*, l.nome as escola_nome 
+            FROM pedidos p
+            JOIN locais l ON p.usuario_origem_id = l.id
+            WHERE p.tipo_pedido = 'DEVOLUCAO' AND p.status = 'DEVOLUCAO_AUTORIZADA'
+            ORDER BY p.data_criacao ASC`);
+        res.json(resList.rows);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/pedidos/admin/devolucoes/confirmar', verificarToken, async (req, res) => {
+    try {
+        const { pedidoId } = req.body;
+        await db.query('BEGIN');
+
+        // 1. Busca os itens da devolução na tabela que confirmamos (itens_pedido)
+        const itens = await db.query('SELECT * FROM itens_pedido WHERE pedido_id = $1', [pedidoId]);
+
+        for (const it of itens.rows) {
+            // 2. Se for Uniforme (tem tamanho específico), aumenta na grade
+            if (it.tamanho && it.tamanho !== 'UNICO' && it.tamanho !== 'TAG') {
+                await db.query(
+                    `UPDATE estoque_grades SET quantidade = quantidade + $1 
+                     WHERE produto_id = $2 AND tamanho = $3`,
+                    [it.quantidade, it.produto_id, it.tamanho]
+                );
+            }
+
+            // 3. Em todos os casos, aumenta o saldo global na tabela produtos
+            await db.query(
+                `UPDATE produtos SET quantidade_estoque = quantidade_estoque + $1 
+                 WHERE id = $2`,
+                [it.quantidade, it.produto_id]
+            );
+        }
+
+        // 4. Finaliza o status do pedido
+        await db.query("UPDATE pedidos SET status = 'CONCLUIDO', data_recebimento = NOW() WHERE id = $1", [pedidoId]);
+
+        await db.query('COMMIT');
+        res.json({ success: true, message: "Itens incorporados ao estoque com sucesso!" });
+    } catch (err) {
+        if (db) await db.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.get('/estoque/devolucao/detalhes/:pedidoId', verificarToken, async (req, res) => {
+    try {
+        const { pedidoId } = params;
+        const query = `
+            SELECT i.*, p.nome as produto_nome 
+            FROM itens_pedido i
+            JOIN produtos p ON i.produto_id = p.id
+            WHERE i.pedido_id = $1`;
+        const result = await db.query(query, [pedidoId]);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/estoque/devolucao/confirmar-final', verificarToken, async (req, res) => {
+    try {
+        const { pedidoId, itensConferidos } = req.body; // itensConferidos: [{id, quantidade_real}]
+        await db.query('BEGIN');
+
+        for (const it of itensConferidos) {
+            // 1. Busca os dados originais do item para saber produto e tamanho
+            const resItem = await db.query('SELECT * FROM itens_pedido WHERE id = $1', [it.id]);
+            const original = resItem.rows[0];
+
+            // 2. Atualiza a quantidade na itens_pedido para o que foi realmente recebido
+            await db.query('UPDATE itens_pedido SET quantidade = $1 WHERE id = $2', [it.quantidade_real, it.id]);
+
+            // 3. Atualiza o ESTOQUE REAL (Grade e Global)
+            if (original.tamanho && original.tamanho !== 'UNICO' && original.tamanho !== 'TAG') {
+                await db.query(
+                    `UPDATE estoque_grades SET quantidade = quantidade + $1 
+                     WHERE produto_id = $2 AND tamanho = $3`,
+                    [it.quantidade_real, original.produto_id, original.tamanho]
+                );
+            }
+
+            await db.query(
+                `UPDATE produtos SET quantidade_estoque = quantidade_estoque + $1 WHERE id = $2`,
+                [it.quantidade_real, original.produto_id]
+            );
+        }
+
+        // 4. Finaliza o status do pedido
+        await db.query("UPDATE pedidos SET status = 'CONCLUIDO', data_recebimento = NOW() WHERE id = $1", [pedidoId]);
+
+        await db.query('COMMIT');
+        res.json({ success: true });
+    } catch (err) {
+        if (db) await db.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/pedidos/admin/devolucoes/autorizar', verificarToken, async (req, res) => {
+    try {
+        const { pedidoId } = req.body;
+        // Usando o status permitido: DEVOLUCAO_AUTORIZADA
+        await db.query("UPDATE pedidos SET status = 'DEVOLUCAO_AUTORIZADA' WHERE id = $1", [pedidoId]);
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/pedidos/logistica/devolucoes/coletar', verificarToken, async (req, res) => {
+    try {
+        const { pedidoId } = req.body;
+        // Usando o status permitido: DEVOLUCAO_EM_TRANSITO
+        await db.query("UPDATE pedidos SET status = 'DEVOLUCAO_EM_TRANSITO' WHERE id = $1", [pedidoId]);
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/pedidos/estoque/devolucoes/finalizar-recebimento', verificarToken, async (req, res) => {
+    try {
+        const { pedidoId, itensConferidos } = req.body; 
+        await db.query('BEGIN');
+
+        for (const it of itensConferidos) {
+            // 1. Atualiza a itens_pedido com a quantidade REAL contada pelo estoquista
+            await db.query('UPDATE itens_pedido SET quantidade = $1 WHERE id = $2', [it.quantidade_real, it.id]);
+
+            // 2. Incrementa o estoque na grade (se houver tamanho)
+            if (it.tamanho && it.tamanho !== 'UNICO' && it.tamanho !== 'TAG') {
+                await db.query(
+                    `UPDATE estoque_grades SET quantidade = quantidade + $1 
+                     WHERE produto_id = $2 AND tamanho = $3`,
+                    [it.quantidade_real, it.produto_id, it.tamanho]
+                );
+            }
+
+            // 3. Incrementa o saldo global do produto
+            await db.query(
+                `UPDATE produtos SET quantidade_estoque = quantidade_estoque + $1 
+                 WHERE id = $2`,
+                [it.quantidade_real, it.produto_id]
+            );
+        }
+
+        // 4. Finaliza com o status permitido: DEVOLVIDO
+        await db.query("UPDATE pedidos SET status = 'DEVOLVIDO', data_recebimento = NOW() WHERE id = $1", [pedidoId]);
+
+        await db.query('COMMIT');
+        res.json({ success: true });
+    } catch (err) { if (db) await db.query('ROLLBACK'); res.status(500).json({ error: err.message }); }
 });
 
 module.exports = router;

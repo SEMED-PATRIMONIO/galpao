@@ -11074,7 +11074,7 @@ async function telaAdminGerenciarDevolucoes() {
             </div>
 
             <div style="display:grid; gap:15px;">
-                ${de透過olucao.map(d => `
+                ${devolucao.map(d => `
                     <div style="background:white; padding:20px; border-radius:12px; border-left:8px solid #f59e0b; display:flex; justify-content:space-between; align-items:center; box-shadow:0 4px 6px rgba(0,0,0,0.05);">
                         <div>
                             <div style="font-weight:bold; color:#d97706; font-size:1.1rem;">📍 ${d.escola_nome}</div>
@@ -11086,7 +11086,7 @@ async function telaAdminGerenciarDevolucoes() {
                         </button>
                     </div>
                 `).join('')}
-                ${de透過olucao.length === 0 ? '<div style="text-align:center; padding:50px; color:#94a3b8;">Nenhuma devolução aguardando recebimento.</div>' : ''}
+                ${devolucao.length === 0 ? '<div style="text-align:center; padding:50px; color:#94a3b8;">Nenhuma devolução aguardando recebimento.</div>' : ''}
             </div>
         </div>
     `;

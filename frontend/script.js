@@ -11214,22 +11214,62 @@ async function finalizarDevolucaoEstoque(pedidoId, itens) {
 }
 
 async function listarDevolucoesAdmin() {
-    const res = await fetch(`${API_URL}/pedidos/admin/devolucoes/pendentes`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
-    const lista = await res.json();
+    // 1. Busca o container e verifica se ele existe
+    const container = document.getElementById('app-content');
     
-    const html = lista.map(d => `
-        <div class="card-devolucao" style="border-left: 8px solid #f59e0b; padding: 15px; background: white; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border-radius: 8px;">
-            <div>
-                <strong>📍 ${d.escola_nome}</strong><br>
-                <small>Solicitante: ${d.solicitante} | Data: ${new Date(d.data_criacao).toLocaleDateString()}</small>
+    if (!container) {
+        console.error("Erro: Elemento 'app-content' não encontrado na tela do Admin.");
+        return;
+    }
+
+    container.innerHTML = '<div style="padding:20px; color:white;">⏳ Carregando solicitações de devolução...</div>';
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/admin/devolucoes-pendentes`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const devolucoes = await res.json();
+
+        // 2. Monta o HTML (Verifique se 'devolucoes' é um array)
+        container.innerHTML = `
+            <div class="painel-vidro" style="max-width: 1100px; margin: auto;">
+                <h2 style="color:white; margin-bottom:20px;">📦 DEVOLUÇÕES PENDENTES DE AUTORIZAÇÃO</h2>
+                
+                <div style="overflow-x:auto;">
+                    <table style="width:100%; color:white; border-collapse:collapse;">
+                        <thead>
+                            <tr style="border-bottom:2px solid rgba(255,255,255,0.2); text-align:left;">
+                                <th style="padding:10px;">ID</th>
+                                <th style="padding:10px;">ORIGEM (ESCOLA)</th>
+                                <th style="padding:10px;">DATA SOLICITAÇÃO</th>
+                                <th style="padding:10px;">STATUS</th>
+                                <th style="padding:10px; text-align:center;">AÇÕES</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${devolucoes.length === 0 ? 
+                                '<tr><td colspan="5" style="padding:20px; text-align:center;">Nenhuma devolução pendente.</td></tr>' :
+                                devolucoes.map(d => `
+                                <tr style="border-bottom:1px solid rgba(255,255,255,0.1);">
+                                    <td style="padding:10px;">#${d.id}</td>
+                                    <td style="padding:10px;">${d.escola_nome}</td>
+                                    <td style="padding:10px;">${new Date(d.data_criacao).toLocaleDateString()}</td>
+                                    <td style="padding:10px;"><span style="background:#f59e0b; padding:4px 8px; border-radius:4px; font-size:0.8rem;">${d.status}</span></td>
+                                    <td style="padding:10px; text-align:center;">
+                                        <button onclick="verDetalhesDevolucaoAdmin(${d.id})" class="btn-acao" style="background:#1e40af; color:white; border:none; padding:8px 12px; border-radius:5px; cursor:pointer;">
+                                            🔍 CONFERIR
+                                        </button>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
             </div>
-            <button onclick="autorizarColetaDevolucao(${d.id})" style="background: #2563eb; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer;">
-                ✅ AUTORIZAR COLETA
-            </button>
-        </div>
-    `).join('');
-    
-    document.getElementById('container-devolucoes').innerHTML = html || '<p>Nenhuma devolução pendente.</p>';
+        `;
+    } catch (err) {
+        container.innerHTML = `<div style="color:#ef4444; padding:20px;">Erro ao carregar devoluções: ${err.message}</div>`;
+    }
 }
 
 async function listarDevolucoesEstoque() {

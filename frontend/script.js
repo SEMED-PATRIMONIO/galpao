@@ -1200,7 +1200,7 @@ async function telaDevolucaoUniforme() {
                 </div>
 
                 <div style="margin-top:35px; display:flex; gap:15px;">
-                    <button onclick="processarSolicitacaoDevolucao()" style="flex:2; background:#1e3a8a; color:white; border:none; padding:18px; border-radius:10px; font-weight:bold; cursor:pointer;">🚀 ENVIAR SOLICITAÇÃO</button>
+                    <button onclick="enviarDevolucaoEscolaV2()" style="flex:2; background:#1e3a8a; color:white; border:none; padding:18px; border-radius:10px; font-weight:bold; cursor:pointer;">🚀 ENVIAR SOLICITAÇÃO</button>
                     <button onclick="carregarDashboard()" style="flex:1; background:#94a3b8; color:white; border:none; padding:18px; border-radius:10px; font-weight:bold; cursor:pointer;">CANCELAR</button>
                 </div>
             </div>
@@ -1216,11 +1216,10 @@ async function telaDevolucaoUniforme() {
     }
 }
 
-async function processarSolicitacaoDevolucao() {
+async function enviarDevolucaoEscolaV2() {
     const inputs = document.querySelectorAll('.input-devolucao');
     const itensParaDevolver = [];
 
-    // 1. Coleta apenas os itens onde a quantidade é maior que zero
     inputs.forEach(input => {
         const qtd = parseInt(input.value) || 0;
         if (qtd > 0) {
@@ -1232,14 +1231,12 @@ async function processarSolicitacaoDevolucao() {
         }
     });
 
-    if (itensParaDevolver.length === 0) {
-        return alertaVidro("Informe ao menos uma quantidade para devolver.", "erro");
-    }
-
-    if (!confirm(`Confirmar a solicitação de devolução de ${itensParaDevolver.length} item(ns)?`)) return;
+    if (itensParaDevolver.length === 0) return alert("Selecione ao menos um item.");
+    if (!confirm("Confirmar envio da solicitação?")) return;
 
     try {
-        const res = await fetch(`${API_URL}/pedidos/escola/solicitar-devolucao`, {
+        // Aponta para a NOVA ROTA isolada
+        const res = await fetch(`${API_URL}/pedidos/escola/solicitacao-devolucao-v2`, {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json', 
@@ -1248,16 +1245,12 @@ async function processarSolicitacaoDevolucao() {
             body: JSON.stringify({ itens: itensParaDevolver })
         });
 
-        const data = await res.json();
-
         if (res.ok) {
-            alertaVidro("✅ Solicitação enviada! Aguarde a autorização do Admin.", "sucesso");
+            alert("✅ Enviado com sucesso!");
             carregarDashboard();
-        } else {
-            throw new Error(data.error || "Erro ao processar devolução.");
         }
     } catch (err) {
-        alertaVidro("🚨 Falha: " + err.message, "erro");
+        alert("Erro no envio: " + err.message);
     }
 }
 

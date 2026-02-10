@@ -3817,4 +3817,43 @@ router.get('/pedidos/admin/devolucoes-pendentes', verificarToken, async (req, re
     }
 });
 
+router.get('/pedidos/admin/detalhes-devolucao/:id', verificarToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const query = `
+            SELECT 
+                ip.id as item_id,
+                p.nome as produto_nome, 
+                ip.tamanho, 
+                ip.quantidade
+            FROM itens_pedido ip
+            JOIN produtos p ON ip.produto_id = p.id
+            WHERE ip.pedido_id = $1
+        `;
+        const result = await db.query(query, [id]);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/pedidos/admin/processar-devolucao', verificarToken, async (req, res) => {
+    try {
+        const { pedidoId, acao } = req.body; // acao: 'AUTORIZAR' ou 'RECUSAR'
+        const novoStatus = acao === 'AUTORIZAR' ? 'DEVOLUCAO_AUTORIZADA' : 'DEVOLUCAO_RECUSADA';
+        const autorizadorId = req.userId;
+
+        await db.query(
+            `UPDATE pedidos 
+             SET status = $1, autorizado_por = $2, data_autorizacao = NOW() 
+             WHERE id = $3`,
+            [novoStatus, autorizadorId, pedidoId]
+        );
+
+        res.json({ success: true, status: novoStatus });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;

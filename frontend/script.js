@@ -309,7 +309,6 @@ async function carregarDashboard() {
         // Chama alertas específicos da escola (Pedidos em transporte para o localId)
         setTimeout(() => verificarAlertasEscola(), 500);
     }
-
     // --- 4. PERFIL: ADMIN ---
     if (perfil === 'admin') {
         html += `
@@ -348,7 +347,6 @@ async function carregarDashboard() {
         // Chama alertas de novas solicitações de Escolas e Logística
         setTimeout(() => verificarSolicitacoesPendentes(), 500);
     }
-
     // --- 5. PERFIL: ESTOQUE ---
     if (perfil === 'estoque') {
         html += `
@@ -386,7 +384,6 @@ async function carregarDashboard() {
         // Chama alertas de pedidos aguardando separação
         setTimeout(verificarPedidosParaSeparar, 500);
     }
-
     // --- 6. PERFIL: LOGÍSTICA ---
     if (perfil === 'logistica') {
         html += `
@@ -403,7 +400,6 @@ async function carregarDashboard() {
         // Alertas de pedidos prontos para coleta no Estoque Central
         setTimeout(verificarPedidosParaColeta, 500);
     }
-
     html += menuComum + `</div>`; // Fecha a grid e adiciona o menu comum no fim
     container.innerHTML = html;
 

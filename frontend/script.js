@@ -11291,6 +11291,81 @@ async function listarDevolucoesEstoque() {
     document.getElementById('container-estoque').innerHTML = html || '<p>Nenhuma carga em trânsito para recebimento.</p>';
 }
 
+async function verDetalhesDevolucaoAdmin(pedidoId) {
+    const container = document.getElementById('app-content');
+    
+    try {
+        const res = await fetch(`${API_URL}/pedidos/admin/detalhes-devolucao/${pedidoId}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const itens = await res.json();
+
+        // Injetamos a visão de detalhes
+        container.innerHTML = `
+            <div class="painel-vidro" style="max-width: 800px; margin: auto;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                    <h2 style="color:white; margin:0;">📋 CONFERIR ITENS - PEDIDO #${pedidoId}</h2>
+                    <button onclick="listarDevolucoesAdmin()" style="background:#64748b; color:white; border:none; padding:8px 15px; border-radius:6px; cursor:pointer;">VOLTAR</button>
+                </div>
+
+                <div style="background:rgba(255,255,255,0.1); border-radius:10px; padding:20px; margin-bottom:30px;">
+                    <table style="width:100%; color:white; border-collapse:collapse;">
+                        <thead>
+                            <tr style="border-bottom:1px solid rgba(255,255,255,0.3); text-align:left;">
+                                <th style="padding:10px;">PRODUTO</th>
+                                <th style="padding:10px; text-align:center;">TAMANHO</th>
+                                <th style="padding:10px; text-align:center;">QTD SOLICITADA</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${itens.map(i => `
+                                <tr style="border-bottom:1px solid rgba(255,255,255,0.1);">
+                                    <td style="padding:10px;">${i.produto_nome}</td>
+                                    <td style="padding:10px; text-align:center;">${i.tamanho}</td>
+                                    <td style="padding:10px; text-align:center; font-weight:bold;">${i.quantidade}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div style="display:flex; gap:20px;">
+                    <button onclick="responderDevolucao(${pedidoId}, 'AUTORIZAR')" style="flex:1; background:#10b981; color:white; border:none; padding:15px; border-radius:8px; font-weight:bold; cursor:pointer; font-size:1rem;">
+                        ✅ AUTORIZAR COLETA
+                    </button>
+                    <button onclick="responderDevolucao(${pedidoId}, 'RECUSAR')" style="flex:1; background:#ef4444; color:white; border:none; padding:15px; border-radius:8px; font-weight:bold; cursor:pointer; font-size:1rem;">
+                        ❌ RECUSAR SOLICITAÇÃO
+                    </button>
+                </div>
+            </div>
+        `;
+    } catch (err) {
+        alert("Erro ao carregar itens: " + err.message);
+    }
+}
+
+async function responderDevolucao(pedidoId, acao) {
+    if (!confirm(`Tem certeza que deseja ${acao} esta devolução?`)) return;
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/admin/processar-devolucao`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json', 
+                'Authorization': `Bearer ${TOKEN}` 
+            },
+            body: JSON.stringify({ pedidoId, acao })
+        });
+
+        if (res.ok) {
+            alert(`Solicitação ${acao === 'AUTORIZAR' ? 'autorizada' : 'recusada'} com sucesso!`);
+            listarDevolucoesAdmin(); // Volta para a lista principal
+        }
+    } catch (err) {
+        alert("Erro ao processar: " + err.message);
+    }
+}
+
 async function listarDevolucoesLogistica() {
     const res = await fetch(`${API_URL}/pedidos/logistica/devolucoes/para-coletar`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
     const lista = await res.json();

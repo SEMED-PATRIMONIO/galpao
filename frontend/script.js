@@ -1414,7 +1414,7 @@ function logout() {
 }
 
 // Função para Admin autorizar pedido ou recusar com motivo [cite: 10, 24]
-async function processarSolicitacao(pedidoId, acao) {
+async function processarSolicitacaoANTIGO(pedidoId, acao) {
     let motivo = '';
     let status = acao === 'AUTORIZA' ? 'PEDIDO AUTORIZADO' : 'RECUSADO';
 
@@ -11359,6 +11359,30 @@ async function listarDevolucoesLogistica() {
     `).join('');
     
     document.getElementById('container-logistica').innerHTML = html || '<p>Nada para coletar no momento.</p>';
+}
+
+async function processarDecisao(pedidoId, novoStatus) {
+    if (!confirm(`Deseja realmente definir esta devolução como ${novoStatus}?`)) return;
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/admin/decisao-devolucao`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json', 
+                'Authorization': `Bearer ${TOKEN}` 
+            },
+            body: JSON.stringify({ pedidoId, status: novoStatus })
+        });
+
+        if (res.ok) {
+            alert("✅ Status atualizado!");
+            listarDevolucoesAdmin(); // Recarrega a lista principal
+        } else {
+            alert("Erro ao atualizar status.");
+        }
+    } catch (err) {
+        alert("Erro na conexão: " + err.message);
+    }
 }
 
 // Isso garante que o onclick="funcao()" funcione sempre

@@ -1708,13 +1708,22 @@ router.get('/pedidos/escola/a-caminho', verificarToken, async (req, res) => {
 
 router.get('/pedidos/escola/limite-devolucao', verificarToken, async (req, res) => {
     try {
-        // Identifica a escola pelo Token (ajuste para 'id' ou 'local_id' conforme seu JWT)
-        const escolaId = req.user.local_id || req.user.id; 
+        // 1. Seguindo seu modelo: buscamos o local_id do usuário logado (req.userId)
+        const userRes = await db.query(
+            'SELECT local_id FROM usuarios WHERE id = $1', 
+            [req.userId]
+        );
 
-        if (!escolaId) {
-            return res.status(401).json({ success: false, error: "Sessão inválida. Identificação da escola não encontrada." });
+        if (userRes.rows.length === 0 || !userRes.rows[0].local_id) {
+            return res.status(404).json({ 
+                success: false, 
+                error: "Escola não identificada para este usuário." 
+            });
         }
 
+        const escolaId = userRes.rows[0].local_id;
+
+        // 2. Agora buscamos os itens entregues para ESTA escola específica
         const query = `
             SELECT 
                 ip.produto_id, 
@@ -1733,7 +1742,6 @@ router.get('/pedidos/escola/limite-devolucao', verificarToken, async (req, res) 
 
         const result = await db.query(query, [escolaId]);
 
-        // Retorno limpo mesmo se estiver vazio
         res.json({
             success: true,
             items: result.rows || [],

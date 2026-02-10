@@ -7289,33 +7289,64 @@ async function finalizarConferencia(id) {
 
 async function listarColetasLogistica() {
     const container = document.getElementById('app-content');
-    container.innerHTML = '<div style="padding:20px;">BUSCANDO COLETAS...</div>';
+    container.innerHTML = '<div style="padding:20px; color:white;">⏳ Carregando coletas de devolução...</div>';
 
     try {
-        const res = await fetch(`${API_URL}/pedidos/fila-coleta`, {
+        const res = await fetch(`${API_URL}/devolucoes/logistica/coletas-pendentes`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
-        const pedidos = await res.json();
+        const coletas = await res.json();
 
-        let html = `
-            <div style="padding:20px;">
-                <h2 style="color: #1e3a8a; margin-bottom: 20px;">🚚 COLETAS LIBERADAS (LOGÍSTICA)</h2>
-                ${pedidos.map(p => `
-                    <div style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; border-left: 5px solid #3b82f6;">
-                        <div>
-                            <span style="font-weight: bold; color: #1e40af;">PEDIDO #${p.id}</span>
-                            <div style="font-size: 1.2rem; font-weight: bold;">DESTINO: ${p.escola}</div>
-                            <div style="color: #ef4444; font-weight: bold;">📦 VOLUMES: ${p.volumes}</div>
-                        </div>
-                        <button onclick="confirmarSaidaTransporte(${p.id})" style="padding: 12px 25px; background: #059669; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer;">
-                            INICIAR TRANSPORTE
-                        </button>
-                    </div>
-                `).join('')}
+        container.innerHTML = `
+            <div class="painel-vidro" style="max-width: 900px; margin: auto;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                    <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background:#475569; width:100px;">⬅️ VOLTAR</button>
+                    <h2 style="color:white; margin:0;">🚚 COLETAS DE DEVOLUÇÃO</h2>
+                    <div style="width:100px;"></div>
+                </div>
+                
+                <table style="width:100%; color:white; border-collapse:collapse;">
+                    <thead>
+                        <tr style="border-bottom:2px solid rgba(255,255,255,0.2); text-align:left;">
+                            <th style="padding:10px;">ID</th>
+                            <th style="padding:10px;">UNIDADE (ESCOLA)</th>
+                            <th style="padding:10px; text-align:center;">AÇÃO</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${coletas.length === 0 ? '<tr><td colspan="3" style="text-align:center; padding:30px;">✅ Nenhuma devolução aguardando coleta.</td></tr>' : 
+                        coletas.map(c => `
+                            <tr style="border-bottom:1px solid rgba(255,255,255,0.1);">
+                                <td style="padding:15px;">#${c.id}</td>
+                                <td style="padding:15px;"><b>${c.escola_nome}</b></td>
+                                <td style="padding:15px; text-align:center;">
+                                    <button onclick="confirmarColetaDevolucao(${c.id})" class="btn-acao" style="background:#f59e0b; color:white; border:none; padding:10px 15px; border-radius:6px; font-weight:bold; cursor:pointer;">📦 CONFIRMAR COLETA</button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
             </div>
         `;
-        container.innerHTML = html || '<p style="padding:20px;">NENHUMA COLETA AGUARDANDO.</p>';
-    } catch (err) { alert("Erro ao carregar coletas"); }
+    } catch (err) { container.innerHTML = "Erro ao carregar logística."; }
+}
+
+async function confirmarColetaDevolucao(pedidoId) {
+    if (!confirm(`Confirma que coletou os materiais da devolução #${pedidoId}?`)) return;
+
+    try {
+        const res = await fetch(`${API_URL}/devolucoes/logistica/confirmar-coleta/${pedidoId}`, {
+            method: 'PUT',
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+
+        if (res.ok) {
+            alert("✅ Coleta registrada com sucesso!");
+            listarColetasLogistica();
+        }
+    } catch (err) {
+        alert("Falha ao registrar coleta.");
+    }
 }
 
 async function confirmarSaidaTransporte(id) {

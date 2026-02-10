@@ -3883,4 +3883,56 @@ router.get('/pedidos/admin/conferir-devolucao-remessa/:id', verificarToken, asyn
     }
 });
 
+router.post('/pedidos/escola/nova-devolucao-isolada', verificarToken, async (req, res) => {
+    const { itens } = req.body;
+    const usuarioId = req.userId;
+
+    try {
+        await db.query('BEGIN');
+        const userRes = await db.query('SELECT local_id FROM usuarios WHERE id = $1', [usuarioId]);
+        const escolaId = userRes.rows[0]?.local_id;
+
+        // Cria o Pedido (Cabeçalho)
+        const resPed = await db.query(
+            `INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, tipo_pedido, data_criacao) 
+             VALUES ($1, $2, 'DEVOLUCAO_PENDENTE', 'DEVOLUCAO', NOW()) RETURNING id`,
+            [usuarioId, escolaId]
+        );
+        const pedidoId = resPed.rows[0].id;
+
+        // Cria a Remessa (O vínculo que o Admin precisa)
+        const resRem = await db.query(
+            `INSERT INTO pedido_remessas (pedido_id, status, data_criacao) 
+             VALUES ($1, 'PENDENTE', NOW()) RETURNING id`,
+            [pedidoId]
+        );
+        const remessaId = resRem.rows[0].id;
+
+        // Insere os itens na tabela de remessa (onde o sistema já busca)
+        for (const it of itens) {
+            await db.query(
+                `INSERT INTO pedido_remessa_itens (remessa_id, produto_id, tamanho, quantidade_enviada) 
+                 VALUES ($1, $2, $3, $4)`,
+                [remessaId, it.produto_id, it.tamanho, it.quantidade]
+            );
+        }
+
+        await db.query('COMMIT');
+        res.json({ success: true, pedidoId });
+    } catch (err) {
+        await db.query('ROLLBACK');
+        res.status(500).json({ error: "Erro na nova rota de devolução." });
+    }
+});
+
+router.post('/pedidos/admin/decisao-devolucao', verificarToken, async (req, res) => {
+    try {
+        const { pedidoId, status } = req.body; 
+        await db.query("UPDATE pedidos SET status = $1 WHERE id = $2", [status, pedidoId]);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao processar decisão." });
+    }
+});
+
 module.exports = router;

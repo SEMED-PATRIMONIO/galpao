@@ -11208,7 +11208,7 @@ async function finalizarDevolucaoEstoque(pedidoId, itens) {
 
 async function listarDevolucoesAdmin() {
     const container = document.getElementById('app-content');
-    container.innerHTML = '<div style="padding:20px; color:white;">⏳ Carregando solicitações...</div>';
+    container.innerHTML = '<div style="padding:20px; color:white;">⏳ Carregando...</div>';
 
     try {
         const res = await fetch(`${API_URL}/pedidos/admin/devolucoes-pendentes`, {
@@ -11238,7 +11238,7 @@ async function listarDevolucoesAdmin() {
                                 <td style="padding:10px;">#${d.id}</td>
                                 <td style="padding:10px;">${d.escola_nome}</td>
                                 <td style="padding:10px; text-align:center;">
-                                    <button onclick="verDetalhesV2(${d.id})" class="btn-acao" style="background:#1e40af; color:white; border:none; padding:8px 12px; border-radius:5px; cursor:pointer;">🔍 CONFERIR</button>
+                                    <button onclick="verDetalhesDevolucaoAdmin(${d.id})" class="btn-acao" style="background:#1e40af; color:white; border:none; padding:8px 12px; border-radius:5px; cursor:pointer;">🔍 CONFERIR</button>
                                 </td>
                             </tr>
                         `).join('')}
@@ -11329,32 +11329,41 @@ async function verDetalhesDevolucaoAdmin(pedidoId) {
     const container = document.getElementById('app-content');
     
     try {
-        // Chamada para a ROTA EXCLUSIVA que acabamos de criar
         const res = await fetch(`${API_URL}/pedidos/admin/visualizar-itens-devolucao/${pedidoId}`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
         const itens = await res.json();
 
         container.innerHTML = `
-            <div class="painel-vidro">
-                <h3>📋 ITENS DA SOLICITAÇÃO #${pedidoId}</h3>
-                <table style="width:100%; color:white; margin:20px 0;">
-                    <thead style="border-bottom:1px solid #fff;">
-                        <tr><th>PRODUTO</th><th>TAMANHO</th><th>QUANTIDADE</th></tr>
+            <div class="painel-vidro" style="max-width: 800px; margin: auto;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                    <button onclick="listarDevolucoesAdmin()" class="btn-sair-vidro" style="background:#475569; width:100px;">⬅️ VOLTAR</button>
+                    <h2 style="color:white; margin:0; font-size:1.2rem;">📋 CONFERIR PEDIDO #${pedidoId}</h2>
+                    <div style="width:100px;"></div>
+                </div>
+
+                <table style="width:100%; color:white; border-collapse:collapse; margin-bottom:30px;">
+                    <thead>
+                        <tr style="border-bottom:1px solid #fff; text-align:left;">
+                            <th style="padding:10px;">PRODUTO</th>
+                            <th style="padding:10px; text-align:center;">TAMANHO</th>
+                            <th style="padding:10px; text-align:center;">QUANTIDADE</th>
+                        </tr>
                     </thead>
                     <tbody>
                         ${itens.map(i => `
-                            <tr>
-                                <td>${i.nome}</td>
-                                <td style="text-align:center;">${i.tamanho}</td>
-                                <td style="text-align:center;">${i.quantidade}</td>
+                            <tr style="border-bottom:1px solid rgba(255,255,255,0.1);">
+                                <td style="padding:10px;">${i.nome}</td>
+                                <td style="padding:10px; text-align:center;">${i.tamanho}</td>
+                                <td style="padding:10px; text-align:center; font-weight:bold;">${i.quantidade || '0'}</td>
                             </tr>
                         `).join('')}
                     </tbody>
                 </table>
-                <div style="display:flex; gap:10px;">
-                    <button onclick="processarDecisao(${pedidoId}, 'DEVOLUCAO_AUTORIZADA')" style="background:#10b981; flex:1; padding:10px; color:white; border:none; border-radius:5px; cursor:pointer;">AUTORIZAR</button>
-                    <button onclick="processarDecisao(${pedidoId}, 'DEVOLUCAO_RECUSADA')" style="background:#ef4444; flex:1; padding:10px; color:white; border:none; border-radius:5px; cursor:pointer;">RECUSAR</button>
+
+                <div style="display:flex; gap:20px;">
+                    <button onclick="processarDecisao(${pedidoId}, 'DEVOLUCAO_AUTORIZADA')" style="flex:1; background:#10b981; color:white; border:none; padding:15px; border-radius:8px; font-weight:bold; cursor:pointer;">✅ AUTORIZAR</button>
+                    <button onclick="processarDecisao(${pedidoId}, 'DEVOLUCAO_RECUSADA')" style="flex:1; background:#ef4444; color:white; border:none; padding:15px; border-radius:8px; font-weight:bold; cursor:pointer;">❌ RECUSAR</button>
                 </div>
             </div>
         `;

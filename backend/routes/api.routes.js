@@ -1708,8 +1708,12 @@ router.get('/pedidos/escola/a-caminho', verificarToken, async (req, res) => {
 
 router.get('/pedidos/escola/limite-devolucao', verificarToken, async (req, res) => {
     try {
-        // ATENÇÃO: Verifique se o seu token guarda o local_id do usuário escola
+        // Identifica a escola pelo Token (ajuste para 'id' ou 'local_id' conforme seu JWT)
         const escolaId = req.user.local_id || req.user.id; 
+
+        if (!escolaId) {
+            return res.status(401).json({ success: false, error: "Sessão inválida. Identificação da escola não encontrada." });
+        }
 
         const query = `
             SELECT 
@@ -1722,15 +1726,23 @@ router.get('/pedidos/escola/limite-devolucao', verificarToken, async (req, res) 
             JOIN produtos p ON ip.produto_id = p.id
             WHERE ped.local_destino_id = $1 
               AND ped.status = 'ENTREGUE'
+              AND ped.data_recebimento >= NOW() - INTERVAL '30 days'
             GROUP BY ip.produto_id, p.nome, ip.tamanho
             HAVING SUM(ip.quantidade) > 0
         `;
 
         const result = await db.query(query, [escolaId]);
-        res.json(result.rows);
+
+        // Retorno limpo mesmo se estiver vazio
+        res.json({
+            success: true,
+            items: result.rows || [],
+            message: result.rows.length === 0 ? "Nenhum uniforme recebido nos últimos 30 dias." : ""
+        });
+
     } catch (err) {
-        console.error("ERRO NO LIMITE DEVOLUCAO:", err.message);
-        res.status(500).json({ error: "Erro interno ao buscar limites: " + err.message });
+        console.error("ERRO SQL:", err.message);
+        res.status(500).json({ success: false, error: "Erro ao consultar banco: " + err.message });
     }
 });
 
@@ -3740,6 +3752,43 @@ router.post('/pedidos/estoque/devolucoes/finalizar-recebimento', verificarToken,
         await db.query('COMMIT');
         res.json({ success: true });
     } catch (err) { if (db) await db.query('ROLLBACK'); res.status(500).json({ error: err.message }); }
+});
+
+router.post('/pedidos/escola/solicitar-devolucao', verificarToken, async (req, res) => {
+    try {
+        const { itens } = req.body;
+        const escolaId = req.user.local_id || req.user.id;
+        const usuarioId = req.user.id;
+
+        await db.query('BEGIN');
+
+        // 1. Cria o registro na tabela pedidos com o status que o banco exige
+        const resPed = await db.query(
+            `INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, tipo_pedido, data_criacao) 
+             VALUES ($1, $2, 'DEVOLUCAO_PENDENTE', 'DEVOLUCAO', NOW()) 
+             RETURNING id`,
+            [usuarioId, escolaId]
+        );
+        
+        const pedidoId = resPed.rows[0].id;
+
+        // 2. Insere os itens na tabela VIVA (itens_pedido)
+        for (const it of itens) {
+            await db.query(
+                `INSERT INTO itens_pedido (pedido_id, produto_id, tamanho, quantidade) 
+                 VALUES ($1, $2, $3, $4)`,
+                [pedidoId, it.produto_id, it.tamanho, it.quantidade]
+            );
+        }
+
+        await db.query('COMMIT');
+        res.json({ success: true, pedidoId });
+
+    } catch (err) {
+        if (db) await db.query('ROLLBACK');
+        console.error("ERRO AO SOLICITAR DEVOLUCAO:", err.message);
+        res.status(500).json({ error: "Erro ao gravar solicitação: " + err.message });
+    }
 });
 
 module.exports = router;

@@ -3856,4 +3856,31 @@ router.post('/pedidos/admin/processar-devolucao', verificarToken, async (req, re
     }
 });
 
+router.get('/pedidos/admin/conferir-devolucao-remessa/:id', verificarToken, async (req, res) => {
+    try {
+        const { id } = req.params; // ID do Pedido Pai
+
+        const query = `
+            SELECT 
+                pri.id,
+                prod.nome as produto_nome, 
+                pri.tamanho, 
+                pri.quantidade_enviada as quantidade
+            FROM pedido_remessas pr
+            JOIN pedido_remessa_itens pri ON pr.id = pri.remessa_id
+            JOIN produtos prod ON pri.produto_id = prod.id
+            WHERE pr.pedido_id = $1
+        `;
+        
+        const result = await db.query(query, [id]);
+        
+        // Garantimos o envio de JSON
+        res.json(result.rows || []);
+
+    } catch (err) {
+        console.error("Erro na rota exclusiva de devolução:", err.message);
+        res.status(500).json({ error: "Erro interno ao processar a conferência." });
+    }
+});
+
 module.exports = router;

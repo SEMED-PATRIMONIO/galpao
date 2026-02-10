@@ -11207,15 +11207,8 @@ async function finalizarDevolucaoEstoque(pedidoId, itens) {
 }
 
 async function listarDevolucoesAdmin() {
-    // 1. Busca o container e verifica se ele existe
     const container = document.getElementById('app-content');
-    
-    if (!container) {
-        console.error("Erro: Elemento 'app-content' não encontrado na tela do Admin.");
-        return;
-    }
-
-    container.innerHTML = '<div style="padding:20px; color:white;">⏳ Carregando solicitações de devolução...</div>';
+    container.innerHTML = '<div style="padding:20px; color:white;">⏳ Carregando solicitações...</div>';
 
     try {
         const res = await fetch(`${API_URL}/pedidos/admin/devolucoes-pendentes`, {
@@ -11223,46 +11216,94 @@ async function listarDevolucoesAdmin() {
         });
         const devolucoes = await res.json();
 
-        // 2. Monta o HTML (Verifique se 'devolucoes' é um array)
         container.innerHTML = `
-            <div class="painel-vidro" style="max-width: 1100px; margin: auto;">
-                <h2 style="color:white; margin-bottom:20px;">📦 DEVOLUÇÕES PENDENTES DE AUTORIZAÇÃO</h2>
+            <div class="painel-vidro" style="max-width: 900px; margin: auto;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                    <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background:#475569; width:100px;">⬅️ VOLTAR</button>
+                    <h2 style="color:white; margin:0; font-size:1.2rem;">📦 SOLICITAÇÕES DE DEVOLUÇÃO</h2>
+                    <div style="width:100px;"></div>
+                </div>
                 
-                <div style="overflow-x:auto;">
-                    <table style="width:100%; color:white; border-collapse:collapse;">
-                        <thead>
-                            <tr style="border-bottom:2px solid rgba(255,255,255,0.2); text-align:left;">
-                                <th style="padding:10px;">ID</th>
-                                <th style="padding:10px;">ORIGEM (ESCOLA)</th>
-                                <th style="padding:10px;">DATA SOLICITAÇÃO</th>
-                                <th style="padding:10px;">STATUS</th>
-                                <th style="padding:10px; text-align:center;">AÇÕES</th>
+                <table style="width:100%; color:white; border-collapse:collapse;">
+                    <thead>
+                        <tr style="border-bottom:2px solid rgba(255,255,255,0.2); text-align:left;">
+                            <th style="padding:10px;">ID</th>
+                            <th style="padding:10px;">ESCOLA</th>
+                            <th style="padding:10px; text-align:center;">AÇÃO</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${devolucoes.map(d => `
+                            <tr style="border-bottom:1px solid rgba(255,255,255,0.1);">
+                                <td style="padding:10px;">#${d.id}</td>
+                                <td style="padding:10px;">${d.escola_nome}</td>
+                                <td style="padding:10px; text-align:center;">
+                                    <button onclick="verDetalhesV2(${d.id})" class="btn-acao" style="background:#1e40af; color:white; border:none; padding:8px 12px; border-radius:5px; cursor:pointer;">🔍 CONFERIR</button>
+                                </td>
                             </tr>
-                        </thead>
-                        <tbody>
-                            ${devolucoes.length === 0 ? 
-                                '<tr><td colspan="5" style="padding:20px; text-align:center;">Nenhuma devolução pendente.</td></tr>' :
-                                devolucoes.map(d => `
-                                <tr style="border-bottom:1px solid rgba(255,255,255,0.1);">
-                                    <td style="padding:10px;">#${d.id}</td>
-                                    <td style="padding:10px;">${d.escola_nome}</td>
-                                    <td style="padding:10px;">${new Date(d.data_criacao).toLocaleDateString()}</td>
-                                    <td style="padding:10px;"><span style="background:#f59e0b; padding:4px 8px; border-radius:4px; font-size:0.8rem;">${d.status}</span></td>
-                                    <td style="padding:10px; text-align:center;">
-                                        <button onclick="verDetalhesDevolucaoAdmin(${d.id})" class="btn-acao" style="background:#1e40af; color:white; border:none; padding:8px 12px; border-radius:5px; cursor:pointer;">
-                                            🔍 CONFERIR
-                                        </button>
-                                    </td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    } catch (err) { container.innerHTML = "Erro ao carregar lista."; }
+}
+
+async function verDetalhesV2(pedidoId) {
+    const container = document.getElementById('app-content');
+    
+    try {
+        const res = await fetch(`${API_URL}/pedidos/admin/conferir-devolucao-v2/${pedidoId}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const itens = await res.json();
+
+        container.innerHTML = `
+            <div class="painel-vidro" style="max-width: 800px; margin: auto;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                    <button onclick="listarDevolucoesAdmin()" class="btn-sair-vidro" style="background:#475569; width:100px;">⬅️ VOLTAR</button>
+                    <h2 style="color:white; margin:0; font-size:1.2rem;">📋 ITENS DO PEDIDO #${pedidoId}</h2>
+                    <div style="width:100px;"></div>
+                </div>
+
+                <table style="width:100%; color:white; border-collapse:collapse; margin-bottom:30px;">
+                    <thead>
+                        <tr style="border-bottom:1px solid #fff; text-align:left;">
+                            <th style="padding:10px;">PRODUTO</th>
+                            <th style="padding:10px; text-align:center;">TAMANHO</th>
+                            <th style="padding:10px; text-align:center;">QTD</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${itens.map(i => `
+                            <tr>
+                                <td style="padding:10px;">${i.nome}</td>
+                                <td style="padding:10px; text-align:center;">${i.tamanho}</td>
+                                <td style="padding:10px; text-align:center;">${i.quantidade}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+
+                <div style="display:flex; gap:20px;">
+                    <button onclick="enviarDecisaoV2(${pedidoId}, 'DEVOLUCAO_AUTORIZADA')" style="flex:1; background:#10b981; color:white; border:none; padding:15px; border-radius:8px; font-weight:bold; cursor:pointer;">✅ AUTORIZAR</button>
+                    <button onclick="enviarDecisaoV2(${pedidoId}, 'DEVOLUCAO_RECUSADA')" style="flex:1; background:#ef4444; color:white; border:none; padding:15px; border-radius:8px; font-weight:bold; cursor:pointer;">❌ RECUSAR</button>
                 </div>
             </div>
         `;
-    } catch (err) {
-        container.innerHTML = `<div style="color:#ef4444; padding:20px;">Erro ao carregar devoluções: ${err.message}</div>`;
-    }
+    } catch (err) { alert("Erro ao carregar detalhes."); }
+}
+
+async function enviarDecisaoV2(pedidoId, status) {
+    if(!confirm(`Confirma definir como ${status}?`)) return;
+    try {
+        const res = await fetch(`${API_URL}/pedidos/admin/decisao-devolucao-v2`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ pedidoId, status })
+        });
+        if(res.ok) { alert("Sucesso!"); listarDevolucoesAdmin(); }
+    } catch(e) { alert("Erro ao processar."); }
 }
 
 async function listarDevolucoesEstoque() {

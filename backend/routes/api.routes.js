@@ -3978,19 +3978,23 @@ router.post('/pedidos/escola/solicitacao-devolucao-v2', verificarToken, async (r
 router.get('/pedidos/admin/visualizar-itens-devolucao/:id', verificarToken, async (req, res) => {
     try {
         const { id } = req.params;
+
+        // Note o ajuste na query: selecionando 'quantidade_solicitada'
         const query = `
             SELECT 
                 prod.nome, 
-                pri.tamanho, 
-                pri.quantidade_enviada as quantidade
-            FROM pedido_remessas pr
-            JOIN pedido_remessa_itens pri ON pr.id = pri.remessa_id
-            JOIN produtos prod ON pri.produto_id = prod.id
-            WHERE pr.pedido_id = $1
+                pi.tamanho, 
+                pi.quantidade_solicitada as quantidade
+            FROM pedido_itens pi
+            JOIN produtos prod ON pi.produto_id = prod.id
+            WHERE pi.pedido_id = $1
         `;
+
         const result = await db.query(query, [id]);
-        res.json(result.rows);
+        res.json(result.rows || []);
+
     } catch (err) {
+        console.error("Erro na visualização do Admin:", err.message);
         res.status(500).json({ error: "Erro ao buscar itens." });
     }
 });

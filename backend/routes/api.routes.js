@@ -4061,4 +4061,38 @@ router.post('/pedidos/estoque/finalizar-devolucao-v2', verificarToken, async (re
     }
 });
 
+router.get('/devolucoes/logistica/coletas-pendentes', verificarToken, async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                p.id, 
+                l.nome as escola_nome, 
+                p.data_criacao
+            FROM pedidos p
+            JOIN locais l ON p.local_destino_id = l.id
+            WHERE p.status = 'DEVOLUCAO_AUTORIZADA' 
+              AND p.tipo_pedido = 'DEVOLUCAO'
+            ORDER BY p.data_criacao ASC
+        `;
+        const result = await db.query(query);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao listar coletas de devolução." });
+    }
+});
+
+// 2. Confirmar coleta de DEVOLUÇÃO
+router.put('/devolucoes/logistica/confirmar-coleta/:id', verificarToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        await db.query(
+            "UPDATE pedidos SET status = 'DEVOLUCAO_EM_TRANSITO', data_saida = NOW() WHERE id = $1",
+            [id]
+        );
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao processar coleta." });
+    }
+});
+
 module.exports = router;

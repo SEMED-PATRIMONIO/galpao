@@ -11443,22 +11443,76 @@ async function responderDevolucao(pedidoId, acao) {
 }
 
 async function listarDevolucoesLogistica() {
-    const res = await fetch(`${API_URL}/pedidos/logistica/devolucoes/para-coletar`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
-    const lista = await res.json();
-    
-    const html = lista.map(d => `
-        <div class="card-devolucao" style="border-left: 8px solid #2563eb; padding: 15px; background: white; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border-radius: 8px;">
-            <div>
-                <strong>🚚 COLETAR EM: ${d.escola_nome}</strong><br>
-                <small>Status: Aguardando Motorista</small>
-            </div>
-            <button onclick="confirmarColetaEscola(${d.id})" style="background: #16a34a; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer;">
-                📦 CONFIRMAR COLETA
-            </button>
+    // 1. Forçamos a busca pelo elemento no momento exato
+    const container = document.getElementById('app-content');
+
+    // 2. Se por algum motivo ele ainda for null, tentamos um plano B
+    if (!container) {
+        console.error("ERRO: app-content não encontrado. IDs disponíveis:", 
+            Array.from(document.querySelectorAll('[id]')).map(el => el.id));
+        return alert("Erro de interface: Área de conteúdo não encontrada. Tente atualizar a página (F5).");
+    }
+
+    // 3. Limpamos o container e mostramos o carregamento
+    container.innerHTML = `
+        <div style="padding:40px; text-align:center; color:white;">
+            <div class="spinner"></div> <p>⏳ Buscando coletas autorizadas pelo Admin...</p>
         </div>
-    `).join('');
-    
-    document.getElementById('container-logistica').innerHTML = html || '<p>Nada para coletar no momento.</p>';
+    `;
+
+    try {
+        const res = await fetch(`${API_URL}/devolucoes/logistica/coletas-pendentes`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        
+        if (!res.ok) throw new Error("Não foi possível acessar a lista de coletas.");
+        
+        const coletas = await res.json();
+
+        // 4. Montagem da Tabela com Botão VOLTAR
+        container.innerHTML = `
+            <div class="painel-vidro" style="max-width: 900px; margin: auto;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:25px;">
+                    <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background:#475569; width:100px;">⬅️ VOLTAR</button>
+                    <h2 style="color:white; margin:0; font-size:1.3rem;">🚚 COLETAS DE DEVOLUÇÃO</h2>
+                    <div style="width:100px;"></div>
+                </div>
+                
+                <div style="background: rgba(0,0,0,0.2); border-radius: 10px; padding: 5px;">
+                    <table style="width:100%; color:white; border-collapse:collapse;">
+                        <thead>
+                            <tr style="border-bottom:2px solid rgba(255,255,255,0.2); text-align:left;">
+                                <th style="padding:15px;">PEDIDO</th>
+                                <th style="padding:15px;">ESCOLA ORIGEM</th>
+                                <th style="padding:15px; text-align:center;">AÇÃO</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${coletas.length === 0 ? 
+                                '<tr><td colspan="3" style="text-align:center; padding:40px; color:#cbd5e1;">✅ Nenhuma coleta pendente no momento.</td></tr>' : 
+                                coletas.map(c => `
+                                    <tr style="border-bottom:1px solid rgba(255,255,255,0.1);">
+                                        <td style="padding:15px;">#${c.id}</td>
+                                        <td style="padding:15px;"><b>${c.escola_nome}</b></td>
+                                        <td style="padding:15px; text-align:center;">
+                                            <button onclick="confirmarColetaDevolucao(${c.id})" class="btn-acao" style="background:#f59e0b; color:white; border:none; padding:10px 18px; border-radius:8px; font-weight:bold; cursor:pointer; transition: 0.3s;">📦 CONFIRMAR COLETA</button>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+    } catch (err) { 
+        container.innerHTML = `
+            <div class="painel-vidro" style="text-align:center; color:#f87171; padding:30px;">
+                <h3>🚨 Erro de Conexão</h3>
+                <p>${err.message}</p>
+                <button onclick="listarDevolucoesLogistica()" style="background:#475569; color:white; border:none; padding:10px 20px; border-radius:5px; cursor:pointer; margin-top:15px;">TENTAR NOVAMENTE</button>
+            </div>
+        `;
+    }
 }
 
 async function processarDecisao(pedidoId, novoStatus) {

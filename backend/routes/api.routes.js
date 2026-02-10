@@ -3788,4 +3788,33 @@ router.post('/pedidos/escola/solicitar-devolucao', verificarToken, async (req, r
     }
 });
 
+router.get('/pedidos/admin/devolucoes-pendentes', verificarToken, async (req, res) => {
+    try {
+        // 1. Segurança: Verifica se é Admin (ajuste conforme seu padrão de perfil)
+        // Se o seu sistema usa req.user.perfil, adicione a trava aqui.
+
+        const query = `
+            SELECT 
+                p.id, 
+                l.nome as escola_nome, 
+                p.data_criacao, 
+                p.status
+            FROM pedidos p
+            JOIN locais l ON p.local_destino_id = l.id
+            WHERE p.tipo_pedido = 'DEVOLUCAO' 
+              AND p.status = 'DEVOLUCAO_PENDENTE'
+            ORDER BY p.data_criacao DESC
+        `;
+
+        const result = await db.query(query);
+        
+        // Sempre retorna JSON, mesmo que vazio, para evitar o erro "Unexpected token <"
+        res.json(result.rows || []);
+
+    } catch (err) {
+        console.error("ERRO ADMIN DEVOLUCOES:", err.message);
+        res.status(500).json({ error: "Erro interno ao buscar devoluções." });
+    }
+});
+
 module.exports = router;

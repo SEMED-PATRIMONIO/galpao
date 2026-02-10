@@ -11331,7 +11331,6 @@ async function verDetalhesDevolucaoAdmin(pedidoId) {
     const container = document.getElementById('app-content');
     
     try {
-        // Busca na rota que lê a tabela pedido_remessa_itens
         const res = await fetch(`${API_URL}/pedidos/admin/visualizar-itens-devolucao/${pedidoId}`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
@@ -11341,14 +11340,14 @@ async function verDetalhesDevolucaoAdmin(pedidoId) {
             <div class="painel-vidro" style="max-width: 800px; margin: auto;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
                     <button onclick="listarDevolucoesAdmin()" class="btn-sair-vidro" style="background:#475569; width:100px;">⬅️ VOLTAR</button>
-                    <h2 style="color:white; margin:0;">📋 CONFERIR ITENS - PEDIDO #${pedidoId}</h2>
+                    <h2 style="color:white; margin:0;">📋 CONFERIR ITENS - #${pedidoId}</h2>
                     <div style="width:100px;"></div>
                 </div>
 
                 <table style="width:100%; color:white; border-collapse:collapse; margin-bottom:30px;">
-                    <thead style="background:rgba(255,255,255,0.1);">
+                    <thead style="border-bottom:1px solid rgba(255,255,255,0.3); text-align:left;">
                         <tr>
-                            <th style="padding:10px; text-align:left;">PRODUTO</th>
+                            <th style="padding:10px;">PRODUTO</th>
                             <th style="padding:10px; text-align:center;">TAMANHO</th>
                             <th style="padding:10px; text-align:center;">QUANTIDADE</th>
                         </tr>
@@ -11358,7 +11357,9 @@ async function verDetalhesDevolucaoAdmin(pedidoId) {
                             <tr style="border-bottom:1px solid rgba(255,255,255,0.1);">
                                 <td style="padding:10px;">${i.nome}</td>
                                 <td style="padding:10px; text-align:center;">${i.tamanho}</td>
-                                <td style="padding:10px; text-align:center; font-weight:bold;">${i.quantidade}</td>
+                                <td style="padding:10px; text-align:center; font-weight:bold; color:#10b981;">
+                                    ${i.quantidade}
+                                </td>
                             </tr>
                         `).join('')}
                     </tbody>
@@ -11370,9 +11371,7 @@ async function verDetalhesDevolucaoAdmin(pedidoId) {
                 </div>
             </div>
         `;
-    } catch (err) {
-        alert("Erro ao carregar os itens para conferência.");
-    }
+    } catch (err) { alert("Erro ao carregar detalhes."); }
 }
 
 async function responderDevolucao(pedidoId, acao) {

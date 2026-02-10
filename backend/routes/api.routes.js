@@ -1708,7 +1708,8 @@ router.get('/pedidos/escola/a-caminho', verificarToken, async (req, res) => {
 
 router.get('/pedidos/escola/limite-devolucao', verificarToken, async (req, res) => {
     try {
-        const escolaId = req.user.local_id; // ID da escola logada
+        // ATENÇÃO: Verifique se o seu token guarda o local_id do usuário escola
+        const escolaId = req.user.local_id || req.user.id; 
 
         const query = `
             SELECT 
@@ -1717,18 +1718,19 @@ router.get('/pedidos/escola/limite-devolucao', verificarToken, async (req, res) 
                 ip.tamanho, 
                 SUM(ip.quantidade) as total_recebido
             FROM pedidos ped
-            JOIN itens_pedido ip ON ped.id = ip.pedido_id -- O erro costuma estar aqui (usando pedido_itens)
+            JOIN itens_pedido ip ON ped.id = ip.pedido_id
             JOIN produtos p ON ip.produto_id = p.id
             WHERE ped.local_destino_id = $1 
-              AND ped.status = 'ENTREGUE' -- Só o que já foi entregue pode ser devolvido
-              AND ped.data_recebimento >= NOW() - INTERVAL '30 days'
+              AND ped.status = 'ENTREGUE'
             GROUP BY ip.produto_id, p.nome, ip.tamanho
-            HAVING SUM(ip.quantidade) > 0`;
+            HAVING SUM(ip.quantidade) > 0
+        `;
 
         const result = await db.query(query, [escolaId]);
         res.json(result.rows);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        console.error("ERRO NO LIMITE DEVOLUCAO:", err.message);
+        res.status(500).json({ error: "Erro interno ao buscar limites: " + err.message });
     }
 });
 

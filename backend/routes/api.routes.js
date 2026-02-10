@@ -3959,10 +3959,11 @@ router.post('/pedidos/escola/solicitacao-devolucao-v2', verificarToken, async (r
         const remessaId = resRem.rows[0].id;
 
         for (const it of itens) {
+            // USANDO A COLUNA EXATA: quantidade_enviada
             await db.query(
                 `INSERT INTO pedido_remessa_itens (remessa_id, produto_id, tamanho, quantidade_enviada) 
                  VALUES ($1, $2, $3, $4)`,
-                [remessaId, it.produto_id, it.tamanho, it.quantidade] // it.quantidade vindo do frontend
+                [remessaId, it.produto_id, it.tamanho, it.quantidade]
             );
         }
 
@@ -3977,23 +3978,20 @@ router.post('/pedidos/escola/solicitacao-devolucao-v2', verificarToken, async (r
 router.get('/pedidos/admin/visualizar-itens-devolucao/:id', verificarToken, async (req, res) => {
     try {
         const { id } = req.params;
-
         const query = `
             SELECT 
                 prod.nome, 
-                pi.tamanho, 
-                pi.quantidade
-            FROM pedido_itens pi
-            JOIN produtos prod ON pi.produto_id = prod.id
-            WHERE pi.pedido_id = $1
+                pri.tamanho, 
+                pri.quantidade_enviada as quantidade
+            FROM pedido_remessas pr
+            JOIN pedido_remessa_itens pri ON pr.id = pri.remessa_id
+            JOIN produtos prod ON pri.produto_id = prod.id
+            WHERE pr.pedido_id = $1
         `;
-
         const result = await db.query(query, [id]);
-        res.json(result.rows || []);
-
+        res.json(result.rows);
     } catch (err) {
-        console.error("Erro na visualização do Admin:", err.message);
-        res.status(500).json({ error: "Erro ao buscar itens do pedido." });
+        res.status(500).json({ error: "Erro ao buscar itens." });
     }
 });
 
@@ -4024,6 +4022,38 @@ router.post('/pedidos/admin/decisao-devolucao-v2', verificarToken, async (req, r
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ error: "Erro ao atualizar status." });
+    }
+});
+
+router.put('/pedidos/logistica/confirmar-coleta/:id', verificarToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        // O status muda para EM_TRANSITO. O estoque só verá pedidos com este status.
+        await db.query(
+            "UPDATE pedidos SET status = 'DEVOLUCAO_EM_TRANSITO', data_saida = NOW() WHERE id = $1",
+            [id]
+        );
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/pedidos/estoque/finalizar-devolucao-v2', verificarToken, async (req, res) => {
+    const { pedidoId, itens } = req.body;
+    try {
+        await db.query('BEGIN');
+        for (const item of itens) {
+            // Soma na grade (estoque_grades) e no total (produtos)
+            await db.query("UPDATE estoque_grades SET quantidade = quantidade + $1 WHERE produto_id = $2 AND tamanho = $3", [item.quantidade, item.produto_id, item.tamanho]);
+            await db.query("UPDATE produtos SET quantidade_estoque = quantidade_estoque + $1 WHERE id = $2", [item.quantidade, item.produto_id]);
+        }
+        await db.query("UPDATE pedidos SET status = 'DEVOLVIDO', data_recebimento = NOW() WHERE id = $1", [pedidoId]);
+        await db.query('COMMIT');
+        res.json({ success: true });
+    } catch (err) {
+        await db.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
     }
 });
 

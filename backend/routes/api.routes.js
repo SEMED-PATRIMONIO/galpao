@@ -4102,4 +4102,20 @@ router.put('/devolucoes/logistica/confirmar-coleta/:id', verificarToken, async (
     }
 });
 
+router.get('/devolucoes/estoque/recebimentos-pendentes', verificarToken, async (req, res) => {
+    try {
+        const query = `
+            SELECT p.id, l.nome as escola_nome, p.data_saida as data_coleta
+            FROM pedidos p
+            JOIN locais l ON p.local_destino_id = l.id
+            WHERE p.status = 'DEVOLUCAO_EM_TRANSITO'
+            ORDER BY p.data_saida ASC
+        `;
+        const result = await db.query(query);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao listar recebimentos." });
+    }
+});
+
 module.exports = router;

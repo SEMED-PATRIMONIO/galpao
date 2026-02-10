@@ -1708,36 +1708,26 @@ router.get('/pedidos/escola/a-caminho', verificarToken, async (req, res) => {
 
 router.get('/pedidos/escola/limite-devolucao', verificarToken, async (req, res) => {
     try {
-        // 1. Seguindo seu modelo: buscamos o local_id do usuário logado (req.userId)
-        const userRes = await db.query(
-            'SELECT local_id FROM usuarios WHERE id = $1', 
-            [req.userId]
-        );
+        const userRes = await db.query('SELECT local_id FROM usuarios WHERE id = $1', [req.userId]);
+        const escolaId = userRes.rows[0]?.local_id;
 
-        if (userRes.rows.length === 0 || !userRes.rows[0].local_id) {
-            return res.status(404).json({ 
-                success: false, 
-                error: "Escola não identificada para este usuário." 
-            });
-        }
+        if (!escolaId) return res.status(404).json({ error: "Escola não vinculada." });
 
-        const escolaId = userRes.rows[0].local_id;
-
-        // 2. Agora buscamos os itens entregues para ESTA escola específica
         const query = `
             SELECT 
-                ip.produto_id, 
-                p.nome as produto_nome, 
-                ip.tamanho, 
-                SUM(ip.quantidade) as total_recebido
-            FROM pedidos ped
-            JOIN itens_pedido ip ON ped.id = ip.pedido_id
-            JOIN produtos p ON ip.produto_id = p.id
-            WHERE ped.local_destino_id = $1 
-              AND ped.status = 'ENTREGUE'
-              AND ped.data_recebimento >= NOW() - INTERVAL '30 days'
-            GROUP BY ip.produto_id, p.nome, ip.tamanho
-            HAVING SUM(ip.quantidade) > 0
+                pri.produto_id, 
+                prod.nome as produto_nome, 
+                pri.tamanho, 
+                SUM(pri.quantidade_enviada) as total_recebido
+            FROM pedidos p
+            JOIN pedido_remessas pr ON p.id = pr.pedido_id
+            JOIN pedido_remessa_itens pri ON pr.id = pri.remessa_id
+            JOIN produtos prod ON pri.produto_id = prod.id
+            WHERE p.local_destino_id = $1 
+              AND (p.status = 'ENTREGUE' OR pr.status = 'ENTREGUE')
+              AND pr.data_criacao >= NOW() - INTERVAL '30 days'
+            GROUP BY pri.produto_id, prod.nome, pri.tamanho
+            HAVING SUM(pri.quantidade_enviada) > 0
         `;
 
         const result = await db.query(query, [escolaId]);
@@ -1745,12 +1735,11 @@ router.get('/pedidos/escola/limite-devolucao', verificarToken, async (req, res) 
         res.json({
             success: true,
             items: result.rows || [],
-            message: result.rows.length === 0 ? "Nenhum uniforme recebido nos últimos 30 dias." : ""
+            message: result.rows.length === 0 ? "Nenhum material encontrado nas remessas entregues." : ""
         });
 
     } catch (err) {
-        console.error("ERRO SQL:", err.message);
-        res.status(500).json({ success: false, error: "Erro ao consultar banco: " + err.message });
+        res.status(500).json({ success: false, error: err.message });
     }
 });
 

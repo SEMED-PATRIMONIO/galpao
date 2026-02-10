@@ -3935,4 +3935,49 @@ router.post('/pedidos/admin/decisao-devolucao', verificarToken, async (req, res)
     }
 });
 
+router.post('/pedidos/escola/solicitacao-devolucao-v2', verificarToken, async (req, res) => {
+    const { itens } = req.body;
+    const usuarioId = req.userId;
+
+    try {
+        await db.query('BEGIN');
+        
+        // Busca o local_id
+        const userRes = await db.query('SELECT local_id FROM usuarios WHERE id = $1', [usuarioId]);
+        const escolaId = userRes.rows[0]?.local_id;
+
+        // 1. Cria o Pedido (Cabeçalho)
+        const resPed = await db.query(
+            `INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, tipo_pedido, data_criacao) 
+             VALUES ($1, $2, 'DEVOLUCAO_PENDENTE', 'DEVOLUCAO', NOW()) RETURNING id`,
+            [usuarioId, escolaId]
+        );
+        const pedidoId = resPed.rows[0].id;
+
+        // 2. Cria a Remessa (Necessária para o Admin enxergar os produtos)
+        const resRem = await db.query(
+            `INSERT INTO pedido_remessas (pedido_id, status, data_criacao) 
+             VALUES ($1, 'PENDENTE', NOW()) RETURNING id`,
+            [pedidoId]
+        );
+        const remessaId = resRem.rows[0].id;
+
+        // 3. Insere na tabela que o Admin consulta (pedido_remessa_itens)
+        for (const it of itens) {
+            await db.query(
+                `INSERT INTO pedido_remessa_itens (remessa_id, produto_id, tamanho, quantidade_enviada) 
+                 VALUES ($1, $2, $3, $4)`,
+                [remessaId, it.produto_id, it.tamanho, it.quantidade]
+            );
+        }
+
+        await db.query('COMMIT');
+        res.json({ success: true, pedidoId });
+    } catch (err) {
+        await db.query('ROLLBACK');
+        console.error("Erro na rota v2:", err.message);
+        res.status(500).json({ error: "Erro ao processar devolução isolada." });
+    }
+});
+
 module.exports = router;

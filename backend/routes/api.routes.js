@@ -3979,5 +3979,30 @@ router.post('/pedidos/escola/solicitacao-devolucao-v2', verificarToken, async (r
         res.status(500).json({ error: "Erro ao processar devolução isolada." });
     }
 });
+router.get('/pedidos/admin/visualizar-itens-devolucao/:id', verificarToken, async (req, res) => {
+    try {
+        const { id } = req.params; // ID do Pedido
+
+        const query = `
+            SELECT 
+                prod.nome, 
+                pri.tamanho, 
+                pri.quantidade_enviada as quantidade
+            FROM pedido_remessas pr
+            JOIN pedido_remessa_itens pri ON pr.id = pri.remessa_id
+            JOIN produtos prod ON pri.produto_id = prod.id
+            WHERE pr.pedido_id = $1
+        `;
+
+        const result = await db.query(query, [id]);
+
+        // Retornamos um array vazio [] se não houver itens, para não quebrar o frontend
+        res.json(result.rows || []);
+
+    } catch (err) {
+        console.error("ERRO NA CONSULTA ADMIN:", err.message);
+        res.status(500).json({ error: "Erro interno no banco de dados." });
+    }
+});
 
 module.exports = router;

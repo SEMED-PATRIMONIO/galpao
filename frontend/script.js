@@ -1218,39 +1218,41 @@ async function telaDevolucaoUniforme() {
 
 async function enviarDevolucaoEscolaV2() {
     const inputs = document.querySelectorAll('.input-devolucao');
-    const itensParaDevolver = [];
+    const itensParaEnviar = [];
 
     inputs.forEach(input => {
         const qtd = parseInt(input.value) || 0;
         if (qtd > 0) {
-            itensParaDevolver.push({
+            itensParaEnviar.push({
                 produto_id: input.dataset.id,
                 tamanho: input.dataset.tam,
-                quantidade: qtd
+                quantidade: qtd // Nome exato do campo
             });
         }
     });
 
-    if (itensParaDevolver.length === 0) return alert("Selecione ao menos um item.");
-    if (!confirm("Confirmar envio da solicitação?")) return;
+    if (itensParaEnviar.length === 0) return alert("Informe a quantidade que deseja devolver.");
+    if (!confirm("Confirmar o envio desta solicitação de devolução?")) return;
 
     try {
-        // Aponta para a NOVA ROTA isolada
         const res = await fetch(`${API_URL}/pedidos/escola/solicitacao-devolucao-v2`, {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json', 
                 'Authorization': `Bearer ${TOKEN}` 
             },
-            body: JSON.stringify({ itens: itensParaDevolver })
+            body: JSON.stringify({ itens: itensParaEnviar }) // Enviando como 'itens'
         });
 
         if (res.ok) {
-            alert("✅ Enviado com sucesso!");
+            alert("✅ Solicitação enviada com sucesso!");
             carregarDashboard();
+        } else {
+            const erro = await res.json();
+            throw new Error(erro.error || "Erro ao processar.");
         }
     } catch (err) {
-        alert("Erro no envio: " + err.message);
+        alert("🚨 Falha no envio: " + err.message);
     }
 }
 
@@ -11329,6 +11331,7 @@ async function verDetalhesDevolucaoAdmin(pedidoId) {
     const container = document.getElementById('app-content');
     
     try {
+        // Busca na rota que lê a tabela pedido_remessa_itens
         const res = await fetch(`${API_URL}/pedidos/admin/visualizar-itens-devolucao/${pedidoId}`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
@@ -11338,14 +11341,14 @@ async function verDetalhesDevolucaoAdmin(pedidoId) {
             <div class="painel-vidro" style="max-width: 800px; margin: auto;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
                     <button onclick="listarDevolucoesAdmin()" class="btn-sair-vidro" style="background:#475569; width:100px;">⬅️ VOLTAR</button>
-                    <h2 style="color:white; margin:0; font-size:1.2rem;">📋 CONFERIR PEDIDO #${pedidoId}</h2>
+                    <h2 style="color:white; margin:0;">📋 CONFERIR ITENS - PEDIDO #${pedidoId}</h2>
                     <div style="width:100px;"></div>
                 </div>
 
                 <table style="width:100%; color:white; border-collapse:collapse; margin-bottom:30px;">
-                    <thead>
-                        <tr style="border-bottom:1px solid #fff; text-align:left;">
-                            <th style="padding:10px;">PRODUTO</th>
+                    <thead style="background:rgba(255,255,255,0.1);">
+                        <tr>
+                            <th style="padding:10px; text-align:left;">PRODUTO</th>
                             <th style="padding:10px; text-align:center;">TAMANHO</th>
                             <th style="padding:10px; text-align:center;">QUANTIDADE</th>
                         </tr>
@@ -11355,7 +11358,7 @@ async function verDetalhesDevolucaoAdmin(pedidoId) {
                             <tr style="border-bottom:1px solid rgba(255,255,255,0.1);">
                                 <td style="padding:10px;">${i.nome}</td>
                                 <td style="padding:10px; text-align:center;">${i.tamanho}</td>
-                                <td style="padding:10px; text-align:center; font-weight:bold;">${i.quantidade || '0'}</td>
+                                <td style="padding:10px; text-align:center; font-weight:bold;">${i.quantidade}</td>
                             </tr>
                         `).join('')}
                     </tbody>
@@ -11367,7 +11370,9 @@ async function verDetalhesDevolucaoAdmin(pedidoId) {
                 </div>
             </div>
         `;
-    } catch (err) { alert("Erro ao carregar detalhes."); }
+    } catch (err) {
+        alert("Erro ao carregar os itens para conferência.");
+    }
 }
 
 async function responderDevolucao(pedidoId, acao) {

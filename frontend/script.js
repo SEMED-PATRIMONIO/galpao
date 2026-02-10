@@ -11295,17 +11295,23 @@ async function verDetalhesDevolucaoAdmin(pedidoId) {
     const container = document.getElementById('app-content');
     
     try {
-        const res = await fetch(`${API_URL}/pedidos/admin/detalhes-devolucao/${pedidoId}`, {
+        // CHAMADA PARA A NOVA ROTA EXCLUSIVA
+        const res = await fetch(`${API_URL}/pedidos/admin/conferir-devolucao-remessa/${pedidoId}`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
+        
         const itens = await res.json();
 
-        // Injetamos a visão de detalhes
+        // Se o servidor retornou erro ou não é um array, tratamos aqui
+        if (!Array.isArray(itens)) {
+            throw new Error("Formato de dados inválido recebido do servidor.");
+        }
+
         container.innerHTML = `
             <div class="painel-vidro" style="max-width: 800px; margin: auto;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                    <h2 style="color:white; margin:0;">📋 CONFERIR ITENS - PEDIDO #${pedidoId}</h2>
-                    <button onclick="listarDevolucoesAdmin()" style="background:#64748b; color:white; border:none; padding:8px 15px; border-radius:6px; cursor:pointer;">VOLTAR</button>
+                    <h2 style="color:white; margin:0;">📋 CONFERIR ITENS - DEVOLUÇÃO #${pedidoId}</h2>
+                    <button onclick="listarDevolucoesAdmin()" class="btn-sair-vidro" style="background:#64748b; width:100px;">⬅️ VOLTAR</button>
                 </div>
 
                 <div style="background:rgba(255,255,255,0.1); border-radius:10px; padding:20px; margin-bottom:30px;">
@@ -11314,11 +11320,13 @@ async function verDetalhesDevolucaoAdmin(pedidoId) {
                             <tr style="border-bottom:1px solid rgba(255,255,255,0.3); text-align:left;">
                                 <th style="padding:10px;">PRODUTO</th>
                                 <th style="padding:10px; text-align:center;">TAMANHO</th>
-                                <th style="padding:10px; text-align:center;">QTD SOLICITADA</th>
+                                <th style="padding:10px; text-align:center;">QTD PARA DEVOLVER</th>
                             </tr>
                         </thead>
                         <tbody>
-                            ${itens.map(i => `
+                            ${itens.length === 0 ? 
+                                '<tr><td colspan="3" style="padding:20px; text-align:center;">Nenhum item encontrado nesta remessa.</td></tr>' :
+                                itens.map(i => `
                                 <tr style="border-bottom:1px solid rgba(255,255,255,0.1);">
                                     <td style="padding:10px;">${i.produto_nome}</td>
                                     <td style="padding:10px; text-align:center;">${i.tamanho}</td>
@@ -11330,17 +11338,18 @@ async function verDetalhesDevolucaoAdmin(pedidoId) {
                 </div>
 
                 <div style="display:flex; gap:20px;">
-                    <button onclick="responderDevolucao(${pedidoId}, 'AUTORIZAR')" style="flex:1; background:#10b981; color:white; border:none; padding:15px; border-radius:8px; font-weight:bold; cursor:pointer; font-size:1rem;">
+                    <button onclick="responderDevolucao(${pedidoId}, 'AUTORIZAR')" style="flex:1; background:#10b981; color:white; border:none; padding:15px; border-radius:8px; font-weight:bold; cursor:pointer;">
                         ✅ AUTORIZAR COLETA
                     </button>
-                    <button onclick="responderDevolucao(${pedidoId}, 'RECUSAR')" style="flex:1; background:#ef4444; color:white; border:none; padding:15px; border-radius:8px; font-weight:bold; cursor:pointer; font-size:1rem;">
+                    <button onclick="responderDevolucao(${pedidoId}, 'RECUSAR')" style="flex:1; background:#ef4444; color:white; border:none; padding:15px; border-radius:8px; font-weight:bold; cursor:pointer;">
                         ❌ RECUSAR SOLICITAÇÃO
                     </button>
                 </div>
             </div>
         `;
     } catch (err) {
-        alert("Erro ao carregar itens: " + err.message);
+        console.error(err);
+        alert("Erro ao carregar detalhes: " + err.message);
     }
 }
 

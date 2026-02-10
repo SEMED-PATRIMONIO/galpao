@@ -7288,15 +7288,28 @@ async function finalizarConferencia(id) {
 }
 
 async function listarColetasLogistica() {
-    const container = document.getElementById('app-content');
-    container.innerHTML = '<div style="padding:20px; color:white;">⏳ Carregando coletas de devolução...</div>';
+    // Tenta encontrar o container padrão ou um alternativo
+    const container = document.getElementById('app-content') || 
+                      document.getElementById('main-content') || 
+                      document.querySelector('.content-wrapper');
+
+    if (!container) {
+        console.error("ERRO: Nenhum container de conteúdo foi encontrado no HTML da Logística!");
+        return alert("Erro de interface: Container não encontrado.");
+    }
+
+    container.innerHTML = '<div style="padding:20px; color:white;">⏳ Carregando coletas...</div>';
 
     try {
         const res = await fetch(`${API_URL}/devolucoes/logistica/coletas-pendentes`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
+        
+        if (!res.ok) throw new Error("Falha na rota do servidor");
+        
         const coletas = await res.json();
 
+        // Se chegar aqui, o 'container' existe e o 'innerHTML' vai funcionar
         container.innerHTML = `
             <div class="painel-vidro" style="max-width: 900px; margin: auto;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
@@ -7314,13 +7327,13 @@ async function listarColetasLogistica() {
                         </tr>
                     </thead>
                     <tbody>
-                        ${coletas.length === 0 ? '<tr><td colspan="3" style="text-align:center; padding:30px;">✅ Nenhuma devolução aguardando coleta.</td></tr>' : 
+                        ${coletas.length === 0 ? '<tr><td colspan="3" style="text-align:center; padding:30px;">✅ Nenhuma coleta pendente.</td></tr>' : 
                         coletas.map(c => `
                             <tr style="border-bottom:1px solid rgba(255,255,255,0.1);">
                                 <td style="padding:15px;">#${c.id}</td>
                                 <td style="padding:15px;"><b>${c.escola_nome}</b></td>
                                 <td style="padding:15px; text-align:center;">
-                                    <button onclick="confirmarColetaDevolucao(${c.id})" class="btn-acao" style="background:#f59e0b; color:white; border:none; padding:10px 15px; border-radius:6px; font-weight:bold; cursor:pointer;">📦 CONFIRMAR COLETA</button>
+                                    <button onclick="confirmarColetaDevolucao(${c.id})" class="btn-acao" style="background:#f59e0b; color:white; border:none; padding:10px 15px; border-radius:6px; font-weight:bold; cursor:pointer;">📦 COLETAR</button>
                                 </td>
                             </tr>
                         `).join('')}
@@ -7328,7 +7341,9 @@ async function listarColetasLogistica() {
                 </table>
             </div>
         `;
-    } catch (err) { container.innerHTML = "Erro ao carregar logística."; }
+    } catch (err) { 
+        container.innerHTML = `<div style="color:red; padding:20px;">Erro ao carregar: ${err.message}</div>`;
+    }
 }
 
 async function confirmarColetaDevolucao(pedidoId) {

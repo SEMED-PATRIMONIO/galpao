@@ -4063,21 +4063,28 @@ router.post('/pedidos/estoque/finalizar-devolucao-v2', verificarToken, async (re
 
 router.get('/devolucoes/logistica/coletas-pendentes', verificarToken, async (req, res) => {
     try {
+        // Esta query busca o local (escola) vinculado ao usuário que iniciou a devolução
         const query = `
             SELECT 
                 p.id, 
                 l.nome as escola_nome, 
-                p.data_criacao
+                p.data_criacao,
+                p.status
             FROM pedidos p
-            JOIN locais l ON p.local_destino_id = l.id
-            WHERE p.status = 'DEVOLUCAO_AUTORIZADA' 
-              AND p.tipo_pedido = 'DEVOLUCAO'
+            JOIN usuarios u ON p.usuario_origem_id = u.id
+            JOIN locais l ON u.local_id = l.id
+            WHERE p.status = 'DEVOLUCAO_AUTORIZADA'
             ORDER BY p.data_criacao ASC
         `;
         const result = await db.query(query);
+        
+        // Log para você ver no terminal do VSCode/PM2 se o banco retornou algo
+        console.log(`[LOGÍSTICA] Pedidos encontrados: ${result.rowCount}`);
+        
         res.json(result.rows);
     } catch (err) {
-        res.status(500).json({ error: "Erro ao listar coletas de devolução." });
+        console.error("Erro na rota de logística:", err.message);
+        res.status(500).json({ error: "Erro ao carregar lista de coletas." });
     }
 });
 

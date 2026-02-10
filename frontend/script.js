@@ -1131,28 +1131,47 @@ async function processarSolicitacao(pedidoId, acao) {
 
 
 async function telaDevolucaoUniforme() {
-    // 1. Prepara o container principal (aplica bordas arredondadas e limpa a tela)
     const container = prepararContainerPrincipal();
-    container.innerHTML = '<div style="padding:30px; color:#64748b;">⏳ Carregando histórico de recebimentos...</div>';
+    container.innerHTML = '<div style="padding:30px; color:#64748b; text-align:center;">⏳ Verificando seu histórico de recebimentos...</div>';
 
     try {
-        // Busca o "extrato" do que a escola recebeu nos últimos 30 dias
         const res = await fetch(`${API_URL}/pedidos/escola/limite-devolucao`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
-        const itensRecebidos = await res.json();
+        
+        const data = await res.json();
+
+        if (!res.ok || !data.success) {
+            throw new Error(data.error || "Não foi possível carregar os dados.");
+        }
+
+        // CASO 1: NADA PARA DEVOLVER
+        if (data.items.length === 0) {
+            container.innerHTML = `
+                <div style="padding:60px 20px; text-align:center;">
+                    <div style="font-size: 5rem; margin-bottom: 20px;">📦</div>
+                    <h2 style="color:#1e3a8a;">Nada para devolver</h2>
+                    <p style="color:#64748b; max-width:400px; margin: 0 auto;">${data.message}</p>
+                    <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background:#2563eb; width:220px; margin-top:30px; color:white; padding:12px; border:none; border-radius:8px; cursor:pointer;">VOLTAR AO INÍCIO</button>
+                </div>
+            `;
+            return;
+        }
+
+        // CASO 2: ITENS ENCONTRADOS - MONTA A TABELA
+        const itensRecebidos = data.items;
 
         container.innerHTML = `
             <div style="padding:30px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
                     <h2 style="color:#1e3a8a; margin:0;">🔄 SOLICITAR DEVOLUÇÃO</h2>
-                    <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background:#475569; width:100px;">⬅️ VOLTAR</button>
+                    <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background:#475569; width:100px; color:white; border:none; padding:8px; border-radius:6px; cursor:pointer;">⬅️ VOLTAR</button>
                 </div>
 
                 <div style="background: #fff9eb; border-left: 4px solid #f59e0b; padding: 15px; border-radius: 8px; margin-bottom: 25px;">
                     <p style="color:#92400e; margin:0; font-size:0.95rem;">
                         Abaixo listamos os uniformes recebidos nos últimos 30 dias. 
-                        A devolução é limitada à quantidade total recebida no período.
+                        A devolução é limitada à quantidade disponível no histórico.
                     </p>
                 </div>
 
@@ -1160,28 +1179,23 @@ async function telaDevolucaoUniforme() {
                     <table style="width:100%; border-collapse:collapse;">
                         <thead style="background:#f1f5f9; color:#1e3a8a;">
                             <tr>
-                                <th style="padding:15px; text-align:left; border-radius: 8px 0 0 0;">PRODUTO / TAMANHO</th>
+                                <th style="padding:15px; text-align:left;">PRODUTO / TAMANHO</th>
                                 <th style="padding:15px; text-align:center;">RECEBIDO (30d)</th>
-                                <th style="padding:15px; width:150px; text-align:center; border-radius: 0 8px 0 0;">DEVOLVER</th>
+                                <th style="padding:15px; width:150px; text-align:center;">DEVOLVER</th>
                             </tr>
                         </thead>
                         <tbody>
-                            ${itensRecebidos.length === 0 ? 
-                                '<tr><td colspan="3" style="padding:30px; text-align:center; color:#64748b;">Nenhum item disponível para devolução.</td></tr>' :
-                                itensRecebidos.map(i => `
+                            ${itensRecebidos.map(i => `
                                 <tr style="border-bottom:1px solid #eee;">
                                     <td style="padding:15px; color:#1e293b;"><b>${i.produto_nome}</b><br><span style="color:#64748b; font-size:0.85rem;">Tam: ${i.tamanho}</span></td>
-                                    <td style="padding:15px; text-align:center; color:#1e40af; font-weight:bold; font-size:1.1rem;">${i.total_recebido}</td>
+                                    <td style="padding:15px; text-align:center; color:#1e40af; font-weight:bold;">${i.total_recebido}</td>
                                     <td style="padding:15px;">
                                         <input type="number" class="input-devolucao" 
                                             data-id="${i.produto_id}" 
                                             data-tam="${i.tamanho}" 
                                             data-max="${i.total_recebido}"
-                                            data-nome="${i.produto_nome}"
                                             placeholder="0" min="0" max="${i.total_recebido}"
-                                            style="width:100%; padding:10px; border:2px solid #cbd5e1; border-radius:8px; text-align:center; font-weight:bold; outline:none;"
-                                            onfocus="this.style.borderColor='#1e3a8a'"
-                                            onblur="this.style.borderColor='#cbd5e1'">
+                                            style="width:100%; padding:10px; border:2px solid #cbd5e1; border-radius:8px; text-align:center; font-weight:bold;">
                                     </td>
                                 </tr>
                             `).join('')}
@@ -1190,61 +1204,65 @@ async function telaDevolucaoUniforme() {
                 </div>
 
                 <div style="margin-top:35px; display:flex; gap:15px;">
-                    <button onclick="processarSolicitacaoDevolucao()" style="flex:2; background:#1e3a8a; color:white; border:none; padding:18px; border-radius:10px; font-weight:bold; cursor:pointer; font-size:1rem; transition:0.2s;" onmouseover="this.style.backgroundColor='#1e40af'">
-                        🚀 ENVIAR SOLICITAÇÃO
-                    </button>
-                    <button onclick="carregarDashboard()" style="flex:1; background:#94a3b8; color:white; border:none; padding:18px; border-radius:10px; font-weight:bold; cursor:pointer; transition:0.2s;" onmouseover="this.style.backgroundColor='#64748b'">
-                        CANCELAR
-                    </button>
+                    <button onclick="processarSolicitacaoDevolucao()" style="flex:2; background:#1e3a8a; color:white; border:none; padding:18px; border-radius:10px; font-weight:bold; cursor:pointer;">🚀 ENVIAR SOLICITAÇÃO</button>
+                    <button onclick="carregarDashboard()" style="flex:1; background:#94a3b8; color:white; border:none; padding:18px; border-radius:10px; font-weight:bold; cursor:pointer;">CANCELAR</button>
                 </div>
             </div>
         `;
     } catch (err) {
         container.innerHTML = `
-            <div style="padding:30px; text-align:center;">
-                <p style="color:#ef4444;">Erro ao carregar dados de devolução.</p>
+            <div style="padding:30px; text-align:center; color:#ef4444;">
+                <h3>🚨 Erro ao carregar</h3>
+                <p>${err.message}</p>
                 <button onclick="carregarDashboard()" style="background:#64748b; color:white; border:none; padding:10px 20px; border-radius:6px; cursor:pointer;">⬅️ VOLTAR</button>
             </div>
         `;
     }
 }
 
-function processarSolicitacaoDevolucao() {
+async function processarSolicitacaoDevolucao() {
     const inputs = document.querySelectorAll('.input-devolucao');
-    const itensDevolucao = [];
-    let erroValidacao = "";
+    const itensParaDevolver = [];
 
+    // 1. Coleta apenas os itens onde a quantidade é maior que zero
     inputs.forEach(input => {
-        const qtdDevolver = parseInt(input.value) || 0;
-        const qtdMax = parseInt(input.getAttribute('data-max'));
-        const nomeProd = input.getAttribute('data-nome');
-        const tam = input.getAttribute('data-tam');
-
-        if (qtdDevolver > qtdMax) {
-            erroValidacao += `❌ Você não pode devolver ${qtdDevolver} unidades de ${nomeProd} (${tam}). O limite recebido foi ${qtdMax}.\n`;
-        }
-
-        if (qtdDevolver > 0 && qtdDevolver <= qtdMax) {
-            itensDevolucao.push({
-                produto_id: input.getAttribute('data-id'),
-                tamanho: tam,
-                quantidade: qtdDevolver
+        const qtd = parseInt(input.value) || 0;
+        if (qtd > 0) {
+            itensParaDevolver.push({
+                produto_id: input.dataset.id,
+                tamanho: input.dataset.tam,
+                quantidade: qtd
             });
         }
     });
 
-    if (erroValidacao) {
-        alert("⚠️ ERRO DE QUANTIDADE:\n\n" + erroValidacao);
-        return;
+    if (itensParaDevolver.length === 0) {
+        return alertaVidro("Informe ao menos uma quantidade para devolver.", "erro");
     }
 
-    if (itensDevolucao.length === 0) {
-        alert("Informe pelo menos uma quantidade válida para devolução.");
-        return;
-    }
+    if (!confirm(`Confirmar a solicitação de devolução de ${itensParaDevolver.length} item(ns)?`)) return;
 
-    // Se passou na validação, envia para a sua rota de criar pedido (operacao: 'DEVOLUCAO')
-    finalizarEnvioDevolucao(itensDevolucao);
+    try {
+        const res = await fetch(`${API_URL}/pedidos/escola/solicitar-devolucao`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json', 
+                'Authorization': `Bearer ${TOKEN}` 
+            },
+            body: JSON.stringify({ itens: itensParaDevolver })
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+            alertaVidro("✅ Solicitação enviada! Aguarde a autorização do Admin.", "sucesso");
+            carregarDashboard();
+        } else {
+            throw new Error(data.error || "Erro ao processar devolução.");
+        }
+    } catch (err) {
+        alertaVidro("🚨 Falha: " + err.message, "erro");
+    }
 }
 
 async function finalizarEnvioDevolucao(itens) {

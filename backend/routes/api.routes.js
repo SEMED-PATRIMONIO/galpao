@@ -4125,36 +4125,42 @@ router.post('/devolucoes/estoque/finalizar-entrada', verificarToken, async (req,
         await db.query('BEGIN');
 
         for (const item of itens) {
-            // 1. Atualiza a tabela estoque_grades (coluna: quantidade)
+            // Garantimos que os valores sejam números inteiros para o Postgres não reclamar
+            const qtd = parseInt(item.quantidade);
+            const pId = parseInt(item.produto_id);
+            const tam = item.tamanho;
+
+            // 1. Soma na Grade
             await db.query(
-                `UPDATE estoque_grades 
-                 SET quantidade = quantidade + $1 
-                 WHERE produto_id = $2 AND tamanho = $3`,
-                [item.quantidade, item.produto_id, item.tamanho]
+                "UPDATE estoque_grades SET quantidade = quantidade + $1 WHERE produto_id = $2 AND tamanho = $3",
+                [qtd, pId, tam]
             );
 
-            // 2. Atualiza a tabela produtos (coluna: quantidade_estoque)
+            // 2. Soma no Saldo Geral
             await db.query(
-                `UPDATE produtos 
-                 SET quantidade_estoque = quantidade_estoque + $1 
-                 WHERE id = $2`,
-                [item.quantidade, item.produto_id]
+                "UPDATE produtos SET quantidade_estoque = quantidade_estoque + $1 WHERE id = $2",
+                [qtd, pId]
             );
         }
 
-        // 3. Finaliza o status do pedido para DEVOLVIDO
+        // 3. Finaliza o status com CAST EXPLÍCITO (::status_pedido)
+        // Isso remove qualquer ambiguidade para o banco de dados
         await db.query(
-            "UPDATE pedidos SET status = 'DEVOLVIDO', data_recebimento = NOW() WHERE id = $1",
-            [pedidoId]
+            `UPDATE pedidos 
+             SET status = 'DEVOLVIDO'::status_pedido, 
+                 data_recebimento = CURRENT_TIMESTAMP 
+             WHERE id = $1`,
+            [parseInt(pedidoId)]
         );
 
         await db.query('COMMIT');
-        res.json({ success: true, message: "Estoque atualizado com sucesso." });
+        res.json({ success: true });
 
     } catch (err) {
         await db.query('ROLLBACK');
-        console.error("ERRO AO ATUALIZAR SALDO:", err.message);
-        res.status(500).json({ error: "Erro crítico ao processar entrada no estoque." });
+        console.error("🚨 ERRO NO BANCO DE DADOS:", err.message);
+        // Enviamos a mensagem real do erro para o seu console do navegador
+        res.status(500).json({ error: "Erro interno no servidor", details: err.message });
     }
 });
 

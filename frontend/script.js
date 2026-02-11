@@ -72,11 +72,11 @@ document.getElementById('form-login')?.addEventListener('submit', async (e) => {
             carregarDashboard();
             // --- FIM DO TRECHO ---
         } else {
-            alert('ERRO: ' + (data.message || 'Falha no login'));
+            notificar('ERRO: ' + (data.message || 'Falha no login'));
         }
     } catch (err) {
         console.error("Erro na conexão de login:", err);
-        alert("Erro ao conectar com o servidor.");
+        notificar("Erro ao conectar com o servidor.");
     }
 });
 
@@ -124,30 +124,30 @@ function mostrarLogin() {
     }, 100);
 }
 
-// Carregar alertas para Perfil Escola
-async function verificarAlertasEscola() { // Removi o localId daqui
+// Carregar notificaras para Perfil Escola
+async function verificarnotificarasEscola() { // Removi o localId daqui
     try {
         // A rota correta no seu server.js + pedidos.routes.js
-        const res = await fetch(`${API_URL}/pedidos/alertas-escola`, { 
+        const res = await fetch(`${API_URL}/pedidos/notificaras-escola`, { 
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
         
         if (!res.ok) return;
         const pedidos = await res.json();
         
-        const alertContainer = document.getElementById('alertas-container');
-        if (!alertContainer) return;
+        const notificarContainer = document.getElementById('notificaras-container');
+        if (!notificarContainer) return;
 
         if (pedidos.length > 0) {
-            alertContainer.innerHTML = `
+            notificarContainer.innerHTML = `
                 <div style="background: #fef2f2; color: #dc2626; padding: 15px; border-radius: 8px; border: 1px solid #fee2e2; margin-bottom: 20px; font-weight: bold; text-align: center;">
                     ⚠️ ATENÇÃO: VOCÊ POSSUI ${pedidos.length} PEDIDO(S) EM TRANSPORTE PARA ESTA UNIDADE!
                 </div>`;
         } else {
-            alertContainer.innerHTML = '';
+            notificarContainer.innerHTML = '';
         }
     } catch (err) {
-        console.error("Erro nos alertas:", err);
+        console.error("Erro nos notificaras:", err);
     }
 }
 
@@ -173,7 +173,7 @@ async function inicializarSessaoUsuario() {
     }
 }
 
-// Renderizar estoque com Alerta Visual de nível baixo
+// Renderizar estoque com notificara Visual de nível baixo
 async function renderizarEstoqueCentral() {
     const res = await fetch(`${API_URL}/estoque/central`, {
         headers: { 'Authorization': `Bearer ${TOKEN}` }
@@ -181,10 +181,10 @@ async function renderizarEstoqueCentral() {
     const produtos = await res.json();
 
     const html = produtos.map(p => `
-        <div class="item-estoque ${p.alerta_baixo ? 'estoque-baixo' : ''}">
+        <div class="item-estoque ${p.notificara_baixo ? 'estoque-baixo' : ''}">
             <span>${p.nome}</span>
             <span>QTD: ${p.quantidade_estoque}</span>
-            ${p.alerta_baixo ? '<b style="color: red;">⚠️ BAIXO ESTOQUE</b>' : ''}
+            ${p.notificara_baixo ? '<b style="color: red;">⚠️ BAIXO ESTOQUE</b>' : ''}
         </div>
     `).join('');
     document.getElementById('lista-estoque').innerHTML = html;
@@ -231,7 +231,7 @@ async function carregarDashboard() {
             <button onclick="logout()" class="btn-sair-vidro">SAIR</button>
         </div>
 
-        <div id="area-alertas" style="margin-top: 80px; margin-bottom: 20px;"></div>
+        <div id="area-notificaras" style="margin-top: 80px; margin-bottom: 20px;"></div>
         
         <div class="grid-menu-principal">
     `;
@@ -311,8 +311,8 @@ async function carregarDashboard() {
                 <i>🛠️</i><span>SOLICITAR MANUTENÇÃO IMPRESSORA</span>
             </button>
         `;
-        // Chama alertas específicos da escola (Pedidos em transporte para o localId)
-        setTimeout(() => verificarAlertasEscola(), 500);
+        // Chama notificaras específicos da escola (Pedidos em transporte para o localId)
+        setTimeout(() => verificarnotificarasEscola(), 500);
     }
     // --- 4. PERFIL: ADMIN ---
     if (perfil === 'admin') {
@@ -349,7 +349,7 @@ async function carregarDashboard() {
             </button>
 
         `;
-        // Chama alertas de novas solicitações de Escolas e Logística
+        // Chama notificaras de novas solicitações de Escolas e Logística
         setTimeout(() => verificarSolicitacoesPendentes(), 500);
     }
     // --- 5. PERFIL: ESTOQUE ---
@@ -386,7 +386,7 @@ async function carregarDashboard() {
                 <i>🧮</i><span>CALCULADORA</span>
             </button>
         `;
-        // Chama alertas de pedidos aguardando separação
+        // Chama notificaras de pedidos aguardando separação
         setTimeout(verificarPedidosParaSeparar, 500);
     }
     // --- 6. PERFIL: LOGÍSTICA ---
@@ -402,13 +402,13 @@ async function carregarDashboard() {
                 <i>🏷️</i><span>SOLICITAR PATRIMÔNIO</span>
             </button>
         `;
-        // Alertas de pedidos prontos para coleta no Estoque Central
+        // notificaras de pedidos prontos para coleta no Estoque Central
         setTimeout(verificarPedidosParaColeta, 500);
     }
     html += menuComum + `</div>`; // Fecha a grid e adiciona o menu comum no fim
     container.innerHTML = html;
 
-    iniciarAlertaPedidos();
+    iniciarnotificaraPedidos();
 }
 
 async function telaVisualizarEstoque() {
@@ -499,7 +499,7 @@ function filtrarEstoque() {
                 ${produtosExibidos.map(p => {
                     // Garantimos que os valores sejam tratados como números para a comparação
                     const saldo = Number(p.quantidade_estoque) || 0;
-                    const minimo = Number(p.alerta_minimo) || 0;
+                    const minimo = Number(p.notificara_minimo) || 0;
 
                     const status = saldo <= minimo 
                         ? '<span style="color:#f87171; font-weight:bold; font-size:0.75rem;">🔴 CRÍTICO</span>' 
@@ -529,7 +529,7 @@ async function enviarPedidoUniforme(operacao) {
     const localId = localStorage.getItem('minha_unidade_id');
     
     if (!localId || localId === "null") {
-        return alert("Erro: Seu usuário não está vinculado a nenhuma escola no cadastro.");
+        return notificar("Erro: Seu usuário não está vinculado a nenhuma escola no cadastro.");
     }
 
     const payload = {
@@ -549,15 +549,15 @@ async function enviarPedidoUniforme(operacao) {
         });
 
         if (res.ok) {
-            alert("✅ Enviado com sucesso!");
+            notificar("✅ Enviado com sucesso!");
             carrinhoUniforme = [];
             carregarDashboard();
         } else {
             const erro = await res.json();
-            alert("❌ Erro: " + erro.error);
+            notificar("❌ Erro: " + erro.error);
         }
     } catch (err) {
-        alert("Erro de conexão.");
+        notificar("Erro de conexão.");
     }
 }
 
@@ -600,11 +600,11 @@ async function finalizarPedidoUniforme(tipoMovimentacao) {
 
     // Segurança: Se não houver local_id, o usuário não pode pedir nada
     if (!localIdLogado || localIdLogado === "" || localIdLogado === "null") {
-        return alert("⚠️ ERRO: Seu usuário não possui um local vinculado. Saia e entre novamente no sistema.");
+        return notificar("⚠️ ERRO: Seu usuário não possui um local vinculado. Saia e entre novamente no sistema.");
     }
 
     if (carrinhoUniforme.length === 0) {
-        return alert("Seu carrinho está vazio!");
+        return notificar("Seu carrinho está vazio!");
     }
 
     // 2. Montamos o objeto que será enviado ao banco
@@ -628,15 +628,15 @@ async function finalizarPedidoUniforme(tipoMovimentacao) {
         });
 
         if (res.ok) {
-            alert("✨ Pedido realizado com sucesso para sua unidade!");
+            notificar("✨ Pedido realizado com sucesso para sua unidade!");
             carrinhoUniforme = []; // Limpa o carrinho
             carregarDashboard();
         } else {
-            alert("Erro ao processar pedido no servidor.");
+            notificar("Erro ao processar pedido no servidor.");
         }
     } catch (err) {
         console.error("Erro no envio:", err);
-        alert("Falha na conexão com o servidor.");
+        notificar("Falha na conexão com o servidor.");
     }
 }
 
@@ -681,8 +681,8 @@ function gerarCamposProduto() {
             <option value="PATRIMONIO">🏷️ PATRIMÔNIO</option>
         </select>
 
-        <label>ESTOQUE MÍNIMO (ALERTA):</label>
-        <input type="number" id="cad_alerta_minimo" value="10">
+        <label>ESTOQUE MÍNIMO (notificarA):</label>
+        <input type="number" id="cad_notificara_minimo" value="10">
     `;
 }
 
@@ -879,14 +879,14 @@ async function salvarEdicaoPedido(pedidoId) {
         });
 
         if (res.ok) {
-            alert("✅ Quantidades ajustadas com sucesso!");
+            notificar("✅ Quantidades ajustadas com sucesso!");
             // Após salvar, volta para a tela de análise para verificar se o botão "Autorizar" já pode ser liberado
             analisarPedido(pedidoId);
         } else {
-            alert("Erro ao salvar alterações.");
+            notificar("Erro ao salvar alterações.");
         }
     } catch (err) {
-        alert("Erro de conexão com o servidor.");
+        notificar("Erro de conexão com o servidor.");
     }
 }
 
@@ -904,15 +904,15 @@ async function finalizarPedido(pedidoId) {
         });
 
         if (res.ok) {
-            alert("✅ Autorizado! O estoque foi atualizado e o pedido seguiu para SEPARAÇÃO.");
+            notificar("✅ Autorizado! O estoque foi atualizado e o pedido seguiu para SEPARAÇÃO.");
             document.getElementById('modal-analise').style.display = 'none';
             telaAdminGerenciarSolicitacoes(); // Recarrega a lista
         } else {
             const erro = await res.json();
-            alert("❌ Erro ao autorizar: " + erro.error);
+            notificar("❌ Erro ao autorizar: " + erro.error);
         }
     } catch (err) {
-        alert("🚨 Erro de conexão com o servidor.");
+        notificar("🚨 Erro de conexão com o servidor.");
     }
 }
 
@@ -930,15 +930,15 @@ async function finalizarAutorizacao(pedidoId) {
         });
 
         if (res.ok) {
-            alert("✅ Pedido Autorizado! O status agora é 'AGUARDANDO SEPARAÇÃO'.");
+            notificar("✅ Pedido Autorizado! O status agora é 'AGUARDANDO SEPARAÇÃO'.");
             document.getElementById('modal-analise').style.display = 'none';
             telaAdminGerenciarSolicitacoes(); // Recarrega a lista de pendentes
         } else {
             const erro = await res.json();
-            alert("❌ Erro ao autorizar: " + erro.error);
+            notificar("❌ Erro ao autorizar: " + erro.error);
         }
     } catch (err) {
-        alert("🚨 Erro de conexão com o servidor.");
+        notificar("🚨 Erro de conexão com o servidor.");
     }
 }
 
@@ -1019,7 +1019,7 @@ async function atualizarQuantidadeItem(itemId, novaQtd) {
             body: JSON.stringify({ quantidade: novaQtd })
         });
         console.log(`Item ${itemId} atualizado para ${novaQtd}`);
-    } catch (err) { alert("Erro ao salvar alteração do item."); }
+    } catch (err) { notificar("Erro ao salvar alteração do item."); }
 }
 
 async function finalizarAprovacao(pedidoId) {
@@ -1032,10 +1032,10 @@ async function finalizarAprovacao(pedidoId) {
         });
 
         if (res.ok) {
-            alert("🚀 Pedido APROVADO e enviado para o estoque!");
+            notificar("🚀 Pedido APROVADO e enviado para o estoque!");
             telaAdminGerenciarSolicitacoes(); // Recarrega a lista
         }
-    } catch (err) { alert("Erro ao aprovar pedido."); }
+    } catch (err) { notificar("Erro ao aprovar pedido."); }
 }
 
 async function atualizarStatusPedido(id, novoStatus) {
@@ -1049,15 +1049,15 @@ async function atualizarStatusPedido(id, novoStatus) {
         });
 
         if (res.ok) {
-            alert("✅ STATUS ATUALIZADO!");
+            notificar("✅ STATUS ATUALIZADO!");
             telaAdminGerenciarSolicitacoes(); // Recarrega a lista
         }
-    } catch (err) { alert("Erro ao atualizar pedido."); }
+    } catch (err) { notificar("Erro ao atualizar pedido."); }
 }
 
 async function recusarPedidoAdmin(id) {
     const motivo = prompt("Informe o motivo da recusa:");
-    if (!motivo) return alert("É necessário informar um motivo para recusar.");
+    if (!motivo) return notificar("É necessário informar um motivo para recusar.");
 
     try {
         const res = await fetch(`${API_URL}/pedidos/${id}/status`, {
@@ -1067,10 +1067,10 @@ async function recusarPedidoAdmin(id) {
         });
 
         if (res.ok) {
-            alert("❌ SOLICITAÇÃO RECUSADA.");
+            notificar("❌ SOLICITAÇÃO RECUSADA.");
             telaAdminGerenciarSolicitacoes();
         }
-    } catch (err) { alert("Erro ao processar recusa."); }
+    } catch (err) { notificar("Erro ao processar recusa."); }
 }
 
 // 1. Busca os itens e mostra no console/tela para o admin
@@ -1094,7 +1094,7 @@ async function carregarDetalhesParaAutorizar(pedidoId) {
             }
         }
     } catch (err) {
-        alert("Erro ao carregar detalhes: " + err.message);
+        notificar("Erro ao carregar detalhes: " + err.message);
     }
 }
 
@@ -1119,13 +1119,13 @@ async function processarSolicitacao(pedidoId, acao) {
         });
 
         if (res.ok) {
-            alert(acao === 'AUTORIZA' ? "✅ SOLICITAÇÃO AUTORIZADA!" : "❌ SOLICITAÇÃO RECUSADA!");
+            notificar(acao === 'AUTORIZA' ? "✅ SOLICITAÇÃO AUTORIZADA!" : "❌ SOLICITAÇÃO RECUSADA!");
             telaAdminGerenciarSolicitacoes(); // Recarrega a lista
         } else {
-            alert("Erro ao processar solicitação.");
+            notificar("Erro ao processar solicitação.");
         }
     } catch (err) {
-        alert("Erro de conexão com o servidor.");
+        notificar("Erro de conexão com o servidor.");
     }
 }
 
@@ -1236,7 +1236,7 @@ async function enviarDevolucaoEscolaV2() {
         }
     });
 
-    if (itensParaEnviar.length === 0) return alert("Informe a quantidade que deseja devolver.");
+    if (itensParaEnviar.length === 0) return notificar("Informe a quantidade que deseja devolver.");
     if (!confirm("Confirmar o envio desta solicitação de devolução?")) return;
 
     try {
@@ -1250,14 +1250,14 @@ async function enviarDevolucaoEscolaV2() {
         });
 
         if (res.ok) {
-            alert("✅ Solicitação enviada com sucesso!");
+            notificar("✅ Solicitação enviada com sucesso!");
             carregarDashboard();
         } else {
             const erro = await res.json();
             throw new Error(erro.error || "Erro ao processar.");
         }
     } catch (err) {
-        alert("🚨 Falha no envio: " + err.message);
+        notificar("🚨 Falha no envio: " + err.message);
     }
 }
 
@@ -1275,18 +1275,18 @@ async function finalizarEnvioDevolucao(itens) {
         });
 
         if (res.ok) {
-            alert("✅ Solicitação enviada! O Administrador será notificado para autorizar a recolha.");
+            notificar("✅ Solicitação enviada! O Administrador será notificado para autorizar a recolha.");
             carregarDashboard(); // Volta para a tela principal
         } else {
             const erro = await res.json();
-            alert("❌ Erro ao enviar: " + erro.error);
+            notificar("❌ Erro ao enviar: " + erro.error);
         }
     } catch (err) {
-        alert("🚨 Erro de conexão com o servidor.");
+        notificar("🚨 Erro de conexão com o servidor.");
     }
 }
 
-function iniciarAlertaPedidos() {
+function iniciarnotificaraPedidos() {
     // Usando 'perfil' para bater com o resto do seu script
     const perfil = localStorage.getItem('perfil')?.toLowerCase();
     if (!perfil) return;
@@ -1294,47 +1294,47 @@ function iniciarAlertaPedidos() {
     // Função que executa a verificação
     const verificar = async () => {
         try {
-            const res = await fetch(`${API_URL}/pedidos/contagem/alertas`, {
+            const res = await fetch(`${API_URL}/pedidos/contagem/notificaras`, {
                 headers: { 'Authorization': `Bearer ${TOKEN}` }
             });
             if (!res.ok) return;
             const contagem = await res.json();
             
-            const areaAlerta = document.getElementById('area-alertas');
-            if (!areaAlerta) return;
+            const areanotificara = document.getElementById('area-notificaras');
+            if (!areanotificara) return;
 
-            // Limpa o alerta se não houver nada
-            areaAlerta.innerHTML = '';
-            areaAlerta.style.display = 'none';
+            // Limpa o notificara se não houver nada
+            areanotificara.innerHTML = '';
+            areanotificara.style.display = 'none';
 
             if (perfil === 'admin' && contagem.admin_pendente > 0) {
-                areaAlerta.innerHTML = `
+                areanotificara.innerHTML = `
                     <div style="background: #fee2e2; color: #b91c1c; padding: 15px; border-radius: 8px; border: 1px solid #f87171; font-weight: bold; text-align: center; cursor: pointer; margin-bottom: 20px;" 
                          onclick="listarSolicitacoesPendentes()">
                         ⚠️ EXISTEM ${contagem.admin_pendente} SOLICITAÇÕES DE UNIFORME AGUARDANDO AUTORIZAÇÃO! (CLIQUE AQUI PARA VER)
                     </div>`;
-                areaAlerta.style.display = 'block';
+                areanotificara.style.display = 'block';
             } else if (perfil === 'estoque' && contagem.estoque_pendente > 0) {
-                areaAlerta.innerHTML = `
+                areanotificara.innerHTML = `
                     <div style="background: #dcfce7; color: #15803d; padding: 15px; border-radius: 8px; border: 1px solid #4ade80; font-weight: bold; text-align: center; cursor: pointer; margin-bottom: 20px;"
                         onclick="listarFilaSeparacao()">
                         📦 EXISTEM ${contagem.estoque_pendente} PEDIDOS AUTORIZADOS PARA SEPARAÇÃO! (CLIQUE AQUI PARA VER)
                     </div>`;
-                areaAlerta.style.display = 'block';
+                areanotificara.style.display = 'block';
             } else if (perfil === 'logistica' && contagem.estoque_pendente > 0) {
-                areaAlerta.innerHTML = `
-                    <div class="alerta-pulsar" style="background:#eff6ff; color:#1e40af; cursor:pointer;" onclick="listarColetasLogistica()">
+                areanotificara.innerHTML = `
+                    <div class="notificara-pulsar" style="background:#eff6ff; color:#1e40af; cursor:pointer;" onclick="listarColetasLogistica()">
                         🚚 EXISTEM ${contagem.logistica_pendente} COLETAS LIBERADAS PARA TRANSPORTE!
                     </div>`;
-                areaAlerta.style.display = 'block';                
+                areanotificara.style.display = 'block';                
             } else if (perfil === 'escola' && contagem.estoque_pendente > 0) {
-                areaAlerta.innerHTML = `
-                    <div class="alerta-pulsar" style="background:#fff7ed; color:#c2410c; cursor:pointer;" onclick="listarPedidosEmCaminho()">
+                areanotificara.innerHTML = `
+                    <div class="notificara-pulsar" style="background:#fff7ed; color:#c2410c; cursor:pointer;" onclick="listarPedidosEmCaminho()">
                         🚚 VOCÊ TEM ${contagem.escola_recebimento} PEDIDO(S) EM TRANSPORTE PARA SUA UNIDADE! (CLIQUE PARA CONFIRMAR RECEBIMENTO)
                     </div>`;
-                areaAlerta.style.display = 'block';
+                areanotificara.style.display = 'block';
             }                
-        } catch (e) { console.error("Erro no alerta:", e); }
+        } catch (e) { console.error("Erro no notificara:", e); }
     };
 
     // Executa agora e depois a cada 30 segundos
@@ -1382,7 +1382,7 @@ async function listarSolicitacoesPendentes() {
         `;
         container.innerHTML = html;
     } catch (err) {
-        alert("Erro ao carregar lista");
+        notificar("Erro ao carregar lista");
     }
 }
 
@@ -1407,12 +1407,12 @@ async function autorizarPedido(id) {
         });
         const data = await res.json();
         if(res.ok) {
-            alert("✅ " + data.message);
+            notificar("✅ " + data.message);
             carregarDashboard();
         } else {
-            alert("❌ ERRO: " + data.error);
+            notificar("❌ ERRO: " + data.error);
         }
-    } catch(e) { alert("Erro na autorização"); }
+    } catch(e) { notificar("Erro na autorização"); }
 }
 
 function logout() {
@@ -1440,7 +1440,7 @@ async function processarSolicitacaoANTIGO(pedidoId, acao) {
     });
 
     if (res.ok) {
-        alert("SOLICITAÇÃO ATUALIZADA");
+        notificar("SOLICITAÇÃO ATUALIZADA");
         carregarDashboard();
     }
 }
@@ -1459,7 +1459,7 @@ async function confirmarRecebimentoantigo(pedidoId) {
     });
 
     if (res.ok) {
-        alert("RECEBIMENTO CONFIRMADO!");
+        notificar("RECEBIMENTO CONFIRMADO!");
         carregarDashboard();
     }
 }
@@ -1467,7 +1467,7 @@ async function confirmarRecebimentoantigo(pedidoId) {
 // Função para Estoque definir volumes e liberar [cite: 18, 20, 21]
 async function liberarParaLogistica(pedidoId) {
     const volumes = document.getElementById(`volumes_${pedidoId}`).value;
-    if (!volumes) return alert("INFORME A QTD DE VOLUMES");
+    if (!volumes) return notificar("INFORME A QTD DE VOLUMES");
 
     const res = await fetch(`${API_URL}/pedidos/${pedidoId}/status`, {
         method: 'PATCH',
@@ -1479,7 +1479,7 @@ async function liberarParaLogistica(pedidoId) {
     });
 
     if (res.ok) {
-        alert("PEDIDO LIBERADO PARA LOGÍSTICA");
+        notificar("PEDIDO LIBERADO PARA LOGÍSTICA");
         carregarDashboard();
     }
 }
@@ -1496,7 +1496,7 @@ function imprimirRelatorioEstoque(dados) {
         p.nome, 
         p.tipo, 
         p.quantidade_estoque, 
-        p.alerta_baixo ? "ESTOQUE BAIXO" : "OK"
+        p.notificara_baixo ? "ESTOQUE BAIXO" : "OK"
     ]);
 
     doc.autoTable({
@@ -1527,7 +1527,7 @@ async function enviarPedidoGrade() {
     });
 
     if (itens.length === 0) {
-        return alert("POR FAVOR, PREENCHA A QUANTIDADE DE PELO MENOS UM ITEM.");
+        return notificar("POR FAVOR, PREENCHA A QUANTIDADE DE PELO MENOS UM ITEM.");
     }
 
     if (!confirm(`CONFIRMAR SOLICITAÇÃO DE ${totalItens} ITENS?`)) return;
@@ -1544,13 +1544,13 @@ async function enviarPedidoGrade() {
 
         const data = await res.json();
         if (res.ok) {
-            alert("SOLICITAÇÃO REALIZADA COM SUCESSO!");
+            notificar("SOLICITAÇÃO REALIZADA COM SUCESSO!");
             carregarDashboard(); // Volta para a tela inicial
         } else {
-            alert("ERRO AO SALVAR: " + (data.error || "Verifique o console"));
+            notificar("ERRO AO SALVAR: " + (data.error || "Verifique o console"));
         }
     } catch (err) {
-        alert("FALHA NA CONEXÃO COM O SERVIDOR");
+        notificar("FALHA NA CONEXÃO COM O SERVIDOR");
     }
 }
 
@@ -1603,7 +1603,7 @@ async function abrirModalCadastroUsuario() {
 
         modal.style.display = 'flex';
     } catch (err) {
-        alert("Erro ao carregar lista de unidades.");
+        notificar("Erro ao carregar lista de unidades.");
     }
 }
 
@@ -1617,12 +1617,12 @@ async function salvarNovoUsuario() {
 
     // 2. Validações básicas antes de enviar ao servidor
     if (!nome || !senha || !perfil) {
-        return alert("⚠️ Preencha Nome, Senha e Perfil obrigatoriamente.");
+        return notificar("⚠️ Preencha Nome, Senha e Perfil obrigatoriamente.");
     }
 
     // Se o perfil for 'escola', o local_id DEVE ser preenchido
     if (perfil === 'escola' && !local_id) {
-        return alert("⚠️ Usuários do perfil ESCOLA precisam ser vinculados a uma unidade.");
+        return notificar("⚠️ Usuários do perfil ESCOLA precisam ser vinculados a uma unidade.");
     }
 
     // 3. Monta o objeto de dados (o 'corpo' da requisição)
@@ -1648,7 +1648,7 @@ async function salvarNovoUsuario() {
         const data = await res.json();
 
         if (res.ok) {
-            alert("✨ Funcionário cadastrado com sucesso!");
+            notificar("✨ Funcionário cadastrado com sucesso!");
             
             // Limpa os campos para o próximo cadastro
             document.getElementById('novo_nome').value = '';
@@ -1657,11 +1657,11 @@ async function salvarNovoUsuario() {
             // Recarrega a tela para atualizar a tabela de funcionários
             telaGerenciarUsuarios();
         } else {
-            alert("❌ Erro ao cadastrar: " + (data.error || data.message));
+            notificar("❌ Erro ao cadastrar: " + (data.error || data.message));
         }
     } catch (err) {
         console.error("Erro na requisição:", err);
-        alert("🚨 Falha na conexão com o servidor.");
+        notificar("🚨 Falha na conexão com o servidor.");
     }
 }
 
@@ -1677,7 +1677,7 @@ function salvarUsuario() {
     let local_id = null;
 
     if (!nome || !senha || !perfil) {
-        return alert("ERRO: TODOS OS CAMPOS SÃO OBRIGATÓRIOS!");
+        return notificar("ERRO: TODOS OS CAMPOS SÃO OBRIGATÓRIOS!");
     }
 
     // Atribuição automática de local_id baseada no perfil
@@ -1687,7 +1687,7 @@ function salvarUsuario() {
     else if (perfil === 'super') local_id = 36;
     else if (perfil === 'escola') {
         local_id = document.getElementById('cadLocal').value;
-        if (!local_id) return alert("ERRO: SELECIONE UMA ESCOLA!");
+        if (!local_id) return notificar("ERRO: SELECIONE UMA ESCOLA!");
     }
 
     const dados = { nome, senha, perfil, local_id: parseInt(local_id) };
@@ -1703,10 +1703,10 @@ function salvarUsuario() {
     .then(async res => {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Erro ao cadastrar");
-        alert("USUÁRIO CADASTRADO COM SUCESSO!");
+        notificar("USUÁRIO CADASTRADO COM SUCESSO!");
         document.querySelector('.modal-overlay').remove();
     })
-    .catch(err => alert(err.message));
+    .catch(err => notificar(err.message));
 }
 
 async function telaGerenciarUsuarios() {
@@ -1817,7 +1817,7 @@ async function telaGerenciarUsuarios() {
 
     } catch (err) {
         console.error("Erro na tela de usuários:", err);
-        alert("Erro ao carregar dados. Verifique o console.");
+        notificar("Erro ao carregar dados. Verifique o console.");
         container.innerHTML = `<div style="padding:20px; color:red;">⚠️ Erro técnico: ${err.message}</div>`;
     }
 }
@@ -1835,7 +1835,7 @@ async function salvarUsuario() {
     });
 
     if (res.ok) {
-        alert("UTILIZADOR CRIADO!");
+        notificar("UTILIZADOR CRIADO!");
         telaGerenciarUsuarios();
     }
 }
@@ -1853,7 +1853,7 @@ async function alternarStatusUsuario(id, statusAtual) {
         if (res.ok) {
             telaGerenciarUsuarios(); // Recarrega a lista
         }
-    } catch (err) { alert("Erro ao atualizar status."); }
+    } catch (err) { notificar("Erro ao atualizar status."); }
 }
 
 async function telaPedidosAutorizados() {
@@ -1989,7 +1989,7 @@ async function enviarPedidoMateriais() {
         }
     });
 
-    if (itens.length === 0) return alert("SELECIONE PELO MENOS UM ITEM");
+    if (itens.length === 0) return notificar("SELECIONE PELO MENOS UM ITEM");
 
     const res = await fetch(`${API_URL}/pedidos/grade`, { // Reaproveita a rota de grade
         method: 'POST',
@@ -1998,7 +1998,7 @@ async function enviarPedidoMateriais() {
     });
 
     if (res.ok) {
-        alert("SOLICITAÇÃO DE MATERIAL ENVIADA!");
+        notificar("SOLICITAÇÃO DE MATERIAL ENVIADA!");
         carregarDashboard();
     }
 }
@@ -2020,7 +2020,7 @@ async function executarTrocaSenha() {
     const nova = document.getElementById('nova_senha_input').value;
     const confirma = document.getElementById('confirma_senha_input').value;
 
-    if (!nova || nova !== confirma) return alert("AS SENHAS NÃO CONFEREM!");
+    if (!nova || nova !== confirma) return notificar("AS SENHAS NÃO CONFEREM!");
 
     const res = await fetch(`${API_URL}/auth/alterar-senha`, {
         method: 'PATCH',
@@ -2029,7 +2029,7 @@ async function executarTrocaSenha() {
     });
 
     if (res.ok) {
-        alert("SENHA ALTERADA!");
+        notificar("SENHA ALTERADA!");
         carregarDashboard();
     }
 }
@@ -2089,11 +2089,11 @@ async function processarAprovacaoAdmin(pedidoId, acao) {
     const data = await res.json();
 
     if (res.ok) {
-        alert("SOLICITAÇÃO PROCESSADA!");
+        notificar("SOLICITAÇÃO PROCESSADA!");
         telaVerSolicitacoes();
     } else {
         // Exibe o erro de estoque negativo retornado pelo backend
-        alert("ATENÇÃO: " + (data.error || data.message));
+        notificar("ATENÇÃO: " + (data.error || data.message));
     }
 }
 
@@ -2113,7 +2113,7 @@ function formGenerico(tabela, label) {
 
 async function salvarGenerico(tabela) {
     const nome = document.getElementById('nome_generico').value;
-    if(!nome) return alert("PREENCHA O NOME!");
+    if(!nome) return notificar("PREENCHA O NOME!");
 
     const res = await fetch(`${API_URL}/api/cadastros/basico/${tabela}`, {
         method: 'POST',
@@ -2122,7 +2122,7 @@ async function salvarGenerico(tabela) {
     });
 
     if(res.ok) {
-        alert("CADASTRADO COM SUCESSO!");
+        notificar("CADASTRADO COM SUCESSO!");
         document.getElementById('nome_generico').value = '';
     }
 }
@@ -2131,12 +2131,12 @@ async function salvarGenerico(tabela) {
 function ajustarGradeUniforme() {
     const tipo = document.getElementById('prod_tipo').value;
     const nome = document.getElementById('prod_nome').value.toUpperCase();
-    const divAlerta = document.getElementById('div_alerta_minimo');
+    const divnotificara = document.getElementById('div_notificara_minimo');
     const infoGrade = document.getElementById('info_grade');
     const textoGrade = document.getElementById('texto_grade');
 
     if (tipo === 'UNIFORMES') {
-        divAlerta.style.display = 'none';
+        divnotificara.style.display = 'none';
         infoGrade.style.display = 'block';
         if (nome.includes('TENIS')) {
             textoGrade.innerText = "22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43";
@@ -2144,7 +2144,7 @@ function ajustarGradeUniforme() {
             textoGrade.innerText = "2, 4, 6, 8, 10, 12, 14, 16, PP, P, M, G, GG, EGG";
         }
     } else {
-        divAlerta.style.display = 'block';
+        divnotificara.style.display = 'block';
         infoGrade.style.display = 'none';
     }
 }
@@ -2210,7 +2210,7 @@ function gerarInputsPlaquetas() {
         }
     } else {
         btn.style.display = 'none';
-        if(qtd > 100) alert("POR FAVOR, CADASTRE NO MÁXIMO 100 ITENS POR VEZ.");
+        if(qtd > 100) notificar("POR FAVOR, CADASTRE NO MÁXIMO 100 ITENS POR VEZ.");
     }
 }
 
@@ -2225,11 +2225,11 @@ async function salvarPatrimonioLote() {
         .filter(v => v !== '');
 
     if (!produto_id || !local_id || !nota_fiscal || numeros_serie.length === 0) {
-        return alert("POR FAVOR, PREENCHA TODOS OS CAMPOS E OS NÚMEROS DE SÉRIE!");
+        return notificar("POR FAVOR, PREENCHA TODOS OS CAMPOS E OS NÚMEROS DE SÉRIE!");
     }
 
     if (numeros_serie.length < document.getElementById('pat_qtd').value) {
-        return alert("EXISTEM CAMPOS DE PLAQUETA VAZIOS!");
+        return notificar("EXISTEM CAMPOS DE PLAQUETA VAZIOS!");
     }
 
     try {
@@ -2250,14 +2250,14 @@ async function salvarPatrimonioLote() {
         const data = await res.json();
 
         if (res.ok) {
-            alert(data.message);
+            notificar(data.message);
             renderizarFormPatrimonio(); // Limpa/Reseta o formulário
         } else {
-            alert("ERRO: " + data.error);
+            notificar("ERRO: " + data.error);
         }
     } catch (error) {
         console.error(error);
-        alert("FALHA AO COMUNICAR COM O SERVIDOR.");
+        notificar("FALHA AO COMUNICAR COM O SERVIDOR.");
     }
 }
 
@@ -2279,7 +2279,7 @@ function telaCadastroCategoria() {
 
 async function salvarNovaCategoria() {
     const nome = document.getElementById('cad_cat_nome').value;
-    if (!nome) return alert("Digite o nome da categoria!");
+    if (!nome) return notificar("Digite o nome da categoria!");
 
     try {
         const res = await fetch(`${API_URL}/categorias`, {
@@ -2292,13 +2292,13 @@ async function salvarNovaCategoria() {
         });
 
         if (res.ok) {
-            alert("✅ Categoria salva!");
+            notificar("✅ Categoria salva!");
             document.getElementById('cad_cat_nome').value = '';
         } else {
             const erro = await res.json();
-            alert("❌ Erro: " + erro.error);
+            notificar("❌ Erro: " + erro.error);
         }
-    } catch (e) { alert("Erro de conexão."); }
+    } catch (e) { notificar("Erro de conexão."); }
 }
 
 async function telaCadastrosBase() {
@@ -2355,7 +2355,7 @@ async function salvarNovoSetor() {
     const nome = document.getElementById('cad_setor_nome').value;
     const token = localStorage.getItem('token');
 
-    if (!nome) return alert("Por favor, informe o nome do setor.");
+    if (!nome) return notificar("Por favor, informe o nome do setor.");
 
     try {
         const res = await fetch(`${API_URL}/setores`, {
@@ -2370,13 +2370,13 @@ async function salvarNovoSetor() {
         const data = await res.json();
 
         if (res.ok) {
-            alert("✅ " + data.message);
+            notificar("✅ " + data.message);
             document.getElementById('cad_setor_nome').value = '';
         } else {
-            alert("⚠️ " + data.error);
+            notificar("⚠️ " + data.error);
         }
     } catch (e) {
-        alert("Erro ao conectar com o servidor.");
+        notificar("Erro ao conectar com o servidor.");
     }
 }
 
@@ -2398,7 +2398,7 @@ async function formProduto() {
                 <input type="text" id="prod_nome" placeholder="Ex: TENIS, CAMISA, PAPEL A4..." style="text-transform: uppercase;">
                 
                 <label style="color: white; display: block; margin-top: 10px;">TIPO:</label>
-                <select id="prod_tipo" class="input-grade" style="width: 100%; height: 50px;" onchange="ajustarExibicaoAlerta()">
+                <select id="prod_tipo" class="input-grade" style="width: 100%; height: 50px;" onchange="ajustarExibicaonotificara()">
                     <option value="MATERIAL">MATERIAL</option>
                     <option value="UNIFORMES">UNIFORMES</option>
                     <option value="PATRIMONIO">PATRIMÔNIO</option>
@@ -2410,9 +2410,9 @@ async function formProduto() {
                     ${categorias.map(c => `<option value="${c.id}">${c.nome}</option>`).join('')}
                 </select>
 
-                <div id="div_alerta_minimo">
-                    <label style="color: white; display: block; margin-top: 10px;">ALERTA DE ESTOQUE BAIXO:</label>
-                    <input type="number" id="prod_alerta" value="0">
+                <div id="div_notificara_minimo">
+                    <label style="color: white; display: block; margin-top: 10px;">notificarA DE ESTOQUE BAIXO:</label>
+                    <input type="number" id="prod_notificara" value="0">
                 </div>
 
                 <button onclick="salvarProdutoNovo()" style="background: var(--success); margin-top: 25px; width: 100%; font-weight: bold;">
@@ -2420,7 +2420,7 @@ async function formProduto() {
                 </button>
             </div>
         `;
-        ajustarExibicaoAlerta();
+        ajustarExibicaonotificara();
     } catch (err) {
         area.innerHTML = `<div class="painel-vidro" style="color:red;">Erro ao carregar categorias.</div>`;
     }
@@ -2431,16 +2431,16 @@ async function salvarProdutoNovo() {
     const tipo = document.getElementById('prod_tipo').value;
     const categoriaSelect = document.getElementById('prod_categoria');
     const categoria_id = categoriaSelect.value;
-    const alerta_minimo = document.getElementById('prod_alerta').value;
+    const notificara_minimo = document.getElementById('prod_notificara').value;
 
-    if (!nome) return alert("O nome do produto é obrigatório!");
+    if (!nome) return notificar("O nome do produto é obrigatório!");
 
     const payload = {
         nome: nome,
         tipo: tipo,
         // Envia null se não houver categoria selecionada
         categoria_id: categoria_id ? parseInt(categoria_id) : null,
-        alerta_minimo: parseInt(alerta_minimo) || 0
+        notificara_minimo: parseInt(notificara_minimo) || 0
     };
 
     try {
@@ -2454,48 +2454,48 @@ async function salvarProdutoNovo() {
         });
 
         if (res.ok) {
-            alert("✅ Cadastro realizado com sucesso!");
+            notificar("✅ Cadastro realizado com sucesso!");
             formProduto(); // Limpa a tela
         } else {
             const erro = await res.json();
-            alert("❌ Erro no Servidor: " + erro.error);
+            notificar("❌ Erro no Servidor: " + erro.error);
         }
     } catch (err) {
         console.error("Erro de conexão:", err);
-        alert("🚨 Falha de conexão com o servidor.");
+        notificar("🚨 Falha de conexão com o servidor.");
     }
 }
 
-function ajustarExibicaoAlerta() {
+function ajustarExibicaonotificara() {
     const tipo = document.getElementById('prod_tipo').value;
-    document.getElementById('div_alerta_minimo').style.display = (tipo === 'PATRIMONIO') ? 'none' : 'block';
+    document.getElementById('div_notificara_minimo').style.display = (tipo === 'PATRIMONIO') ? 'none' : 'block';
 }
 
 function ajustarCamposTipo() {
     const tipo = document.getElementById('prod_tipo').value;
-    const divAlerta = document.getElementById('div_alerta_minimo');
-    // Só mostra alerta para Material e Uniformes
-    divAlerta.style.display = (tipo === 'PATRIMONIO') ? 'none' : 'block';
+    const divnotificara = document.getElementById('div_notificara_minimo');
+    // Só mostra notificara para Material e Uniformes
+    divnotificara.style.display = (tipo === 'PATRIMONIO') ? 'none' : 'block';
 }
 
-function toggleAlerta() {
+function togglenotificara() {
     const tipo = document.getElementById('p_tipo').value;
-    const divAlerta = document.getElementById('div_p_alerta');
-    const inputAlerta = document.getElementById('p_alerta');
+    const divnotificara = document.getElementById('div_p_notificara');
+    const inputnotificara = document.getElementById('p_notificara');
 
     if (tipo === 'PATRIMONIO') {
-        // Esconde o campo de alerta e zera o valor
-        divAlerta.style.display = 'none';
-        inputAlerta.value = 0;
+        // Esconde o campo de notificara e zera o valor
+        divnotificara.style.display = 'none';
+        inputnotificara.value = 0;
     } else {
         // Mostra para Materiais e Uniformes
-        divAlerta.style.display = 'block';
+        divnotificara.style.display = 'block';
     }
 }
 
-function toggleAlertaEstoque() {
+function togglenotificaraEstoque() {
     const tipo = document.getElementById('prod_tipo').value;
-    document.getElementById('div_alerta_minimo').style.display = (tipo === 'PATRIMONIO') ? 'none' : 'block';
+    document.getElementById('div_notificara_minimo').style.display = (tipo === 'PATRIMONIO') ? 'none' : 'block';
 }
 
 async function salvarNovoProduto(event) {
@@ -2519,14 +2519,14 @@ async function salvarNovoProduto(event) {
         });
 
         if (res.ok) {
-            alert("✅ Produto cadastrado com sucesso no catálogo!");
+            notificar("✅ Produto cadastrado com sucesso no catálogo!");
             carregarDashboard(); // Volta para a tela principal
         } else {
             const erro = await res.json();
-            alert("Erro: " + erro.error);
+            notificar("Erro: " + erro.error);
         }
     } catch (err) {
-        alert("Falha na conexão com o servidor.");
+        notificar("Falha na conexão com o servidor.");
     }
 }
 
@@ -2616,16 +2616,16 @@ async function salvarLotePatrimonio() {
 
     // --- VALIDAÇÕES ---
     if (tipoDoc === 'DANFE' && (!numDoc || !serieDoc)) {
-        return alert("Por favor, preencha o número e a série da Nota Fiscal.");
+        return notificar("Por favor, preencha o número e a série da Nota Fiscal.");
     }
     if (tipoDoc === 'CHAVE' && chaveNfe.length < 44) {
-        return alert("A Chave de Acesso deve conter os 44 dígitos bipados.");
+        return notificar("A Chave de Acesso deve conter os 44 dígitos bipados.");
     }
     if (!produtoId || isNaN(quantidade)) {
-        return alert("Selecione o produto e informe a quantidade total.");
+        return notificar("Selecione o produto e informe a quantidade total.");
     }
     if (erroSerie) {
-        return alert("Existem campos de série/plaqueta vazios. Todos os itens devem ser identificados.");
+        return notificar("Existem campos de série/plaqueta vazios. Todos os itens devem ser identificados.");
     }
 
     // 4. Envio dos Dados para o Servidor
@@ -2649,14 +2649,14 @@ async function salvarLotePatrimonio() {
         const data = await res.json();
 
         if (res.ok) {
-            alert("✅ " + data.message);
+            notificar("✅ " + data.message);
             carregarDashboard(); // Retorna ao menu
         } else {
             // Caso o banco rejeite (ex: número de série já existente)
-            alert("⚠️ " + data.error);
+            notificar("⚠️ " + data.error);
         }
     } catch (err) {
-        alert("Erro crítico de conexão com o servidor.");
+        notificar("Erro crítico de conexão com o servidor.");
     }
 }
 
@@ -2718,16 +2718,16 @@ function gerarCamposSerieLote() {
 function monitorarTipoProduto() {
     const tipo = document.getElementById('prod_tipo').value;
     const nome = document.getElementById('prod_nome').value.toUpperCase();
-    const boxAlerta = document.getElementById('box_alerta');
+    const boxnotificara = document.getElementById('box_notificara');
     const boxGrade = document.getElementById('box_grade');
     const labelGrade = document.getElementById('label_grade');
 
     if (tipo === 'UNIFORMES') {
-        boxAlerta.style.display = 'none';
+        boxnotificara.style.display = 'none';
         boxGrade.style.display = 'block';
         labelGrade.innerText = nome.includes('TENIS') ? "CALÇADOS (22 ao 43)" : "VESTUÁRIO (2 ao 16, PP ao XGG)";
     } else {
-        boxAlerta.style.display = 'block';
+        boxnotificara.style.display = 'block';
         boxGrade.style.display = 'none';
     }
 }
@@ -2738,12 +2738,12 @@ function abrirDialogoEntrada() {
 
     // Verifica permissão
     if (!perfil) {
-        alert("Sessão expirada. Por favor, faça login novamente.");
+        notificar("Sessão expirada. Por favor, faça login novamente.");
         return;
     }
 
     if (['escola', 'logistica'].includes(perfil.toLowerCase())) {
-        return alert("ACESSO NEGADO: SEU PERFIL NÃO POSSUI PERMISSÃO PARA ENTRADA DE ESTOQUE.");
+        return notificar("ACESSO NEGADO: SEU PERFIL NÃO POSSUI PERMISSÃO PARA ENTRADA DE ESTOQUE.");
     }
 
     // Criação do modal de escolha
@@ -2760,7 +2760,7 @@ function abrirDialogoEntrada() {
                         style="padding:15px; background:#2196F3; color:white; border:none; border-radius:5px; cursor:pointer; font-weight:bold;">
                     📥 ENTRADA MANUAL (ITEM POR ITEM)
                 </button>
-                <button onclick="this.closest('.modal-overlay').remove(); alert('Função via arquivo em desenvolvimento');" 
+                <button onclick="this.closest('.modal-overlay').remove(); notificar('Função via arquivo em desenvolvimento');" 
                         style="padding:15px; background:#4CAF50; color:white; border:none; border-radius:5px; cursor:pointer; font-weight:bold;">
                     📄 IMPORTAR VIA ARQUIVO (CSV/EXCEL)
                 </button>
@@ -2812,7 +2812,7 @@ async function telaEntradaManual() {
             </div>
         `;
     } catch (err) {
-        alert("Erro ao carregar dados para entrada.");
+        notificar("Erro ao carregar dados para entrada.");
     }
 }
 
@@ -2839,7 +2839,7 @@ async function processarEntradaEstoque() {
         }
     });
 
-    if (itens.length === 0) return alert("Adicione pelo menos um item!");
+    if (itens.length === 0) return notificar("Adicione pelo menos um item!");
 
     const payload = {
         local_id: parseInt(localStorage.getItem('local_id')), // ID 36, 37 ou 38 automático do login
@@ -2857,10 +2857,10 @@ async function processarEntradaEstoque() {
 
         if (!res.ok) throw new Error("Erro ao processar entrada");
         
-        alert("ESTOQUE ATUALIZADO COM SUCESSO!");
+        notificar("ESTOQUE ATUALIZADO COM SUCESSO!");
         renderizarMenu();
     } catch (err) {
-        alert(err.message);
+        notificar(err.message);
     }
 }
 
@@ -2965,7 +2965,7 @@ async function salvarEntradaLote() {
         series: Array.from(seriesInputs).map(input => input.value).filter(v => v !== '')
     };
 
-    if (payload.series.length === 0) return alert("Informe as plaquetas!");
+    if (payload.series.length === 0) return notificar("Informe as plaquetas!");
 
     try {
         const res = await fetch(`${API_URL}/estoque/entrada-patrimonio`, {
@@ -2978,14 +2978,14 @@ async function salvarEntradaLote() {
         });
 
         if (res.ok) {
-            alert("✅ Lote registrado com sucesso no Estoque Central!");
+            notificar("✅ Lote registrado com sucesso no Estoque Central!");
             telaEntradaPatrimonioLote(); // Recarrega tela
         } else {
             const err = await res.json();
-            alert("Erro: " + err.error);
+            notificar("Erro: " + err.error);
         }
     } catch (e) {
-        alert("Erro de conexão.");
+        notificar("Erro de conexão.");
     }
 }
 
@@ -3116,7 +3116,7 @@ async function enviarSolicitacao(tipo) {
         }
     });
 
-    if (itens.length === 0) return alert("SELECIONE AO MENOS UM ITEM.");
+    if (itens.length === 0) return notificar("SELECIONE AO MENOS UM ITEM.");
 
     const res = await fetch(`${API_URL}/api/pedidos/solicitar`, {
         method: 'POST',
@@ -3128,7 +3128,7 @@ async function enviarSolicitacao(tipo) {
     });
 
     if (res.ok) {
-        alert("SOLICITAÇÃO ENVIADA! AGUARDE A AUTORIZAÇÃO DO ADMIN.");
+        notificar("SOLICITAÇÃO ENVIADA! AGUARDE A AUTORIZAÇÃO DO ADMIN.");
         renderizarHome();
     }
 }
@@ -3186,7 +3186,7 @@ async function enviarSolicitacao(tipo) {
         }
     });
 
-    if (itens.length === 0) return alert("SELECIONE AO MENOS UM ITEM.");
+    if (itens.length === 0) return notificar("SELECIONE AO MENOS UM ITEM.");
 
     const res = await fetch(`${API_URL}/api/pedidos/solicitar`, {
         method: 'POST',
@@ -3198,7 +3198,7 @@ async function enviarSolicitacao(tipo) {
     });
 
     if (res.ok) {
-        alert("SOLICITAÇÃO ENVIADA! AGUARDE A AUTORIZAÇÃO DO ADMIN.");
+        notificar("SOLICITAÇÃO ENVIADA! AGUARDE A AUTORIZAÇÃO DO ADMIN.");
         renderizarHome();
     }
 }
@@ -3270,7 +3270,7 @@ function validarLimiteSelecao(el, max) {
     const marcados = container.querySelectorAll('input:checked').length;
     if (marcados > max) {
         el.checked = false;
-        alert(`VOCÊ SÓ PODE SELECIONAR ${max} PLAQUETAS PARA ESTE ITEM.`);
+        notificar(`VOCÊ SÓ PODE SELECIONAR ${max} PLAQUETAS PARA ESTE ITEM.`);
     }
 }
 
@@ -3292,14 +3292,14 @@ async function autorizarRealocarPatrimonio(id) {
 
         const data = await res.json();
         if (res.ok) {
-            alert(data.message);
+            notificar(data.message);
             document.querySelector('.modal-overlay').remove();
             renderizarGestaoPedidos(); // Atualiza a lista principal
         } else {
-            alert("ERRO: " + data.error);
+            notificar("ERRO: " + data.error);
         }
     } catch (error) {
-        alert("FALHA AO PROCESSAR AUTORIZAÇÃO.");
+        notificar("FALHA AO PROCESSAR AUTORIZAÇÃO.");
     }
 }
 
@@ -3375,7 +3375,7 @@ async function alterarStatusPedido(id, rota) {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
     });
     if (res.ok) {
-        alert("STATUS ATUALIZADO!");
+        notificar("STATUS ATUALIZADO!");
         renderizarPedidosEmAndamento();
     }
 }
@@ -3577,7 +3577,7 @@ async function gerarRelatorioSaida() {
     const fim = document.getElementById('rel_fim').value;
     const container = document.getElementById('resultado-relatorio');
 
-    if (!inicio || !fim) return alert("SELECIONE O PERÍODO!");
+    if (!inicio || !fim) return notificar("SELECIONE O PERÍODO!");
 
     container.innerHTML = '<div class="loader">PROCESSANDO DADOS...</div>';
 
@@ -3714,10 +3714,10 @@ async function enviarPedidoEscola(tipo) {
     const localIdLogado = localStorage.getItem('local_id');
     
     if (!localIdLogado || localIdLogado === "") {
-        return alert("ERRO: Seu usuário não está vinculado a uma escola. Contate o administrador.");
+        return notificar("ERRO: Seu usuário não está vinculado a uma escola. Contate o administrador.");
     }
 
-    if (carrinhoSolicitacao.length === 0) return alert("Adicione itens à solicitação!");
+    if (carrinhoSolicitacao.length === 0) return notificar("Adicione itens à solicitação!");
 
     const dadosPedido = {
         local_destino_id: parseInt(localIdLogado), // Envia o ID da escola do usuário
@@ -3736,14 +3736,14 @@ async function enviarPedidoEscola(tipo) {
         });
 
         if (res.ok) {
-            alert("✅ Solicitação enviada com sucesso!");
+            notificar("✅ Solicitação enviada com sucesso!");
             carrinhoSolicitacao = [];
             carregarDashboard();
         } else {
-            alert("Erro ao enviar solicitação.");
+            notificar("Erro ao enviar solicitação.");
         }
     } catch (err) {
-        alert("Erro de conexão com o servidor.");
+        notificar("Erro de conexão com o servidor.");
     }
 }
 
@@ -3866,7 +3866,7 @@ async function confirmarRecebimentoFinal(id) {
     });
 
     if(res.ok) {
-        alert("ESTOQUE ATUALIZADO COM SUCESSO!");
+        notificar("ESTOQUE ATUALIZADO COM SUCESSO!");
         document.querySelector('.modal-overlay').remove();
         renderizarGerenciamentoDevolucoes();
     }
@@ -4005,7 +4005,7 @@ async function enviarRemessaFinal(pedidoId) {
     const placa = document.getElementById('placa').value;
 
     if (!motorista || !placa) {
-        alert("⚠️ Por favor, preencha o nome do motorista e a placa do veículo.");
+        notificar("⚠️ Por favor, preencha o nome do motorista e a placa do veículo.");
         return;
     }
 
@@ -4025,7 +4025,7 @@ async function enviarRemessaFinal(pedidoId) {
     });
 
     if (itensParaEnviar.length === 0) {
-        alert("❌ Você não pode gerar uma remessa vazia. Informe as quantidades.");
+        notificar("❌ Você não pode gerar uma remessa vazia. Informe as quantidades.");
         return;
     }
 
@@ -4048,7 +4048,7 @@ async function enviarRemessaFinal(pedidoId) {
         const data = await res.json();
 
         if (res.ok) {
-            alert("✅ Remessa gerada e estoque atualizado!");
+            notificar("✅ Remessa gerada e estoque atualizado!");
             
             // Fecha o modal de conferência
             document.getElementById('modal-analise').style.display = 'none';
@@ -4060,17 +4060,17 @@ async function enviarRemessaFinal(pedidoId) {
             imprimirRomaneio(data.romaneioId);
             
         } else {
-            alert("Erro ao processar remessa: " + data.error);
+            notificar("Erro ao processar remessa: " + data.error);
         }
     } catch (err) {
         console.error(err);
-        alert("🚨 Erro de comunicação com o servidor.");
+        notificar("🚨 Erro de comunicação com o servidor.");
     }
 }
 
 async function gerarPDFTermo() {
     const localId = document.getElementById('termo_local_id').value;
-    if (!localId) return alert("POR FAVOR, SELECIONE UM LOCAL.");
+    if (!localId) return notificar("POR FAVOR, SELECIONE UM LOCAL.");
 
     const res = await fetch(`${API_URL}/api/pedidos/relatorios/termo/${localId}`, {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
@@ -4078,7 +4078,7 @@ async function gerarPDFTermo() {
     const dados = await res.json();
 
     if (dados.itens.length === 0) {
-        return alert("ESTA UNIDADE NÃO POSSUI ITENS PATRIMONIADOS VINCULADOS.");
+        return notificar("ESTA UNIDADE NÃO POSSUI ITENS PATRIMONIADOS VINCULADOS.");
     }
 
     const { jsPDF } = window.jspdf;
@@ -4210,7 +4210,7 @@ function adicionarItemTransferencia() {
     const prodSelect = document.getElementById('transf_prod_id');
     const qtd = document.getElementById('transf_qtd').value;
     
-    if(!qtd || qtd < 1) return alert("INFORME UMA QUANTIDADE VÁLIDA");
+    if(!qtd || qtd < 1) return notificar("INFORME UMA QUANTIDADE VÁLIDA");
 
     const item = {
         produto_id: prodSelect.value,
@@ -4242,7 +4242,7 @@ function atualizarTabelaTransferencia() {
 
 async function enviarTransferenciaFinal() {
     const local_id = document.getElementById('transf_local_id').value;
-    if(!local_id) return alert("POR FAVOR, SELECIONE O DESTINO!");
+    if(!local_id) return notificar("POR FAVOR, SELECIONE O DESTINO!");
 
     const res = await fetch(`${API_URL}/api/pedidos/patrimonio/solicitar-transferencia`, {
         method: 'POST',
@@ -4255,7 +4255,7 @@ async function enviarTransferenciaFinal() {
     });
 
     if(res.ok) {
-        alert("SOLICITAÇÃO ENVIADA! AGUARDE A AUTORIZAÇÃO DO ADMIN.");
+        notificar("SOLICITAÇÃO ENVIADA! AGUARDE A AUTORIZAÇÃO DO ADMIN.");
         itensTransferencia = [];
         renderizarMenuLogistica();
     }
@@ -4264,7 +4264,7 @@ async function enviarTransferenciaFinal() {
 // Função para buscar e exibir notificações
 async function atualizarBadgesNotificacao() {
     try {
-        const res = await fetch(`${API_URL}/pedidos/contagem/alertas`, {
+        const res = await fetch(`${API_URL}/pedidos/contagem/notificaras`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
         
@@ -4575,7 +4575,7 @@ async function renderizarRelatorioEstoqueBaixo() {
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
                     <div style="display:flex; align-items:center; gap:15px;">
                         <img src="assets/logo.png" style="width:40px;">
-                        <h2 style="margin:0; color:#c0392b;">⚠️ ALERTA DE REPOSIÇÃO (MATERIAL)</h2>
+                        <h2 style="margin:0; color:#c0392b;">⚠️ notificarA DE REPOSIÇÃO (MATERIAL)</h2>
                     </div>
                     <button onclick="exportarPDFEstoqueBaixo()" class="btn-info" style="background:#e74c3c">📥 BAIXAR LISTA DE COMPRAS</button>
                 </div>
@@ -4751,14 +4751,14 @@ async function renderizarEntradaEstoque() {
             });
 
             if (response.ok) {
-                alert('Entrada registada com sucesso!');
+                notificar('Entrada registada com sucesso!');
                 renderizarHome();
             } else {
                 const erro = await response.json();
-                alert('Erro: ' + erro.error);
+                notificar('Erro: ' + erro.error);
             }
         });
-    } catch (err) { alert('Erro ao carregar dados do servidor.'); }
+    } catch (err) { notificar('Erro ao carregar dados do servidor.'); }
 }
 
 // 2. RENDERIZAR HISTÓRICO GERAL
@@ -4798,7 +4798,7 @@ async function renderizarHistoricoGeral() {
                 </table>
             </div>
         `;
-    } catch (err) { alert('Erro ao carregar histórico.'); }
+    } catch (err) { notificar('Erro ao carregar histórico.'); }
 }
 
 // 3. VER DETALHES DE UMA MOVIMENTAÇÃO
@@ -4807,37 +4807,37 @@ async function verDetalhesHistorico(id) {
         const res = await fetch(`${API_URL}/historico/${id}/detalhes`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
         const detalhes = await res.json();
         const lista = detalhes.map(d => `- ${d.produto_nome}: ${d.quantidade} un.`).join('\n');
-        alert(`ITENS DA MOVIMENTAÇÃO:\n\n${lista}`);
-    } catch (err) { alert('Erro ao carregar detalhes.'); }
+        notificar(`ITENS DA MOVIMENTAÇÃO:\n\n${lista}`);
+    } catch (err) { notificar('Erro ao carregar detalhes.'); }
 }
 
-// --- FUNÇÕES DE BUSCA E EXIBIÇÃO DE ALERTAS ---
+// --- FUNÇÕES DE BUSCA E EXIBIÇÃO DE notificarAS ---
 
-async function verificarAlertasEscola() {
+async function verificarnotificarasEscola() {
     // Só executa se o perfil for escola
     if (localStorage.getItem('userRole') !== 'escola') return;
 
     try {
-        // Rota correta: /pedidos (prefixo no server.js) + /alertas-escola (no pedidos.routes.js)
-        const res = await fetch(`${API_URL}/pedidos/alertas-escola`, {
+        // Rota correta: /pedidos (prefixo no server.js) + /notificaras-escola (no pedidos.routes.js)
+        const res = await fetch(`${API_URL}/pedidos/notificaras-escola`, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         });
 
         if (!res.ok) return;
 
         const pedidos = await res.json();
-        const alertContainer = document.getElementById('alertas-container');
+        const notificarContainer = document.getElementById('notificaras-container');
 
-        if (alertContainer && pedidos.length > 0) {
-            alertContainer.innerHTML = `
+        if (notificarContainer && pedidos.length > 0) {
+            notificarContainer.innerHTML = `
                 <div style="background: #fffbeb; color: #b45309; padding: 15px; border-radius: 8px; border: 1px solid #fde68a; margin-bottom: 20px; font-weight: bold; text-align: center;">
                     🚚 ATENÇÃO: VOCÊ POSSUI ${pedidos.length} PEDIDO(S) EM TRANSPORTE PARA ESTA UNIDADE!
                 </div>`;
-        } else if (alertContainer) {
-            alertContainer.innerHTML = '';
+        } else if (notificarContainer) {
+            notificarContainer.innerHTML = '';
         }
     } catch (err) {
-        console.error("Erro ao carregar alertas da escola:", err);
+        console.error("Erro ao carregar notificaras da escola:", err);
     }
 }
 
@@ -4852,14 +4852,14 @@ async function verificarSolicitacoesPendentes() {
         });
         const data = await res.json();
 
-        const alertaContainer = document.getElementById('alertas-container');
-        if (alertaContainer && data.total > 0) {
-            alertaContainer.innerHTML = `
+        const notificaraContainer = document.getElementById('notificaras-container');
+        if (notificaraContainer && data.total > 0) {
+            notificaraContainer.innerHTML = `
                 <div onclick="telaHistoricoSolicitacoes()" style="background:#fff7ed; color:#c2410c; padding:15px; border:1px solid #fdba74; border-radius:8px; cursor:pointer; font-weight:bold; text-align:center; margin-bottom:15px;">
                     🚨 ATENÇÃO: EXISTEM ${data.total} SOLICITAÇÕES AGUARDANDO SUA AUTORIZAÇÃO!
                 </div>`;
         }
-    } catch (err) { console.error("Erro no alerta admin:", err); }
+    } catch (err) { console.error("Erro no notificara admin:", err); }
 }
 
 async function verificarPedidosParaSeparar() {
@@ -4868,26 +4868,26 @@ async function verificarPedidosParaSeparar() {
 
     try {
         // Rota definida no seu server.js
-        const res = await fetch(`${API_URL}/api/alertas/estoque/aprovados`, {
+        const res = await fetch(`${API_URL}/api/notificaras/estoque/aprovados`, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         });
 
         if (!res.ok) return;
 
         const data = await res.json();
-        const alertContainer = document.getElementById('alertas-container');
+        const notificarContainer = document.getElementById('notificaras-container');
 
-        // Se houver pedidos aprovados (total > 0), exibe o alerta
-        if (alertContainer && data.total > 0) {
-            alertContainer.innerHTML = `
+        // Se houver pedidos aprovados (total > 0), exibe o notificara
+        if (notificarContainer && data.total > 0) {
+            notificarContainer.innerHTML = `
                 <div style="background: #ecfdf5; color: #059669; padding: 15px; border-radius: 8px; border: 1px solid #a7f3d0; margin-bottom: 20px; font-weight: bold; text-align: center;">
                     📦 EXISTEM ${data.total} PEDIDO(S) APROVADO(S) AGUARDANDO SEPARAÇÃO!
                 </div>`;
-        } else if (alertContainer) {
-            alertContainer.innerHTML = '';
+        } else if (notificarContainer) {
+            notificarContainer.innerHTML = '';
         }
     } catch (err) {
-        console.error("Erro ao carregar alertas do estoque:", err);
+        console.error("Erro ao carregar notificaras do estoque:", err);
     }
 }
 
@@ -4897,32 +4897,32 @@ async function verificarPedidosParaColeta() {
 
     try {
         // Rota exata definida no seu server.js para a logística
-        const res = await fetch(`${API_URL}/api/alertas/logistica/coleta`, {
+        const res = await fetch(`${API_URL}/api/notificaras/logistica/coleta`, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         });
 
         if (!res.ok) return;
 
         const data = await res.json();
-        const alertContainer = document.getElementById('alertas-container');
+        const notificarContainer = document.getElementById('notificaras-container');
 
-        // Se houver pedidos prontos para coleta (total > 0), exibe o alerta
-        if (alertContainer && data.total > 0) {
-            alertContainer.innerHTML = `
+        // Se houver pedidos prontos para coleta (total > 0), exibe o notificara
+        if (notificarContainer && data.total > 0) {
+            notificarContainer.innerHTML = `
                 <div style="background: #eff6ff; color: #1d4ed8; padding: 15px; border-radius: 8px; border: 1px solid #bfdbfe; margin-bottom: 20px; font-weight: bold; text-align: center;">
                     🚚 ATENÇÃO: EXISTEM ${data.total} PEDIDO(S) AGUARDANDO COLETA E TRANSPORTE!
                 </div>`;
-        } else if (alertContainer) {
-            alertContainer.innerHTML = '';
+        } else if (notificarContainer) {
+            notificarContainer.innerHTML = '';
         }
     } catch (err) {
-        console.error("Erro ao carregar alertas da logística:", err);
+        console.error("Erro ao carregar notificaras da logística:", err);
     }
 }
 
-// Função auxiliar para inserir o HTML na div de alertas
-function renderizarAlertaNoPainel(mensagem) {
-    const area = document.getElementById('area-alertas');
+// Função auxiliar para inserir o HTML na div de notificaras
+function renderizarnotificaraNoPainel(mensagem) {
+    const area = document.getElementById('area-notificaras');
     if (area) {
         const div = document.createElement('div');
         div.style = "background: #fff3cd; color: #856404; padding: 12px; margin-bottom: 10px; border-left: 6px solid #ffc107; font-weight: bold; border-radius: 4px; display: flex; justify-content: space-between;";
@@ -4977,7 +4977,7 @@ async function renderizarDashboardGeral() {
                 </div>
             </div>
         `;
-    } catch (e) { alert("Erro ao atualizar painel."); }
+    } catch (e) { notificar("Erro ao atualizar painel."); }
 }
 
 // FUNÇÃO AUXILIAR PARA CRIAR OS CARDS (Mantém o estilo do seu print)
@@ -5110,7 +5110,7 @@ async function verListaPorStatus(status, label) {
                 </div>
             </div>
         `;
-    } catch (err) { alert("Erro ao carregar lista."); }
+    } catch (err) { notificar("Erro ao carregar lista."); }
 }
 
 async function verDetalhesPedidoCompleto(id, statusOrigem, labelOrigem) {
@@ -5159,7 +5159,7 @@ async function verDetalhesPedidoCompleto(id, statusOrigem, labelOrigem) {
                 </div>
             </div>
         `;
-    } catch (err) { alert("Erro ao carregar detalhes."); }
+    } catch (err) { notificar("Erro ao carregar detalhes."); }
 }
 
 // 2. Corrigir Autorizar Solicitações (Nome estava diferente na Parte 3)
@@ -5167,7 +5167,7 @@ async function telaAutorizarSolicitacoes() {
     if (typeof telaVerSolicitacoes === "function") {
         telaVerSolicitacoes();
     } else {
-        alert("Erro: Função telaVerSolicitacoes não encontrada.");
+        notificar("Erro: Função telaVerSolicitacoes não encontrada.");
     }
 }
 
@@ -5203,7 +5203,7 @@ async function renderizarHistoricoGeral() {
     if (typeof renderizarHistorico === "function") {
         renderizarHistorico();
     } else {
-        alert("Função de histórico não encontrada.");
+        notificar("Função de histórico não encontrada.");
     }
 }
 
@@ -5212,7 +5212,7 @@ function renderizarRelatorios() {
     if (typeof renderizarRelatorioEstatisticoUniformes === "function") {
         renderizarRelatorioEstatisticoUniformes();
     } else {
-        alert("Módulo de relatórios não disponível.");
+        notificar("Módulo de relatórios não disponível.");
     }
 }
 
@@ -5222,7 +5222,7 @@ function telaCriarPedidoDireto() {
     if (typeof telaSolicitarMaterial === "function") {
         telaSolicitarMaterial();
     } else {
-        alert("Módulo de criação de pedidos não localizado.");
+        notificar("Módulo de criação de pedidos não localizado.");
     }
 }
 
@@ -5245,7 +5245,7 @@ function renderizarHistoricoGeral() {
     if (typeof renderizarHistorico === "function") {
         renderizarHistorico();
     } else {
-        alert("Erro: Módulo de histórico não localizado.");
+        notificar("Erro: Módulo de histórico não localizado.");
     }
 }
 
@@ -5282,7 +5282,7 @@ async function abrirDialogoEntrada() {
             </div>
         `;
     } catch (err) {
-        alert("Erro ao conectar com o servidor. Verifique o CMD.");
+        notificar("Erro ao conectar com o servidor. Verifique o CMD.");
     }
 }
 
@@ -5340,7 +5340,7 @@ window.abrirDialogoEntrada = async function() {
             </div>
         `;
     } catch (err) {
-        alert("Erro ao carregar dados do catálogo. Verifique a conexão com o servidor.");
+        notificar("Erro ao carregar dados do catálogo. Verifique a conexão com o servidor.");
     }
 };
 
@@ -5352,7 +5352,7 @@ window.telaMovimentarPatrimonio = function() {
             <h2>🏷️ LANÇAR / MOVER PATRIMÔNIO</h2>
             <p>Insira o número de série ou plaqueta para registrar a movimentação.</p>
             <input type="text" placeholder="Nº DE SÉRIE" class="input-field" id="pat_serie">
-            <button class="btn-info" onclick="alert('Funcionalidade sendo integrada ao Banco de Dados...')">LOCALIZAR ITEM</button>
+            <button class="btn-info" onclick="notificar('Funcionalidade sendo integrada ao Banco de Dados...')">LOCALIZAR ITEM</button>
         </div>
     `;
 };
@@ -5432,7 +5432,7 @@ async function telaSolicitarUniforme() {
 
     } catch (e) { 
         console.error(e);
-        alert("Erro ao carregar formulário.");
+        notificar("Erro ao carregar formulário.");
     }
 }
 
@@ -5498,7 +5498,7 @@ function adicionarAoCarrinhoSolicitacao() {
     const tamanho = document.getElementById('solicitar_tamanho').value;
     const quantidade = parseInt(document.getElementById('solicitar_qtd').value);
 
-    if (quantidade <= 0) return alert("Informe uma quantidade válida.");
+    if (quantidade <= 0) return notificar("Informe uma quantidade válida.");
 
     carrinhoSolicitacao.push({ produto_id, nome, tamanho, quantidade });
     renderizarCarrinhoSolicitacao();
@@ -5595,7 +5595,7 @@ async function enviarSolicitacaoUniforme() {
     });
 
     if (itens.length === 0) {
-        alert("POR FAVOR, INSIRA PELO MENOS UMA QUANTIDADE.");
+        notificar("POR FAVOR, INSIRA PELO MENOS UMA QUANTIDADE.");
         return;
     }
 
@@ -5610,15 +5610,15 @@ async function enviarSolicitacaoUniforme() {
         });
 
         if (res.ok) {
-            alert("✅ SOLICITAÇÃO GRAVADA COM SUCESSO! AGUARDANDO AUTORIZAÇÃO.");
+            notificar("✅ SOLICITAÇÃO GRAVADA COM SUCESSO! AGUARDANDO AUTORIZAÇÃO.");
             carregarDashboard(); // Volta para a tela inicial
         } else {
             const erro = await res.json();
-            alert("❌ ERRO: " + erro.error);
+            notificar("❌ ERRO: " + erro.error);
         }
     } catch (err) {
         console.error(err);
-        alert("❌ ERRO DE CONEXÃO COM O SERVIDOR.");
+        notificar("❌ ERRO DE CONEXÃO COM O SERVIDOR.");
     }
 }
 
@@ -5639,7 +5639,7 @@ window.enviarSolicitacaoEscola = async function() {
         }
     });
 
-    if (itens.length === 0) return alert("PREENCHA AS QUANTIDADES!");
+    if (itens.length === 0) return notificar("PREENCHA AS QUANTIDADES!");
 
     if (!confirm(`CONFIRMAR SOLICITAÇÃO DE ${totalItens} ITENS?`)) return;
 
@@ -5658,13 +5658,13 @@ window.enviarSolicitacaoEscola = async function() {
         });
 
         if (res.ok) {
-            alert("SOLICITAÇÃO ENVIADA! AGUARDE AUTORIZAÇÃO.");
+            notificar("SOLICITAÇÃO ENVIADA! AGUARDE AUTORIZAÇÃO.");
             carregarDashboard();
         } else {
-            alert("ERRO AO ENVIAR");
+            notificar("ERRO AO ENVIAR");
         }
     } catch (err) {
-        alert("ERRO DE CONEXÃO");
+        notificar("ERRO DE CONEXÃO");
     }
 };
 
@@ -5700,7 +5700,7 @@ window.detalharSolicitacao = async function(pedidoId) {
         `;
         document.body.appendChild(overlay);
     } catch (err) {
-        alert("Erro ao abrir detalhes da solicitação.");
+        notificar("Erro ao abrir detalhes da solicitação.");
     }
 };
 
@@ -5721,16 +5721,16 @@ async function decidirPedido(pedidoId, novoStatus) {
         });
 
         if (res.ok) {
-            alert(`PEDIDO ${novoStatus} E STOCK ATUALIZADO!`);
+            notificar(`PEDIDO ${novoStatus} E STOCK ATUALIZADO!`);
             location.reload();
         } else {
             const erro = await res.json();
-            alert("ERRO: " + erro.error);
+            notificar("ERRO: " + erro.error);
             btn.disabled = false;
             btn.innerText = textoOriginal;
         }
     } catch (err) {
-        alert("FALHA NA CONEXÃO");
+        notificar("FALHA NA CONEXÃO");
         btn.disabled = false;
         btn.innerText = textoOriginal;
     }
@@ -5800,11 +5800,11 @@ async function visualizarDetalhesPedido(id) {
         `;
         
         // Exibe em um modal ou injeta em algum lugar da tela
-        // Exemplo: alert ou criar um modal flutuante simples
+        // Exemplo: notificar ou criar um modal flutuante simples
         document.getElementById(`detalhes-pedido-${id}`).innerHTML = tabelaHtml;
         
     } catch (err) {
-        alert("Erro ao carregar detalhes.");
+        notificar("Erro ao carregar detalhes.");
     }
 }
 
@@ -5817,15 +5817,15 @@ async function verificarPendenciasAdmin() {
         });
         const pedidos = await res.json();
 
-        const containerAlerta = document.getElementById('area-alertas-admin');
+        const containernotificara = document.getElementById('area-notificaras-admin');
         if (pedidos.length > 0) {
-            containerAlerta.innerHTML = `
-                <div class="banner-alerta-admin" onclick="abrirListaSolicitacoes()">
+            containernotificara.innerHTML = `
+                <div class="banner-notificara-admin" onclick="abrirListaSolicitacoes()">
                     🚨 ATENÇÃO: EXISTEM ${pedidos.length} SOLICITAÇÕES DE UNIFORME AGUARDANDO AUTORIZAÇÃO!
                 </div>
             `;
         } else {
-            containerAlerta.innerHTML = '';
+            containernotificara.innerHTML = '';
         }
     } catch (err) {
         console.error("Erro ao verificar pendências", err);
@@ -5877,7 +5877,7 @@ window.abrirDetalheHistorico = async function(historicoId) {
 
     } catch (err) {
         console.error(err);
-        alert("Erro ao carregar detalhes do histórico.");
+        notificar("Erro ao carregar detalhes do histórico.");
     }
 };
 
@@ -6007,7 +6007,7 @@ window.aplicarFiltroLogs = function() {
 
 async function salvarCadastro() {
     const tabela = document.getElementById('selecionarTabela').value;
-    if (!tabela) return alert("POR FAVOR, SELECIONE UMA TABELA.");
+    if (!tabela) return notificar("POR FAVOR, SELECIONE UMA TABELA.");
 
     let payload = {};
     // Ajuste o endpoint conforme a sua rota unificada (geralmente /cadastros/nome_tabela)
@@ -6032,18 +6032,18 @@ async function salvarCadastro() {
         else if (tabela === 'produtos') {
             const nome = document.getElementById('cad_nome_produto').value;
             const tipo = document.getElementById('cad_tipo_produto').value;
-            const alerta = document.getElementById('cad_alerta_minimo').value;
+            const notificara = document.getElementById('cad_notificara_minimo').value;
 
-            if (!nome || !tipo) return alert("NOME E CATEGORIA SÃO OBRIGATÓRIOS!");
+            if (!nome || !tipo) return notificar("NOME E CATEGORIA SÃO OBRIGATÓRIOS!");
 
             payload = { 
                 nome: nome.toUpperCase(), 
                 tipo: tipo, 
-                alerta_minimo: parseInt(alerta) || 0 
+                notificara_minimo: parseInt(notificara) || 0 
             };
         }
 
-        if (Object.keys(payload).length === 0) return alert("PREENCHA OS CAMPOS!");
+        if (Object.keys(payload).length === 0) return notificar("PREENCHA OS CAMPOS!");
 
         const res = await fetch(endpoint, {
             method: 'POST',
@@ -6055,15 +6055,15 @@ async function salvarCadastro() {
         });
 
         if (res.ok) {
-            alert("✅ REGISTO SALVO COM SUCESSO!");
+            notificar("✅ REGISTO SALVO COM SUCESSO!");
             document.getElementById('modalCadastro').style.display = 'none';
             carregarDashboard();
         } else {
             const erro = await res.json();
-            alert("❌ ERRO: " + (erro.error || "Falha ao salvar"));
+            notificar("❌ ERRO: " + (erro.error || "Falha ao salvar"));
         }
     } catch (f) {
-        alert("Erro de ligação ao servidor.");
+        notificar("Erro de ligação ao servidor.");
     }
 }
 
@@ -6161,7 +6161,7 @@ async function verDetalhesPedidoGrade(pedidoId) {
             </div>
         `;
         document.body.insertAdjacentHTML('beforeend', htmlModal);
-    } catch (err) { alert("Erro ao carregar detalhes"); }
+    } catch (err) { notificar("Erro ao carregar detalhes"); }
 }
 
 async function telaEntradaEstoque() {
@@ -6217,7 +6217,7 @@ async function salvarEntradaEstoque() {
         quantidade_total = parseInt(document.getElementById('qtd_total_material').value) || 0;
     }
 
-    if (quantidade_total <= 0) return alert("Informe uma quantidade válida!");
+    if (quantidade_total <= 0) return notificar("Informe uma quantidade válida!");
 
     try {
         const res = await fetch(`${API_URL}/estoque/entrada`, {
@@ -6227,12 +6227,12 @@ async function salvarEntradaEstoque() {
         });
 
         if (res.ok) {
-            alert("✅ ESTOQUE ATUALIZADO!");
+            notificar("✅ ESTOQUE ATUALIZADO!");
             telaEntradaEstoque();
         } else {
-            alert("❌ Erro ao salvar entrada.");
+            notificar("❌ Erro ao salvar entrada.");
         }
-    } catch (err) { alert("Erro de conexão."); }
+    } catch (err) { notificar("Erro de conexão."); }
 }
 
 // Carrega os produtos dinamicamente ao mudar o tipo
@@ -6277,7 +6277,7 @@ async function carregarProdutosEntrada(tipo) {
                 camposExtras.innerHTML = `<label>QTD TOTAL:</label><input type="number" id="qtd_total_material" value="0" style="width:100%; padding:10px;">`;
             }
         };
-    } catch (err) { alert("Erro ao carregar lista de produtos."); }
+    } catch (err) { notificar("Erro ao carregar lista de produtos."); }
 }
 
 function renderizarGradeTamanhos(tipo, nomeProduto) {
@@ -6401,7 +6401,7 @@ async function listarFilaSeparacao() {
         `;
         container.innerHTML = html;
     } catch (err) {
-        alert("ERRO AO CARREGAR FILA");
+        notificar("ERRO AO CARREGAR FILA");
     }
 }
 
@@ -6419,7 +6419,7 @@ async function iniciarProcessoSeparacao(pedidoId) {
         abrirTelaConferenciaItens(pedidoId);
 
     } catch (err) {
-        alert("Erro ao iniciar processo.");
+        notificar("Erro ao iniciar processo.");
     }
 }
 
@@ -6472,7 +6472,7 @@ async function abrirTelaConferenciaItens(pedidoId) {
                 </button>
             </div>
         `;
-    } catch (err) { alert("Erro ao carregar itens."); }
+    } catch (err) { notificar("Erro ao carregar itens."); }
 }
 
 async function salvarRemessa(pedidoId) {
@@ -6485,7 +6485,7 @@ async function salvarRemessa(pedidoId) {
         const maxPermitido = parseInt(input.dataset.max); // Pega o que ainda falta enviar
 
         if (qtd > maxPermitido) {
-            alert(`Erro: Você tentou enviar ${qtd} unidades, mas o saldo pendente é de apenas ${maxPermitido}.`);
+            notificar(`Erro: Você tentou enviar ${qtd} unidades, mas o saldo pendente é de apenas ${maxPermitido}.`);
             erroValidacao = true;
             return;
         }
@@ -6500,7 +6500,7 @@ async function salvarRemessa(pedidoId) {
     });
 
     if (erroValidacao) return; // Interrompe se houver erro
-    if (itensRemessa.length === 0) return alert("Informe a quantidade de pelo menos um item.");
+    if (itensRemessa.length === 0) return notificar("Informe a quantidade de pelo menos um item.");
 
     if (!confirm("Confirmar o registro desta remessa de saída?")) return;
 
@@ -6526,39 +6526,40 @@ async function salvarRemessa(pedidoId) {
 
         } else {
             const data = await res.json();
-            alert("Erro: " + data.error);
+            notificar("Erro: " + data.error);
         }
     } catch (err) {
-        alert("Erro de conexão.");
+        notificar("Erro de conexão.");
     }
 }
 
 async function telaAbastecerEstoque() {
     const container = document.getElementById('app-content');
-    
+    container.style.background = "transparent";
+
     container.innerHTML = `
         <div style="padding:20px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                <h2 style="color:#1e3a8a;">📥 ENTRADA DE ESTOQUE</h2>
+                <h2 style="color:white; margin:0;">📥 ENTRADA DE ESTOQUE</h2>
                 <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
             </div>
 
-            <div style="background:white; padding:20px; border-radius:8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); max-width:600px;">
-                <label>TIPO DE PRODUTO:</label>
-                <select id="tipo_entrada" onchange="carregarProdutosEntrada(this.value)" style="width:100%; padding:10px; margin-bottom:15px; border-radius:4px;">
+            <div class="painel-vidro" style="max-width:600px; margin-top:10px;">
+                <label style="color:white; display:block; margin-bottom:5px; font-weight:bold;">TIPO DE PRODUTO:</label>
+                <select id="tipo_entrada" onchange="carregarProdutosEntrada(this.value)" style="width:100%; padding:12px; margin-bottom:20px; border-radius:10px; background: rgba(255,255,255,0.1); color:white; border: 1px solid rgba(255,255,255,0.2); outline:none;">
                     <option value="">Selecione...</option>
                     <option value="MATERIAL">📦 MATERIAL / CONSUMO</option>
                     <option value="UNIFORMES">👕 UNIFORMES / VESTUÁRIO</option>
                 </select>
 
-                <label>PRODUTO:</label>
-                <select id="produto_entrada" style="width:100%; padding:10px; margin-bottom:15px; border-radius:4px;">
+                <label style="color:white; display:block; margin-bottom:5px; font-weight:bold;">PRODUTO:</label>
+                <select id="produto_entrada" style="width:100%; padding:12px; margin-bottom:20px; border-radius:10px; background: rgba(255,255,255,0.1); color:white; border: 1px solid rgba(255,255,255,0.2); outline:none;">
                     <option value="">Selecione o tipo primeiro...</option>
                 </select>
 
                 <div id="campos_dinamicos_entrada"></div>
 
-                <button onclick="salvarEntradaEstoque()" style="width:100%; padding:12px; background:#10b981; color:white; border:none; border-radius:4px; cursor:pointer; font-weight:bold; margin-top:10px;">
+                <button onclick="salvarEntradaEstoque()" style="width:100%; padding:15px; background:#10b981; color:white; border:none; border-radius:12px; cursor:pointer; font-weight:bold; margin-top:15px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); transition: 0.3s;">
                     CONFIRMAR ENTRADA
                 </button>
             </div>
@@ -6581,7 +6582,7 @@ async function enviarEntradaEstoque() {
         }
     });
 
-    if (itens.length === 0) return alert("INSIRA AO MENOS UMA QUANTIDADE PARA ENTRADA!");
+    if (itens.length === 0) return notificar("INSIRA AO MENOS UMA QUANTIDADE PARA ENTRADA!");
 
     if (!confirm("CONFIRMA A ENTRADA DESTAS QUANTIDADES NO ESTOQUE CENTRAL?")) return;
 
@@ -6596,14 +6597,14 @@ async function enviarEntradaEstoque() {
         });
 
         if (res.ok) {
-            alert("✅ ESTOQUE ATUALIZADO!");
+            notificar("✅ ESTOQUE ATUALIZADO!");
             carregarDashboard();
         } else {
             const erro = await res.json();
-            alert("❌ ERRO: " + erro.error);
+            notificar("❌ ERRO: " + erro.error);
         }
     } catch (err) {
-        alert("Erro na conexão com o servidor.");
+        notificar("Erro na conexão com o servidor.");
     }
 }
 
@@ -6615,7 +6616,7 @@ async function salvarAbastecimento(produtoId) {
         if (qtd > 0) itens.push({ tamanho: i.dataset.tamanho, quantidade: qtd });
     });
 
-    if (itens.length === 0) return alert("INSIRA AO MENOS UMA QUANTIDADE!");
+    if (itens.length === 0) return notificar("INSIRA AO MENOS UMA QUANTIDADE!");
 
     try {
         const res = await fetch(`${API_URL}/pedidos/abastecer`, {
@@ -6624,11 +6625,11 @@ async function salvarAbastecimento(produtoId) {
             body: JSON.stringify({ produto_id: produtoId, itens })
         });
         if (res.ok) {
-            alert("✅ ESTOQUE ATUALIZADO!");
+            notificar("✅ ESTOQUE ATUALIZADO!");
             // Limpa os inputs desta linha
             inputs.forEach(i => i.value = '');
         }
-    } catch (err) { alert("Erro ao salvar"); }
+    } catch (err) { notificar("Erro ao salvar"); }
 }
 
 let carrinhoAdmin = [];
@@ -6709,7 +6710,7 @@ async function telaAdminCriarPedido() {
             </div>
         `;
     } catch (err) {
-        alert("Erro ao sincronizar tabelas: produtos/locais.");
+        notificar("Erro ao sincronizar tabelas: produtos/locais.");
     }
 }
 
@@ -6745,7 +6746,7 @@ async function filtrarProdutosPorTipo() {
             }).join('');
 
     } catch (err) {
-        alertaVidro("Erro ao carregar produtos deste tipo.", "erro");
+        notificaraVidro("Erro ao carregar produtos deste tipo.", "erro");
     }
 }
 
@@ -6802,7 +6803,7 @@ async function configurarGradeAdminDireto() {
 
 async function enviarPedidoAdminDireto() {
     const localId = document.getElementById('admin_direto_local').value;
-    if (!localId) return alertaVidro("Selecione a unidade de destino.", "erro");
+    if (!localId) return notificaraVidro("Selecione a unidade de destino.", "erro");
 
     try {
         const res = await fetch(`${API_URL}/pedidos/admin-direto-final`, {
@@ -6816,10 +6817,10 @@ async function enviarPedidoAdminDireto() {
 
         if (!res.ok) throw new Error("Falha no processamento.");
         
-        alertaVidro("Pedido enviado e estoque atualizado!", "sucesso");
+        notificaraVidro("Pedido enviado e estoque atualizado!", "sucesso");
         carregarDashboard();
     } catch (err) {
-        alertaVidro("Erro ao finalizar pedido no servidor.", "erro");
+        notificaraVidro("Erro ao finalizar pedido no servidor.", "erro");
     }
 }
 
@@ -6838,13 +6839,13 @@ function adicionarAoCarrinhoAdminDireto() {
 
     // 1. Validação de seleção básica
     if (!produtoId || !tamanho || isNaN(qtdSolicitada) || qtdSolicitada <= 0) {
-        alertaVidro("Preencha todos os campos corretamente.", "erro");
+        notificaraVidro("Preencha todos os campos corretamente.", "erro");
         return;
     }
 
     // 2. TRAVA: Validação de Estoque insuficiente
     if (qtdSolicitada > estoqueDisponivel) {
-        alertaVidro(`Saldo insuficiente! Você solicitou ${qtdSolicitada}, mas temos apenas ${estoqueDisponivel} em estoque.`, "erro");
+        notificaraVidro(`Saldo insuficiente! Você solicitou ${qtdSolicitada}, mas temos apenas ${estoqueDisponivel} em estoque.`, "erro");
         return;
     }
 
@@ -6854,7 +6855,7 @@ function adicionarAoCarrinhoAdminDireto() {
     );
 
     if (jaExiste) {
-        alertaVidro(`O item "${produtoNome}" (${tamanho}) já está na sua lista. Se quiser mudar a quantidade, remova-o e adicione novamente.`, "erro");
+        notificaraVidro(`O item "${produtoNome}" (${tamanho}) já está na sua lista. Se quiser mudar a quantidade, remova-o e adicione novamente.`, "erro");
         return;
     }
 
@@ -6950,22 +6951,22 @@ async function salvarPedidoDiretoAdmin() {
         });
 
         if (res.ok) {
-            alert("✅ Sucesso! Pedido enviado para o estoque e baixa realizada.");
+            notificar("✅ Sucesso! Pedido enviado para o estoque e baixa realizada.");
             carrinhoAdmin = [];
             carregarDashboard();
         } else {
             const erro = await res.json();
-            alert("Erro: " + erro.error);
+            notificar("Erro: " + erro.error);
         }
     } catch (err) {
-        alert("Falha de rede.");
+        notificar("Falha de rede.");
     }
 }
 
 async function enviarPedidoGeralAdmin() {
     const localId = document.getElementById('pedido_local_id').value;
-    if (!localId) return alert("Selecione a Unidade de Destino!");
-    if (carrinhoSolicitacao.length === 0) return alert("Adicione itens ao pedido!");
+    if (!localId) return notificar("Selecione a Unidade de Destino!");
+    if (carrinhoSolicitacao.length === 0) return notificar("Adicione itens ao pedido!");
 
     const dados = {
         local_destino_id: localId,
@@ -6984,14 +6985,14 @@ async function enviarPedidoGeralAdmin() {
         });
 
         if (res.ok) {
-            alert("🚀 Pedido criado e enviado diretamente para SEPARAÇÃO no estoque!");
+            notificar("🚀 Pedido criado e enviado diretamente para SEPARAÇÃO no estoque!");
             carregarDashboard();
         } else {
             const erro = await res.json();
-            alert("Erro: " + erro.error);
+            notificar("Erro: " + erro.error);
         }
     } catch (err) {
-        alert("Erro de conexão.");
+        notificar("Erro de conexão.");
     }
 }
 
@@ -7023,7 +7024,7 @@ async function carregarProdutosAdmin(tipo) {
 
 async function enviarPedidoDiretoAdmin() {
     const local_destino_id = document.getElementById('admin_local_destino').value;
-    if (!local_destino_id) return alert("Selecione o local de destino!");
+    if (!local_destino_id) return notificar("Selecione o local de destino!");
 
     try {
         const res = await fetch(`${API_URL}/pedidos/admin/criar`, {
@@ -7033,10 +7034,10 @@ async function enviarPedidoDiretoAdmin() {
         });
 
         if (res.ok) {
-            alert("✅ PEDIDO CRIADO! O estoque já pode visualizar para separação.");
+            notificar("✅ PEDIDO CRIADO! O estoque já pode visualizar para separação.");
             carregarDashboard();
         }
-    } catch (e) { alert("Erro ao enviar pedido."); }
+    } catch (e) { notificar("Erro ao enviar pedido."); }
 }
 
 async function abrirPainelSeparacao() {
@@ -7174,7 +7175,7 @@ async function finalizarSaidaEstoque(pedidoId) {
         qtd_enviar: parseInt(i.value) || 0
     })).filter(item => item.qtd_enviar > 0);
 
-    if (itens.length === 0) return alert("Nenhuma quantidade informada para saída!");
+    if (itens.length === 0) return notificar("Nenhuma quantidade informada para saída!");
 
     try {
         const res = await fetch(`${API_URL}/pedidos/${pedidoId}/remessa`, {
@@ -7184,10 +7185,10 @@ async function finalizarSaidaEstoque(pedidoId) {
         });
 
         if (res.ok) {
-            alert("✅ REMESSA REGISTRADA E ESTOQUE ATUALIZADO!");
+            notificar("✅ REMESSA REGISTRADA E ESTOQUE ATUALIZADO!");
             abrirPainelSeparacao();
         }
-    } catch (e) { alert("Erro ao processar saída."); }
+    } catch (e) { notificar("Erro ao processar saída."); }
 }
 
 async function antigoabrirPainelSeparacao(id) {
@@ -7248,7 +7249,7 @@ async function antigoabrirPainelSeparacao(id) {
             </div>
         `;
         container.innerHTML = html;
-    } catch (err) { alert("Erro ao carregar itens para conferência"); }
+    } catch (err) { notificar("Erro ao carregar itens para conferência"); }
 }
 
 async function finalizarConferencia(id) {
@@ -7261,7 +7262,7 @@ async function finalizarConferencia(id) {
         const qtd = parseInt(input.value);
         const max = parseInt(input.dataset.max);
         if (qtd > max) {
-            alert(`ALERTA: Você está tentando enviar ${qtd} unidades, mas o autorizado são apenas ${max}! Corrija antes de prosseguir.`);
+            notificar(`notificarA: Você está tentando enviar ${qtd} unidades, mas o autorizado são apenas ${max}! Corrija antes de prosseguir.`);
             input.focus();
             return;
         }
@@ -7274,7 +7275,7 @@ async function finalizarConferencia(id) {
         }
     }
 
-    if (volumes < 1) return alert("INFORME A QUANTIDADE DE VOLUMES!");
+    if (volumes < 1) return notificar("INFORME A QUANTIDADE DE VOLUMES!");
 
     try {
         const res = await fetch(`${API_URL}/pedidos/${id}/concluir-separacao`, {
@@ -7284,12 +7285,12 @@ async function finalizarConferencia(id) {
         });
         const data = await res.json();
         if (res.ok) {
-            alert("✅ " + data.message);
+            notificar("✅ " + data.message);
             listarFilaSeparacao();
         } else {
-            alert("❌ ERRO: " + data.error);
+            notificar("❌ ERRO: " + data.error);
         }
-    } catch (err) { alert("Erro na requisição"); }
+    } catch (err) { notificar("Erro na requisição"); }
 }
 
 async function listarColetasLogistica() {
@@ -7300,7 +7301,7 @@ async function listarColetasLogistica() {
 
     if (!container) {
         console.error("ERRO: Nenhum container de conteúdo foi encontrado no HTML da Logística!");
-        return alert("Erro de interface: Container não encontrado.");
+        return notificar("Erro de interface: Container não encontrado.");
     }
 
     container.innerHTML = '<div style="padding:20px; color:white;">⏳ Carregando coletas...</div>';
@@ -7361,11 +7362,11 @@ async function confirmarColetaDevolucao(pedidoId) {
         });
 
         if (res.ok) {
-            alert("✅ Coleta registrada com sucesso!");
+            notificar("✅ Coleta registrada com sucesso!");
             listarColetasLogistica();
         }
     } catch (err) {
-        alert("Falha ao registrar coleta.");
+        notificar("Falha ao registrar coleta.");
     }
 }
 
@@ -7377,10 +7378,10 @@ async function confirmarSaidaTransporte(id) {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
         if (res.ok) {
-            alert("✅ TRANSPORTE INICIADO!");
+            notificar("✅ TRANSPORTE INICIADO!");
             listarColetasLogistica();
         }
-    } catch (err) { alert("Erro ao processar"); }
+    } catch (err) { notificar("Erro ao processar"); }
 }
 
 async function listarPedidosEmCaminho() {
@@ -7389,7 +7390,7 @@ async function listarPedidosEmCaminho() {
 
     try {
         const tokenAtual = localStorage.getItem('token');
-        const res = await fetch(`${API_URL}/pedidos/alertas-escola`, { 
+        const res = await fetch(`${API_URL}/pedidos/notificaras-escola`, { 
             headers: { 'Authorization': `Bearer ${tokenAtual}` }
         });
 
@@ -7431,7 +7432,7 @@ async function listarPedidosEmCaminho() {
         container.innerHTML = html;
     } catch (err) { 
         console.error(err);
-        alert("Erro ao buscar entregas: " + err.message); 
+        notificar("Erro ao buscar entregas: " + err.message); 
     }
 }
 
@@ -7447,14 +7448,14 @@ async function confirmarEntregaEscola(id) {
         });
 
         if (res.ok) {
-            alert("✅ RECEBIMENTO REGISTRADO! O estoque da unidade será atualizado.");
+            notificar("✅ RECEBIMENTO REGISTRADO! O estoque da unidade será atualizado.");
             listarPedidosEmCaminho(); // Recarrega a lista
         } else {
             const erro = await res.json();
-            alert("Erro: " + (erro.error || "Falha ao confirmar."));
+            notificar("Erro: " + (erro.error || "Falha ao confirmar."));
         }
     } catch (err) { 
-        alert("Erro de conexão com o servidor."); 
+        notificar("Erro de conexão com o servidor."); 
     }
 }
 
@@ -7487,7 +7488,7 @@ async function listarColetaLogistica() {
                 </div>
             </div>`;
         container.innerHTML = html || '<p style="padding:20px;">Nenhuma carga pronta para coleta no momento.</p>';
-    } catch (e) { alert("Erro ao carregar coletas."); }
+    } catch (e) { notificar("Erro ao carregar coletas."); }
 }
 
 async function confirmarColetaLogistica(id) {
@@ -7500,10 +7501,10 @@ async function confirmarColetaLogistica(id) {
         });
 
         if (res.ok) {
-            alert("✅ TRANSPORTE INICIADO! A escola de destino já pode visualizar o status.");
+            notificar("✅ TRANSPORTE INICIADO! A escola de destino já pode visualizar o status.");
             listarColetaLogistica();
         }
-    } catch (e) { alert("Erro ao confirmar coleta."); }
+    } catch (e) { notificar("Erro ao confirmar coleta."); }
 }
 
 // --- 2. SOLICITAR PATRIMÔNIO (LOGÍSTICA) ---
@@ -7540,7 +7541,7 @@ async function telaSolicitarPatrimonio() {
                 </div>
             </div>`;
     } catch (e) { 
-        alert("Erro ao carregar produtos de patrimônio."); 
+        notificar("Erro ao carregar produtos de patrimônio."); 
     }
 }
 
@@ -7578,7 +7579,7 @@ async function enviarSolicitacaoPatrimonioLog() {
     const quantidade = parseInt(document.getElementById('solic_pat_qtd').value);
 
     if (!produto_id || quantidade <= 0) {
-        return alert("POR FAVOR, SELECIONE O PRODUTO E A QUANTIDADE.");
+        return notificar("POR FAVOR, SELECIONE O PRODUTO E A QUANTIDADE.");
     }
 
     // Criamos o array de itens no padrão que a rota /pedidos/escola/solicitar espera
@@ -7600,15 +7601,15 @@ async function enviarSolicitacaoPatrimonioLog() {
         });
 
         if (res.ok) {
-            alert("✅ SOLICITAÇÃO DE PATRIMÓNIO ENVIADA COM SUCESSO!");
+            notificar("✅ SOLICITAÇÃO DE PATRIMÓNIO ENVIADA COM SUCESSO!");
             carregarDashboard();
         } else {
             const erro = await res.json();
-            alert("❌ ERRO AO SOLICITAR: " + (erro.error || "Verifique os dados."));
+            notificar("❌ ERRO AO SOLICITAR: " + (erro.error || "Verifique os dados."));
         }
     } catch (err) {
         console.error("Erro na solicitação de património:", err);
-        alert("Erro de ligação ao servidor.");
+        notificar("Erro de ligação ao servidor.");
     }
 }
 
@@ -7678,7 +7679,7 @@ async function telaRelatorioRemessas(pedidoId) {
         html += `</div>`;
         container.innerHTML = html;
     } catch (err) {
-        alert("Erro ao carregar o relatório.");
+        notificar("Erro ao carregar o relatório.");
     }
 }
 
@@ -7741,7 +7742,7 @@ async function telaReceberDevolucoes() {
         }
         html += `</div>`;
         container.innerHTML = html;
-    } catch (err) { alert("Erro ao carregar devoluções."); }
+    } catch (err) { notificar("Erro ao carregar devoluções."); }
 }
 
 async function confirmarRecebimentoDevolucao(pedidoId) {
@@ -7755,14 +7756,14 @@ async function confirmarRecebimentoDevolucao(pedidoId) {
         });
 
         if (res.ok) {
-            alertaVidro("✅ Estoque atualizado!", "sucesso");
+            notificaraVidro("✅ Estoque atualizado!", "sucesso");
             telaAdminGerenciarDevolucoes(); // Recarrega a lista
         } else {
             const erro = await res.json();
-            alert("Erro: " + erro.error);
+            notificar("Erro: " + erro.error);
         }
     } catch (err) {
-        alert("Erro de conexão.");
+        notificar("Erro de conexão.");
     }
 }
 
@@ -7820,7 +7821,7 @@ async function telaAcompanhamentoGeral() {
             </div>
         `;
     } catch (err) {
-        alert("Erro ao carregar lista de acompanhamento.");
+        notificar("Erro ao carregar lista de acompanhamento.");
     }
 }
 
@@ -7845,7 +7846,7 @@ async function buscarDadosPatrimonio() {
         headers: { 'Authorization': `Bearer ${TOKEN}` }
     });
     
-    if (!res.ok) return alert("Item não localizado.");
+    if (!res.ok) return notificar("Item não localizado.");
     const item = await res.json();
     
     // Carrega locais e setores para a opção de transferência
@@ -7895,7 +7896,7 @@ async function executarTransferencia(patrimonio_id, produto_id) {
     });
 
     if (res.ok) {
-        alert("✅ Movimentação registada!");
+        notificar("✅ Movimentação registada!");
         telaGerenciarPatrimonio();
     }
 }
@@ -7991,17 +7992,17 @@ async function salvarProduto() {
     const nome = document.getElementById('p_nome').value.trim();
     const categoria_id = document.getElementById('p_categoria').value;
     const tipo = document.getElementById('p_tipo').value;
-    const alerta_minimo = parseInt(document.getElementById('p_alerta').value) || 0;
+    const notificara_minimo = parseInt(document.getElementById('p_notificara').value) || 0;
 
     if (!nome || !categoria_id) {
-        return alert("Por favor, preencha o nome e selecione uma categoria.");
+        return notificar("Por favor, preencha o nome e selecione uma categoria.");
     }
 
     const payload = {
         nome: nome.toUpperCase(),
         categoria_id: parseInt(categoria_id),
         tipo: tipo,
-        alerta_minimo: alerta_minimo,
+        notificara_minimo: notificara_minimo,
         quantidade_estoque: 0 // Todo produto novo nasce com saldo zero
     };
 
@@ -8016,14 +8017,14 @@ async function salvarProduto() {
         });
 
         if (res.ok) {
-            alert("✅ Produto cadastrado com sucesso!");
+            notificar("✅ Produto cadastrado com sucesso!");
             formProduto(); // Limpa/Reseta o formulário
         } else {
             const erro = await res.json();
-            alert("❌ Erro ao salvar: " + erro.error);
+            notificar("❌ Erro ao salvar: " + erro.error);
         }
     } catch (err) {
-        alert("Erro de comunicação com o servidor.");
+        notificar("Erro de comunicação com o servidor.");
     }
 }
 
@@ -8092,7 +8093,7 @@ async function telaAdminVerPedidos() {
             </div>
         `;
     } catch (err) {
-        alert("Erro ao carregar a lista de pedidos.");
+        notificar("Erro ao carregar a lista de pedidos.");
     }
 }
 
@@ -8152,7 +8153,7 @@ async function telaEstoquePedidosPendentes() {
         `;
     } catch (err) {
         console.error(err);
-        alert("Erro ao carregar pedidos para o estoque.");
+        notificar("Erro ao carregar pedidos para o estoque.");
     }
 }
 
@@ -8230,7 +8231,7 @@ async function imprimirRomaneio(remessaId) {
         `);
         janelaImpressao.document.close();
     } catch (err) {
-        alert("Erro ao gerar romaneio.");
+        notificar("Erro ao gerar romaneio.");
     }
 }
 
@@ -8276,8 +8277,8 @@ async function telaAdminDashboard() {
         `;
     } catch (err) { 
         console.error(err);
-        if (typeof alertaVidro === 'function') {
-            alertaVidro("Erro ao carregar Dashboard. Verifique se o servidor foi reiniciado após adicionar a nova rota.", "erro");
+        if (typeof notificaraVidro === 'function') {
+            notificaraVidro("Erro ao carregar Dashboard. Verifique se o servidor foi reiniciado após adicionar a nova rota.", "erro");
         }
     }
 }
@@ -8450,7 +8451,7 @@ window.verItensPedido = async function(pedidoId) {
     });
     htmlItens += `</div>`;
     
-    alert("Dados carregados com sucesso! (Você pode substituir este alert por um Modal flutuante)");
+    notificar("Dados carregados com sucesso! (Você pode substituir este notificar por um Modal flutuante)");
     // Para um efeito visual melhor, você pode injetar este htmlItens dentro de uma div modal
 };
 
@@ -8485,7 +8486,7 @@ async function telaLogisticaColeta() {
             </div>
         `;
     } catch (err) {
-        alert("Erro ao carregar pedidos da logística.");
+        notificar("Erro ao carregar pedidos da logística.");
     }
 }
 
@@ -8505,7 +8506,7 @@ window.iniciarTransporteRemessa = async function(remessaId) {
         });
 
         if (res.ok) {
-            alert("🚚 Transporte iniciado!");
+            notificar("🚚 Transporte iniciado!");
             // IMPORTANTE: Chama a função que desenha a tela de logística novamente
             // Isso fará a remessa sumir da lista (pois o status mudou)
             if (typeof telaLogisticaEntrega === 'function') {
@@ -8513,11 +8514,11 @@ window.iniciarTransporteRemessa = async function(remessaId) {
             }
         } else {
             const erro = await res.json();
-            alert("Erro: " + erro.error);
+            notificar("Erro: " + erro.error);
         }
     } catch (err) {
         console.error(err);
-        alert("Falha ao conectar com o servidor.");
+        notificar("Falha ao conectar com o servidor.");
     }
 };
 
@@ -8587,10 +8588,10 @@ async function confirmarRecebimentoRemessa(remessaId, pedidoId) {
         });
 
         if (res.ok) {
-            alert("✨ Recebimento registrado! O estoque da escola foi atualizado.");
+            notificar("✨ Recebimento registrado! O estoque da escola foi atualizado.");
             telaEscolaConfirmarRecebimento(); // Atualiza a lista
         }
-    } catch (err) { alert("Erro ao processar recebimento."); }
+    } catch (err) { notificar("Erro ao processar recebimento."); }
 }
 
 async function confirmarEntregaFinal(pedidoId) {
@@ -8603,7 +8604,7 @@ async function confirmarEntregaFinal(pedidoId) {
     });
 
     if(res.ok) {
-        alert("🎉 Excelente! O ciclo do pedido foi concluído.");
+        notificar("🎉 Excelente! O ciclo do pedido foi concluído.");
         telaEscolaConfirmarRecebimento();
     }
 }
@@ -8664,7 +8665,7 @@ async function processarDocumentoRomaneio(remessaId, acao = 'imprimir') {
                 });
             } catch (err) { console.log("Compartilhamento cancelado."); }
         } else {
-            alert("Seu navegador não suporta compartilhamento de arquivos. O PDF será baixado.");
+            notificar("Seu navegador não suporta compartilhamento de arquivos. O PDF será baixado.");
             html2pdf().set(opt).from(elemento).save();
         }
     }
@@ -8763,29 +8764,29 @@ async function gerarECompartilharRomaneio(remessaId) {
             link.click();
             
             if (shareErr.name === 'NotAllowedError') {
-                alert("O navegador bloqueou o compartilhamento direto. O romaneio foi baixado na sua pasta de Downloads.");
+                notificar("O navegador bloqueou o compartilhamento direto. O romaneio foi baixado na sua pasta de Downloads.");
             } else {
-                alert("Compartilhamento indisponível. O PDF foi baixado automaticamente.");
+                notificar("Compartilhamento indisponível. O PDF foi baixado automaticamente.");
             }
         }
 
     } catch (err) {
         console.error("Erro crítico ao processar romaneio:", err);
-        alert(`Falha ao gerar documento: ${err.message}`);
+        notificar(`Falha ao gerar documento: ${err.message}`);
     }
 }
 
-async function carregarAlertasEscola() {
+async function carregarnotificarasEscola() {
     // Busca remessas destinadas a esta escola que estão 'EM_TRANSPORTE'
     const res = await fetch(`${API_URL}/pedidos/escola/remessas-a-caminho`, {
         headers: { 'Authorization': `Bearer ${TOKEN}` }
     });
     const remessas = await res.json();
 
-    const areaAlerta = document.getElementById('alertas-transporte');
+    const areanotificara = document.getElementById('notificaras-transporte');
     if (remessas.length > 0) {
-        areaAlerta.innerHTML = remessas.map(r => `
-            <div class="alerta-viagem" style="background: #fef3c7; border-left: 5px solid #d97706; padding: 15px; margin-bottom: 10px;">
+        areanotificara.innerHTML = remessas.map(r => `
+            <div class="notificara-viagem" style="background: #fef3c7; border-left: 5px solid #d97706; padding: 15px; margin-bottom: 10px;">
                 <p><strong>🚚 MERCADORIA A CAMINHO!</strong></p>
                 <p>Remessa #${r.id} saiu do estoque e está em transporte.</p>
                 <button onclick="confirmarRecebimento(${r.id})">Confirmar Recebimento</button>
@@ -8807,9 +8808,9 @@ window.confirmarRecebimento = async function(remessaId) {
         });
 
         if (res.ok) {
-            alert("Sucesso! O recebimento foi registado no sistema.");
-            // Recarrega os alertas para o card amarelo desaparecer
-            if (typeof carregarAlertasEscola === 'function') carregarAlertasEscola();
+            notificar("Sucesso! O recebimento foi registado no sistema.");
+            // Recarrega os notificaras para o card amarelo desaparecer
+            if (typeof carregarnotificarasEscola === 'function') carregarnotificarasEscola();
             // Se tiver uma função de histórico na tela da escola, recarrega-a também
             if (typeof carregarHistoricoEscola === 'function') carregarHistoricoEscola();
         } else {
@@ -8818,7 +8819,7 @@ window.confirmarRecebimento = async function(remessaId) {
         }
     } catch (err) {
         console.error("Erro ao confirmar:", err);
-        alert("Falha ao confirmar recebimento: " + err.message);
+        notificar("Falha ao confirmar recebimento: " + err.message);
     }
 };
 
@@ -8839,10 +8840,10 @@ document.addEventListener('click', async (event) => {
                 headers: { 'Authorization': `Bearer ${TOKEN}`, 'Content-Type': 'application/json' }
             });
             if (res.ok) {
-                alert("🚚 Transporte iniciado!");
+                notificar("🚚 Transporte iniciado!");
                 telaLogisticaEntregas(); 
             }
-        } catch (err) { alert("Erro na conexão."); }
+        } catch (err) { notificar("Erro na conexão."); }
     }
 
     // --- LOGICA DA ESCOLA ---
@@ -8856,10 +8857,10 @@ document.addEventListener('click', async (event) => {
                 headers: { 'Authorization': `Bearer ${TOKEN}` }
             });
             if (res.ok) {
-                alert("✅ Recebimento registrado!");
+                notificar("✅ Recebimento registrado!");
                 telaEscolaConfirmarRecebimento(); 
             }
-        } catch (err) { alert("Erro ao confirmar."); }
+        } catch (err) { notificar("Erro ao confirmar."); }
     }
 
     // --- LOGICA DO DASHBOARD ADMIN (SURPRESA) ---
@@ -9029,7 +9030,7 @@ async function atualizarStatsImpressoras() {
             const dataAbertura = new Date(at.data_abertura).toLocaleString('pt-BR', {day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit'});
             const dataFechamento = new Date(at.data_fechamento).toLocaleString('pt-BR', {day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit'});
             
-            // Obtém o objeto com o texto formatado e a cor do alerta
+            // Obtém o objeto com o texto formatado e a cor do notificara
             const sla = calcularSLAUtil(at.data_abertura, at.data_fechamento);
 
             return `
@@ -9107,7 +9108,7 @@ async function compartilharStatusImpressoras() {
         } else {
             // Fallback: Se o navegador não suportar share (ex: PCs antigos), apenas baixa o PDF
             html2pdf().set(opt).from(areaOculta).save();
-            alert("Compartilhamento nativo não suportado. O PDF foi baixado.");
+            notificar("Compartilhamento nativo não suportado. O PDF foi baixado.");
         }
     } catch (err) {
         console.error("Erro ao compartilhar:", err);
@@ -9167,12 +9168,12 @@ async function validarEEnviarManutencao(impressoraId) {
     const obs = document.getElementById('obs-manutencao').value;
 
     if (!motivo) {
-        alert("Por favor, selecione o motivo da manutenção.");
+        notificar("Por favor, selecione o motivo da manutenção.");
         return;
     }
 
     if (motivo === 'outros' && obs.trim().length < 5) {
-        alert("Para o motivo 'Outros', é obrigatório descrever o problema detalhadamente.");
+        notificar("Para o motivo 'Outros', é obrigatório descrever o problema detalhadamente.");
         return;
     }
 
@@ -9198,14 +9199,14 @@ async function enviarChamadoAoServidor(dados) {
         const resultado = await res.json();
 
         if (res.ok) {
-            alert("✅ " + resultado.message);
+            notificar("✅ " + resultado.message);
             carregarDashboard(); // Retorna ao menu principal
         } else {
             // Aqui o servidor avisará se já existe um chamado em aberto
-            alert("⚠️ " + resultado.error);
+            notificar("⚠️ " + resultado.error);
         }
     } catch (err) {
-        alert("Erro de conexão com o servidor.");
+        notificar("Erro de conexão com o servidor.");
     }
 }
 
@@ -9253,7 +9254,7 @@ async function telaListarChamadosAbertos() {
             </div>
         `;
     } catch (err) {
-        alert("Erro ao carregar chamados.");
+        notificar("Erro ao carregar chamados.");
     }
 }
 
@@ -9269,15 +9270,15 @@ async function executarEncerramentoChamado(chamadoId, dados) {
         });
 
         if (res.ok) {
-            alert("✅ Chamado encerrado e contador registrado!");
+            notificar("✅ Chamado encerrado e contador registrado!");
             document.getElementById('modal-conclusao').remove();
             telaListarChamadosAbertos(); // Recarrega a lista para remover o item concluído
         } else {
             const erro = await res.json();
-            alert("Erro: " + erro.error);
+            notificar("Erro: " + erro.error);
         }
     } catch (err) {
-        alert("Erro de conexão com o servidor.");
+        notificar("Erro de conexão com o servidor.");
     }
 }
 
@@ -9360,7 +9361,7 @@ async function executarCadastroImpressora() {
     const modelo = document.getElementById('reg-imp-modelo').value;
 
     if (!local_id || !modelo) {
-        alert("Por favor, preencha todos os campos.");
+        notificar("Por favor, preencha todos os campos.");
         return;
     }
 
@@ -9375,14 +9376,14 @@ async function executarCadastroImpressora() {
         });
 
         if (res.ok) {
-            alert("✅ Impressora vinculada ao local com sucesso!");
+            notificar("✅ Impressora vinculada ao local com sucesso!");
             telaCadastroImpressoras(); // Limpa e recarrega a tela
         } else {
             const erro = await res.json();
-            alert("Erro: " + erro.error);
+            notificar("Erro: " + erro.error);
         }
     } catch (err) {
-        alert("Falha na comunicação com o servidor.");
+        notificar("Falha na comunicação com o servidor.");
     }
 }
 
@@ -9493,7 +9494,7 @@ function habilitarComparacao() {
         // Insere antes do botão PDF
         areaFiltros.insertBefore(divFiltro2, document.querySelector('button[onclick="gerarPDFDashboard()"]'));
         
-        // Alerta visual de que o modo mudou
+        // notificara visual de que o modo mudou
         document.getElementById('dash-local').previousElementSibling.innerText = "LOCAL A";
         document.getElementById('dash-local').style.borderColor = "#3b82f6";
     }
@@ -9606,13 +9607,13 @@ async function telaRelatorioGeralAtivos() {
             </div>
         `;
     } catch (err) {
-        alert("Erro ao carregar relatório de ativos.");
+        notificar("Erro ao carregar relatório de ativos.");
     }
 }
 
 async function buscarProdutosParaPedido(categoria) {
     const localDestino = document.getElementById('admin_local_destino').value;
-    if (!localDestino) return alert("Selecione primeiro o local de destino!");
+    if (!localDestino) return notificar("Selecione primeiro o local de destino!");
 
     // Busca produtos da categoria para o usuário escolher
     const res = await fetch(`${API_URL}/estoque/geral`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
@@ -9628,7 +9629,7 @@ async function buscarProdutosParaPedido(categoria) {
         if (qtd > 0 && qtd <= filtrados[escolha].quantidade_estoque) {
             adicionarAoCarrinhoAdmin(filtrados[escolha], qtd);
         } else {
-            alert("Quantidade inválida ou superior ao estoque!");
+            notificar("Quantidade inválida ou superior ao estoque!");
         }
     }
 }
@@ -9872,13 +9873,13 @@ async function atualizarTabelaLogs() {
         const dados = await res.json();
         area.innerHTML = renderizarLinhasLog(dados);
     } catch (err) {
-        alert("Erro ao filtrar logs.");
+        notificar("Erro ao filtrar logs.");
     }
 }
 
 function exportarLogsExcel() {
     const tabela = document.querySelector("#area-tabela-logs table");
-    if (!tabela) return alert("Nenhum dado para exportar.");
+    if (!tabela) return notificar("Nenhum dado para exportar.");
 
     let csv = [];
     const linhas = tabela.querySelectorAll("tr");
@@ -9919,7 +9920,7 @@ async function compartilharLogsPDF() {
     const user = document.getElementById('filtro-user-log').options[document.getElementById('filtro-user-log').selectedIndex].text;
 
     if (!navigator.share) {
-        return alert("Seu navegador não suporta compartilhamento nativo. Use a opção PDF.");
+        return notificar("Seu navegador não suporta compartilhamento nativo. Use a opção PDF.");
     }
 
     const opcoes = {
@@ -9951,7 +9952,7 @@ async function compartilharDashboardPDF() {
 
     // Verifica suporte ao compartilhamento nativo
     if (!navigator.share) {
-        return alert("Seu navegador não suporta compartilhamento nativo. Utilize a função PDF para salvar o arquivo.");
+        return notificar("Seu navegador não suporta compartilhamento nativo. Utilize a função PDF para salvar o arquivo.");
     }
 
     // Configurações do PDF para compartilhamento (Layout Paisagem para os gráficos)
@@ -9978,7 +9979,7 @@ async function compartilharDashboardPDF() {
     } catch (err) {
         if (err.name !== 'AbortError') {
             console.error("Erro ao compartilhar:", err);
-            alert("Não foi possível processar o compartilhamento.");
+            notificar("Não foi possível processar o compartilhamento.");
         }
     }
 }
@@ -10042,7 +10043,7 @@ async function salvarNovoLocal() {
     const token = localStorage.getItem('token');
 
     if (!nome || nome.length < 3) {
-        return alert("Por favor, insira um nome válido para o local.");
+        return notificar("Por favor, insira um nome válido para o local.");
     }
 
     try {
@@ -10058,14 +10059,14 @@ async function salvarNovoLocal() {
         const data = await res.json();
 
         if (res.ok) {
-            alert("✅ " + data.message);
+            notificar("✅ " + data.message);
             document.getElementById('cad_local_nome').value = '';
             // Opcional: se houver uma lista de locais na tela, você pode disparar a função que a recarrega aqui
         } else {
-            alert("⚠️ " + data.error);
+            notificar("⚠️ " + data.error);
         }
     } catch (e) {
-        alert("Erro crítico de conexão com o servidor.");
+        notificar("Erro crítico de conexão com o servidor.");
     }
 }
 
@@ -10103,12 +10104,12 @@ async function telaInventarioLocal() {
                     </div>
             </div>
         `;
-    } catch (e) { alert("Erro ao carregar locais."); }
+    } catch (e) { notificar("Erro ao carregar locais."); }
 }
 
 async function gerarRelatorioInventario() {
     const localId = document.getElementById('inv_local_id').value;
-    if (!localId) return alert("Selecione um local!");
+    if (!localId) return notificar("Selecione um local!");
 
     const res = await fetch(`${API_URL}/estoque/inventario/${localId}`, {
         headers: { 'Authorization': `Bearer ${TOKEN}` }
@@ -10224,14 +10225,14 @@ async function confirmarBaixa(patrimonioId, produtoId) {
         });
 
         if (res.ok) {
-            alert("✅ Património registado como INSERVÍVEL.");
+            notificar("✅ Património registado como INSERVÍVEL.");
             document.getElementById('modal-baixa').remove();
             buscarDadosPatrimonio(); // Recarrega a consulta
         } else {
-            alert("Erro ao processar baixa.");
+            notificar("Erro ao processar baixa.");
         }
     } catch (e) {
-        alert("Erro de conexão.");
+        notificar("Erro de conexão.");
     }
 }
 
@@ -10269,7 +10270,7 @@ async function telaResumoBaixasAnual() {
             </div>
         `;
     } catch (e) {
-        alert("Erro ao carregar o resumo.");
+        notificar("Erro ao carregar o resumo.");
     }
 }
 
@@ -10346,9 +10347,9 @@ async function enviarEncerramento(id) {
     // Recupera o ID que a função inicializarSessaoUsuario salvou
     const tecnicoId = localStorage.getItem('usuario_id');
 
-    if (!contador) return alert("O número do contador é obrigatório!");
+    if (!contador) return notificar("O número do contador é obrigatório!");
     if (!relatorio || relatorio.trim().length === 0) {
-        return alert("O Relatório Técnico é obrigatório! Descreva brevemente o serviço realizado.");
+        return notificar("O Relatório Técnico é obrigatório! Descreva brevemente o serviço realizado.");
     }
     try {
         const res = await fetch(`${API_URL}/impressoras/v2/finalizar-recarga/${id}`, {
@@ -10365,16 +10366,16 @@ async function enviarEncerramento(id) {
         });
 
         if (res.ok) {
-            alert("✅ Recarga registrada com sucesso!");
+            notificar("✅ Recarga registrada com sucesso!");
             const modal = document.getElementById('modal-conclusao');
             if (modal) modal.remove();
             telaListarChamadosAbertos(); 
         } else {
             const erro = await res.json();
-            alert("Erro: " + erro.error);
+            notificar("Erro: " + erro.error);
         }
     } catch (e) {
-        alert("Erro de conexão com o servidor.");
+        notificar("Erro de conexão com o servidor.");
     }
 }
 
@@ -10426,7 +10427,7 @@ async function telaComparativoLocais() {
             </div>
         `;
     } catch (e) {
-        alert("Erro ao gerar comparativo.");
+        notificar("Erro ao gerar comparativo.");
     }
 }
 
@@ -10661,8 +10662,8 @@ async function telaEstoqueMateriaisEPatrimonios() {
     }
 }
 
-function alertaVidro(mensagem, tipo = 'info') {
-    // Remove alerta anterior se existir
+function notificaraVidro(mensagem, tipo = 'info') {
+    // Remove notificara anterior se existir
     const anterior = document.getElementById('notificacao-vidro');
     if (anterior) anterior.remove();
 
@@ -10674,7 +10675,7 @@ function alertaVidro(mensagem, tipo = 'info') {
     const corDestaque = tipo === 'erro' ? '#f87171' : '#4ade80';
 
     overlay.innerHTML = `
-        <div class="painel-vidro alerta-vidro">
+        <div class="painel-vidro notificara-vidro">
             <div style="font-size: 3rem; margin-bottom: 10px;">${tipo === 'erro' ? '⚠️' : '✅'}</div>
             <p style="color: white; font-size: 1.1rem; margin-bottom: 20px; line-height: 1.5;">${mensagem}</p>
             <button onclick="this.closest('.notificacao-vidro-overlay').remove()" 
@@ -10814,7 +10815,7 @@ async function telaAdminPedidoUniformes() {
                 </div>
             </div>
         `;
-    } catch (err) { alertaVidro("Erro ao carregar dados de uniformes.", "erro"); }
+    } catch (err) { notificaraVidro("Erro ao carregar dados de uniformes.", "erro"); }
 }
 
 async function telaAdminPedidoMateriais() {
@@ -10877,12 +10878,12 @@ function addCarrinhoUniformes() {
     const qtd = parseInt(inputQtd.value);
     const estoque = parseInt(selTam.options[selTam.selectedIndex]?.dataset.estoque || 0);
 
-    if (!pId || !tam || qtd <= 0) return alertaVidro("Preencha todos os campos corretamente.", "erro");
-    if (qtd > estoque) return alertaVidro(`Saldo insuficiente! Temos apenas ${estoque} em estoque.`, "erro");
+    if (!pId || !tam || qtd <= 0) return notificaraVidro("Preencha todos os campos corretamente.", "erro");
+    if (qtd > estoque) return notificaraVidro(`Saldo insuficiente! Temos apenas ${estoque} em estoque.`, "erro");
     
     // TRAVA DE DUPLICIDADE
     if (carrinhoAdminDireto.some(i => i.produto_id === pId && i.tamanho === tam)) {
-        return alertaVidro("Este item com este tamanho já está na lista.", "erro");
+        return notificaraVidro("Este item com este tamanho já está na lista.", "erro");
     }
 
     carrinhoAdminDireto.push({ produto_id: pId, nome: pNome, tamanho: tam, quantidade: qtd });
@@ -10899,14 +10900,14 @@ function addCarrinhoMateriais() {
     const qtd = parseInt(inputQtd.value);
     const stockDisp = parseInt(opcaoProd.dataset.estoque || 0);
 
-    if (!produtoId || qtd <= 0) return alertaVidro("Selecione o produto e a quantidade.", "erro");
+    if (!produtoId || qtd <= 0) return notificaraVidro("Selecione o produto e a quantidade.", "erro");
 
     // TRAVA 1: Stock insuficiente
-    if (qtd > stockDisp) return alertaVidro(`Stock insuficiente. Disponível: ${stockDisp}`, "erro");
+    if (qtd > stockDisp) return notificaraVidro(`Stock insuficiente. Disponível: ${stockDisp}`, "erro");
 
     // TRAVA 2: Duplicidade
     if (carrinhoAdminDireto.some(i => i.produto_id === produtoId)) {
-        return alertaVidro("Este material já está no carrinho.", "erro");
+        return notificaraVidro("Este material já está no carrinho.", "erro");
     }
 
     carrinhoAdminDireto.push({ produto_id: produtoId, nome: produtoNome, tamanho: 'UNICO', quantidade: qtd });
@@ -10915,7 +10916,7 @@ function addCarrinhoMateriais() {
 
 async function finalizarPedidoUniformes() {
     const localId = document.getElementById('uni_local').value;
-    if (!localId) return alertaVidro("Selecione a unidade de destino.", "erro");
+    if (!localId) return notificaraVidro("Selecione a unidade de destino.", "erro");
 
     try {
         const res = await fetch(`${API_URL}/pedidos/admin/uniformes/concluir-direto`, {
@@ -10930,12 +10931,12 @@ async function finalizarPedidoUniformes() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
         
-        alertaVidro("✅ Pedido direto realizado com sucesso!", "sucesso");
+        notificaraVidro("✅ Pedido direto realizado com sucesso!", "sucesso");
         carrinhoAdminDireto = [];
         carregarDashboard();
 
     } catch (err) {
-        alertaVidro("🚨 Erro ao salvar: " + err.message, "erro");
+        notificaraVidro("🚨 Erro ao salvar: " + err.message, "erro");
     }
 }
 
@@ -10953,10 +10954,10 @@ async function enviarAoServidor(endpoint, dados) {
             body: JSON.stringify(dados)
         });
         if (!res.ok) throw new Error();
-        alertaVidro("Pedido realizado com sucesso!", "sucesso");
+        notificaraVidro("Pedido realizado com sucesso!", "sucesso");
         carregarDashboard();
     } catch (err) {
-        alertaVidro("Erro ao processar pedido no servidor.", "erro");
+        notificaraVidro("Erro ao processar pedido no servidor.", "erro");
     }
 }
 
@@ -10986,7 +10987,7 @@ async function buscarPlaquetasDisponiveis(produtoId) {
             </option>
         `).join('');
     } catch (err) {
-        alertaVidro("Erro ao carregar lista de plaquetas.", "erro");
+        notificaraVidro("Erro ao carregar lista de plaquetas.", "erro");
     }
 }
 
@@ -11000,12 +11001,12 @@ function addCarrinhoPatrimonio() {
     const tagNome = selectPlaqueta.options[selectPlaqueta.selectedIndex]?.dataset.tag;
 
     if (!produtoId || !patrimonioId) {
-        return alertaVidro("Selecione o modelo e a plaqueta individual.", "erro");
+        return notificaraVidro("Selecione o modelo e a plaqueta individual.", "erro");
     }
 
     // TRAVA: Não permite a mesma plaqueta duas vezes no carrinho
     if (carrinhoAdminDireto.some(i => i.patrimonio_id === patrimonioId)) {
-        return alertaVidro("Esta plaqueta já está na lista.", "erro");
+        return notificaraVidro("Esta plaqueta já está na lista.", "erro");
     }
 
     // Adiciona ao carrinho com ID individual do património
@@ -11022,9 +11023,9 @@ function addCarrinhoPatrimonio() {
 
 async function finalizarPedidoPatrimonios() {
     const localId = document.getElementById('pat_destino').value;
-    if (!localId) return alertaVidro("Selecione o destino.", "erro");
+    if (!localId) return notificaraVidro("Selecione o destino.", "erro");
 
-    if (carrinhoAdminDireto.length === 0) return alertaVidro("Carrinho vazio.", "erro");
+    if (carrinhoAdminDireto.length === 0) return notificaraVidro("Carrinho vazio.", "erro");
 
     enviarAoServidor('/pedidos/admin/finalizar/patrimonios', { 
         local_id: localId, 
@@ -11062,8 +11063,8 @@ function abrirModalPadrao(conteudoHtml, largura = '800px') {
 
 async function finalizarPedidoMateriaisDireto() {
     const localId = document.getElementById('mat_local').value;
-    if (!localId) return alertaVidro("Selecione a unidade de destino.", "erro");
-    if (carrinhoAdminDireto.length === 0) return alertaVidro("Adicione itens ao carrinho!", "erro");
+    if (!localId) return notificaraVidro("Selecione a unidade de destino.", "erro");
+    if (carrinhoAdminDireto.length === 0) return notificaraVidro("Adicione itens ao carrinho!", "erro");
 
     try {
         const res = await fetch(`${API_URL}/pedidos/admin/materiais/concluir-direto`, {
@@ -11078,7 +11079,7 @@ async function finalizarPedidoMateriaisDireto() {
         const data = await res.json();
 
         if (res.ok) {
-            alertaVidro("✅ Pedido de Materiais realizado!", "sucesso");
+            notificaraVidro("✅ Pedido de Materiais realizado!", "sucesso");
             carrinhoAdminDireto = []; 
             carregarDashboard();      
         } else {
@@ -11087,14 +11088,14 @@ async function finalizarPedidoMateriaisDireto() {
 
     } catch (err) {
         console.error("Erro materiais:", err.message);
-        alertaVidro("🚨 Erro: " + err.message, "erro");
+        notificaraVidro("🚨 Erro: " + err.message, "erro");
     }
 }
 
 async function finalizarPedidoPatrimonioDireto() {
     const localId = document.getElementById('pat_local').value;
-    if (!localId) return alertaVidro("Selecione a unidade de destino.", "erro");
-    if (carrinhoAdminDireto.length === 0) return alertaVidro("Nenhum item no carrinho!", "erro");
+    if (!localId) return notificaraVidro("Selecione a unidade de destino.", "erro");
+    if (carrinhoAdminDireto.length === 0) return notificaraVidro("Nenhum item no carrinho!", "erro");
 
     try {
         const res = await fetch(`${API_URL}/pedidos/admin/patrimonio/concluir-direto`, {
@@ -11109,7 +11110,7 @@ async function finalizarPedidoPatrimonioDireto() {
         const data = await res.json();
 
         if (res.ok) {
-            alertaVidro("✅ Transferência de Patrimônio iniciada!", "sucesso");
+            notificaraVidro("✅ Transferência de Patrimônio iniciada!", "sucesso");
             carrinhoAdminDireto = []; 
             carregarDashboard();      
         } else {
@@ -11118,7 +11119,7 @@ async function finalizarPedidoPatrimonioDireto() {
 
     } catch (err) {
         console.error("Erro patrimônio:", err.message);
-        alertaVidro("🚨 Erro: " + err.message, "erro");
+        notificaraVidro("🚨 Erro: " + err.message, "erro");
     }
 }
 
@@ -11214,12 +11215,12 @@ async function salvarRecebimentoDevolucao(pedidoId, idsItens) {
         });
 
         if (res.ok) {
-            alertaVidro("✅ Estoque atualizado com as quantidades conferidas!", "sucesso");
+            notificaraVidro("✅ Estoque atualizado com as quantidades conferidas!", "sucesso");
             document.getElementById('modal-analise-devolucao').style.display = 'none';
             telaEstoqueListarDevolucoes(); // Função que lista as pendentes
         }
     } catch (err) {
-        alert("Erro ao processar recebimento.");
+        notificar("Erro ao processar recebimento.");
     }
 }
 
@@ -11231,7 +11232,7 @@ async function confirmarColetaEscola(pedidoId) {
         body: JSON.stringify({ pedidoId })
     });
     if (res.ok) {
-        alertaVidro("🚚 Status: DEVOLUÇÃO EM TRÂNSITO", "sucesso");
+        notificaraVidro("🚚 Status: DEVOLUÇÃO EM TRÂNSITO", "sucesso");
         carregarDashboard();
     }
 }
@@ -11253,10 +11254,10 @@ async function finalizarDevolucaoEstoque(pedidoId, itens) {
         });
 
         if (res.ok) {
-            alertaVidro("📦 Devolução concluída! Estoque atualizado.", "sucesso");
+            notificaraVidro("📦 Devolução concluída! Estoque atualizado.", "sucesso");
             carregarDashboard();
         }
-    } catch (err) { alertaVidro("Erro ao processar devolução", "erro"); }
+    } catch (err) { notificaraVidro("Erro ao processar devolução", "erro"); }
 }
 
 async function listarDevolucoesAdmin() {
@@ -11344,7 +11345,7 @@ async function verDetalhesV2(pedidoId) {
                 </div>
             </div>
         `;
-    } catch (err) { alert("Erro ao carregar detalhes."); }
+    } catch (err) { notificar("Erro ao carregar detalhes."); }
 }
 
 async function enviarDecisaoV2(pedidoId, status) {
@@ -11355,8 +11356,8 @@ async function enviarDecisaoV2(pedidoId, status) {
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
             body: JSON.stringify({ pedidoId, status })
         });
-        if(res.ok) { alert("Sucesso!"); listarDevolucoesAdmin(); }
-    } catch(e) { alert("Erro ao processar."); }
+        if(res.ok) { notificar("Sucesso!"); listarDevolucoesAdmin(); }
+    } catch(e) { notificar("Erro ao processar."); }
 }
 
 async function listarDevolucoesEstoque() {
@@ -11365,7 +11366,7 @@ async function listarDevolucoesEstoque() {
 
     if (!container) {
         console.error("ERRO: Container 'app-content' não encontrado no perfil Estoque.");
-        return alert("Erro de interface: Área de conteúdo não localizada. Tente recarregar a página.");
+        return notificar("Erro de interface: Área de conteúdo não localizada. Tente recarregar a página.");
     }
 
     // 2. Feedback visual de carregamento
@@ -11468,7 +11469,7 @@ async function telaConferirEntradaFisica(pedidoId) {
             </div>
         `;
     } catch (err) {
-        alert("Erro ao carregar detalhes para o estoque.");
+        notificar("Erro ao carregar detalhes para o estoque.");
     }
 }
 
@@ -11516,7 +11517,7 @@ async function verDetalhesDevolucaoAdmin(pedidoId) {
                 </div>
             </div>
         `;
-    } catch (err) { alert("Erro ao carregar detalhes."); }
+    } catch (err) { notificar("Erro ao carregar detalhes."); }
 }
 
 async function responderDevolucao(pedidoId, acao) {
@@ -11533,11 +11534,11 @@ async function responderDevolucao(pedidoId, acao) {
         });
 
         if (res.ok) {
-            alert(`Solicitação ${acao === 'AUTORIZAR' ? 'autorizada' : 'recusada'} com sucesso!`);
+            notificar(`Solicitação ${acao === 'AUTORIZAR' ? 'autorizada' : 'recusada'} com sucesso!`);
             listarDevolucoesAdmin(); // Volta para a lista principal
         }
     } catch (err) {
-        alert("Erro ao processar: " + err.message);
+        notificar("Erro ao processar: " + err.message);
     }
 }
 
@@ -11549,7 +11550,7 @@ async function listarDevolucoesLogistica() {
     if (!container) {
         console.error("ERRO: app-content não encontrado. IDs disponíveis:", 
             Array.from(document.querySelectorAll('[id]')).map(el => el.id));
-        return alert("Erro de interface: Área de conteúdo não encontrada. Tente atualizar a página (F5).");
+        return notificar("Erro de interface: Área de conteúdo não encontrada. Tente atualizar a página (F5).");
     }
 
     // 3. Limpamos o container e mostramos o carregamento
@@ -11628,13 +11629,13 @@ async function processarDecisao(pedidoId, novoStatus) {
         });
 
         if (res.ok) {
-            alert("✅ Status atualizado!");
+            notificar("✅ Status atualizado!");
             listarDevolucoesAdmin(); // Recarrega a lista principal
         } else {
-            alert("Erro ao atualizar status.");
+            notificar("Erro ao atualizar status.");
         }
     } catch (err) {
-        alert("Erro na conexão: " + err.message);
+        notificar("Erro na conexão: " + err.message);
     }
 }
 
@@ -11668,16 +11669,38 @@ async function finalizarProcessoDevolucao(pedidoId) {
         const data = await res.json();
 
         if (res.ok) {
-            alert("✅ Sucesso! Estoque atualizado.");
+            notificar("✅ Sucesso! Estoque atualizado.");
             carregarDashboard();
         } else {
             // AQUI ESTÁ O SEGREDO: Mostrar a mensagem real do erro
             console.error("Erro completo:", data);
-            alert(`🚨 ERRO DO SERVIDOR: ${data.message || data.error}\n\nVerifique o console para detalhes.`);
+            notificar(`🚨 ERRO DO SERVIDOR: ${data.message || data.error}\n\nVerifique o console para detalhes.`);
         }
     } catch (err) {
-        alert("🚨 Erro de conexão ou na rede.");
+        notificar("🚨 Erro de conexão ou na rede.");
     }
+}
+
+function notificar(mensagem, tipo = 'sucesso') {
+    // Cria o overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'notificara-vidro-overlay';
+    
+    // Define a cor do ícone/detalhe baseado no tipo (opcional)
+    const corDestaque = tipo === 'erro' ? '#ff4b2b' : '#10b981';
+
+    overlay.innerHTML = `
+        <div class="notificara-vidro-caixa">
+            <div style="font-size: 3rem; margin-bottom: 10px;">${tipo === 'erro' ? '⚠️' : '✅'}</div>
+            <p style="font-size: 1.1rem; margin-bottom: 20px; font-weight: 500;">${mensagem}</p>
+            <button onclick="this.parentElement.parentElement.remove()" 
+                style="background: ${corDestaque}; color: white; border: none; padding: 10px 30px; border-radius: 10px; cursor: pointer; font-weight: bold; width: 100%;">
+                ENTENDIDO
+            </button>
+        </div>
+    `;
+
+    document.body.appendChild(overlay);
 }
 
 // Isso garante que o onclick="funcao()" funcione sempre

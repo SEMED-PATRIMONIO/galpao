@@ -11673,6 +11673,11 @@ async function finalizarProcessoDevolucao(pedidoId) {
             const erro = await res.json();
             throw new Error(erro.error || "Erro ao processar entrada.");
         }
+        if (!res.ok) {
+            const erroJson = await res.json();
+            console.error("Detalhes do erro do servidor:", erroJson.details);
+            alert(`Erro ao atualizar estoque: ${erroJson.details}`); // Isso vai te mostrar a mensagem real do Postgres
+        }
     } catch (err) {
         alert("🚨 Erro fatal: " + err.message);
     }

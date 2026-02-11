@@ -11638,7 +11638,6 @@ async function finalizarProcessoDevolucao(pedidoId) {
     const inputs = document.querySelectorAll('.input-estoque-final');
     const itensRecebidos = [];
 
-    // Coleta os dados editados pelo estoquista
     inputs.forEach(input => {
         const qtd = parseInt(input.value) || 0;
         if (qtd > 0) {
@@ -11650,11 +11649,7 @@ async function finalizarProcessoDevolucao(pedidoId) {
         }
     });
 
-    if (itensRecebidos.length === 0) {
-        return alert("Nenhuma quantidade válida foi informada para entrada.");
-    }
-
-    if (!confirm("Confirmar a entrada destes itens no estoque físico? O saldo será atualizado imediatamente.")) return;
+    if (!confirm("Confirmar a entrada destes itens no estoque físico?")) return;
 
     try {
         const res = await fetch(`${API_URL}/devolucoes/estoque/finalizar-entrada`, {
@@ -11666,20 +11661,18 @@ async function finalizarProcessoDevolucao(pedidoId) {
             body: JSON.stringify({ pedidoId, itens: itensRecebidos })
         });
 
+        const data = await res.json();
+
         if (res.ok) {
-            alert("✅ Estoque atualizado! Devolução finalizada com sucesso.");
+            alert("✅ Sucesso! Estoque atualizado.");
             carregarDashboard();
         } else {
-            const erro = await res.json();
-            throw new Error(erro.error || "Erro ao processar entrada.");
-        }
-        if (!res.ok) {
-            const erroJson = await res.json();
-            console.error("Detalhes do erro do servidor:", erroJson.details);
-            alert(`Erro ao atualizar estoque: ${erroJson.details}`); // Isso vai te mostrar a mensagem real do Postgres
+            // AQUI ESTÁ O SEGREDO: Mostrar a mensagem real do erro
+            console.error("Erro completo:", data);
+            alert(`🚨 ERRO DO SERVIDOR: ${data.message || data.error}\n\nVerifique o console para detalhes.`);
         }
     } catch (err) {
-        alert("🚨 Erro fatal: " + err.message);
+        alert("🚨 Erro de conexão ou na rede.");
     }
 }
 

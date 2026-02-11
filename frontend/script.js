@@ -11446,12 +11446,11 @@ async function telaConferirEntradaFisica(pedidoId) {
                                 <td style="padding:10px;">${i.nome}</td>
                                 <td style="padding:10px; text-align:center;">${i.tamanho}</td>
                                 <td style="padding:10px; text-align:center;">
-                                    <input type="number" value="${i.quantidade}" 
+                                    <input type="number" value="${i.quantidade}"
                                         class="input-estoque-final" 
-                                        data-pid="${i.produto_id}" 
+                                        data-pid="${i.produto_id}"  // O valor aqui vinha 'undefined', por isso virava NaN
                                         data-tam="${i.tamanho}"
                                         style="width:80px; padding:8px; border-radius:5px; border:1px solid #ccc; text-align:center; font-weight:bold;">
-                                </td>
                             </tr>
                         `).join('')}
                     </tbody>

@@ -4118,4 +4118,44 @@ router.get('/devolucoes/estoque/recebimentos-pendentes', verificarToken, async (
     }
 });
 
+router.post('/devolucoes/estoque/finalizar-entrada', verificarToken, async (req, res) => {
+    const { pedidoId, itens } = req.body;
+
+    try {
+        await db.query('BEGIN');
+
+        for (const item of itens) {
+            // 1. Atualiza a tabela estoque_grades (coluna: quantidade)
+            await db.query(
+                `UPDATE estoque_grades 
+                 SET quantidade = quantidade + $1 
+                 WHERE produto_id = $2 AND tamanho = $3`,
+                [item.quantidade, item.produto_id, item.tamanho]
+            );
+
+            // 2. Atualiza a tabela produtos (coluna: quantidade_estoque)
+            await db.query(
+                `UPDATE produtos 
+                 SET quantidade_estoque = quantidade_estoque + $1 
+                 WHERE id = $2`,
+                [item.quantidade, item.produto_id]
+            );
+        }
+
+        // 3. Finaliza o status do pedido para DEVOLVIDO
+        await db.query(
+            "UPDATE pedidos SET status = 'DEVOLVIDO', data_recebimento = NOW() WHERE id = $1",
+            [pedidoId]
+        );
+
+        await db.query('COMMIT');
+        res.json({ success: true, message: "Estoque atualizado com sucesso." });
+
+    } catch (err) {
+        await db.query('ROLLBACK');
+        console.error("ERRO AO ATUALIZAR SALDO:", err.message);
+        res.status(500).json({ error: "Erro crítico ao processar entrada no estoque." });
+    }
+});
+
 module.exports = router;

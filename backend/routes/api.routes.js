@@ -3979,9 +3979,9 @@ router.get('/pedidos/admin/visualizar-itens-devolucao/:id', verificarToken, asyn
     try {
         const { id } = req.params;
 
-        // Note o ajuste na query: selecionando 'quantidade_solicitada'
         const query = `
             SELECT 
+                pi.produto_id, -- ADICIONADO: Agora o frontend saberá quem é o produto
                 prod.nome, 
                 pi.tamanho, 
                 pi.quantidade_solicitada as quantidade
@@ -3994,7 +3994,6 @@ router.get('/pedidos/admin/visualizar-itens-devolucao/:id', verificarToken, asyn
         res.json(result.rows || []);
 
     } catch (err) {
-        console.error("Erro na visualização do Admin:", err.message);
         res.status(500).json({ error: "Erro ao buscar itens." });
     }
 });

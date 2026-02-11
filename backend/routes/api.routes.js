@@ -4121,36 +4121,40 @@ router.get('/devolucoes/estoque/recebimentos-pendentes', verificarToken, async (
 router.post('/devolucoes/estoque/finalizar-entrada', verificarToken, async (req, res) => {
     const { pedidoId, itens } = req.body;
 
+    // DIAGNÓSTICO 1: Verificar se os dados chegaram
+    if (!pedidoId || !itens || !Array.isArray(itens)) {
+        return res.status(400).json({ 
+            error: "Dados incompletos ou formato inválido.",
+            recebido: { pedidoId, itens } 
+        });
+    }
+
     try {
         await db.query('BEGIN');
 
         for (const item of itens) {
-            // Garantimos que os valores sejam números inteiros para o Postgres não reclamar
-            const qtd = parseInt(item.quantidade);
+            // DIAGNÓSTICO 2: Proteção contra valores nulos/NaN
+            const qtd = parseInt(item.quantidade) || 0;
             const pId = parseInt(item.produto_id);
             const tam = item.tamanho;
 
-            // 1. Soma na Grade
+            if (isNaN(pId) || !tam) throw new Error(`Item inválido: Produto ${pId}, Tam ${tam}`);
+
             await db.query(
                 "UPDATE estoque_grades SET quantidade = quantidade + $1 WHERE produto_id = $2 AND tamanho = $3",
                 [qtd, pId, tam]
             );
 
-            // 2. Soma no Saldo Geral
             await db.query(
                 "UPDATE produtos SET quantidade_estoque = quantidade_estoque + $1 WHERE id = $2",
                 [qtd, pId]
             );
         }
 
-        // 3. Finaliza o status com CAST EXPLÍCITO (::status_pedido)
-        // Isso remove qualquer ambiguidade para o banco de dados
+        // DIAGNÓSTICO 3: O SQL do status com cast explícito
         await db.query(
-            `UPDATE pedidos 
-             SET status = 'DEVOLVIDO'::status_pedido, 
-                 data_recebimento = CURRENT_TIMESTAMP 
-             WHERE id = $1`,
-            [parseInt(pedidoId)]
+            "UPDATE pedidos SET status = $1::status_pedido, data_recebimento = NOW() WHERE id = $2",
+            ['DEVOLVIDO', parseInt(pedidoId)]
         );
 
         await db.query('COMMIT');
@@ -4158,9 +4162,13 @@ router.post('/devolucoes/estoque/finalizar-entrada', verificarToken, async (req,
 
     } catch (err) {
         await db.query('ROLLBACK');
-        console.error("🚨 ERRO NO BANCO DE DADOS:", err.message);
-        // Enviamos a mensagem real do erro para o seu console do navegador
-        res.status(500).json({ error: "Erro interno no servidor", details: err.message });
+        console.error("🚨 ERRO NO BANCO:", err.message);
+        // Retornamos o erro REAL do Postgres para o Frontend ver
+        res.status(500).json({ 
+            error: "Falha no Banco de Dados", 
+            message: err.message,
+            stack: err.stack // Ajuda a ver em qual linha do código deu erro
+        });
     }
 });
 

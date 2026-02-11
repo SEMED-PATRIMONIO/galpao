@@ -11355,22 +11355,117 @@ async function enviarDecisaoV2(pedidoId, status) {
 }
 
 async function listarDevolucoesEstoque() {
-    const res = await fetch(`${API_URL}/pedidos/estoque/devolucoes/para-receber`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
-    const lista = await res.json();
-    
-    const html = lista.map(d => `
-        <div class="card-devolucao" style="border-left: 8px solid #16a34a; padding: 15px; background: white; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border-radius: 8px;">
-            <div>
-                <strong>📥 RECEBER DE: ${d.escola_nome}</strong><br>
-                <small>Status: Em trânsito para o Galpão</small>
+    // 1. Localiza o container principal
+    const container = document.getElementById('app-content');
+
+    if (!container) {
+        console.error("ERRO: Container 'app-content' não encontrado no perfil Estoque.");
+        return alert("Erro de interface: Área de conteúdo não localizada. Tente recarregar a página.");
+    }
+
+    // 2. Feedback visual de carregamento
+    container.innerHTML = '<div style="padding:40px; text-align:center; color:white;">⏳ Buscando devoluções em trânsito...</div>';
+
+    try {
+        // Chamada para a rota que busca apenas o status 'DEVOLUCAO_EM_TRANSITO'
+        const res = await fetch(`${API_URL}/devolucoes/estoque/recebimentos-pendentes`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const recebimentos = await res.json();
+
+        container.innerHTML = `
+            <div class="painel-vidro" style="max-width: 950px; margin: auto;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:25px;">
+                    <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background:#475569; width:100px;">⬅️ VOLTAR</button>
+                    <h2 style="color:white; margin:0;">📥 RECEBIMENTO DE DEVOLUÇÕES</h2>
+                    <div style="width:100px;"></div>
+                </div>
+                
+                <table style="width:100%; color:white; border-collapse:collapse;">
+                    <thead>
+                        <tr style="border-bottom:2px solid rgba(255,255,255,0.2); text-align:left;">
+                            <th style="padding:15px;">PEDIDO</th>
+                            <th style="padding:15px;">ORIGEM (ESCOLA)</th>
+                            <th style="padding:15px;">DATA COLETA</th>
+                            <th style="padding:15px; text-align:center;">AÇÃO</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${recebimentos.length === 0 ? 
+                            '<tr><td colspan="4" style="text-align:center; padding:40px;">🚚 Nenhum material em trânsito no momento.</td></tr>' : 
+                            recebimentos.map(r => `
+                                <tr style="border-bottom:1px solid rgba(255,255,255,0.1);">
+                                    <td style="padding:15px;">#${r.id}</td>
+                                    <td style="padding:15px;"><b>${r.escola_nome}</b></td>
+                                    <td style="padding:15px;">${new Date(r.data_coleta).toLocaleString()}</td>
+                                    <td style="padding:15px; text-align:center;">
+                                        <button onclick="telaConferirEntradaFisica(${r.id})" class="btn-acao" style="background:#10b981; color:white; border:none; padding:10px 15px; border-radius:6px; cursor:pointer;">🔍 CONFERIR ENTRADA</button>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                    </tbody>
+                </table>
             </div>
-            <button onclick="abrirModalConferenciaEstoque(${d.id})" style="background: #0f172a; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer;">
-                🔍 CONFERIR ITENS
-            </button>
-        </div>
-    `).join('');
+        `;
+    } catch (err) {
+        container.innerHTML = `<div style="color:red; padding:20px;">Erro ao carregar recebimentos: ${err.message}</div>`;
+    }
+}
+
+async function telaConferirEntradaFisica(pedidoId) {
+    const container = document.getElementById('app-content');
     
-    document.getElementById('container-estoque').innerHTML = html || '<p>Nenhuma carga em trânsito para recebimento.</p>';
+    try {
+        // Reutilizamos a rota de visualização que já corrigimos para o Admin (lendo quantidade_solicitada)
+        const res = await fetch(`${API_URL}/pedidos/admin/visualizar-itens-devolucao/${pedidoId}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const itens = await res.json();
+
+        container.innerHTML = `
+            <div class="painel-vidro" style="max-width: 850px; margin: auto;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                    <button onclick="listarDevolucoesEstoque()" class="btn-sair-vidro" style="background:#475569; width:100px;">⬅️ VOLTAR</button>
+                    <h2 style="color:white; margin:0;">📝 CONFERÊNCIA FÍSICA #${pedidoId}</h2>
+                    <div style="width:100px;"></div>
+                </div>
+
+                <p style="color:#cbd5e1; margin-bottom:20px;">Ajuste as quantidades caso o material recebido seja diferente do solicitado:</p>
+
+                <table style="width:100%; color:white; border-collapse:collapse; margin-bottom:30px;">
+                    <thead>
+                        <tr style="border-bottom:1px solid #fff; text-align:left;">
+                            <th style="padding:10px;">PRODUTO</th>
+                            <th style="padding:10px; text-align:center;">TAM</th>
+                            <th style="padding:10px; text-align:center;">QTD RECEBIDA</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${itens.map(i => `
+                            <tr style="border-bottom:1px solid rgba(255,255,255,0.1);">
+                                <td style="padding:10px;">${i.nome}</td>
+                                <td style="padding:10px; text-align:center;">${i.tamanho}</td>
+                                <td style="padding:10px; text-align:center;">
+                                    <input type="number" value="${i.quantidade}" 
+                                        class="input-estoque-final" 
+                                        data-pid="${i.produto_id}" 
+                                        data-tam="${i.tamanho}"
+                                        style="width:80px; padding:8px; border-radius:5px; border:1px solid #ccc; text-align:center; font-weight:bold;">
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+
+                <button onclick="finalizarProcessoDevolucao(${pedidoId})" 
+                    style="width:100%; background:#059669; color:white; padding:18px; border:none; border-radius:10px; font-weight:bold; cursor:pointer; font-size:1.1rem;">
+                    📥 CONFIRMAR RECEBIMENTO E ATUALIZAR ESTOQUE
+                </button>
+            </div>
+        `;
+    } catch (err) {
+        alert("Erro ao carregar detalhes para o estoque.");
+    }
 }
 
 async function verDetalhesDevolucaoAdmin(pedidoId) {
@@ -11536,6 +11631,50 @@ async function processarDecisao(pedidoId, novoStatus) {
         }
     } catch (err) {
         alert("Erro na conexão: " + err.message);
+    }
+}
+
+async function finalizarProcessoDevolucao(pedidoId) {
+    const inputs = document.querySelectorAll('.input-estoque-final');
+    const itensRecebidos = [];
+
+    // Coleta os dados editados pelo estoquista
+    inputs.forEach(input => {
+        const qtd = parseInt(input.value) || 0;
+        if (qtd > 0) {
+            itensRecebidos.push({
+                produto_id: input.dataset.pid,
+                tamanho: input.dataset.tam,
+                quantidade: qtd
+            });
+        }
+    });
+
+    if (itensRecebidos.length === 0) {
+        return alert("Nenhuma quantidade válida foi informada para entrada.");
+    }
+
+    if (!confirm("Confirmar a entrada destes itens no estoque físico? O saldo será atualizado imediatamente.")) return;
+
+    try {
+        const res = await fetch(`${API_URL}/devolucoes/estoque/finalizar-entrada`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json', 
+                'Authorization': `Bearer ${TOKEN}` 
+            },
+            body: JSON.stringify({ pedidoId, itens: itensRecebidos })
+        });
+
+        if (res.ok) {
+            alert("✅ Estoque atualizado! Devolução finalizada com sucesso.");
+            carregarDashboard();
+        } else {
+            const erro = await res.json();
+            throw new Error(erro.error || "Erro ao processar entrada.");
+        }
+    } catch (err) {
+        alert("🚨 Erro fatal: " + err.message);
     }
 }
 

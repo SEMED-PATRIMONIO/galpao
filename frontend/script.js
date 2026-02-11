@@ -8093,7 +8093,7 @@ async function telaAdminVerPedidos() {
 
 async function telaEstoquePedidosPendentes() {
     const app = document.getElementById('app-content');
-    app.style.background = "#f8fafc"; // Cor clara para leitura
+    app.style.background = "transparent";
     
     try {
         const res = await fetch(`${API_URL}/pedidos/estoque/pendentes`, {
@@ -8125,7 +8125,7 @@ async function telaEstoquePedidosPendentes() {
                             }
 
                             return `
-                                <div style="background:white; padding:20px; border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,0.1); border-left:10px solid ${corStatus}; display:flex; justify-content:space-between; align-items:center;">
+                                <div style="background:transparent; padding:20px; border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,0.1); border-left:10px solid ${corStatus}; display:flex; justify-content:space-between; align-items:center;">
                                     <div>
                                         <div style="font-size:1.1rem; font-weight:bold; color:#1e293b; margin-bottom:5px;">
                                             📍 ${p.escola_nome || 'Local Não Identificado'}

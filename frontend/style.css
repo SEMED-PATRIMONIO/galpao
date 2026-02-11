@@ -1278,14 +1278,13 @@ body.login-body {
     left: 0;
     width: 220px;
     height: 110px;
-    background-color: #ffffff; /* Fundo branco */
+    background-color: transparent; /* Fundo branco */
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 10px;
     border-bottom-right-radius: 15px;
-    box-shadow: 2px 2px 8px rgba(0,0,0,0.1);
-    
+        
     /* Z-INDEX BAIXO: Ela fica por trás da bandeira */
     z-index: 1; 
 }

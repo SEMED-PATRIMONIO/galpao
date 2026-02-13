@@ -294,25 +294,26 @@ async function carregarDashboard() {
     }
     // --- 3. PERFIL: ESCOLA ---
     if (perfil === 'escola') {
-        html += `
-            <button class="btn-grande btn-vidro" onclick="telaEscolaConfirmarRecebimento()">
-                <i>🚚</i><span>CONFIRMAR RECEBIMENTO</span>
-            </button>
-            <button class="btn-grande btn-vidro" onclick="telaSolicitarUniforme()">
-                <i>👕</i><span>SOLICITAR UNIFORMES</span>
-            </button>
-            <button class="btn-grande btn-vidro" onclick="telaDevolucaoUniforme()">
-                <i>🔄</i><span>DEVOLVER UNIFORMES</span>
-            </button>
-            <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaSolicitarServicoImpressora('recarga')">
-                <i>💧</i><span>SOLICITAR RECARGA DE TONER</span>
-            </button>
-            <button class="btn-grande btn-vidro" onclick="telaSolicitarServicoImpressora('manutencao')">
-                <i>🛠️</i><span>SOLICITAR MANUTENÇÃO IMPRESSORA</span>
-            </button>
-        `;
+          telaPrincipalEscola
+    //    html += `
+    //        <button class="btn-grande btn-vidro" onclick="telaEscolaConfirmarRecebimento()">
+    //            <i>🚚</i><span>CONFIRMAR RECEBIMENTO</span>
+    //        </button>
+    //        <button class="btn-grande btn-vidro" onclick="telaSolicitarUniforme()">
+    //            <i>👕</i><span>SOLICITAR UNIFORMES</span>
+    //        </button>
+    //        <button class="btn-grande btn-vidro" onclick="telaDevolucaoUniforme()">
+    //            <i>🔄</i><span>DEVOLVER UNIFORMES</span>
+    //        </button>
+    //        <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaSolicitarServicoImpressora('recarga')">
+    //            <i>💧</i><span>SOLICITAR RECARGA DE TONER</span>
+    //        </button>
+    //        <button class="btn-grande btn-vidro" onclick="telaSolicitarServicoImpressora('manutencao')">
+    //            <i>🛠️</i><span>SOLICITAR MANUTENÇÃO IMPRESSORA</span>
+    //        </button>
+    //   `;
         // Chama notificaras específicos da escola (Pedidos em transporte para o localId)
-        setTimeout(() => verificarnotificarasEscola(), 500);
+    //    setTimeout(() => verificarnotificarasEscola(), 500);
     }
     // --- 4. PERFIL: ADMIN ---
     if (perfil === 'admin') {
@@ -452,6 +453,29 @@ async function telaVisualizarEstoque() {
     } catch (err) {
         container.innerHTML = "<div class='painel-vidro' style='color:#f87171;'>🚨 Erro ao carregar estoque.</div>";
     }
+}
+
+async function telaPrincipalEscola() {
+    const app = document.getElementById('app-content');
+    
+    // Configura o container para centralização total
+    app.style.background = "transparent";
+    app.style.display = "flex";
+    app.style.justifyContent = "center";
+    app.style.alignItems = "center";
+    app.style.minHeight = "70vh"; 
+
+    app.innerHTML = `
+        <div class="painel-vidro" style="max-width: 500px; padding: 50px; text-align: center;">
+            <div style="font-size: 4rem; margin-bottom: 20px;">⚠️</div>
+            <h2 style="color: white; margin: 0; line-height: 1.4; font-size: 1.5rem;">
+                O APLICATIVO ESTÁ PROVISORIAMENTE EM MANUTENÇÃO
+            </h2>
+            <p style="color: rgba(255,255,255,0.6); margin-top: 20px; font-size: 0.9rem;">
+                Estamos realizando atualizações técnicas para melhorar o sistema.
+            </p>
+        </div>
+    `;
 }
 
 function mudarAba(novaCategoria) {

@@ -80,8 +80,23 @@
             z-index: 9999; font-weight: bold; box-shadow: 0 5px 15px rgba(0,0,0,0.3);
             animation: fadeIn 0.3s;
         }
-
+        .alerta-vidro {
+            position: fixed; top: 50%; left: 50%; 
+            transform: translate(-50%, -50%);
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 40px; border-radius: 30px; color: white;
+            text-align: center; z-index: 10000;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+            width: 85%; max-width: 350px;
+            animation: zoomIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes zoomIn { 
+            from { opacity: 0; transform: translate(-50%, -50%) scale(0.8); } 
+            to { opacity: 1; transform: translate(-50%, -50%) scale(1); } 
+        }
     </style>
 </head>
 <body>
@@ -326,10 +341,24 @@
             maskCPF(el);
             let v = el.value.replace(/\D/g, '');
             if(v.length === 11) {
+                // 1. Validação Matemática (Dígitos verificadores)
+                if(!validarCPF(v)) {
+                    exibirAviso("CPF Inválido", "O número informado não é um CPF válido. Por favor, confira os dados.", "erro");
+                    el.value = "";
+                    return;
+                }
+
+                // 2. Validação de Banco (Duplicidade)
                 const res = await fetch('check_cpf.php?cpf=' + v);
                 const data = await res.json();
-                if(data.exists) { alert("CPF JÁ CADASTRADO!"); el.value = ""; } 
-                else { calcularIdade2026(); proximo(2); }
+                if(data.exists) { 
+                    exibirAviso("Já Cadastrado", "Este CPF já possui uma inscrição ativa em nosso sistema.", "aviso");
+                    el.value = ""; 
+                } 
+                else { 
+                    calcularIdade2026(); 
+                    proximo(2); 
+                }
             }
         }
 
@@ -356,6 +385,41 @@
             } else {
                 area.innerHTML = `<label>ANO ESCOLAR:</label><select name="ano_pretendido" required><option value="2º ANO">2º ANO</option><option value="3º ANO">3º ANO</option><option value="EJA">EJA (MAIORES DE 15)</option></select>`;
             }
+        }
+
+        // --- VALIDADOR MATEMÁTICO DE CPF ---
+        function validarCPF(cpf) {
+            cpf = cpf.replace(/\D/g, '');
+            if (cpf.length !== 11 || /^(\d)\1+$/.test(cpf)) return false;
+            let soma = 0, resto;
+            for (let i = 1; i <= 9; i++) soma += parseInt(cpf.substring(i-1, i)) * (11 - i);
+            resto = (soma * 10) % 11;
+            if ((resto === 10) || (resto === 11)) resto = 0;
+            if (resto !== parseInt(cpf.substring(9, 10))) return false;
+            soma = 0;
+            for (let i = 1; i <= 10; i++) soma += parseInt(cpf.substring(i-1, i)) * (12 - i);
+            resto = (soma * 10) % 11;
+            if ((resto === 10) || (resto === 11)) resto = 0;
+            return resto === parseInt(cpf.substring(10, 11));
+        }
+
+        // --- GERADOR DE AVISO VITRIFICADO ---
+        function exibirAviso(titulo, msg, tipo = 'erro') {
+            const antigo = document.querySelector('.alerta-vidro');
+            if(antigo) antigo.remove();
+
+            const div = document.createElement('div');
+            div.className = 'alerta-vidro';
+            const corIcone = tipo === 'erro' ? '#ef4444' : '#f59e0b';
+            const icone = tipo === 'erro' ? '✕' : '⚠';
+
+            div.innerHTML = `
+                <span style="font-size: 3.5rem; color: ${corIcone}; display: block; margin-bottom: 10px;">${icone}</span>
+                <h3 style="margin: 0 0 10px 0; text-transform: uppercase;">${titulo}</h3>
+                <p style="font-size: 0.95rem; opacity: 0.9; margin-bottom: 25px; line-height: 1.4;">${msg}</p>
+                <button type="button" class="btn-avancar" style="margin-top: 0; padding: 12px;" onclick="this.parentElement.remove()">ENTENDI</button>
+            `;
+            document.body.appendChild(div);
         }
 
         async function processarCEP(el) {

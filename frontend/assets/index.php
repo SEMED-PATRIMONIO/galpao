@@ -380,13 +380,39 @@
             else if (anos === 6) mod = "1º ANO";
 
             const area = document.getElementById('area_modalidade');
-            if(mod !== "") {
+
+            if (mod !== "") {
+                // Mantém o direcionamento automático para menores de 7 anos
                 area.innerHTML = `<div style="background:rgba(0,0,0,0.2);padding:15px;border-radius:10px;text-align:center;"><b>MODALIDADE DESTINADA:</b><br>${mod}</div><input type="hidden" name="ano_pretendido" value="${mod}">`;
             } else {
-                area.innerHTML = `<label>ANO ESCOLAR:</label><select name="ano_pretendido" required><option value="2º ANO">2º ANO</option><option value="3º ANO">3º ANO</option><option value="EJA">EJA (MAIORES DE 15)</option></select>`;
+                // Listas de opções
+                const fundamental = ['2º ANO', '3º ANO', '4º ANO', '5º ANO', '6º ANO', '7º ANO', '8º ANO', '9º ANO'];
+                const eja = ['EJA I', 'EJA II', 'EJA III', 'EJA IV', 'EJA V', 'EJA VI', 'EJA VII', 'EJA VIII', 'EJA IX'];
+                
+                let opcoes = "";
+
+                // Regra: 7 até 14 anos e 11 meses
+                if (anos >= 7 && anos < 15) {
+                    fundamental.forEach(item => { opcoes += `<option value="${item}">${item}</option>`; });
+                } 
+                // Regra: 15 até 17 anos e 11 meses (Fundamental + EJA)
+                else if (anos >= 15 && anos < 18) {
+                    [...fundamental, ...eja].forEach(item => { opcoes += `<option value="${item}">${item}</option>`; });
+                } 
+                // Regra: 18 anos ou mais (Apenas EJA)
+                else if (anos >= 18) {
+                    eja.forEach(item => { opcoes += `<option value="${item}">${item}</option>`; });
+                }
+
+                area.innerHTML = `
+                    <label>ANO ESCOLAR:</label>
+                    <select name="ano_pretendido" class="form-control" required>
+                        <option value="">Selecione o ano...</option>
+                        ${opcoes}
+                    </select>`;
             }
         }
-
+            
         // --- VALIDADOR MATEMÁTICO DE CPF ---
         function validarCPF(cpf) {
             cpf = cpf.replace(/\D/g, '');

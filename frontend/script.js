@@ -327,9 +327,6 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="listarDevolucoesAdmin()">
                 <i>🔄</i><span>AUTORIZAR DEVOLUÇÕES</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="telaAbastecerEstoque()">
-                <i>📥</i><span>ENTRADA ESTOQUE</span>
-            </button>
             <button class="btn-grande btn-vidro" onclick="modalEscolhaTipoPedido()">
                 <i>➕</i><span>CRIAR PEDIDO</span>
             </button>
@@ -338,9 +335,6 @@ async function carregarDashboard() {
             </button>
             <button class="btn-grande btn-vidro" style="background:rgba(16, 185, 129, 0.2);" onclick="telaEstoqueMateriaisEPatrimonios()">
                 <i>📦</i><span>VER ESTOQUE DE MATERIAIS</span>
-            </button>
-            <button class="btn-grande btn-vidro btn-breve" // ---onclick="telaInventarioLocal()">
-                <i>🏷️</i><span>INVENTÁRIO PATRIMÔNIO</span>
             </button>
             <button class="btn-grande btn-vidro btn-breve" // ---onclick="telaAdminDashboard()">
                 <i>📈</i><span>PAINEL DE PEDIDOS</span>
@@ -351,7 +345,7 @@ async function carregarDashboard() {
 
         `;
         // Chama notificaras de novas solicitações de Escolas e Logística
-        setTimeout(() => verificarSolicitacoesPendentes(), 500);
+        // setTimeout(() => verificarSolicitacoesPendentes(), 500);
     }
     // --- 5. PERFIL: ESTOQUE ---
     if (perfil === 'estoque') {
@@ -380,15 +374,15 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="telaHistoricoMovimentacoes()">
                 <i>📜</i><span>HISTÓRICO</span>
             </button>
-            <button class="btn-grande btn-vidro btn-breve" //  --- onclick="telaEntradaPatrimonioLote()">
-                <i>🏷️</i><span>LANÇAR ENTRADA PATRIMÔNIO</span>
+            <button class="btn-grande btn-vidro" onclick="telaMenuPatrimonio()">
+                <i>🏷️</i><span>PATRIMÔNIO</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="abrirCalculadoraConversao()">
                 <i>🧮</i><span>CALCULADORA</span>
             </button>
         `;
         // Chama notificaras de pedidos aguardando separação
-        setTimeout(verificarPedidosParaSeparar, 500);
+        // setTimeout(verificarPedidosParaSeparar, 500);
     }
     // --- 6. PERFIL: LOGÍSTICA ---
     if (perfil === 'logistica') {
@@ -11774,6 +11768,591 @@ function notificarBreve(mensagem) {
         overlay.style.transition = '0.5s';
         setTimeout(() => overlay.remove(), 500);
     }, 3000);
+}
+
+async function telaMenuPatrimonio() {
+    const app = document.getElementById('app-content');
+    
+    // Reset visual e centralização
+    app.style.background = "transparent";
+    app.style.display = "block"; 
+
+    app.innerHTML = `
+        <div class="painel-vidro" style="max-width: 1000px; margin: 20px auto; padding: 30px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom:15px; margin-bottom:30px;">
+                <h2 style="color:white; margin:0; display:flex; align-items:center; gap:12px;">
+                    <span style="font-size: 1.8rem;">🏛️</span> GESTÃO DE PATRIMÔNIO
+                </h2>
+                <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+            </div>
+
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:20px;">
+                
+                <button onclick="telaPatrimonioEntrada()" class="btn-quadrado-vidro">
+                    <span style="font-size:2rem;">📥</span><br>
+                    DAR ENTRADA<br><small style="font-weight:normal; opacity:0.7;">(Estoque)</small>
+                </button>
+
+                <button onclick="telaPatrimonioSolicitar()" class="btn-quadrado-vidro">
+                    <span style="font-size:2rem;">📝</span><br>
+                    SOLICITAR ITEM<br><small style="font-weight:normal; opacity:0.7;">(Novo Pedido)</small>
+                </button>
+
+                <button onclick="telaPatrimonioAprovar()" class="btn-quadrado-vidro" style="border-color: rgba(255, 215, 0, 0.3);">
+                    <span style="font-size:2rem;">⚖️</span><br>
+                    APROVAR / REMESSAS<br><small style="font-weight:normal; opacity:0.7;">(Gestão)</small>
+                </button>
+
+                <button onclick="telaPatrimonioColeta()" class="btn-quadrado-vidro">
+                    <span style="font-size:2rem;">🚚</span><br>
+                    COLETAR REMESSA<br><small style="font-weight:normal; opacity:0.7;">(Logística)</small>
+                </button>
+
+                <button onclick="telaPatrimonioConfirmar()" class="btn-quadrado-vidro">
+                    <span style="font-size:2rem;">✅</span><br>
+                    CONFIRMAR ENTREGA<br><small style="font-weight:normal; opacity:0.7;">(Recebimento)</small>
+                </button>
+
+                <button onclick="telaPatrimonioMover()" class="btn-quadrado-vidro">
+                    <span style="font-size:2rem;">🔄</span><br>
+                    MOVER LOCAL<br><small style="font-weight:normal; opacity:0.7;">(Transferência)</small>
+                </button>
+
+            </div>
+        </div>
+    `;
+}
+
+async function telaPatrimonioSolicitar() {
+    const app = document.getElementById('app-content');
+    app.style.background = "transparent";
+
+    // Criamos um array temporário para os itens da solicitação
+    let itensSolicitados = [];
+
+    try {
+        // Buscamos apenas produtos que são do tipo PATRIMONIO
+        const resProd = await fetch(`${API_URL}/produtos?tipo=PATRIMONIO`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const produtos = await resProd.json();
+
+        app.innerHTML = `
+            <div class="painel-vidro" style="max-width: 800px; margin: 20px auto;">
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom:15px; margin-bottom:25px;">
+                    <h2 style="color:white; margin:0;">📝 NOVA SOLICITAÇÃO DE PATRIMÔNIO</h2>
+                    <button onclick="telaMenuPatrimonio()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                </div>
+
+                <div style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 15px; border: 1px solid rgba(255,255,255,0.1);">
+                    <label style="color:white; font-weight:bold; display:block; margin-bottom:10px;">SELECIONE O PRODUTO:</label>
+                    <div style="display:flex; gap:10px; margin-bottom:20px;">
+                        <select id="sel-patrimonio" style="flex:1; padding:12px; border-radius:10px; background:rgba(255,255,255,0.1); color:white; border:1px solid rgba(255,255,255,0.2);">
+                            <option value="" style="color:black;">Escolha um item...</option>
+                            ${produtos.map(p => `<option value="${p.id}" data-nome="${p.nome}" style="color:black;">${p.nome}</option>`).join('')}
+                        </select>
+                        <input type="number" id="qtd-patrimonio" value="1" min="1" style="width:80px; padding:12px; border-radius:10px; background:rgba(255,255,255,0.1); color:white; border:1px solid rgba(255,255,255,0.2); text-align:center;">
+                        <button onclick="adicionarItemPatrimonio()" style="background:#3b82f6; color:white; border:none; padding:0 20px; border-radius:10px; cursor:pointer; font-weight:bold;">ADICIONAR</button>
+                    </div>
+
+                    <div id="lista-itens-solicitacao" style="margin-bottom:20px;">
+                        </div>
+
+                    <label style="color:white; font-weight:bold; display:block; margin-bottom:10px;">OBSERVAÇÃO / FINALIDADE:</label>
+                    <textarea id="obs-patrimonio" placeholder="Descreva o motivo da solicitação..." style="width:100%; height:80px; padding:12px; border-radius:10px; background:rgba(255,255,255,0.1); color:white; border:1px solid rgba(255,255,255,0.2); margin-bottom:20px;"></textarea>
+
+                    <button onclick="enviarSolicitacaoPatrimonio()" style="width:100%; padding:15px; background:#10b981; color:white; border:none; border-radius:12px; cursor:pointer; font-weight:bold; font-size:1.1rem; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
+                        ENVIAR SOLICITAÇÃO PARA O ESTOQUE
+                    </button>
+                </div>
+            </div>
+        `;
+
+        // Função interna para gerenciar a lista na tela
+        window.adicionarItemPatrimonio = () => {
+            const sel = document.getElementById('sel-patrimonio');
+            const qtd = document.getElementById('qtd-patrimonio').value;
+            const produtoNome = sel.options[sel.selectedIndex].dataset.nome;
+            const produtoId = sel.value;
+
+            if (!produtoId) return alert("Selecione um produto.");
+
+            itensSolicitados.push({ produto_id: produtoId, nome: produtoNome, quantidade: qtd });
+            renderizarListaPatrimonio();
+        };
+
+        window.renderizarListaPatrimonio = () => {
+            const lista = document.getElementById('lista-itens-solicitacao');
+            lista.innerHTML = itensSolicitados.map((item, index) => `
+                <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.05); padding:10px 15px; border-radius:8px; margin-bottom:5px; border:1px solid rgba(255,255,255,0.1);">
+                    <span style="color:white;"><strong>${item.quantidade}x</strong> ${item.nome}</span>
+                    <button onclick="itensSolicitados.splice(${index}, 1); renderizarListaPatrimonio();" style="background:none; border:none; color:#ef4444; cursor:pointer; font-weight:bold;">REMOVER</button>
+                </div>
+            `).join('');
+        };
+
+        window.enviarSolicitacaoPatrimonio = async () => {
+            if (itensSolicitados.length === 0) return alert("Adicione ao menos um item.");
+            
+            const payload = {
+                local_destino_id: USUARIO.local_id, // Se for Escola, o destino é ela mesma
+                itens: itensSolicitados,
+                observacao: document.getElementById('obs-patrimonio').value
+            };
+
+            const res = await fetch(`${API_URL}/patrimonio/solicitar`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                alert("✅ Solicitação enviada com sucesso!");
+                telaMenuPatrimonio();
+            }
+        };
+
+    } catch (err) {
+        console.error(err);
+    }
+}
+
+async function telaPatrimonioEntrada() {
+    const app = document.getElementById('app-content');
+    app.style.background = "transparent";
+
+    try {
+        // Buscamos Locais e Produtos homologados para o Select
+        const [resLocais, resProds] = await Promise.all([
+            fetch(`${API_URL}/locais`, { headers: { 'Authorization': `Bearer ${TOKEN}` } }),
+            fetch(`${API_URL}/produtos?tipo=PATRIMONIO`, { headers: { 'Authorization': `Bearer ${TOKEN}` } })
+        ]);
+
+        const locais = await resLocais.json();
+        const produtos = await resProds.json();
+
+        app.innerHTML = `
+            <div class="painel-vidro" style="max-width: 600px; margin: 20px auto;">
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom:15px; margin-bottom:25px;">
+                    <h2 style="color:white; margin:0;">📥 ENTRADA DE PATRIMÔNIO</h2>
+                    <button onclick="telaMenuPatrimonio()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                </div>
+
+                <div style="display:grid; gap:15px;">
+                    <div>
+                        <label style="color:white; font-weight:bold; display:block; margin-bottom:5px;">PRODUTO (HOMOLOGADO):</label>
+                        <select id="ent-pat-produto" style="width:100%; padding:12px; border-radius:10px; background:rgba(255,255,255,0.1); color:white; border:1px solid rgba(255,255,255,0.2);">
+                            <option value="" style="color:black;">Selecione o item...</option>
+                            ${produtos.map(p => `<option value="${p.id}" style="color:black;">${p.nome} (Saldo Atual: ${p.quantidade_estoque})</option>`).join('')}
+                        </select>
+                    </div>
+
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px;">
+                        <div>
+                            <label style="color:white; font-weight:bold; display:block; margin-bottom:5px;">QUANTIDADE:</label>
+                            <input type="number" id="ent-pat-qtd" value="1" min="1" style="width:100%; padding:12px; border-radius:10px; background:rgba(255,255,255,0.1); color:white; border:1px solid rgba(255,255,255,0.2);">
+                        </div>
+                        <div>
+                            <label style="color:white; font-weight:bold; display:block; margin-bottom:5px;">NOTA FISCAL:</label>
+                            <input type="text" id="ent-pat-nf" placeholder="Opcional" style="width:100%; padding:12px; border-radius:10px; background:rgba(255,255,255,0.1); color:white; border:1px solid rgba(255,255,255,0.2);">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label style="color:white; font-weight:bold; display:block; margin-bottom:5px;">LOCAL DE ARMAZENAGEM:</label>
+                        <select id="ent-pat-local" style="width:100%; padding:12px; border-radius:10px; background:rgba(255,255,255,0.1); color:white; border:1px solid rgba(255,255,255,0.2);">
+                            ${locais.map(l => `<option value="${l.id}" ${l.nome.includes('ESTOQUE') ? 'selected' : ''} style="color:black;">${l.nome}</option>`).join('')}
+                        </select>
+                    </div>
+
+                    <button onclick="processarEntradaPatrimonio()" style="width:100%; padding:15px; background:#10b981; color:white; border:none; border-radius:12px; cursor:pointer; font-weight:bold; font-size:1.1rem; margin-top:10px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
+                        CONFIRMAR ENTRADA E INDIVIDUALIZAR
+                    </button>
+                </div>
+            </div>
+        `;
+
+        // Função para disparar a gravação
+        window.processarEntradaPatrimonio = async () => {
+            const data = {
+                produto_id: document.getElementById('ent-pat-produto').value,
+                quantidade: parseInt(document.getElementById('ent-pat-qtd').value),
+                nota_fiscal: document.getElementById('ent-pat-nf').value,
+                local_id: document.getElementById('ent-pat-local').value,
+                setor_id: null // Pode ser definido depois
+            };
+
+            if (!data.produto_id || data.quantidade < 1) return alert("Preencha o produto e a quantidade.");
+
+            const res = await fetch(`${API_URL}/patrimonio/entrada`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+                body: JSON.stringify(data)
+            });
+
+            if (res.ok) {
+                alert("✅ Itens registrados individualmente no patrimônio!");
+                telaMenuPatrimonio();
+            }
+        };
+
+    } catch (err) {
+        console.error(err);
+    }
+}
+
+async function telaPatrimonioAprovar() {
+    const app = document.getElementById('app-content');
+    app.style.background = "transparent";
+
+    try {
+        const res = await fetch(`${API_URL}/patrimonio/solicitacoes-pendentes`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const solicitacoes = await res.json();
+
+        app.innerHTML = `
+            <div class="painel-vidro" style="max-width: 1000px; margin: 20px auto;">
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom:15px; margin-bottom:25px;">
+                    <h2 style="color:white; margin:0;">⚖️ APROVAÇÃO DE PATRIMÔNIO</h2>
+                    <button onclick="telaMenuPatrimonio()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                </div>
+
+                <div style="display:grid; gap:15px;">
+                    ${solicitacoes.length === 0 ? 
+                        '<p style="color:rgba(255,255,255,0.6); text-align:center; padding:40px;">Nenhuma solicitação pendente.</p>' : 
+                        solicitacoes.map(s => `
+                            <div style="background: rgba(255,255,255,0.05); padding:20px; border-radius:15px; border: 1px solid rgba(255,255,255,0.1); display:flex; justify-content:space-between; align-items:center;">
+                                <div>
+                                    <div style="font-size:1.1rem; font-weight:bold; color:white;">📍 ${s.escola_nome}</div>
+                                    <div style="color:rgba(255,255,255,0.6); font-size:0.9rem;">
+                                        Solicitado por: <strong>${s.solicitante}</strong> em ${new Date(s.data_criacao).toLocaleDateString()}<br>
+                                        Qtd. de Modelos Diferentes: ${s.total_itens}
+                                    </div>
+                                </div>
+                                <div style="display:flex; gap:10px;">
+                                    <button onclick="aprovarSolicitacaoPatrimonio(${s.id})" style="background:#10b981; color:white; border:none; padding:10px 20px; border-radius:8px; cursor:pointer; font-weight:bold;">✅ APROVAR</button>
+                                    <button onclick="verDetalhesSolicitacao(${s.id})" style="background:rgba(255,255,255,0.1); color:white; border:1px solid rgba(255,255,255,0.2); padding:10px 20px; border-radius:8px; cursor:pointer;">🔍 ITENS</button>
+                                </div>
+                            </div>
+                        `).join('')
+                    }
+                </div>
+            </div>
+        `;
+    } catch (err) {
+        console.error(err);
+    }
+}
+
+// Função para Aprovar
+window.aprovarSolicitacaoPatrimonio = async (pedidoId) => {
+    if (!confirm("Confirmar aprovação deste pedido de patrimônio?")) return;
+    const res = await fetch(`${API_URL}/patrimonio/aprovar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+        body: JSON.stringify({ pedidoId })
+    });
+    if (res.ok) {
+        notificar("Solicitação aprovada! Agora você pode gerar as remessas.");
+        telaPatrimonioAprovar();
+    }
+};
+
+async function telaPatrimonioMontarRemessa(pedidoId) {
+    const app = document.getElementById('app-content');
+    
+    try {
+        // Busca os itens que foram aprovados no pedido
+        const resItens = await fetch(`${API_URL}/pedidos/detalhes/${pedidoId}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const pedido = await resItens.json(); // Espera-se { itens: [...] }
+
+        app.innerHTML = `
+            <div class="painel-vidro" style="max-width: 900px; margin: 20px auto;">
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom:15px; margin-bottom:25px;">
+                    <h2 style="color:white; margin:0;">📦 MONTAR REMESSA (PEDIDO #${pedidoId})</h2>
+                    <button onclick="telaPatrimonioAprovar()" class="btn-voltar-vidro">⬅️ CANCELAR</button>
+                </div>
+
+                <div id="container-selecao-itens">
+                    <p style="color:white; opacity:0.8;">Selecione abaixo os itens físicos que serão enviados nesta remessa:</p>
+                    
+                    ${pedido.itens.map(item => `
+                        <div class="card-item-selecao" style="background:rgba(255,255,255,0.05); margin-bottom:15px; padding:15px; border-radius:12px; border:1px solid rgba(255,255,255,0.1);">
+                            <div style="color:white; font-weight:bold; margin-bottom:10px;">
+                                ${item.nome} (Solicitado: ${item.quantidade_solicitada})
+                            </div>
+                            <div id="lista-fisica-${item.produto_id}" class="grid-patrimonios" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap:10px;">
+                                <button onclick="carregarPatrimoniosDisponiveis(${item.produto_id}, ${item.quantidade_solicitada})" 
+                                    style="background:#3b82f6; color:white; border:none; padding:8px; border-radius:5px; cursor:pointer; font-size:0.8rem;">
+                                    🔍 SELECIONAR UNIDADES
+                                </button>
+                            </div>
+                        </div>
+                    `).join('')}
+
+                    <button onclick="confirmarGeracaoRemessa(${pedidoId})" 
+                        style="width:100%; padding:15px; background:#10b981; color:white; border:none; border-radius:12px; cursor:pointer; font-weight:bold; margin-top:20px; font-size:1.1rem; box-shadow: 0 4px 15px rgba(0,0,0,0.3);">
+                        🚀 FINALIZAR E LIBERAR PARA LOGÍSTICA
+                    </button>
+                </div>
+            </div>
+        `;
+    } catch (err) {
+        notificar("Erro ao carregar detalhes do pedido", "erro");
+    }
+}
+
+// Função para listar os IDs físicos com Checkbox
+window.carregarPatrimoniosDisponiveis = async (produtoId, limite) => {
+    const container = document.getElementById(`lista-fisica-${produtoId}`);
+    container.innerHTML = "<small style='color:white;'>Buscando itens no estoque...</small>";
+
+    const res = await fetch(`${API_URL}/patrimonio/disponiveis/${produtoId}`, {
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+    const disponiveis = await res.json();
+
+    container.innerHTML = disponiveis.map(p => `
+        <label style="background:rgba(255,255,255,0.1); padding:8px; border-radius:6px; cursor:pointer; display:flex; align-items:center; gap:8px; color:white; font-size:0.85rem; border: 1px solid rgba(255,255,255,0.1);">
+            <input type="checkbox" class="check-patrimonio" value="${p.id}" data-pid="${produtoId}">
+            ID: ${p.id} ${p.numero_serie ? `<br><small>${p.numero_serie}</small>` : ''}
+        </label>
+    `).join('');
+};
+
+window.confirmarGeracaoRemessa = async (pedidoId) => {
+    const selecionados = Array.from(document.querySelectorAll('.check-patrimonio:checked')).map(cb => parseInt(cb.value));
+
+    if (selecionados.length === 0) return notificar("Selecione pelo menos um item físico.", "erro");
+
+    if (confirm(`Confirmar o envio de ${selecionados.length} itens para logística?`)) {
+        const res = await fetch(`${API_URL}/patrimonio/gerar-remessa`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ pedidoId, itensSelecionados: selecionados })
+        });
+
+        if (res.ok) {
+            notificar("Remessa gerada! A logística já pode visualizar para coleta.");
+            telaMenuPatrimonio();
+        }
+    }
+};
+
+async function telaPatrimonioColeta() {
+    const app = document.getElementById('app-content');
+    app.style.background = "transparent";
+
+    try {
+        const res = await fetch(`${API_URL}/patrimonio/logistica/pendentes`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const remessas = await res.json();
+
+        app.innerHTML = `
+            <div class="painel-vidro" style="max-width: 900px; margin: 20px auto;">
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom:15px; margin-bottom:25px;">
+                    <h2 style="color:white; margin:0;">🚚 COLETA DE PATRIMÔNIO</h2>
+                    <button onclick="telaMenuPatrimonio()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                </div>
+
+                <div style="display:grid; gap:15px;">
+                    ${remessas.length === 0 ? 
+                        '<p style="color:rgba(255,255,255,0.6); text-align:center; padding:40px;">Nenhuma remessa aguardando coleta no momento.</p>' : 
+                        remessas.map(r => `
+                            <div style="background: rgba(255,255,255,0.05); padding:20px; border-radius:15px; border: 1px solid rgba(255,255,255,0.1); display:flex; justify-content:space-between; align-items:center;">
+                                <div>
+                                    <div style="font-size:1.1rem; font-weight:bold; color:white;">📍 DESTINO: ${r.local_destino}</div>
+                                    <div style="color:rgba(255,255,255,0.6); font-size:0.9rem;">
+                                        Remessa #${r.remessa_id} | Pedido #${r.pedido_id}<br>
+                                        Itens Individuais: <strong>${r.total_itens} volumes</strong>
+                                    </div>
+                                </div>
+                                <button onclick="confirmarColetaPatrimonio(${r.remessa_id})" 
+                                    style="background:#3b82f6; color:white; border:none; padding:12px 25px; border-radius:8px; cursor:pointer; font-weight:bold; transition:0.3s;"
+                                    onmouseover="this.style.background='#2563eb'" onmouseout="this.style.background='#3b82f6'">
+                                    📦 CONFIRMAR COLETA
+                                </button>
+                            </div>
+                        `).join('')
+                    }
+                </div>
+            </div>
+        `;
+    } catch (err) {
+        console.error(err);
+    }
+}
+
+// Função para confirmar a ação no banco
+window.confirmarColetaPatrimonio = async (remessaId) => {
+    if (!confirm("Confirmar que esta remessa foi carregada para o transporte?")) return;
+
+    const res = await fetch(`${API_URL}/patrimonio/logistica/confirmar-coleta`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+        body: JSON.stringify({ remessaId })
+    });
+
+    if (res.ok) {
+        notificar("Coleta confirmada! A remessa agora está em trânsito.");
+        telaPatrimonioColeta();
+    }
+};
+
+async function telaPatrimonioConfirmar() {
+    const app = document.getElementById('app-content');
+    app.style.background = "transparent";
+
+    try {
+        // Procuramos remessas em transporte para o local do usuário
+        const res = await fetch(`${API_URL}/patrimonio/remessas-a-caminho`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const remessas = await res.json();
+
+        app.innerHTML = `
+            <div class="painel-vidro" style="max-width: 900px; margin: 20px auto;">
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom:15px; margin-bottom:25px;">
+                    <h2 style="color:white; margin:0;">✅ CONFIRMAR RECEBIMENTO</h2>
+                    <button onclick="telaMenuPatrimonio()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                </div>
+
+                <div style="display:grid; gap:15px;">
+                    ${remessas.length === 0 ? 
+                        '<p style="color:rgba(255,255,255,0.6); text-align:center; padding:40px;">Não há patrimónios em trânsito para a sua localização.</p>' : 
+                        remessas.map(r => `
+                            <div style="background: rgba(255,255,255,0.05); padding:20px; border-radius:15px; border: 1px solid rgba(255,255,255,0.1); display:flex; justify-content:space-between; align-items:center;">
+                                <div>
+                                    <div style="font-size:1.1rem; font-weight:bold; color:white;">📦 REMESSA #${r.id}</div>
+                                    <div style="color:rgba(255,255,255,0.6); font-size:0.9rem;">
+                                        Enviado em: ${new Date(r.data_saida).toLocaleDateString()}<br>
+                                        Itens na carga: <strong>${r.total_itens} volumes</strong>
+                                    </div>
+                                </div>
+                                <button onclick="finalizarRecebimentoPatrimonio(${r.id})" 
+                                    style="background:#10b981; color:white; border:none; padding:12px 25px; border-radius:8px; cursor:pointer; font-weight:bold; box-shadow: 0 4px 12px rgba(16,185,129,0.3);">
+                                    CONFIRMAR CHEGADA
+                                </button>
+                            </div>
+                        `).join('')
+                    }
+                </div>
+            </div>
+        `;
+    } catch (err) {
+        console.error(err);
+    }
+}
+
+window.finalizarRecebimentoPatrimonio = async (remessaId) => {
+    if (!confirm("Confirma que todos os volumes desta remessa foram entregues corretamente?")) return;
+
+    const res = await fetch(`${API_URL}/patrimonio/confirmar-recebimento`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+        body: JSON.stringify({ remessaId })
+    });
+
+    if (res.ok) {
+        notificar("Excelente! O património já consta como ativo no seu local.");
+        telaMenuPatrimonio();
+    }
+};
+
+async function telaPatrimonioConsulta() {
+    const app = document.getElementById('app-content');
+    app.style.background = "transparent";
+
+    app.innerHTML = `
+        <div class="painel-vidro" style="max-width: 800px; margin: 20px auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom:15px; margin-bottom:25px;">
+                <h2 style="color:white; margin:0;">🔍 CONSULTA DE PATRIMÔNIO</h2>
+                <button onclick="telaMenuPatrimonio()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+            </div>
+
+            <div style="display:flex; gap:10px; margin-bottom:30px;">
+                <input type="text" id="busca-patrimonio" placeholder="Digite o ID ou Número de Série..." 
+                    style="flex:1; padding:15px; border-radius:12px; background:rgba(255,255,255,0.1); color:white; border:1px solid rgba(255,255,255,0.2); font-size:1.1rem;">
+                <button onclick="pesquisarPatrimonio()" style="background:#3b82f6; color:white; border:none; padding:0 25px; border-radius:12px; cursor:pointer; font-weight:bold;">BUSCAR</button>
+            </div>
+
+            <div id="resultado-consulta"></div>
+        </div>
+    `;
+}
+
+window.pesquisarPatrimonio = async () => {
+    const termo = document.getElementById('busca-patrimonio').value;
+    if (!termo) return;
+
+    const res = await fetch(`${API_URL}/patrimonio/historico/${termo}`, {
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+    
+    if (!res.ok) return notificar("Patrimônio não encontrado.", "erro");
+
+    const data = await res.json();
+    const { detalhes, historico } = data;
+
+    document.getElementById('resultado-consulta').innerHTML = `
+        <div style="background:rgba(255,255,255,0.1); padding:20px; border-radius:15px; border:1px solid #10b981; margin-bottom:25px;">
+            <h3 style="color:#10b981; margin-top:0;">📍 Localização Atual: ${detalhes.local_atual}</h3>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; color:white; gap:10px; font-size:0.95rem;">
+                <div><strong>Produto:</strong> ${detalhes.produto_nome}</div>
+                <div><strong>Série:</strong> ${detalhes.numero_serie || 'Não informado'}</div>
+                <div><strong>Status:</strong> ${detalhes.status}</div>
+                <div><strong>Nota Fiscal:</strong> ${detalhes.nota_fiscal || 'N/A'}</div>
+            </div>
+        </div>
+
+        <h3 style="color:white; margin-bottom:15px;">📜 Histórico de Movimentações</h3>
+        <div style="border-left: 2px dashed rgba(255,255,255,0.3); margin-left: 10px; padding-left: 20px;">
+            ${historico.length === 0 ? 
+                '<p style="color:rgba(255,255,255,0.5);">Sem movimentações registradas além da entrada.</p>' :
+                historico.map(h => `
+                    <div style="margin-bottom:20px; position:relative;">
+                        <div style="position:absolute; left:-27px; top:5px; width:12px; height:12px; background:#3b82f6; border-radius:50%; border:2px solid white;"></div>
+                        <div style="color:white; font-weight:bold;">${h.status === 'ENTREGUE' ? 'Chegada em' : 'Enviado para'}: ${h.destino}</div>
+                        <div style="color:rgba(255,255,255,0.6); font-size:0.85rem;">
+                            Data: ${new Date(h.data_chegada || h.data_saida).toLocaleString()}<br>
+                            Responsável: ${h.quem_enviou}
+                        </div>
+                    </div>
+                `).join('')
+            }
+        </div>
+    `;
+};
+
+async function carregarChamadosPendentesEscola(localId) {
+    const areaNotificacao = document.getElementById('notificacao-impressora-escola');
+    if (!areaNotificacao) return;
+
+    try {
+        // Rota para buscar chamados específicos desta escola que não estão 'CONCLUIDO'
+        const res = await fetch(`${API_URL}/chamados/impressora/pendentes?local_id=${localId}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const chamados = await res.json();
+
+        if (chamados.length > 0) {
+            areaNotificacao.innerHTML = `
+                <div class="painel-vidro" style="padding: 10px 15px; border-radius: 12px; border: 1px solid rgba(255,165,0,0.3); background: rgba(255,165,0,0.1); display: flex; align-items: center; gap: 10px; cursor: pointer;" onclick="telaListarChamadosEscola()">
+                    <span style="font-size: 1.2rem;">🖨️</span>
+                    <div style="text-align: left;">
+                        <div style="color: white; font-size: 0.75rem; font-weight: bold; line-height: 1;">CHAMADOS ABERTOS</div>
+                        <div style="color: #fbbf24; font-size: 0.9rem; font-weight: 900;">${chamados.length} AGUARDANDO TÉCNICO</div>
+                    </div>
+                </div>
+            `;
+        }
+    } catch (err) {
+        console.error("Erro ao buscar chamados da escola:", err);
+    }
 }
 
 // Isso garante que o onclick="funcao()" funcione sempre

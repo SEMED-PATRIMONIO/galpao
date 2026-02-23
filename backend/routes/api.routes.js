@@ -4172,4 +4172,297 @@ router.post('/devolucoes/estoque/finalizar-entrada', verificarToken, async (req,
     }
 });
 
+// ROTA EXCLUSIVA: Criar Solicitação de Patrimônio
+router.post('/patrimonio/solicitar', verificarToken, async (req, res) => {
+    const { local_destino_id, itens, observacao } = req.body;
+    const usuario_origem_id = req.user.id; // Pego o ID de quem está logado
+
+    try {
+        await db.query('BEGIN');
+
+        // 1. Cria o registro principal na tabela pedidos
+        // Usamos status 'AGUARDANDO_AUTORIZACAO' e tipo 'PATRIMONIO'
+        const pedidoRes = await db.query(
+            `INSERT INTO pedidos 
+             (usuario_origem_id, local_destino_id, status, tipo_pedido, motivo_recusa) 
+             VALUES ($1, $2, 'AGUARDANDO_AUTORIZACAO', 'PATRIMONIO', $3) 
+             RETURNING id`,
+            [usuario_origem_id, local_destino_id, observacao]
+        );
+
+        const pedidoId = pedidoRes.rows[0].id;
+
+        // 2. Insere os itens solicitados (apenas quantidade neste momento)
+        for (const item of itens) {
+            await db.query(
+                `INSERT INTO pedido_itens (pedido_id, produto_id, quantidade_solicitada) 
+                 VALUES ($1, $2, $3)`,
+                [pedidoId, item.produto_id, item.quantidade]
+            );
+        }
+
+        await db.query('COMMIT');
+        res.json({ success: true, pedidoId });
+
+    } catch (err) {
+        await db.query('ROLLBACK');
+        console.error("Erro ao solicitar patrimônio:", err.message);
+        res.status(500).json({ error: "Erro interno ao processar solicitação." });
+    }
+});
+
+// ROTA: Entrada de Novos Patrimônios
+router.post('/patrimonio/entrada', verificarToken, async (req, res) => {
+    const { produto_id, quantidade, nota_fiscal, local_id, setor_id } = req.body;
+
+    try {
+        await db.query('BEGIN');
+
+        // 1. Validação de Segurança: O produto é realmente do tipo PATRIMONIO?
+        const checkProd = await db.query(
+            "SELECT tipo FROM produtos WHERE id = $1", [produto_id]
+        );
+
+        if (checkProd.rows[0].tipo !== 'PATRIMONIO') {
+            throw new Error("Este produto não está catalogado como Patrimônio.");
+        }
+
+        // 2. Loop de Individualização: Cria X registros na tabela 'patrimonios'
+        // Note que numero_serie e outros campos ficam nulos para preenchimento tardio
+        for (let i = 0; i < quantidade; i++) {
+            await db.query(
+                `INSERT INTO patrimonios (produto_id, local_id, setor_id, nota_fiscal, status) 
+                 VALUES ($1, $2, $3, $4, 'ESTOQUE')`,
+                [produto_id, local_id, setor_id, nota_fiscal]
+            );
+        }
+
+        // 3. Sincronização: Atualiza a contagem global na tabela 'produtos'
+        await db.query(
+            "UPDATE produtos SET quantidade_estoque = quantidade_estoque + $1 WHERE id = $2",
+            [quantidade, produto_id]
+        );
+
+        await db.query('COMMIT');
+        res.json({ success: true, message: `${quantidade} itens individualizados com sucesso.` });
+
+    } catch (err) {
+        await db.query('ROLLBACK');
+        console.error("Erro na entrada de patrimônio:", err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 1. Listar solicitações de patrimônio pendentes
+router.get('/patrimonio/solicitacoes-pendentes', verificarToken, async (req, res) => {
+    try {
+        const query = `
+            SELECT p.id, p.data_criacao, l.nome as escola_nome, u.nome as solicitante,
+            (SELECT COUNT(*) FROM pedido_itens WHERE pedido_id = p.id) as total_itens
+            FROM pedidos p
+            JOIN locais l ON p.local_destino_id = l.id
+            JOIN usuarios u ON p.usuario_origem_id = u.id
+            WHERE p.tipo_pedido = 'PATRIMONIO' AND p.status = 'AGUARDANDO_AUTORIZACAO'
+            ORDER BY p.data_criacao DESC`;
+        
+        const result = await db.query(query);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 2. Aprovar Solicitação (Transformar em Pedido Oficial)
+router.post('/patrimonio/aprovar', verificarToken, async (req, res) => {
+    const { pedidoId } = req.body;
+    try {
+        await db.query("UPDATE pedidos SET status = 'APROVADO', autorizado_por = $1, data_autorizacao = NOW() WHERE id = $2", 
+        [req.user.id, pedidoId]);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 1. Listar itens físicos disponíveis para um determinado produto
+router.get('/patrimonio/disponiveis/:produtoId', verificarToken, async (req, res) => {
+    try {
+        const { produtoId } = req.params;
+        const query = `
+            SELECT id, numero_serie, nota_fiscal 
+            FROM patrimonios 
+            WHERE produto_id = $1 AND status = 'ESTOQUE'
+            ORDER BY id ASC`;
+        const result = await db.query(query, [produtoId]);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 2. Gerar Remessa de Património (Vinculando IDs individuais)
+router.post('/patrimonio/gerar-remessa', verificarToken, async (req, res) => {
+    const { pedidoId, itensSelecionados } = req.body; // itensSelecionados: [id1, id2, id3...]
+
+    try {
+        await db.query('BEGIN');
+
+        // A. Cria a Remessa principal (status: AGUARDANDO_COLETA)
+        const remessaRes = await db.query(
+            `INSERT INTO remessas (pedido_id, usuario_id, status) 
+             VALUES ($1, $2, 'AGUARDANDO_COLETA') RETURNING id`,
+            [pedidoId, req.user.id]
+        );
+        const remessaId = remessaRes.rows[0].id;
+
+        // B. Vincula cada património à remessa e muda o status do item
+        for (const patId of itensSelecionados) {
+            // Atualiza o património para indicar que está em processo de envio
+            await db.query(
+                `UPDATE patrimonios SET 
+                 status = 'EM_TRANSITO', 
+                 pedido_id = $1 
+                 WHERE id = $2`,
+                [pedidoId, patId]
+            );
+
+            // Se você tiver uma tabela de itens da remessa, insira aqui:
+            await db.query(
+                `INSERT INTO remessa_itens (remessa_id, patrimonio_id) VALUES ($1, $2)`,
+                [remessaId, patId]
+            );
+        }
+
+        await db.query('COMMIT');
+        res.json({ success: true, message: "Remessa gerada com sucesso!" });
+
+    } catch (err) {
+        await db.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 1. Listar remessas de património aguardando coleta
+router.get('/patrimonio/logistica/pendentes', verificarToken, async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                r.id as remessa_id, 
+                r.data_criacao, 
+                p.id as pedido_id, 
+                l.nome as local_destino,
+                (SELECT COUNT(*) FROM remessa_itens WHERE remessa_id = r.id) as total_itens
+            FROM remessas r
+            JOIN pedidos p ON r.pedido_id = p.id
+            JOIN locais l ON p.local_destino_id = l.id
+            WHERE p.tipo_pedido = 'PATRIMONIO' AND r.status = 'AGUARDANDO_COLETA'
+            ORDER BY r.data_criacao ASC`;
+        
+        const result = await db.query(query);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 2. Confirmar Coleta (Mudar status para EM_TRANSPORTE)
+router.post('/patrimonio/logistica/confirmar-coleta', verificarToken, async (req, res) => {
+    const { remessaId } = req.body;
+    try {
+        await db.query(
+            "UPDATE remessas SET status = 'EM_TRANSPORTE', data_saida = NOW() WHERE id = $1",
+            [remessaId]
+        );
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ROTA: Confirmar Recebimento de Património no Destino
+router.post('/patrimonio/confirmar-recebimento', verificarToken, async (req, res) => {
+    const { remessaId } = req.body;
+
+    try {
+        await db.query('BEGIN');
+
+        // 1. Procuramos o local de destino e os itens desta remessa
+        const infoRes = await db.query(`
+            SELECT p.local_destino_id, ri.patrimonio_id 
+            FROM remessas r
+            JOIN pedidos p ON r.pedido_id = p.id
+            JOIN remessa_itens ri ON ri.remessa_id = r.id
+            WHERE r.id = $1`, [remessaId]);
+
+        if (infoRes.rows.length === 0) throw new Error("Remessa não encontrada.");
+
+        const localDestinoId = infoRes.rows[0].local_destino_id;
+        const itens = infoRes.rows.map(r => r.patrimonio_id);
+
+        // 2. Atualizamos cada item na tabela 'patrimonios'
+        // O local_id muda para a escola e o status volta para 'ATIVO' (ou 'ALOCADO')
+        await db.query(`
+            UPDATE patrimonios 
+            SET local_id = $1, 
+                status = 'ATIVO', 
+                data_atualizacao = NOW() 
+            WHERE id = ANY($2)`, 
+            [localDestinoId, itens]);
+
+        // 3. Finalizamos a remessa
+        await db.query("UPDATE remessas SET status = 'ENTREGUE', data_chegada = NOW() WHERE id = $1", [remessaId]);
+
+        await db.query('COMMIT');
+        res.json({ success: true, message: "Património recebido e inventário atualizado!" });
+
+    } catch (err) {
+        await db.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ROTA: Consultar Detalhes e Histórico de um Patrimônio
+router.get('/patrimonio/historico/:identificador', verificarToken, async (req, res) => {
+    const { identificador } = req.params; // Pode ser o ID ou o Número de Série
+
+    try {
+        // 1. Busca os dados atuais do item
+        const itemRes = await db.query(`
+            SELECT p.*, pr.nome as produto_nome, l.nome as local_atual, s.nome as setor_nome
+            FROM patrimonios p
+            JOIN produtos pr ON p.produto_id = pr.id
+            JOIN locais l ON p.local_id = l.id
+            LEFT JOIN setores s ON p.setor_id = s.id
+            WHERE p.id::text = $1 OR p.numero_serie = $1`, [identificador]);
+
+        if (itemRes.rows.length === 0) {
+            return res.status(404).json({ error: "Patrimônio não localizado." });
+        }
+
+        const patrimonio = itemRes.rows[0];
+
+        // 2. Busca o rastro de movimentação (Remessas por onde passou)
+        const trilhaRes = await db.query(`
+            SELECT 
+                r.data_saida, r.data_chegada, r.status,
+                l_dest.nome as destino,
+                u_envio.nome as quem_enviou
+            FROM remessa_itens ri
+            JOIN remessas r ON ri.remessa_id = r.id
+            JOIN pedidos ped ON r.pedido_id = ped.id
+            JOIN locais l_dest ON ped.local_destino_id = l_dest.id
+            JOIN usuarios u_envio ON r.usuario_id = u_envio.id
+            WHERE ri.patrimonio_id = $1
+            ORDER BY r.data_criacao DESC`, [patrimonio.id]);
+
+        res.json({
+            detalhes: patrimonio,
+            historico: trilhaRes.rows
+        });
+
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;

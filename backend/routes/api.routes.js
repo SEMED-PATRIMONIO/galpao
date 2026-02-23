@@ -2863,11 +2863,12 @@ router.get('/impressoras/relatorio-consumo', verificarToken, async (req, res) =>
                 u1.data_fechamento as data_ultima,
                 u2.contador_encerramento as penultima_leitura,
                 u2.data_fechamento as data_penultima
-            FROM impressoras i
+            FROM UltimasLeituras u1
+            JOIN UltimasLeituras u2 ON u1.impressora_id = u2.impressora_id 
+                                   AND u2.ordem = u1.ordem + 1
+            JOIN impressoras i ON u1.impressora_id = i.id
             JOIN locais l ON i.local_id = l.id
-            JOIN UltimasLeituras u1 ON i.id = u1.impressora_id AND u1.ordem = 1
-            JOIN UltimasLeituras u2 ON i.id = u2.impressora_id AND u2.ordem = 2
-            ORDER BY l.nome ASC;
+            ORDER BY u1.data_fechamento DESC;
         `;
         const { rows } = await db.query(query);
         res.json(rows);

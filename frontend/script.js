@@ -295,23 +295,23 @@ async function carregarDashboard() {
     // --- 3. PERFIL: ESCOLA ---
     if (perfil === 'escola') {
           telaPrincipalEscola
-    //    html += `
-    //        <button class="btn-grande btn-vidro" onclick="telaEscolaConfirmarRecebimento()">
-    //            <i>🚚</i><span>CONFIRMAR RECEBIMENTO</span>
-    //        </button>
-    //        <button class="btn-grande btn-vidro" onclick="telaSolicitarUniforme()">
-    //            <i>👕</i><span>SOLICITAR UNIFORMES</span>
-    //        </button>
-    //        <button class="btn-grande btn-vidro" onclick="telaDevolucaoUniforme()">
-    //            <i>🔄</i><span>DEVOLVER UNIFORMES</span>
-    //        </button>
-    //        <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaSolicitarServicoImpressora('recarga')">
-    //            <i>💧</i><span>SOLICITAR RECARGA DE TONER</span>
-    //        </button>
-    //        <button class="btn-grande btn-vidro" onclick="telaSolicitarServicoImpressora('manutencao')">
-    //            <i>🛠️</i><span>SOLICITAR MANUTENÇÃO IMPRESSORA</span>
-    //        </button>
-    //   `;
+        html += `
+            <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaEscolaConfirmarRecebimento()">
+                <i>🚚</i><span>CONFIRMAR RECEBIMENTO</span>
+            </button>
+            <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaSolicitarUniforme()">
+                <i>👕</i><span>SOLICITAR UNIFORMES</span>
+            </button>
+            <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaDevolucaoUniforme()">
+                <i>🔄</i><span>DEVOLVER UNIFORMES</span>
+            </button>
+            <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaSolicitarServicoImpressora('recarga')">
+                <i>💧</i><span>SOLICITAR RECARGA DE TONER</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="telaSolicitarServicoImpressora('manutencao')">
+                <i>🛠️</i><span>SOLICITAR MANUTENÇÃO IMPRESSORA</span>
+            </button>
+       `;
         // Chama notificaras específicos da escola (Pedidos em transporte para o localId)
     //    setTimeout(() => verificarnotificarasEscola(), 500);
     }
@@ -9224,6 +9224,7 @@ async function enviarChamadoAoServidor(dados) {
 
         if (res.ok) {
             notificar("✅ " + resultado.message);
+            notificarBreve("SOLICITAÇÃO ENVIADA COM SUCESSO!");
             carregarDashboard(); // Retorna ao menu principal
         } else {
             // Aqui o servidor avisará se já existe um chamado em aberto
@@ -10587,6 +10588,7 @@ async function telaConsumoImpressoras() {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         });
         const dados = await res.json();
+        dados.sort((a, b) => new Date(b.data_ultima) - new Date(a.data_ultima));
         const corpo = document.getElementById('corpo-consumo');
 
         corpo.innerHTML = dados.map(item => {
@@ -10612,19 +10614,40 @@ async function telaConsumoImpressoras() {
 }
 
 function compartilharConsumoZap() {
-    let texto = "*📊 RELATÓRIO DE CONSUMO DE IMPRESSORAS*\n\n";
-    const linhas = document.querySelectorAll("#corpo-consumo tr");
+    // 1. Capturamos todas as linhas da tabela de consumo
+    const linhas = document.querySelectorAll('#corpo-consumo tr');
     
-    linhas.forEach(linha => {
-        const colunas = linha.querySelectorAll("td");
-        if(colunas.length > 0) {
-            texto += `📍 *${colunas[0].innerText}*\n`;
-            texto += `└ Consumo: ${colunas[5].innerText} em ${colunas[4].innerText}\n`;
-            texto += `└ Média: ${colunas[6].innerText}\n\n`;
-        }
+    if (linhas.length === 0) {
+        return notificar("Não há dados na tabela para compartilhar.", "erro");
+    }
+
+    let mensagem = "📊 *RELATÓRIO DE CONSUMO - CONSULPLENA*\n";
+    mensagem += "━━━━━━━━━━━━━━━━━━━━\n\n";
+
+    // 2. Percorremos cada linha para montar o bloco de texto
+    linhas.forEach((linha, index) => {
+        const col = linha.querySelectorAll('td');
+        
+        // Extraímos os textos das colunas exatamente como aparecem na tela
+        const unidade  = col[0].innerText.trim();
+        const modelo   = col[1].innerText.trim();
+        const leitura  = col[3].innerText.trim();
+        const dias     = col[4].innerText.trim();
+        const consumo  = col[5].innerText.trim();
+        const media    = col[6].innerText.trim();
+
+        mensagem += `📍 *${unidade}*\n`;
+        mensagem += `🖨️ ${modelo}\n`;
+        mensagem += `📈 *Consumo:* ${consumo} (${dias})\n`;
+        mensagem += `🔢 Leitura Atual: ${leitura}\n`;
+        mensagem += `📊 Média Mensal: ${media}\n`;
+        mensagem += `────────────────────\n`;
     });
 
-    const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(texto)}`;
+    mensagem += "\n_Relatório gerado automaticamente pelo Sistema SEMED_";
+
+    // 3. Geramos o link do WhatsApp e abrimos em nova aba
+    const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(mensagem)}`;
     window.open(url, '_blank');
 }
 
@@ -11725,6 +11748,32 @@ function notificar(mensagem, tipo = 'sucesso') {
     `;
 
     document.body.appendChild(overlay);
+}
+
+function notificarBreve(mensagem) {
+    const overlay = document.createElement('div');
+    overlay.className = 'alerta-vidro-overlay'; // Reutiliza o overlay centralizado que criamos
+    
+    overlay.innerHTML = `
+        <div class="alerta-vidro-caixa" style="border-color: #3b82f6;">
+            <div style="font-size: 3rem; margin-bottom: 10px;">📩</div>
+            <p style="font-size: 1.2rem; font-weight: bold; color: white; margin: 0;">
+                ${mensagem}
+            </p>
+            <p style="font-size: 0.9rem; color: rgba(255,255,255,0.6); margin-top: 10px;">
+                Esta mensagem fechará em 3 segundos...
+            </p>
+        </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    // Remove automaticamente após 3 segundos (3000ms)
+    setTimeout(() => {
+        overlay.style.opacity = '0';
+        overlay.style.transition = '0.5s';
+        setTimeout(() => overlay.remove(), 500);
+    }, 3000);
 }
 
 // Isso garante que o onclick="funcao()" funcione sempre

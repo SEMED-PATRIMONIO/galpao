@@ -33,24 +33,24 @@ app.post('/api/login', async (req, res) => {
 // LISTAR ITENS
 app.get('/api/item', async (req, res) => {
     try {
+        // Adicionamos o filtro WHERE status = 'A'
+        // Usamos COALESCE para garantir que itens antigos sem status também apareçam como ativos
         const result = await pool.query(`
             SELECT 
                 id,
                 item,
                 quantidade,
                 alerta,
-                COALESCE(status, 'A') as status
+                status
             FROM public.item
+            WHERE COALESCE(status, 'A') = 'A'
             ORDER BY item ASC
         `);
-
         res.json(result.rows);
-    } catch (err) {
-        console.error("Erro ao listar itens:", err.message);
-        res.status(500).json({ error: err.message });
+    } catch (err) { 
+        res.status(500).json({ error: err.message }); 
     }
 });
-
 
 // LOCAIS (Usando 'AS nome' para o frontend entender)
 app.get('/api/local', async (req, res) => {

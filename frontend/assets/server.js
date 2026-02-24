@@ -31,7 +31,7 @@ app.post('/api/login', async (req, res) => {
 
 // LISTAGEM DE ITENS (ESTOQUE)
 // LISTAR ITENS
-app.get('/api/item', async (req, res) => {
+app.get('/api/estoque/ativos', async (req, res) => {
     try {
         const result = await pool.query(`
             SELECT id, item, quantidade, alerta, status 
@@ -246,6 +246,34 @@ app.patch('/api/item/:id/desativar', async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: err.message });
+    }
+});
+
+// LISTAR ESTOQUE - SOMENTE ATIVOS
+app.get('/api/estoque/ativos', async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT 
+                e.id,
+                i.item,
+                c.nome_categoria,
+                l.local,
+                e.quantidade
+            FROM estoque e
+            JOIN item i ON e.item_id = i.id
+            JOIN categoria c ON i.categoria_id = c.id
+            JOIN local l ON e.local_id = l.id
+            WHERE 
+                i.status = 'A'
+                AND c.status = 'A'
+                AND l.status = 'A'
+            ORDER BY i.item ASC
+        `);
+
+        res.json(result.rows);
+    } catch (error) {
+        console.error("Erro ao listar estoque ativo:", error);
+        res.status(500).json({ error: "Erro ao buscar estoque" });
     }
 });
 

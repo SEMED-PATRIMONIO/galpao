@@ -15,7 +15,13 @@ async function carregarDados(aba) {
     main.innerHTML = '<p style="padding:20px">A carregar...</p>';
 
     try {
-        const res = await fetch(`${LOCAL_API_URL}/${aba}`);
+        let url = `${LOCAL_API_URL}/${aba}`;
+
+            if (aba === 'item') {
+                url = `${LOCAL_API_URL}/estoque/ativos`;
+            }
+
+            const res = await fetch(url);
         const dados = await res.json();
 
         // ABA: ESTOQUE (ITEM)

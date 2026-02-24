@@ -4465,4 +4465,19 @@ router.get('/patrimonio/historico/:identificador', verificarToken, async (req, r
     }
 });
 
+router.get('/produtos', verificarToken, async (req, res) => {
+    try {
+        // Note: usei os nomes 'nome' e 'quantidade_estoque' que seu script.js espera
+        const result = await db.query(`
+            SELECT id, item as nome, quantidade as quantidade_estoque 
+            FROM produtos 
+            WHERE tipo = 'PATRIMONIO' 
+            ORDER BY item ASC
+        `);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;

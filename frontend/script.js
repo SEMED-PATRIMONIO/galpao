@@ -11922,11 +11922,19 @@ async function telaPatrimonioEntrada() {
     app.style.background = "transparent";
 
     try {
-        // Buscamos Locais e Produtos homologados para o Select
+        // AJUSTE CIRÚRGICO: Corrigindo as URLs para baterem com o backend
         const [resLocais, resProds] = await Promise.all([
-            fetch(`${API_URL}/locais`, { headers: { 'Authorization': `Bearer ${TOKEN}` } }),
-            fetch(`${API_URL}/produtos?tipo=PATRIMONIO`, { headers: { 'Authorization': `Bearer ${TOKEN}` } })
+            // Mudamos /locais para /locais/dropdown (conforme sua rota enviada)
+            fetch(`${LOCAL_API_URL}/locais/dropdown`, { headers: { 'Authorization': `Bearer ${TOKEN}` } }),
+            
+            // Verifique se a rota /produtos existe. Se não existir, use /item
+            fetch(`${LOCAL_API_URL}/produtos?tipo=PATRIMONIO`, { headers: { 'Authorization': `Bearer ${TOKEN}` } })
         ]);
+
+        // Validação de erro antes de tentar converter para JSON
+        if (!resLocais.ok || !resProds.ok) {
+            throw new Error(`Erro no servidor: Locais(${resLocais.status}) ou Produtos(${resProds.status})`);
+        }
 
         const locais = await resLocais.json();
         const produtos = await resProds.json();

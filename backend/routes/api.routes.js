@@ -4483,42 +4483,87 @@ router.get('/produtos', verificarToken, async (req, res) => {
 const multer = require('multer');
 const path = require('path');
 
-// Configuração de onde salvar os PDFs
+// Configuração de Armazenamento
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        cb(null, 'uploads/notas_fiscais/'); // Certifique-se que esta pasta existe
+        // Como o script roda na raiz do backend, o caminho é relativo a ele
+        cb(null, 'uploads/notas_fiscais/'); 
     },
     filename: (req, file, cb) => {
+        // Geramos um nome único: Prefixo + Timestamp + Número Aleatório + Extensão
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
         cb(null, 'NF-' + uniqueSuffix + path.extname(file.originalname));
     }
 });
-const upload = multer({ storage: storage });
+
+// Filtro de Segurança (Apenas PDF)
+const upload = multer({ 
+    storage: storage,
+    limits: { fileSize: 5 * 1024 * 1024 }, // Limite de 5MB por arquivo
+    fileFilter: (req, file, cb) => {
+        if (path.extname(file.originalname).toLowerCase() === '.pdf') {
+            cb(null, true);
+        } else {
+            cb(new Error('Formato inválido! Envie apenas arquivos PDF.'));
+        }
+    }
+});
 
 // ROTA ATUALIZADA (Recebe arquivo e dados)
 router.post('/patrimonio/escola/registrar', verificarToken, upload.single('arquivo_nf'), async (req, res) => {
     const { nome, setor_id, quantidade, nota_fiscal, numero_serie, adquirido_pos_2025 } = req.body;
     const local_id = req.user.local_id;
-    const arquivoPath = req.file ? req.file.path : null;
+    
+    // O Multer coloca os dados do arquivo em req.file
+    // Salvamos o caminho relativo para facilitar o acesso depois
+    const url_nota_fiscal = req.file ? req.file.path : null;
 
     try {
         await db.query('BEGIN');
-        
-        // ... Lógica de busca/criação de produto (conforme fizemos antes) ...
 
-        for (let i = 0; i < quantidade; i++) {
+        // 1. Lógica do Produto (mantém como estava)
+        let prodRes = await db.query(
+            "SELECT id FROM produtos WHERE UPPER(nome) = $1 AND local_id = $2 AND tipo = 'PATRIMONIO'",
+            [nome.toUpperCase(), local_id]
+        );
+
+        let produto_id;
+        if (prodRes.rows.length === 0) {
+            const newProd = await db.query(
+                "INSERT INTO produtos (nome, tipo, local_id, quantidade_estoque) VALUES ($1, 'PATRIMONIO', $2, 0) RETURNING id",
+                [nome.toUpperCase(), local_id]
+            );
+            produto_id = newProd.rows[0].id;
+        } else {
+            produto_id = prodRes.rows[0].id;
+        }
+
+        // 2. Inserção do(s) item(ns) de patrimônio com os NOVOS campos
+        for (let i = 0; i < (parseInt(quantidade) || 1); i++) {
             await db.query(
-                `INSERT INTO patrimonios (produto_id, local_id, setor_id, numero_serie, nota_fiscal, status, adquirido_pos_2025, url_nota_fiscal) 
-                 VALUES ($1, $2, $3, $4, $5, 'ATIVO', $6, $7)`,
-                [produto_id, local_id, setor_id, numero_serie, nota_fiscal, adquirido_pos_2025 === 'true', arquivoPath]
+                `INSERT INTO patrimonios (
+                    produto_id, local_id, setor_id, numero_serie, 
+                    nota_fiscal, status, adquirido_pos_2025, url_nota_fiscal, estado
+                ) VALUES ($1, $2, $3, $4, $5, 'ATIVO', $6, $7, 'BOM')`,
+                [
+                    produto_id, 
+                    local_id, 
+                    setor_id, 
+                    numero_serie || null, 
+                    nota_fiscal || null, 
+                    adquirido_pos_2025 === 'true', // Converte string para boolean
+                    url_nota_fiscal
+                ]
             );
         }
 
         await db.query('COMMIT');
-        res.json({ success: true });
+        res.json({ success: true, message: "Registro(s) criado(s) com sucesso!" });
+
     } catch (err) {
         await db.query('ROLLBACK');
-        res.status(500).send("Erro ao salvar");
+        console.error("Erro no cadastro:", err);
+        res.status(500).json({ error: "Erro ao salvar os dados e o arquivo." });
     }
 });
 
@@ -4563,6 +4608,37 @@ router.get('/patrimonio/meu-inventario', verificarToken, async (req, res) => {
     }
 });
 
+router.put('/patrimonio/itens/:id', verificarToken, async (req, res) => {
+    const { id } = req.params;
+    const { setor_id, numero_serie, nota_fiscal, estado } = req.body;
+    const local_id = req.user.local_id;
+
+    try {
+        const query = `
+            UPDATE patrimonios 
+            SET 
+                setor_id = $1, 
+                numero_serie = $2, 
+                nota_fiscal = $3, 
+                estado = $4,
+                data_atualizacao = NOW()
+            WHERE id = $5 AND local_id = $6
+            RETURNING *
+        `;
+        
+        const result = await db.query(query, [setor_id, numero_serie, nota_fiscal, estado, id, local_id]);
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: "Item não encontrado para atualização." });
+        }
+
+        res.json({ success: true, message: "Item atualizado com sucesso!" });
+    } catch (err) {
+        console.error("Erro ao atualizar item:", err);
+        res.status(500).json({ error: "Erro ao atualizar dados." });
+    }
+});
+
 router.delete('/patrimonio/itens/:id', verificarToken, async (req, res) => {
     const { id } = req.params;
     const local_id = req.user.local_id;
@@ -4593,6 +4669,38 @@ router.get('/patrimonio/ver-nota/:filename', verificarToken, (req, res) => {
         res.sendFile(filePath);
     } else {
         res.status(404).json({ error: "Arquivo não encontrado." });
+    }
+});
+
+router.get('/patrimonio/item-detalhes/:id', verificarToken, async (req, res) => {
+    const { id } = req.params;
+    const local_id = req.user.local_id; // Segurança: Filtra pela escola do usuário
+
+    try {
+        const query = `
+            SELECT 
+                p.id, 
+                p.numero_serie, 
+                p.nota_fiscal, 
+                p.estado, 
+                p.setor_id,
+                p.url_nota_fiscal,
+                prod.nome as produto_nome
+            FROM patrimonios p
+            JOIN produtos prod ON p.produto_id = prod.id
+            WHERE p.id = $1 AND p.local_id = $2
+        `;
+        
+        const result = await db.query(query, [id, local_id]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: "Item não encontrado." });
+        }
+
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error("Erro ao buscar detalhes do item:", err);
+        res.status(500).json({ error: "Erro interno no servidor." });
     }
 });
 

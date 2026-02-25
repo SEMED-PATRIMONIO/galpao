@@ -12363,6 +12363,249 @@ async function carregarChamadosPendentesEscola(localId) {
     }
 }
 
+async function telaPatrimonioEscolaCatalogo() {
+    const modal = document.createElement('div');
+    modal.id = 'modal-catalogo-entrada';
+    modal.className = 'alerta-vidro-overlay';
+
+    const resSetores = await fetch(`${API_URL}/patrimonio/setores/meus`, {
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+    const setores = await resSetores.json();
+
+    modal.innerHTML = `
+        <div class="painel-vidro" style="width: 550px; padding: 30px; border: 1px solid rgba(255,255,255,0.2);">
+            <h2 style="color:white; margin:0 0 15px 0;">📝 NOVO PATRIMÔNIO</h2>
+            
+            <div style="display:grid; gap:20px;">
+                
+                <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 12px; border: 1px solid rgba(59, 130, 246, 0.3);">
+                    <label style="color:#60a5fa; font-weight:bold; display:flex; align-items:center; gap:10px; cursor:pointer;">
+                        <input type="checkbox" id="check-2025" onchange="alternarLogica2025(this.checked)" style="transform: scale(1.5);">
+                        BEM ADQUIRIDO A PARTIR DE 01/01/2025?
+                    </label>
+                </div>
+
+                <div>
+                    <label style="color:white; font-size:0.8rem;">NOME DO PRODUTO:</label>
+                    <input type="text" id="cat-nome" class="input-vidro" placeholder="Ex: PROJETOR EPSON">
+                </div>
+
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px;">
+                    <div>
+                        <label style="color:white; font-size:0.8rem;">SETOR:</label>
+                        <select id="cat-setor" class="input-vidro">
+                            ${setores.map(s => `<option value="${s.id}" style="color:black;">${s.nome}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div>
+                        <label style="color:white; font-size:0.8rem;">QUANTIDADE:</label>
+                        <input type="number" id="cat-qtd" value="1" min="1" class="input-vidro">
+                    </div>
+                </div>
+
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px;">
+                    <div>
+                        <label id="label-serie" style="color:white; font-size:0.8rem;">Nº SÉRIE / PLAQUETA:</label>
+                        <input type="text" id="cat-serie" class="input-vidro">
+                    </div>
+                    <div>
+                        <label id="label-nf" style="color:white; font-size:0.8rem;">Nº NOTA FISCAL:</label>
+                        <input type="text" id="cat-nf" class="input-vidro">
+                    </div>
+                </div>
+
+                <div id="container-arquivo-nf" style="display:none;">
+                    <label style="color:white; font-size:0.8rem;">ANEXAR NOTA FISCAL (PDF):</label>
+                    <input type="file" id="cat-file" accept="application/pdf" class="input-vidro" style="padding: 5px;">
+                    <p style="font-size:0.7rem; color:#aaa; margin-top:5px;">*Obrigatório para bens após 2025.</p>
+                </div>
+
+                <div style="display:flex; gap:10px;">
+                    <button onclick="document.getElementById('modal-catalogo-entrada').remove()" class="btn-sair-vidro" style="flex:1;">CANCELAR</button>
+                    <button onclick="enviarCadastroComAnexo()" id="btn-salvar" style="flex:2; background:#3b82f6; color:white; border:none; border-radius:10px; font-weight:bold; cursor:pointer;">
+                        SALVAR REGISTRO
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
+// LÓGICA DE INTERFACE
+window.alternarLogica2025 = (marcado) => {
+    const campoSerie = document.getElementById('cat-serie');
+    const campoNF = document.getElementById('cat-nf');
+    const containerArquivo = document.getElementById('container-arquivo-nf');
+    const labelNF = document.getElementById('label-nf');
+
+    if (marcado) {
+        // Regras para bens novos
+        campoSerie.disabled = true;
+        campoSerie.value = "";
+        campoSerie.style.opacity = "0.5";
+        campoSerie.placeholder = "Preencher na edição";
+        
+        labelNF.innerHTML = "Nº NOTA FISCAL (OBRIGATÓRIO):";
+        labelNF.style.color = "#fbbf24";
+        
+        containerArquivo.style.display = "block";
+    } else {
+        // Regras padrão
+        campoSerie.disabled = false;
+        campoSerie.style.opacity = "1";
+        campoSerie.placeholder = "";
+        
+        labelNF.innerHTML = "Nº NOTA FISCAL:";
+        labelNF.style.color = "white";
+        
+        containerArquivo.style.display = "none";
+    }
+};
+
+async function enviarCadastroComAnexo() {
+    const formData = new FormData();
+    const is2025 = document.getElementById('check-2025').checked;
+    
+    // Validações básicas
+    const nf = document.getElementById('cat-nf').value;
+    const arquivo = document.getElementById('cat-file').files[0];
+
+    if (is2025) {
+        if (!nf) return alert("O número da Nota Fiscal é obrigatório para bens adquiridos após 2025!");
+        if (!arquivo) return alert("Você deve anexar o PDF da Nota Fiscal!");
+    }
+
+    formData.append('nome', document.getElementById('cat-nome').value);
+    formData.append('setor_id', document.getElementById('cat-setor').value);
+    formData.append('quantidade', document.getElementById('cat-qtd').value);
+    formData.append('numero_serie', document.getElementById('cat-serie').value);
+    formData.append('nota_fiscal', nf);
+    formData.append('adquirido_pos_2025', is2025);
+    if (arquivo) formData.append('arquivo_nf', arquivo);
+
+    const res = await fetch(`${API_URL}/patrimonio/escola/registrar`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${TOKEN}` }, // Note: Não defina Content-Type manual aqui
+        body: formData
+    });
+
+    if (res.ok) {
+        notificar("Patrimônio registrado com sucesso!", "sucesso");
+        document.getElementById('modal-catalogo-entrada').remove();
+        carregarTabelaInventario();
+    }
+}
+
+async function carregarTabelaInventario() {
+    // 1. Limpa a busca para não esconder itens novos carregados
+    const campoBusca = document.getElementById('busca-global-patrimonio');
+    if (campoBusca) campoBusca.value = '';
+
+    const setorId = document.getElementById('filtro-setor-patrimonio').value;
+    const corpo = document.getElementById('corpo-tabela-inventario');
+    
+    // Feedback visual de carregamento
+    corpo.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px;">Atualizando inventário...</td></tr>';
+
+    try {
+        const res = await fetch(`${API_URL}/patrimonio/meu-inventario?setor_id=${setorId}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const itens = await res.json();
+
+        corpo.innerHTML = itens.map(item => {
+            // Lógica 1: Item sem placa/série (Pendente) -> Fica Amarelo
+            const semPlaqueta = !item.numero_serie || item.numero_serie.trim() === '';
+            const corTexto = semPlaqueta ? '#fbbf24' : '#ffffff';
+
+            // Lógica 2: Cores do Estado de Conservação
+            const coresEstado = { 'BOM': '#4ade80', 'RUIM': '#fbbf24', 'PÉSSIMO': '#ef4444' };
+            const corPonto = coresEstado[item.estado] || '#ffffff';
+
+            // Lógica 3: Link para o PDF da Nota Fiscal
+            const temArquivo = item.url_nota_fiscal && item.url_nota_fiscal !== '';
+            const colunaNota = temArquivo 
+                ? `<button onclick="visualizarPDF('${item.url_nota_fiscal}')" style="background:none; border:none; cursor:pointer; color:#60a5fa; font-size:1.1rem; display:flex; align-items:center; gap:5px;" title="Abrir PDF">
+                    📄 <span style="font-size:0.85rem; text-decoration:underline;">${item.nota_fiscal}</span>
+                   </button>`
+                : `<span style="opacity:0.6;">${item.nota_fiscal || '---'}</span>`;
+
+            return `
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); color: ${corTexto}; transition: 0.3s;" 
+                    onmouseover="this.style.background='rgba(255,255,255,0.03)'" 
+                    onmouseout="this.style.background='transparent'">
+                    
+                    <td style="padding:15px; font-weight:bold; opacity: 0.9;">${item.setor_nome}</td>
+                    
+                    <td style="padding:15px;">
+                        <div style="font-weight:500;">${item.produto_nome}</div>
+                        <div style="font-size:0.75rem; color:${corPonto}; margin-top:4px;">
+                            ● Estado: ${item.estado}
+                            ${semPlaqueta ? ' <span style="margin-left:8px; background:rgba(251,191,36,0.2); padding:2px 5px; border-radius:4px; color:#fbbf24; font-size:0.65rem;">PENDENTE</span>' : ''}
+                        </div>
+                    </td>
+                    
+                    <td style="padding:15px; font-family: monospace; opacity: 0.8;">
+                        ${semPlaqueta ? '<span style="opacity:0.4;">AGUARDANDO...</span>' : item.numero_serie}
+                    </td>
+                    
+                    <td style="padding:15px;">
+                        ${colunaNota}
+                    </td>
+                    
+                    <td style="padding:15px; text-align:center;">
+                        <button onclick="telaEditarItemPatrimonio(${item.id})" 
+                            style="background:rgba(255,255,255,0.1); border:none; border-radius:8px; padding:8px; cursor:pointer; color:white;" 
+                            title="Editar">
+                            ✏️
+                        </button>
+                        <button onclick="deletarItemPatrimonio(${item.id}, '${item.produto_nome}')" 
+                            style="background:rgba(239,68,68,0.2); border:1px solid rgba(239,68,68,0.4); border-radius:8px; padding:8px; cursor:pointer; color:#ef4444;" title="Excluir">
+                            🗑️
+                        </button>                        
+                    </td>
+                </tr>
+            `;
+        }).join('') || '<tr><td colspan="5" style="text-align:center; padding:40px; opacity:0.5;">Nenhum item cadastrado.</td></tr>';
+
+    } catch (err) {
+        console.error(err);
+        corpo.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#ef4444; padding:20px;">Erro ao carregar dados.</td></tr>';
+    }
+}
+
+window.visualizarPDF = (caminhoCompletoNoBanco) => {
+    if (!caminhoCompletoNoBanco) return;
+
+    // O caminho no banco está como "uploads/notas_fiscais/NF-123.pdf"
+    // Pegamos apenas o nome do arquivo final
+    const partes = caminhoCompletoNoBanco.split(/[\\/]/);
+    const nomeArquivo = partes[partes.length - 1];
+
+    // Chamamos a nossa rota protegida
+    const urlSegura = `${API_URL}/patrimonio/ver-nota/${nomeArquivo}`;
+    
+    // Abrimos em nova aba enviando o TOKEN no cabeçalho (ou via URL se preferir simplificar)
+    // Para simplificar a abertura de PDFs em novas abas com autenticação:
+    window.open(`${urlSegura}?token=${TOKEN}`, '_blank');
+};
+
+window.deletarItemPatrimonio = async (id, nome) => {
+    if (!confirm(`Tem certeza que deseja remover "${nome}" permanentemente do inventário?`)) return;
+
+    const res = await fetch(`${API_URL}/patrimonio/itens/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+
+    if (res.ok) {
+        notificar("Item removido com sucesso!", "sucesso");
+        carregarTabelaInventario(); // Atualiza a lista e o Dashboard
+    }
+};
+
 // Isso garante que o onclick="funcao()" funcione sempre
 window.telaVisualizarEstoque = telaVisualizarEstoque;
 window.telaAbastecerEstoque = telaAbastecerEstoque;

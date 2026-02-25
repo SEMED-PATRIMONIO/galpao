@@ -4480,4 +4480,120 @@ router.get('/produtos', verificarToken, async (req, res) => {
     }
 });
 
+const multer = require('multer');
+const path = require('path');
+
+// Configuração de onde salvar os PDFs
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, 'uploads/notas_fiscais/'); // Certifique-se que esta pasta existe
+    },
+    filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, 'NF-' + uniqueSuffix + path.extname(file.originalname));
+    }
+});
+const upload = multer({ storage: storage });
+
+// ROTA ATUALIZADA (Recebe arquivo e dados)
+router.post('/patrimonio/escola/registrar', verificarToken, upload.single('arquivo_nf'), async (req, res) => {
+    const { nome, setor_id, quantidade, nota_fiscal, numero_serie, adquirido_pos_2025 } = req.body;
+    const local_id = req.user.local_id;
+    const arquivoPath = req.file ? req.file.path : null;
+
+    try {
+        await db.query('BEGIN');
+        
+        // ... Lógica de busca/criação de produto (conforme fizemos antes) ...
+
+        for (let i = 0; i < quantidade; i++) {
+            await db.query(
+                `INSERT INTO patrimonios (produto_id, local_id, setor_id, numero_serie, nota_fiscal, status, adquirido_pos_2025, url_nota_fiscal) 
+                 VALUES ($1, $2, $3, $4, $5, 'ATIVO', $6, $7)`,
+                [produto_id, local_id, setor_id, numero_serie, nota_fiscal, adquirido_pos_2025 === 'true', arquivoPath]
+            );
+        }
+
+        await db.query('COMMIT');
+        res.json({ success: true });
+    } catch (err) {
+        await db.query('ROLLBACK');
+        res.status(500).send("Erro ao salvar");
+    }
+});
+
+app.use('/uploads', express.static('uploads'));
+
+router.get('/patrimonio/meu-inventario', verificarToken, async (req, res) => {
+    const local_id = req.user.local_id; // Pega o ID da escola do token
+    const { setor_id } = req.query; // Pega o filtro de setor se houver
+
+    try {
+        let sql = `
+            SELECT 
+                p.id, 
+                p.numero_serie, 
+                p.nota_fiscal, 
+                p.estado, 
+                p.url_nota_fiscal,
+                p.adquirido_pos_2025,
+                s.nome as setor_nome,
+                prod.nome as produto_nome
+            FROM patrimonios p
+            JOIN setores s ON p.setor_id = s.id
+            JOIN produtos prod ON p.produto_id = prod.id
+            WHERE p.local_id = $1
+        `;
+        
+        const params = [local_id];
+
+        // Se o usuário selecionou um setor específico (e não "todos")
+        if (setor_id && setor_id !== 'todos') {
+            sql += ` AND p.setor_id = $2`;
+            params.push(setor_id);
+        }
+
+        sql += ` ORDER BY s.nome ASC, prod.nome ASC`;
+
+        const result = await db.query(sql, params);
+        res.json(result.rows);
+    } catch (err) {
+        console.error("Erro na query de inventário:", err);
+        res.status(500).json({ error: "Erro interno ao buscar inventário." });
+    }
+});
+
+router.delete('/patrimonio/itens/:id', verificarToken, async (req, res) => {
+    const { id } = req.params;
+    const local_id = req.user.local_id;
+
+    try {
+        // Segurança: Só permite deletar se o item pertencer à escola do usuário
+        const deleteRes = await db.query(
+            "DELETE FROM patrimonios WHERE id = $1 AND local_id = $2 RETURNING *",
+            [id, local_id]
+        );
+
+        if (deleteRes.rowCount === 0) {
+            return res.status(404).json({ error: "Item não encontrado ou acesso negado." });
+        }
+
+        res.json({ success: true, message: "Item removido com sucesso." });
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao excluir item." });
+    }
+});
+
+router.get('/patrimonio/ver-nota/:filename', verificarToken, (req, res) => {
+    const { filename } = req.params;
+    const filePath = path.join(__dirname, '..', 'uploads', 'notas_fiscais', filename);
+
+    // Verifica se o arquivo existe fisicamente
+    if (fs.existsSync(filePath)) {
+        res.sendFile(filePath);
+    } else {
+        res.status(404).json({ error: "Arquivo não encontrado." });
+    }
+});
+
 module.exports = router;

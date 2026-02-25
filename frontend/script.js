@@ -12406,8 +12406,8 @@ async function telaPatrimonioEscolaCatalogo() {
 
                 <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px;">
                     <div>
-                        <label id="label-serie" style="color:white; font-size:0.8rem;">Nº SÉRIE / PLAQUETA:</label>
-                        <input type="text" id="cat-serie" class="input-vidro">
+                        <label id="label-serie" style="color:white; font-size:0.8rem;">Nº SÉRIE / PLAQUETA (OPCIONAL):</label>
+                        <input type="text" id="cat-serie" class="input-vidro" placeholder="Pode deixar vazio se não houver">
                     </div>
                     <div>
                         <label id="label-nf" style="color:white; font-size:0.8rem;">Nº NOTA FISCAL:</label>
@@ -12480,7 +12480,7 @@ async function enviarCadastroComAnexo() {
     formData.append('nome', document.getElementById('cat-nome').value);
     formData.append('setor_id', document.getElementById('cat-setor').value);
     formData.append('quantidade', document.getElementById('cat-qtd').value);
-    formData.append('numero_serie', document.getElementById('cat-serie').value);
+    formData.append('numero_serie', serie);
     formData.append('nota_fiscal', nf);
     formData.append('adquirido_pos_2025', is2025);
     if (arquivo) formData.append('arquivo_nf', arquivo);

@@ -1,6 +1,14 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
+const path = require('path');
+const uploadDir = path.join(__dirname, 'uploads', 'notas_fiscais');
+
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+    console.log('✅ Pasta de uploads verificada/criada com sucesso!');
+}
 const app = express();
 
 app.use(cors());
@@ -9,7 +17,6 @@ app.use(express.json());
 // Importações de Rotas
 const authRoutes = require('./auth/auth.routes');
 const apiRoutes = require('./routes/api.routes'); 
-
 // 1. Rotas da API
 app.use('/auth', authRoutes); 
 app.use('/', apiRoutes);      

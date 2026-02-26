@@ -1357,9 +1357,6 @@ function iniciarnotificaraPedidos() {
         } catch (e) { console.error("Erro no notificar:", e); }
     };
 
-    // Executa agora e depois a cada 30 segundos
-    verificar();
-    setInterval(verificar, 30000);
 }
 
 async function listarSolicitacoesPendentes() {
@@ -4299,9 +4296,6 @@ async function atualizarBadgesNotificacao() {
     }
 }
 
-// Iniciar a verificação automática a cada 2 minutos (120000ms)
-setInterval(atualizarBadgesNotificacao, 120000);
-
 async function renderizarRelatorioEstatisticoUniformes() {
     const conteudo = document.getElementById('conteudo-dinamico');
     conteudo.innerHTML = '<div class="loader">GERANDO ESTATÍSTICAS...</div>';
@@ -5066,12 +5060,6 @@ async function atualizarBadgeNotificacao() {
     } catch (err) {
         console.error("Erro ao buscar notificações");
     }
-}
-
-// Iniciar o monitoramento (Verifica a cada 30 segundos)
-function iniciarMonitoramentoPedidos() {
-    atualizarBadgeNotificacao(); // Verifica logo ao carregar
-    setInterval(atualizarBadgeNotificacao, 30000); // 30000ms = 30 segundos
 }
 
 // Função auxiliar para criar os cards
@@ -12470,19 +12458,23 @@ async function enviarCadastroComAnexo() {
     const formData = new FormData();
     const is2025 = document.getElementById('check-2025').checked;
     
-    // Validações básicas
+    const nome = document.getElementById('cat-nome').value;
+    const setor_id = document.getElementById('cat-setor').value;
+    const quantidade = document.getElementById('cat-qtd').value;
+    const serie = document.getElementById('cat-serie').value; // <--- Faltava isso!
     const nf = document.getElementById('cat-nf').value;
     const arquivo = document.getElementById('cat-file').files[0];
+    if (!nome || !setor_id) return alert("Nome e Setor são obrigatórios!");
 
     if (is2025) {
-        if (!nf) return alert("O número da Nota Fiscal é obrigatório para bens adquiridos após 2025!");
+        if (!nf) return alert("O número da Nota Fiscal é obrigatório para bens após 2025!");
         if (!arquivo) return alert("Você deve anexar o PDF da Nota Fiscal!");
     }
 
-    formData.append('nome', document.getElementById('cat-nome').value);
-    formData.append('setor_id', document.getElementById('cat-setor').value);
-    formData.append('quantidade', document.getElementById('cat-qtd').value);
-    formData.append('numero_serie', serie);
+    formData.append('nome', nome);
+    formData.append('setor_id', setor_id);
+    formData.append('quantidade', quantidade);
+    formData.append('numero_serie', serie); // Agora a variável 'serie' existe
     formData.append('nota_fiscal', nf);
     formData.append('adquirido_pos_2025', is2025);
     if (arquivo) formData.append('arquivo_nf', arquivo);
@@ -12642,7 +12634,7 @@ function abrirMenuPatrimonioEscola() {
                     <div style="font-size: 3rem; margin-bottom: 15px;">📝</div>
                     <h3>2. CATALOGAR BENS</h3>
                 </div>
-                <div onclick="carregarTabelaInventario()" class="painel-vidro card-interativo" style="cursor:pointer; padding: 20px; text-align: center;">
+                <div onclick="telaPatrimonioConsultaEscola()" class="painel-vidro card-interativo" style="cursor:pointer; padding: 20px; text-align: center;">
                     <div style="font-size: 3rem; margin-bottom: 15px;">📋</div>
                     <h3>3. VISUALIZAR BENS</h3>
                 </div>

@@ -4544,14 +4544,14 @@ router.post('/patrimonio/escola/registrar', verificarToken, upload.single('arqui
                 `INSERT INTO patrimonios (
                     produto_id, local_id, setor_id, numero_serie, 
                     nota_fiscal, status, adquirido_pos_2025, url_nota_fiscal, estado
-                ) VALUES ($1, $2, $3, $4, $5, 'ATIVO', $6, $7, 'BOM')`,
+                ) VALUES ($1, $2, $3, $4, $5, 'ESTOQUE', $6, $7, 'BOM')`, // Mudei para 'ESTOQUE' conforme seu enum default
                 [
                     produto_id, 
                     local_id, 
                     setor_id, 
-                    numero_serie || null, 
+                    (i === 0 ? (numero_serie || null) : null), // Só grava a série no primeiro item se for lote
                     nota_fiscal || null, 
-                    adquirido_pos_2025 === 'true', // Converte string para boolean
+                    adquirido_pos_2025 === 'true',
                     url_nota_fiscal
                 ]
             );
@@ -4803,23 +4803,6 @@ router.get('/patrimonio/item-detalhes/:id', verificarToken, async (req, res) => 
 });
 
 router.use('/uploads', express.static('uploads'));
-
-router.get('/pedidos/contagem/notificaras', verificarToken, async (req, res) => {
-    try {
-        // Esta query busca as contagens reais para os balões de alerta
-        const admin = await db.query("SELECT count(*) FROM pedidos WHERE status = 'PENDENTE'");
-        const estoque = await db.query("SELECT count(*) FROM pedidos WHERE status = 'AUTORIZADO'");
-        
-        res.json({
-            admin_pendente: parseInt(admin.rows[0].count),
-            estoque_pendente: parseInt(estoque.rows[0].count),
-            logistica_pendente: 0,
-            escola_recebimento: 0
-        });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
 
 router.get('/patrimonio/escola/resumo', verificarToken, async (req, res) => {
     const local_id = req.user.local_id;

@@ -12642,7 +12642,7 @@ function abrirMenuPatrimonioEscola() {
                     <div style="font-size: 3rem; margin-bottom: 15px;">📝</div>
                     <h3>2. CATALOGAR BENS</h3>
                 </div>
-                <div onclick="telaPatrimonioConsultaEscola()" class="painel-vidro card-interativo" style="cursor:pointer; padding: 20px; text-align: center;">
+                <div onclick="carregarTabelaInventario()" class="painel-vidro card-interativo" style="cursor:pointer; padding: 20px; text-align: center;">
                     <div style="font-size: 3rem; margin-bottom: 15px;">📋</div>
                     <h3>3. VISUALIZAR BENS</h3>
                 </div>

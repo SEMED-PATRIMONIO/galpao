@@ -12610,7 +12610,7 @@ window.deletarItemPatrimonio = async (id, nome) => {
 
 function abrirMenuPatrimonioEscola() {
     // Certifique-se que 'render-area' é o ID do seu container principal onde o conteúdo muda
-    const mainArea = document.getElementById('render-area'); 
+    const mainArea = document.getElementById('app-content') 
     
     mainArea.innerHTML = `
         <div class="animar-entrada" style="padding: 20px; color: white;">

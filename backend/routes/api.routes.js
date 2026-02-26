@@ -4704,4 +4704,21 @@ router.get('/patrimonio/item-detalhes/:id', verificarToken, async (req, res) => 
 
 router.use('/uploads', express.static('uploads'));
 
+router.get('/pedidos/contagem/notificaras', verificarToken, async (req, res) => {
+    try {
+        // Esta query busca as contagens reais para os balões de alerta
+        const admin = await db.query("SELECT count(*) FROM pedidos WHERE status = 'PENDENTE'");
+        const estoque = await db.query("SELECT count(*) FROM pedidos WHERE status = 'AUTORIZADO'");
+        
+        res.json({
+            admin_pendente: parseInt(admin.rows[0].count),
+            estoque_pendente: parseInt(estoque.rows[0].count),
+            logistica_pendente: 0,
+            escola_recebimento: 0
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;

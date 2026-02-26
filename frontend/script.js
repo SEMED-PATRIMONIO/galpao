@@ -1354,7 +1354,7 @@ function iniciarnotificaraPedidos() {
                     </div>`;
                 areanotificara.style.display = 'block';
             }                
-        } catch (e) { console.error("Erro no notificara:", e); }
+        } catch (e) { console.error("Erro no notificar:", e); }
     };
 
     // Executa agora e depois a cada 30 segundos
@@ -12609,40 +12609,43 @@ window.deletarItemPatrimonio = async (id, nome) => {
 };
 
 function abrirMenuPatrimonioEscola() {
-    // Certifique-se que 'render-area' é o ID do seu container principal onde o conteúdo muda
-    const mainArea = document.getElementById('app-content') 
+    const mainArea = document.getElementById('app-content');
     
+    if (!mainArea) {
+        console.error("Contentor 'app-content' não encontrado.");
+        return;
+    }
+
+    // OBRIGATÓRIO: Tornar a div visível antes de injetar o HTML
+    mainArea.style.display = 'block'; 
+    
+    // Esconder o login caso ainda esteja visível
+    const loginContainer = document.getElementById('login-container');
+    if (loginContainer) loginContainer.style.display = 'none';
+
     mainArea.innerHTML = `
         <div class="animar-entrada" style="padding: 20px; color: white;">
-            
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 30px;">
-                <button onclick="carregarDashboard()" class="btn-sair-vidro" style="display: flex; align-items: center; gap: 8px; padding: 10px 20px;">
+                <button onclick="carregarDashboard()" class="btn-sair-vidro" style="padding: 10px 20px; cursor: pointer;">
                     ⬅️ VOLTAR
                 </button>
-                <h1 style="margin: 0; font-size: 1.5rem;">Gestão de Patrimônio</h1>
+                <h1 style="margin: 0; font-size: 1.5rem;">Gestão de Património</h1>
                 <div style="width: 100px;"></div> 
             </div>
 
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; max-width: 1000px; margin: 0 auto;">
-                
-                <div onclick="telaPatrimonioConfigurarSetores()" class="painel-vidro card-interativo">
+                <div onclick="telaPatrimonioConfigurarSetores()" class="painel-vidro card-interativo" style="cursor:pointer; padding: 20px; text-align: center;">
                     <div style="font-size: 3rem; margin-bottom: 15px;">📍</div>
-                    <h3>1. CONFIGURAR SETORES</h3>
-                    <p style="opacity: 0.7; font-size: 0.9rem;">Cadastre as salas e locais da escola.</p>
+                    <h3>1. CADASTRAR SETORES</h3>
                 </div>
-
-                <div onclick="telaPatrimonioEscolaCatalogo()" class="painel-vidro card-interativo">
+                <div onclick="telaPatrimonioEscolaCatalogo()" class="painel-vidro card-interativo" style="cursor:pointer; padding: 20px; text-align: center;">
                     <div style="font-size: 3rem; margin-bottom: 15px;">📝</div>
                     <h3>2. CATALOGAR BENS</h3>
-                    <p style="opacity: 0.7; font-size: 0.9rem;">Adicione novos itens (Bens antigos ou novos).</p>
                 </div>
-
-                <div onclick="telaPatrimonioConsultaEscola()" class="painel-vidro card-interativo">
+                <div onclick="telaPatrimonioConsultaEscola()" class="painel-vidro card-interativo" style="cursor:pointer; padding: 20px; text-align: center;">
                     <div style="font-size: 3rem; margin-bottom: 15px;">📋</div>
-                    <h3>3. CONSULTAR BENS</h3>
-                    <p style="opacity: 0.7; font-size: 0.9rem;">Consulte fotos, notas e estados de conservação.</p>
+                    <h3>3. VISUALIZAR BENS</h3>
                 </div>
-
             </div>
         </div>
     `;

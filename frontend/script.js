@@ -400,12 +400,12 @@ async function carregarDashboard() {
             </button>
         `;
         // notificaras de pedidos prontos para coleta no Estoque Central
-        setTimeout(verificarPedidosParaColeta, 500);
+        //setTimeout(verificarPedidosParaColeta, 500);
     }
     html += menuComum + `</div>`; // Fecha a grid e adiciona o menu comum no fim
     container.innerHTML = html;
 
-    iniciarnotificaraPedidos();
+    //iniciarnotificaraPedidos();
 }
 
 async function telaVisualizarEstoque() {

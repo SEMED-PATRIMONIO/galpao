@@ -521,19 +521,32 @@ router.post('/auth/login', async (req, res) => {
 
         if (result.rows.length > 0) {
             const user = result.rows[0];
-            // Token de exemplo (use sua lógica atual de geração)
-            const token = "TOKEN_" + user.id + "_" + Math.random().toString(36).substr(2);
 
+            // GERANDO O TOKEN REAL (JWT)
+            // Aqui guardamos o id, perfil e local_id dentro do token criptografado
+            const token = jwt.sign(
+                { 
+                    id: user.id, 
+                    perfil: user.perfil, 
+                    local_id: user.local_id 
+                }, 
+                SECRET, 
+                { expiresIn: '24h' } // Opcional: define validade de 24 horas
+            );
+
+            // A resposta para o frontend continua EXATAMENTE IGUAL
             res.json({
                 token: token,
                 perfil: user.perfil,
                 nome: user.nome,
-                local_id: user.local_id // Retorna o ID da escola vinculada
+                local_id: user.local_id
             });
         } else {
             res.status(401).json({ message: "Usuário ou senha inválidos." });
         }
-    } catch (err) { res.status(500).json({ error: err.message }); }
+    } catch (err) { 
+        res.status(500).json({ error: err.message }); 
+    }
 });
 
 // 2. Rota de Aprovação com Baixa no Estoque (Grade e Geral)
@@ -4727,12 +4740,20 @@ router.post('/patrimonio/setores', verificarToken, async (req, res) => {
 
 router.get('/patrimonio/setores/meus', verificarToken, async (req, res) => {
     try {
+        // Agora req.user.local_id existe graças ao ajuste acima
+        const localId = req.user.local_id;
+
+        if (!localId) {
+            return res.status(400).json({ error: "Local do usuário não encontrado no token." });
+        }
+
         const result = await db.query(
             "SELECT id, nome FROM setores WHERE local_id = $1 ORDER BY nome ASC",
-            [req.user.local_id]
+            [localId]
         );
         res.json(result.rows);
     } catch (err) {
+        console.error(err);
         res.status(500).json({ error: "Erro ao listar setores." });
     }
 });

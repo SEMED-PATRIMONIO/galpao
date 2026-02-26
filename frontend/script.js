@@ -12903,9 +12903,18 @@ async function atualizarListaSetores() {
     const res = await fetch(`${API_URL}/patrimonio/setores/meus`, {
         headers: { 'Authorization': `Bearer ${TOKEN}` }
     });
-    const setores = await res.json();
+    
+    const dados = await res.json();
 
-    lista.innerHTML = setores.map(s => `
+    // PROTEÇÃO: Se não for uma lista, exibe o erro e para a execução
+    if (!Array.isArray(dados)) {
+        console.error("Erro retornado pelo servidor:", dados);
+        lista.innerHTML = `<p style="color:red; font-size:0.8rem;">Erro: ${dados.error || 'Falha ao carregar'}</p>`;
+        return;
+    }
+
+    // Se for uma lista, faz o map normalmente
+    lista.innerHTML = dados.map(s => `
         <div style="padding:8px; border-bottom:1px solid rgba(255,255,255,0.05); color:white; font-size:0.9rem;">
             🔹 ${s.nome}
         </div>
@@ -12943,6 +12952,11 @@ async function carregarOpcoesSetoresFiltro() {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
         const setores = await res.json();
+        if (Array.isArray(setores)) {
+            lista.innerHTML = setores.map(s => `<div>${s.nome}</div>`).join('');
+        } else {
+            lista.innerHTML = '<p>Erro ao carregar lista.</p>';
+        }
         
         // Mantemos a opção "Todos" e adicionamos as demais
         select.innerHTML = '<option value="todos">--- Todos os Setores ---</option>' + 

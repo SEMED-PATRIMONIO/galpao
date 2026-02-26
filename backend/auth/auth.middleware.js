@@ -7,8 +7,18 @@ const verificarToken = (req, res, next) => {
 
     jwt.verify(token.replace('Bearer ', ''), SECRET, (err, decoded) => {
         if (err) return res.status(500).send('Falha na autenticação');
+
+        // 1. MANTÉM O QUE JÁ EXISTIA (Para não quebrar rotas antigas)
         req.userId = decoded.id;
         req.perfil = decoded.perfil;
+
+        // 2. ADICIONA O NOVO OBJETO (Para as rotas de Patrimônio e novas funções)
+        req.user = {
+            id: decoded.id,
+            perfil: decoded.perfil,
+            local_id: decoded.local_id // O "pulo do gato" está aqui
+        };
+
         next();
     });
 };

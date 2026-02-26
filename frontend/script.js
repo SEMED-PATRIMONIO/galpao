@@ -12634,7 +12634,7 @@ function abrirMenuPatrimonioEscola() {
             </div>
 
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; max-width: 1000px; margin: 0 auto;">
-                <div onclick="telaPatrimonioConfigurarSetores()" class="painel-vidro card-interativo" style="cursor:pointer; padding: 20px; text-align: center;">
+                <div onclick="telaGerenciarSetores()" class="painel-vidro card-interativo" style="cursor:pointer; padding: 20px; text-align: center;">
                     <div style="font-size: 3rem; margin-bottom: 15px;">📍</div>
                     <h3>1. CADASTRAR SETORES</h3>
                 </div>
@@ -12650,6 +12650,376 @@ function abrirMenuPatrimonioEscola() {
         </div>
     `;
 }
+
+async function carregarDashboardPatrimonio() {
+    const container = document.getElementById('container-resumo-patrimonio');
+    
+    try {
+        const res = await fetch(`${API_URL}/patrimonio/escola/resumo`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const dados = await res.json();
+
+        container.innerHTML = `
+            <div class="painel-vidro" style="padding: 15px; text-align: center; border-left: 4px solid #3b82f6;">
+                <small style="opacity:0.7;">TOTAL DE ITENS</small>
+                <h2 style="margin:5px 0;">${dados.totalItens}</h2>
+            </div>
+            <div class="painel-vidro" style="padding: 15px; text-align: center; border-left: 4px solid #10b981;">
+                <small style="opacity:0.7;">SETORES</small>
+                <h2 style="margin:5px 0;">${dados.totalSetores}</h2>
+            </div>
+            <div class="painel-vidro" style="padding: 15px; text-align: center; border-left: 4px solid #fbbf24;">
+                <small style="opacity:0.7;">SEM PLAQUETA</small>
+                <h2 style="margin:5px 0; color:#fbbf24;">${dados.semPlaqueta}</h2>
+            </div>
+            <div class="painel-vidro" style="padding: 15px; text-align: center; border-left: 4px solid #ef4444;">
+                <small style="opacity:0.7;">ESTADO PÉSSIMO</small>
+                <h2 style="margin:5px 0; color:#ef4444;">${dados.estadoPessimo}</h2>
+            </div>
+            
+            <div class="painel-vidro" style="padding: 15px; grid-column: span 2; font-size: 0.8rem;">
+                <strong style="display:block; margin-bottom:10px;">ITENS POR SETOR:</strong>
+                <div style="max-height: 80px; overflow-y: auto; scrollbar-width: thin;">
+                    ${dados.distribuicao.map(d => `
+                        <div style="display:flex; justify-content:space-between; margin-bottom:4px; padding-bottom:2px; border-bottom:1px solid rgba(255,255,255,0.05);">
+                            <span>${d.setor}</span>
+                            <span style="font-weight:bold;">${d.total}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    } catch (err) {
+        container.innerHTML = `<p>Erro ao carregar indicadores.</p>`;
+    }
+}
+
+async function telaPatrimonioConsultaEscola() {
+    const mainArea = document.getElementById('render-area');
+    
+    mainArea.innerHTML = `
+        <div class="animar-entrada" style="padding: 20px; color: white;">
+            
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 25px;">
+                <button onclick="abrirMenuPatrimonioEscola()" class="btn-sair-vidro" style="padding: 10px 20px;">
+                    ⬅️ VOLTAR
+                </button>
+                <h1 style="margin: 0; font-size: 1.4rem;">Inventário da Unidade</h1>
+                <button onclick="telaPatrimonioEscolaCatalogo()" class="btn-vidro" style="background: rgba(59, 130, 246, 0.2); border-color: #3b82f6;">
+                    + NOVO ITEM
+                </button>
+            </div>
+
+            <div id="container-resumo-patrimonio" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 25px;">
+                </div>
+
+            <div class="painel-vidro" style="padding: 20px; margin-bottom: 20px; display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap;">
+                <div style="flex: 1; min-width: 200px;">
+                    <label style="display:block; margin-bottom:5px; font-size:0.8rem; opacity:0.7;">FILTRAR POR SETOR:</label>
+                    <select id="filtro-setor-patrimonio" onchange="carregarTabelaInventario()" 
+                        style="width:100%; padding:10px; border-radius:8px; background:rgba(0,0,0,0.2); color:white; border:1px solid rgba(255,255,255,0.1);">
+                        <option value="todos">--- Todos os Setores ---</option>
+                    </select>
+                </div>
+
+                <div style="flex: 2; min-width: 300px;">
+                    <label style="display:block; margin-bottom:5px; font-size:0.8rem; opacity:0.7;">BUSCA RÁPIDA:</label>
+                    <input type="text" id="busca-global-patrimonio" oninput="filtrarTabelaLocalmente()" 
+                        placeholder="Pesquisar por nome, série ou setor..." 
+                        style="width:100%; padding:10px; border-radius:8px; background:rgba(0,0,0,0.2); color:white; border:1px solid rgba(255,255,255,0.1);">
+                </div>
+            </div>
+
+            <div class="painel-vidro" style="overflow-x: auto;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
+                    <thead>
+                        <tr style="background: rgba(255,255,255,0.05); text-align: left;">
+                            <th style="padding: 15px;">Setor</th>
+                            <th style="padding: 15px;">Produto / Estado</th>
+                            <th style="padding: 15px;">Nº Série</th>
+                            <th style="padding: 15px;">Nota Fiscal</th>
+                            <th style="padding: 15px; text-align: center;">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="corpo-tabela-inventario">
+                        </tbody>
+                </table>
+            </div>
+        </div>
+    `;
+
+    // 2. ROTINA DE AUTOCARREGAMENTO
+    // Chamamos as funções que buscam os dados no banco de dados assim que a tela abre
+    await carregarOpcoesSetoresFiltro(); // Preenche o <select>
+    await carregarTabelaInventario();    // Preenche o <tbody>
+}
+
+async function telaPatrimonioRegistarItem() {
+    const modal = document.createElement('div');
+    modal.id = 'modal-registo-item';
+    modal.className = 'alerta-vidro-overlay';
+
+    try {
+        // Carregamos os dados necessários em paralelo
+        const [resProds, resSetores] = await Promise.all([
+            fetch(`${API_URL}/produtos?tipo=PATRIMONIO`, { headers: { 'Authorization': `Bearer ${TOKEN}` } }),
+            fetch(`${API_URL}/patrimonio/setores/meus`, { headers: { 'Authorization': `Bearer ${TOKEN}` } })
+        ]);
+
+        const produtos = await resProds.json();
+        const setores = await resSetores.json();
+
+        modal.innerHTML = `
+            <div class="painel-vidro" style="width: 500px; padding: 30px; border-radius: 20px;">
+                <h2 style="color:white; margin-top:0; display:flex; align-items:center; gap:10px;">
+                    <span>➕</span> NOVO ITEM DE PATRIMÔNIO
+                </h2>
+                
+                <div style="display:flex; flex-direction:column; gap:15px; margin-top:20px;">
+                    
+                    <div>
+                        <label style="color:white; font-size:0.8rem; opacity:0.7;">PRODUTO (CATÁLOGO)</label>
+                        <select id="reg-pat-produto" style="width:100%; padding:12px; border-radius:10px; background:rgba(255,255,255,0.1); color:white; border:1px solid rgba(255,255,255,0.2);">
+                            <option value="" style="color:black;">Selecione o produto...</option>
+                            ${produtos.map(p => `<option value="${p.id}" style="color:black;">${p.nome}</option>`).join('')}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label style="color:white; font-size:0.8rem; opacity:0.7;">ALOCAR NO SETOR / SALA</label>
+                        <select id="reg-pat-setor" style="width:100%; padding:12px; border-radius:10px; background:rgba(255,255,255,0.1); color:white; border:1px solid rgba(255,255,255,0.2);">
+                            <option value="" style="color:black;">Selecione o local físico...</option>
+                            ${setores.map(s => `<option value="${s.id}" style="color:black;">${s.nome}</option>`).join('')}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label style="color:white; font-size:0.8rem; opacity:0.7;">NÚMERO DE SÉRIE / PLAQUETA</label>
+                        <input type="text" id="reg-pat-serie" placeholder="Ex: ABC-12345" 
+                            style="width:100%; padding:12px; border-radius:10px; background:rgba(255,255,255,0.1); color:white; border:1px solid rgba(255,255,255,0.2);">
+                    </div>
+
+                    <div>
+                        <label style="color:white; font-size:0.8rem; opacity:0.7;">NOTA FISCAL (OPCIONAL)</label>
+                        <input type="text" id="reg-pat-nf" placeholder="Nº da NF" 
+                            style="width:100%; padding:12px; border-radius:10px; background:rgba(255,255,255,0.1); color:white; border:1px solid rgba(255,255,255,0.2);">
+                    </div>
+
+                    <div style="display:flex; gap:10px; margin-top:10px;">
+                        <button onclick="document.getElementById('modal-registo-item').remove()" 
+                            style="flex:1; padding:12px; background:transparent; color:white; border:1px solid rgba(255,255,255,0.3); border-radius:12px; cursor:pointer;">
+                            CANCELAR
+                        </button>
+                        <button onclick="salvarNovoPatrimonio()" 
+                            style="flex:2; padding:12px; background:#3b82f6; color:white; border:none; border-radius:12px; cursor:pointer; font-weight:bold; box-shadow: 0 4px 15px rgba(59,130,246,0.3);">
+                            CONFIRMAR REGISTRO
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+
+    } catch (err) {
+        console.error(err);
+        alert("Erro ao carregar dados para registo.");
+    }
+
+    // Função interna para processar o envio
+    window.salvarNovoPatrimonio = async () => {
+        const payload = {
+            produto_id: document.getElementById('reg-pat-produto').value,
+            setor_id: document.getElementById('reg-pat-setor').value,
+            numero_serie: document.getElementById('reg-pat-serie').value,
+            nota_fiscal: document.getElementById('reg-pat-nf').value
+        };
+
+        if (!payload.produto_id || !payload.setor_id) {
+            return alert("Por favor, selecione o produto e o setor.");
+        }
+
+        const res = await fetch(`${API_URL}/patrimonio/itens`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+            notificar("Item registado com sucesso!", "sucesso");
+            document.getElementById('modal-registo-item').remove();
+        } else {
+            const erro = await res.json();
+            alert("Erro: " + erro.error);
+        }
+    };
+}
+
+async function telaGerenciarSetores() {
+    const modal = document.createElement('div');
+    modal.id = 'modal-setores';
+    modal.className = 'alerta-vidro-overlay';
+    
+    modal.innerHTML = `
+        <div class="painel-vidro" style="width: 800px; display: flex; gap: 20px; padding: 25px;">
+            <div style="flex: 1; border-right: 1px solid rgba(255,255,255,0.1); padding-right: 20px;">
+                <h3 style="color:white; margin-top:0;">📂 NOVO SETOR</h3>
+                <input type="text" id="nome-setor" placeholder="Ex: SALA DE AULA 01" 
+                    style="width:100%; padding:12px; border-radius:10px; background:rgba(255,255,255,0.1); color:white; border:1px solid rgba(255,255,255,0.2);">
+                <button onclick="salvarSetor()" style="width:100%; margin-top:15px; padding:12px; background:#10b981; color:white; border:none; border-radius:10px; cursor:pointer; font-weight:bold;">
+                    SALVAR SETOR
+                </button>
+                <button onclick="document.getElementById('modal-setores').remove()" style="width:100%; margin-top:10px; background:transparent; color:white; border:1px solid rgba(255,255,255,0.3); padding:8px; border-radius:10px; cursor:pointer;">
+                    CANCELAR
+                </button>
+            </div>
+
+            <div style="flex: 1; display:flex; flex-direction:column;">
+                <h3 style="color:white; margin-top:0;">📋 SETORES CADASTRADOS</h3>
+                <div id="lista-setores-escola" style="flex:1; overflow-y:auto; max-height:300px; background:rgba(0,0,0,0.2); border-radius:10px; padding:10px;">
+                    </div>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+    await atualizarListaSetores();
+
+    window.salvarSetor = async () => {
+        const nome = document.getElementById('nome-setor').value;
+        if (!nome) return alert("Digite o nome do setor.");
+
+        const res = await fetch(`${API_URL}/patrimonio/setores`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ nome })
+        });
+
+        if (res.ok) {
+            document.getElementById('nome-setor').value = '';
+            atualizarListaSetores();
+        } else {
+            const erro = await res.json();
+            alert(erro.error);
+        }
+    };
+}
+
+async function atualizarListaSetores() {
+    const lista = document.getElementById('lista-setores-escola');
+    const res = await fetch(`${API_URL}/patrimonio/setores/meus`, {
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+    const setores = await res.json();
+
+    lista.innerHTML = setores.map(s => `
+        <div style="padding:8px; border-bottom:1px solid rgba(255,255,255,0.05); color:white; font-size:0.9rem;">
+            🔹 ${s.nome}
+        </div>
+    `).join('') || '<p style="color:gray; font-size:0.8rem;">Nenhum setor cadastrado.</p>';
+}
+
+function filtrarTabelaLocalmente() {
+    // 1. Capturamos o que o usuário digitou (em minúsculas para não diferenciar)
+    const campoBusca = document.getElementById('busca-global-patrimonio');
+    if (!campoBusca) return;
+    
+    const termo = campoBusca.value.toLowerCase();
+    
+    // 2. Capturamos todas as linhas de dados da tabela
+    const linhas = document.querySelectorAll('#corpo-tabela-inventario tr');
+
+    linhas.forEach(linha => {
+        // 3. Pegamos o conteúdo de texto da linha inteira
+        // O innerText ignora as tags HTML e pega apenas as palavras
+        const conteudoDaLinha = linha.innerText.toLowerCase();
+
+        // 4. Se o termo estiver presente, mostramos a linha. Se não, escondemos.
+        if (conteudoDaLinha.includes(termo)) {
+            linha.style.display = ""; // Volta ao estado original (visível)
+        } else {
+            linha.style.display = "none"; // Esconde a linha
+        }
+    });
+}
+
+async function carregarOpcoesSetoresFiltro() {
+    const select = document.getElementById('filtro-setor-patrimonio');
+    try {
+        const res = await fetch(`${API_URL}/patrimonio/setores/meus`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const setores = await res.json();
+        
+        // Mantemos a opção "Todos" e adicionamos as demais
+        select.innerHTML = '<option value="todos">--- Todos os Setores ---</option>' + 
+            setores.map(s => `<option value="${s.id}">${s.nome}</option>`).join('');
+    } catch (err) {
+        console.error("Erro ao carregar setores para filtro");
+    }
+}
+
+async function telaEditarItemPatrimonio(id) {
+    const res = await fetch(`${API_URL}/patrimonio/item-detalhes/${id}`, {
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+    const item = await res.json();
+
+    const modal = document.createElement('div');
+    modal.id = 'modal-edicao-item';
+    modal.className = 'alerta-vidro-overlay';
+
+    modal.innerHTML = `
+        <div class="painel-vidro" style="width: 400px; padding: 30px;">
+            <h2 style="color:white; margin:0 0 20px 0;">✏️ ATUALIZAR ITEM</h2>
+            
+            <div style="display:flex; flex-direction:column; gap:15px;">
+                <div>
+                    <label style="color:white; font-size:0.8rem;">ESTADO DE CONSERVAÇÃO:</label>
+                    <select id="edit-estado" style="width:100%; padding:10px; border-radius:8px; background:rgba(255,255,255,0.1); color:white; border:1px solid rgba(255,255,255,0.2);">
+                        <option value="BOM" ${item.estado === 'BOM' ? 'selected' : ''} style="color:black;">🟢 BOM</option>
+                        <option value="RUIM" ${item.estado === 'RUIM' ? 'selected' : ''} style="color:black;">🟡 RUIM</option>
+                        <option value="PÉSSIMO" ${item.estado === 'PÉSSIMO' ? 'selected' : ''} style="color:black;">🔴 PÉSSIMO</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label style="color:white; font-size:0.8rem;">Nº SÉRIE / PLAQUETA:</label>
+                    <input type="text" id="edit-serie" value="${item.numero_serie || ''}" 
+                        style="width:100%; padding:10px; border-radius:8px; background:rgba(255,255,255,0.1); color:white; border:1px solid rgba(255,255,255,0.2);">
+                </div>
+
+                <div style="display:flex; gap:10px; margin-top:10px;">
+                    <button onclick="document.getElementById('modal-edicao-item').remove()" class="btn-sair-vidro" style="flex:1;">CANCELAR</button>
+                    <button onclick="confirmarEdicao(${id})" style="flex:1; background:#10b981; color:white; border:none; border-radius:10px; font-weight:bold; cursor:pointer;">
+                        SALVAR
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
+window.confirmarEdicao = async (itemId) => {
+    const payload = {
+        estado: document.getElementById('edit-estado').value,
+        numero_serie: document.getElementById('edit-serie').value
+    };
+
+    const res = await fetch(`${API_URL}/patrimonio/itens/${itemId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+        body: JSON.stringify(payload)
+    });
+
+    if (res.ok) {
+        notificar("Item atualizado!", "sucesso");
+        document.getElementById('modal-edicao-item').remove();
+        carregarTabelaInventario(); // Recarrega a lista com a nova cor e estado
+    }
+};
 
 // Isso garante que o onclick="funcao()" funcione sempre
 window.telaVisualizarEstoque = telaVisualizarEstoque;

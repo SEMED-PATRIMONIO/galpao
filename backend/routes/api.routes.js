@@ -4606,6 +4606,35 @@ router.get('/patrimonio/meu-inventario', verificarToken, async (req, res) => {
     }
 });
 
+router.put('/patrimonio/itens/baixa/:id', verificarToken, async (req, res) => {
+    const { id } = req.params;
+    const { motivo, observacao } = req.body; // Motivos: 'QUEBRADO', 'FURTADO', 'OBSOLETO'
+    const local_id = req.user.local_id;
+
+    try {
+        // Validação de propriedade
+        const check = await db.query(
+            "SELECT id FROM patrimonios WHERE id = $1 AND local_id = $2",
+            [id, local_id]
+        );
+
+        if (check.rows.length === 0) return res.status(403).json({ error: "Acesso negado." });
+
+        await db.query(
+            `UPDATE patrimonios SET 
+                status = $1, 
+                observacao_baixa = $2, 
+                data_baixa = NOW() 
+             WHERE id = $3`,
+            [motivo, observacao, id]
+        );
+
+        res.json({ success: true, message: "Baixa registrada com sucesso." });
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao processar baixa." });
+    }
+});
+
 router.put('/patrimonio/itens/:id', verificarToken, async (req, res) => {
     const { id } = req.params;
     const { setor_id, numero_serie, nota_fiscal, estado } = req.body;
@@ -4634,6 +4663,77 @@ router.put('/patrimonio/itens/:id', verificarToken, async (req, res) => {
     } catch (err) {
         console.error("Erro ao atualizar item:", err);
         res.status(500).json({ error: "Erro ao atualizar dados." });
+    }
+});
+
+// ROTA: Registar um novo item de património na unidade
+router.post('/patrimonio/itens', verificarToken, async (req, res) => {
+    const { produto_id, setor_id, numero_serie, nota_fiscal } = req.body;
+    const local_id = req.user.local_id; // Segurança: extraído diretamente do Token
+
+    try {
+        await db.query('BEGIN');
+
+        // 1. Validamos se o setor pertence realmente a esta escola
+        const checkSetor = await db.query(
+            "SELECT id FROM setores WHERE id = $1 AND local_id = $2",
+            [setor_id, local_id]
+        );
+
+        if (checkSetor.rows.length === 0) {
+            throw new Error("Setor inválido ou não pertence a esta unidade.");
+        }
+
+        // 2. Inserimos o item na tabela de patrimónios
+        const result = await db.query(
+            `INSERT INTO patrimonios (produto_id, local_id, setor_id, numero_serie, nota_fiscal, status, data_atualizacao) 
+             VALUES ($1, $2, $3, $4, $5, 'ATIVO', NOW()) RETURNING id`,
+            [produto_id, local_id, setor_id, numero_serie || null, nota_fiscal || null]
+        );
+
+        // 3. Atualizamos o saldo global na tabela de produtos (opcional, dependendo da sua regra de negócio)
+        await db.query(
+            "UPDATE produtos SET quantidade_estoque = quantidade_estoque + 1 WHERE id = $1",
+            [produto_id]
+        );
+
+        await db.query('COMMIT');
+        res.json({ success: true, id: result.rows[0].id });
+
+    } catch (err) {
+        await db.query('ROLLBACK');
+        console.error("Erro ao registar património:", err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/patrimonio/setores', verificarToken, async (req, res) => {
+    const { nome } = req.body;
+    const local_id = req.user.local_id; // Pegamos do token para segurança
+
+    try {
+        await db.query(
+            "INSERT INTO setores (nome, local_id) VALUES ($1, $2)",
+            [nome.toUpperCase(), local_id]
+        );
+        res.json({ success: true });
+    } catch (err) {
+        if (err.code === '23505') {
+            return res.status(400).json({ error: "Este setor já está cadastrado nesta escola." });
+        }
+        res.status(500).json({ error: "Erro ao salvar setor." });
+    }
+});
+
+router.get('/patrimonio/setores/meus', verificarToken, async (req, res) => {
+    try {
+        const result = await db.query(
+            "SELECT id, nome FROM setores WHERE local_id = $1 ORDER BY nome ASC",
+            [req.user.local_id]
+        );
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao listar setores." });
     }
 });
 
@@ -4718,6 +4818,37 @@ router.get('/pedidos/contagem/notificaras', verificarToken, async (req, res) => 
         });
     } catch (err) {
         res.status(500).json({ error: err.message });
+    }
+});
+
+router.get('/patrimonio/escola/resumo', verificarToken, async (req, res) => {
+    const local_id = req.user.local_id;
+
+    try {
+        // Promessas paralelas para ganhar velocidade
+        const [totalItens, totalSetores, semPlaqueta, estadoPessimo, porSetor] = await Promise.all([
+            db.query("SELECT COUNT(*) FROM patrimonios WHERE local_id = $1", [local_id]),
+            db.query("SELECT COUNT(*) FROM setores WHERE local_id = $1", [local_id]),
+            db.query("SELECT COUNT(*) FROM patrimonios WHERE local_id = $1 AND (numero_serie IS NULL OR numero_serie = '')", [local_id]),
+            db.query("SELECT COUNT(*) FROM patrimonios WHERE local_id = $1 AND estado = 'PÉSSIMO'", [local_id]),
+            db.query(`
+                SELECT s.nome as setor, COUNT(p.id) as total 
+                FROM setores s 
+                LEFT JOIN patrimonios p ON s.id = p.setor_id 
+                WHERE s.local_id = $1 
+                GROUP BY s.nome 
+                ORDER BY total DESC`, [local_id])
+        ]);
+
+        res.json({
+            totalItens: totalItens.rows[0].count,
+            totalSetores: totalSetores.rows[0].count,
+            semPlaqueta: semPlaqueta.rows[0].count,
+            estadoPessimo: estadoPessimo.rows[0].count,
+            distribuicao: porSetor.rows
+        });
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao gerar resumo." });
     }
 });
 

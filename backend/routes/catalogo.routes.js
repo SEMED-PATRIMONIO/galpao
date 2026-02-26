@@ -43,6 +43,8 @@ router.get('/patrimonios/disponiveis/:produtoId', verificarToken, async (req, re
     }
 });
 
+
+
 // Rota para Inventário Atual (Posição de Estoque por Local)
 router.get('/relatorios/inventario-atual', verificarToken, async (req, res) => {
     try {

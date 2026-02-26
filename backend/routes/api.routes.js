@@ -4567,8 +4567,6 @@ router.post('/patrimonio/escola/registrar', verificarToken, upload.single('arqui
     }
 });
 
-app.use('/uploads', express.static('uploads'));
-
 router.get('/patrimonio/meu-inventario', verificarToken, async (req, res) => {
     const local_id = req.user.local_id; // Pega o ID da escola do token
     const { setor_id } = req.query; // Pega o filtro de setor se houver
@@ -4703,5 +4701,7 @@ router.get('/patrimonio/item-detalhes/:id', verificarToken, async (req, res) => 
         res.status(500).json({ error: "Erro interno no servidor." });
     }
 });
+
+router.use('/uploads', express.static('uploads'));
 
 module.exports = router;

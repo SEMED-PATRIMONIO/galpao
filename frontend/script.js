@@ -311,7 +311,9 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="telaSolicitarServicoImpressora('manutencao')">
                 <i>🛠️</i><span>SOLICITAR MANUTENÇÃO IMPRESSORA</span>
             </button>
-       `;
+            <button class="btn-grande btn-vidro" onclick="abrirMenuPatrimonioEscola()">
+                <i>🏛️</i><span>PATRIMÔNIO</span>
+            </button>       `;
         // Chama notificaras específicos da escola (Pedidos em transporte para o localId)
     //    setTimeout(() => verificarnotificarasEscola(), 500);
     }
@@ -12605,6 +12607,46 @@ window.deletarItemPatrimonio = async (id, nome) => {
         carregarTabelaInventario(); // Atualiza a lista e o Dashboard
     }
 };
+
+function abrirMenuPatrimonioEscola() {
+    // Certifique-se que 'render-area' é o ID do seu container principal onde o conteúdo muda
+    const mainArea = document.getElementById('render-area'); 
+    
+    mainArea.innerHTML = `
+        <div class="animar-entrada" style="padding: 20px; color: white;">
+            
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 30px;">
+                <button onclick="carregarDashboard()" class="btn-sair-vidro" style="display: flex; align-items: center; gap: 8px; padding: 10px 20px;">
+                    ⬅️ VOLTAR
+                </button>
+                <h1 style="margin: 0; font-size: 1.5rem;">Gestão de Patrimônio</h1>
+                <div style="width: 100px;"></div> 
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; max-width: 1000px; margin: 0 auto;">
+                
+                <div onclick="telaPatrimonioConfigurarSetores()" class="painel-vidro card-interativo">
+                    <div style="font-size: 3rem; margin-bottom: 15px;">📍</div>
+                    <h3>1. CONFIGURAR SETORES</h3>
+                    <p style="opacity: 0.7; font-size: 0.9rem;">Cadastre as salas e locais da escola.</p>
+                </div>
+
+                <div onclick="telaPatrimonioEscolaCatalogo()" class="painel-vidro card-interativo">
+                    <div style="font-size: 3rem; margin-bottom: 15px;">📝</div>
+                    <h3>2. CATALOGAR BENS</h3>
+                    <p style="opacity: 0.7; font-size: 0.9rem;">Adicione novos itens (Bens antigos ou novos).</p>
+                </div>
+
+                <div onclick="telaPatrimonioConsultaEscola()" class="painel-vidro card-interativo">
+                    <div style="font-size: 3rem; margin-bottom: 15px;">📋</div>
+                    <h3>3. CONSULTAR BENS</h3>
+                    <p style="opacity: 0.7; font-size: 0.9rem;">Consulte fotos, notas e estados de conservação.</p>
+                </div>
+
+            </div>
+        </div>
+    `;
+}
 
 // Isso garante que o onclick="funcao()" funcione sempre
 window.telaVisualizarEstoque = telaVisualizarEstoque;

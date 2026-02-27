@@ -314,10 +314,10 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="telaSolicitarServicoImpressora('manutencao')">
                 <i>🛠️</i><span>SOLICITAR MANUTENÇÃO IMPRESSORA</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="telaSolicitarManutencaoPC('')">
+            <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaSolicitarManutencaoPC('')">
                 <i>💻</i><span>SOLICITAR MANUTENÇÃO COMPUTADOR</span>
             </button>    
-            <button class="btn-grande btn-vidro" onclick="abrirMenuPatrimonioEscola()">
+            <button class="btn-grande btn-vidro btn-breve" // --- onclick="abrirMenuPatrimonioEscola()">
                 <i>🏛️</i><span>PATRIMÔNIO</span>
             </button>       `;
         // Chama notificaras específicos da escola (Pedidos em transporte para o localId)

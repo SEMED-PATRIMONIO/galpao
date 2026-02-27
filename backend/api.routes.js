@@ -521,19 +521,32 @@ router.post('/auth/login', async (req, res) => {
 
         if (result.rows.length > 0) {
             const user = result.rows[0];
-            // Token de exemplo (use sua lógica atual de geração)
-            const token = "TOKEN_" + user.id + "_" + Math.random().toString(36).substr(2);
+            
+            // Debug temporário: se quiser ver no terminal do servidor se o local_id chegou:
+            console.log("Usuário logado:", user.nome, "Local ID no banco:", user.local_id);
+
+            const token = jwt.sign(
+                { 
+                    id: user.id, 
+                    perfil: user.perfil, 
+                    local_id: user.local_id || user.LOCAL_ID // Tenta as duas formas
+                }, 
+                SECRET, 
+                { expiresIn: '24h' }
+            );
 
             res.json({
                 token: token,
                 perfil: user.perfil,
                 nome: user.nome,
-                local_id: user.local_id // Retorna o ID da escola vinculada
+                local_id: user.local_id || user.LOCAL_ID
             });
         } else {
             res.status(401).json({ message: "Usuário ou senha inválidos." });
         }
-    } catch (err) { res.status(500).json({ error: err.message }); }
+    } catch (err) { 
+        res.status(500).json({ error: err.message }); 
+    }
 });
 
 // 2. Rota de Aprovação com Baixa no Estoque (Grade e Geral)
@@ -1707,29 +1720,39 @@ router.get('/pedidos/escola/a-caminho', verificarToken, async (req, res) => {
 });
 
 router.get('/pedidos/escola/limite-devolucao', verificarToken, async (req, res) => {
-    const usuario_id = req.userId;
-
     try {
-        const result = await db.query(`
-            SELECT 
-                prod.id AS produto_id, 
-                prod.nome AS produto_nome, 
-                pri.tamanho, 
-                SUM(pri.quantidade_enviada)::integer AS total_recebido
-            FROM pedido_remessa_itens pri
-            JOIN pedido_remessas pr ON pri.remessa_id = pr.id
-            JOIN pedidos p ON pr.pedido_id = p.id
-            JOIN produtos prod ON pri.produto_id = prod.id
-            WHERE p.local_destino_id = (SELECT local_id FROM usuarios WHERE id = $1)
-              AND p.data_criacao >= NOW() - INTERVAL '30 days'
-              AND p.status IN ('ENTREGUE', 'EM_TRANSPORTE', 'COLETA_LIBERADA')
-            GROUP BY prod.id, prod.nome, pri.tamanho
-            HAVING SUM(pri.quantidade_enviada) > 0
-        `, [usuario_id]);
+        const userRes = await db.query('SELECT local_id FROM usuarios WHERE id = $1', [req.userId]);
+        const escolaId = userRes.rows[0]?.local_id;
 
-        res.json(result.rows);
+        if (!escolaId) return res.status(404).json({ error: "Escola não vinculada." });
+
+        const query = `
+            SELECT 
+                pri.produto_id, 
+                prod.nome as produto_nome, 
+                pri.tamanho, 
+                SUM(pri.quantidade_enviada) as total_recebido
+            FROM pedidos p
+            JOIN pedido_remessas pr ON p.id = pr.pedido_id
+            JOIN pedido_remessa_itens pri ON pr.id = pri.remessa_id
+            JOIN produtos prod ON pri.produto_id = prod.id
+            WHERE p.local_destino_id = $1 
+              AND (p.status = 'ENTREGUE' OR pr.status = 'ENTREGUE')
+              AND pr.data_criacao >= NOW() - INTERVAL '30 days'
+            GROUP BY pri.produto_id, prod.nome, pri.tamanho
+            HAVING SUM(pri.quantidade_enviada) > 0
+        `;
+
+        const result = await db.query(query, [escolaId]);
+
+        res.json({
+            success: true,
+            items: result.rows || [],
+            message: result.rows.length === 0 ? "Nenhum material encontrado nas remessas entregues." : ""
+        });
+
     } catch (err) {
-        res.status(500).json({ error: "Erro ao calcular limite: " + err.message });
+        res.status(500).json({ success: false, error: err.message });
     }
 });
 
@@ -2853,11 +2876,12 @@ router.get('/impressoras/relatorio-consumo', verificarToken, async (req, res) =>
                 u1.data_fechamento as data_ultima,
                 u2.contador_encerramento as penultima_leitura,
                 u2.data_fechamento as data_penultima
-            FROM impressoras i
+            FROM UltimasLeituras u1
+            JOIN UltimasLeituras u2 ON u1.impressora_id = u2.impressora_id 
+                                   AND u2.ordem = u1.ordem + 1
+            JOIN impressoras i ON u1.impressora_id = i.id
             JOIN locais l ON i.local_id = l.id
-            JOIN UltimasLeituras u1 ON i.id = u1.impressora_id AND u1.ordem = 1
-            JOIN UltimasLeituras u2 ON i.id = u2.impressora_id AND u2.ordem = 2
-            ORDER BY l.nome ASC;
+            ORDER BY u1.data_fechamento DESC;
         `;
         const { rows } = await db.query(query);
         res.json(rows);
@@ -3739,6 +3763,1191 @@ router.post('/pedidos/estoque/devolucoes/finalizar-recebimento', verificarToken,
         await db.query('COMMIT');
         res.json({ success: true });
     } catch (err) { if (db) await db.query('ROLLBACK'); res.status(500).json({ error: err.message }); }
+});
+
+router.post('/pedidos/escola/solicitar-devolucao', verificarToken, async (req, res) => {
+    try {
+        const { itens } = req.body;
+        const escolaId = req.user.local_id || req.user.id;
+        const usuarioId = req.user.id;
+
+        await db.query('BEGIN');
+
+        // 1. Cria o registro na tabela pedidos com o status que o banco exige
+        const resPed = await db.query(
+            `INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, tipo_pedido, data_criacao) 
+             VALUES ($1, $2, 'DEVOLUCAO_PENDENTE', 'DEVOLUCAO', NOW()) 
+             RETURNING id`,
+            [usuarioId, escolaId]
+        );
+        
+        const pedidoId = resPed.rows[0].id;
+
+        // 2. Insere os itens na tabela VIVA (itens_pedido)
+        for (const it of itens) {
+            await db.query(
+                `INSERT INTO itens_pedido (pedido_id, produto_id, tamanho, quantidade) 
+                 VALUES ($1, $2, $3, $4)`,
+                [pedidoId, it.produto_id, it.tamanho, it.quantidade]
+            );
+        }
+
+        await db.query('COMMIT');
+        res.json({ success: true, pedidoId });
+
+    } catch (err) {
+        if (db) await db.query('ROLLBACK');
+        console.error("ERRO AO SOLICITAR DEVOLUCAO:", err.message);
+        res.status(500).json({ error: "Erro ao gravar solicitação: " + err.message });
+    }
+});
+
+router.get('/pedidos/admin/devolucoes-pendentes', verificarToken, async (req, res) => {
+    try {
+        // 1. Segurança: Verifica se é Admin (ajuste conforme seu padrão de perfil)
+        // Se o seu sistema usa req.user.perfil, adicione a trava aqui.
+
+        const query = `
+            SELECT 
+                p.id, 
+                l.nome as escola_nome, 
+                p.data_criacao, 
+                p.status
+            FROM pedidos p
+            JOIN locais l ON p.local_destino_id = l.id
+            WHERE p.tipo_pedido = 'DEVOLUCAO' 
+              AND p.status = 'DEVOLUCAO_PENDENTE'
+            ORDER BY p.data_criacao DESC
+        `;
+
+        const result = await db.query(query);
+        
+        // Sempre retorna JSON, mesmo que vazio, para evitar o erro "Unexpected token <"
+        res.json(result.rows || []);
+
+    } catch (err) {
+        console.error("ERRO ADMIN DEVOLUCOES:", err.message);
+        res.status(500).json({ error: "Erro interno ao buscar devoluções." });
+    }
+});
+
+router.get('/pedidos/admin/detalhes-devolucao/:id', verificarToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const query = `
+            SELECT 
+                ip.id as item_id,
+                p.nome as produto_nome, 
+                ip.tamanho, 
+                ip.quantidade
+            FROM itens_pedido ip
+            JOIN produtos p ON ip.produto_id = p.id
+            WHERE ip.pedido_id = $1
+        `;
+        const result = await db.query(query, [id]);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/pedidos/admin/processar-devolucao', verificarToken, async (req, res) => {
+    try {
+        const { pedidoId, acao } = req.body; // acao: 'AUTORIZAR' ou 'RECUSAR'
+        const novoStatus = acao === 'AUTORIZAR' ? 'DEVOLUCAO_AUTORIZADA' : 'DEVOLUCAO_RECUSADA';
+        const autorizadorId = req.userId;
+
+        await db.query(
+            `UPDATE pedidos 
+             SET status = $1, autorizado_por = $2, data_autorizacao = NOW() 
+             WHERE id = $3`,
+            [novoStatus, autorizadorId, pedidoId]
+        );
+
+        res.json({ success: true, status: novoStatus });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.get('/pedidos/admin/conferir-devolucao-remessa/:id', verificarToken, async (req, res) => {
+    try {
+        const { id } = req.params; // ID do Pedido Pai
+
+        const query = `
+            SELECT 
+                pri.id,
+                prod.nome as produto_nome, 
+                pri.tamanho, 
+                pri.quantidade_enviada as quantidade
+            FROM pedido_remessas pr
+            JOIN pedido_remessa_itens pri ON pr.id = pri.remessa_id
+            JOIN produtos prod ON pri.produto_id = prod.id
+            WHERE pr.pedido_id = $1
+        `;
+        
+        const result = await db.query(query, [id]);
+        
+        // Garantimos o envio de JSON
+        res.json(result.rows || []);
+
+    } catch (err) {
+        console.error("Erro na rota exclusiva de devolução:", err.message);
+        res.status(500).json({ error: "Erro interno ao processar a conferência." });
+    }
+});
+
+router.post('/pedidos/escola/nova-devolucao-isolada', verificarToken, async (req, res) => {
+    const { itens } = req.body;
+    const usuarioId = req.userId;
+
+    try {
+        await db.query('BEGIN');
+        const userRes = await db.query('SELECT local_id FROM usuarios WHERE id = $1', [usuarioId]);
+        const escolaId = userRes.rows[0]?.local_id;
+
+        // Cria o Pedido (Cabeçalho)
+        const resPed = await db.query(
+            `INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, tipo_pedido, data_criacao) 
+             VALUES ($1, $2, 'DEVOLUCAO_PENDENTE', 'DEVOLUCAO', NOW()) RETURNING id`,
+            [usuarioId, escolaId]
+        );
+        const pedidoId = resPed.rows[0].id;
+
+        // Cria a Remessa (O vínculo que o Admin precisa)
+        const resRem = await db.query(
+            `INSERT INTO pedido_remessas (pedido_id, status, data_criacao) 
+             VALUES ($1, 'PENDENTE', NOW()) RETURNING id`,
+            [pedidoId]
+        );
+        const remessaId = resRem.rows[0].id;
+
+        // Insere os itens na tabela de remessa (onde o sistema já busca)
+        for (const it of itens) {
+            await db.query(
+                `INSERT INTO pedido_remessa_itens (remessa_id, produto_id, tamanho, quantidade_enviada) 
+                 VALUES ($1, $2, $3, $4)`,
+                [remessaId, it.produto_id, it.tamanho, it.quantidade]
+            );
+        }
+
+        await db.query('COMMIT');
+        res.json({ success: true, pedidoId });
+    } catch (err) {
+        await db.query('ROLLBACK');
+        res.status(500).json({ error: "Erro na nova rota de devolução." });
+    }
+});
+
+router.post('/pedidos/admin/decisao-devolucao', verificarToken, async (req, res) => {
+    try {
+        const { pedidoId, status } = req.body; 
+        await db.query("UPDATE pedidos SET status = $1 WHERE id = $2", [status, pedidoId]);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao processar decisão." });
+    }
+});
+
+router.post('/pedidos/escola/solicitacao-devolucao-v2', verificarToken, async (req, res) => {
+    const { itens } = req.body;
+    const usuarioId = req.userId;
+
+    try {
+        await db.query('BEGIN');
+        const userRes = await db.query('SELECT local_id FROM usuarios WHERE id = $1', [usuarioId]);
+        const escolaId = userRes.rows[0]?.local_id;
+
+        const resPed = await db.query(
+            `INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, tipo_pedido, data_criacao) 
+             VALUES ($1, $2, 'DEVOLUCAO_PENDENTE', 'DEVOLUCAO', NOW()) RETURNING id`,
+            [usuarioId, escolaId]
+        );
+        const pedidoId = resPed.rows[0].id;
+
+        const resRem = await db.query(
+            `INSERT INTO pedido_remessas (pedido_id, status, data_criacao) 
+             VALUES ($1, 'PENDENTE', NOW()) RETURNING id`,
+            [pedidoId]
+        );
+        const remessaId = resRem.rows[0].id;
+
+        for (const it of itens) {
+            // USANDO A COLUNA EXATA: quantidade_enviada
+            await db.query(
+                `INSERT INTO pedido_remessa_itens (remessa_id, produto_id, tamanho, quantidade_enviada) 
+                 VALUES ($1, $2, $3, $4)`,
+                [remessaId, it.produto_id, it.tamanho, it.quantidade]
+            );
+        }
+
+        await db.query('COMMIT');
+        res.json({ success: true, pedidoId });
+    } catch (err) {
+        await db.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.get('/pedidos/admin/visualizar-itens-devolucao/:id', verificarToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const query = `
+            SELECT 
+                pi.produto_id, -- ADICIONADO: Agora o frontend saberá quem é o produto
+                prod.nome, 
+                pi.tamanho, 
+                pi.quantidade_solicitada as quantidade
+            FROM pedido_itens pi
+            JOIN produtos prod ON pi.produto_id = prod.id
+            WHERE pi.pedido_id = $1
+        `;
+
+        const result = await db.query(query, [id]);
+        res.json(result.rows || []);
+
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao buscar itens." });
+    }
+});
+
+router.get('/pedidos/admin/conferir-devolucao-v2/:id', verificarToken, async (req, res) => {
+    try {
+        const { id } = req.params; // ID do Pedido
+        const query = `
+            SELECT 
+                prod.nome, 
+                pri.tamanho, 
+                pri.quantidade_enviada as quantidade
+            FROM pedido_remessas pr
+            JOIN pedido_remessa_itens pri ON pr.id = pri.remessa_id
+            JOIN produtos prod ON pri.produto_id = prod.id
+            WHERE pr.pedido_id = $1
+        `;
+        const result = await db.query(query, [id]);
+        res.json(result.rows || []);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao buscar itens da remessa." });
+    }
+});
+
+router.post('/pedidos/admin/decisao-devolucao-v2', verificarToken, async (req, res) => {
+    const { pedidoId, status } = req.body;
+    try {
+        await db.query("UPDATE pedidos SET status = $1 WHERE id = $2", [status, pedidoId]);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao atualizar status." });
+    }
+});
+
+router.put('/pedidos/logistica/confirmar-coleta/:id', verificarToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        // O status muda para EM_TRANSITO. O estoque só verá pedidos com este status.
+        await db.query(
+            "UPDATE pedidos SET status = 'DEVOLUCAO_EM_TRANSITO', data_saida = NOW() WHERE id = $1",
+            [id]
+        );
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/pedidos/estoque/finalizar-devolucao-v2', verificarToken, async (req, res) => {
+    const { pedidoId, itens } = req.body;
+    try {
+        await db.query('BEGIN');
+        for (const item of itens) {
+            // Soma na grade (estoque_grades) e no total (produtos)
+            await db.query("UPDATE estoque_grades SET quantidade = quantidade + $1 WHERE produto_id = $2 AND tamanho = $3", [item.quantidade, item.produto_id, item.tamanho]);
+            await db.query("UPDATE produtos SET quantidade_estoque = quantidade_estoque + $1 WHERE id = $2", [item.quantidade, item.produto_id]);
+        }
+        await db.query("UPDATE pedidos SET status = 'DEVOLVIDO', data_recebimento = NOW() WHERE id = $1", [pedidoId]);
+        await db.query('COMMIT');
+        res.json({ success: true });
+    } catch (err) {
+        await db.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.get('/devolucoes/logistica/coletas-pendentes', verificarToken, async (req, res) => {
+    try {
+        // Esta query busca o local (escola) vinculado ao usuário que iniciou a devolução
+        const query = `
+            SELECT 
+                p.id, 
+                l.nome as escola_nome, 
+                p.data_criacao,
+                p.status
+            FROM pedidos p
+            JOIN usuarios u ON p.usuario_origem_id = u.id
+            JOIN locais l ON u.local_id = l.id
+            WHERE p.status = 'DEVOLUCAO_AUTORIZADA'
+            ORDER BY p.data_criacao ASC
+        `;
+        const result = await db.query(query);
+        
+        // Log para você ver no terminal do VSCode/PM2 se o banco retornou algo
+        console.log(`[LOGÍSTICA] Pedidos encontrados: ${result.rowCount}`);
+        
+        res.json(result.rows);
+    } catch (err) {
+        console.error("Erro na rota de logística:", err.message);
+        res.status(500).json({ error: "Erro ao carregar lista de coletas." });
+    }
+});
+
+// 2. Confirmar coleta de DEVOLUÇÃO
+router.put('/devolucoes/logistica/confirmar-coleta/:id', verificarToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        await db.query(
+            "UPDATE pedidos SET status = 'DEVOLUCAO_EM_TRANSITO', data_saida = NOW() WHERE id = $1",
+            [id]
+        );
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao processar coleta." });
+    }
+});
+
+router.get('/devolucoes/estoque/recebimentos-pendentes', verificarToken, async (req, res) => {
+    try {
+        const query = `
+            SELECT p.id, l.nome as escola_nome, p.data_saida as data_coleta
+            FROM pedidos p
+            JOIN locais l ON p.local_destino_id = l.id
+            WHERE p.status = 'DEVOLUCAO_EM_TRANSITO'
+            ORDER BY p.data_saida ASC
+        `;
+        const result = await db.query(query);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao listar recebimentos." });
+    }
+});
+
+router.post('/devolucoes/estoque/finalizar-entrada', verificarToken, async (req, res) => {
+    const { pedidoId, itens } = req.body;
+
+    // DIAGNÓSTICO 1: Verificar se os dados chegaram
+    if (!pedidoId || !itens || !Array.isArray(itens)) {
+        return res.status(400).json({ 
+            error: "Dados incompletos ou formato inválido.",
+            recebido: { pedidoId, itens } 
+        });
+    }
+
+    try {
+        await db.query('BEGIN');
+
+        for (const item of itens) {
+            // DIAGNÓSTICO 2: Proteção contra valores nulos/NaN
+            const qtd = parseInt(item.quantidade) || 0;
+            const pId = parseInt(item.produto_id);
+            const tam = item.tamanho;
+
+            if (isNaN(pId) || !tam) throw new Error(`Item inválido: Produto ${pId}, Tam ${tam}`);
+
+            await db.query(
+                "UPDATE estoque_grades SET quantidade = quantidade + $1 WHERE produto_id = $2 AND tamanho = $3",
+                [qtd, pId, tam]
+            );
+
+            await db.query(
+                "UPDATE produtos SET quantidade_estoque = quantidade_estoque + $1 WHERE id = $2",
+                [qtd, pId]
+            );
+        }
+
+        // DIAGNÓSTICO 3: O SQL do status com cast explícito
+        await db.query(
+            "UPDATE pedidos SET status = $1::status_pedido, data_recebimento = NOW() WHERE id = $2",
+            ['DEVOLVIDO', parseInt(pedidoId)]
+        );
+
+        await db.query('COMMIT');
+        res.json({ success: true });
+
+    } catch (err) {
+        await db.query('ROLLBACK');
+        console.error("🚨 ERRO NO BANCO:", err.message);
+        // Retornamos o erro REAL do Postgres para o Frontend ver
+        res.status(500).json({ 
+            error: "Falha no Banco de Dados", 
+            message: err.message,
+            stack: err.stack // Ajuda a ver em qual linha do código deu erro
+        });
+    }
+});
+
+// ROTA EXCLUSIVA: Criar Solicitação de Patrimônio
+router.post('/patrimonio/solicitar', verificarToken, async (req, res) => {
+    const { local_destino_id, itens, observacao } = req.body;
+    const usuario_origem_id = req.user.id; // Pego o ID de quem está logado
+
+    try {
+        await db.query('BEGIN');
+
+        // 1. Cria o registro principal na tabela pedidos
+        // Usamos status 'AGUARDANDO_AUTORIZACAO' e tipo 'PATRIMONIO'
+        const pedidoRes = await db.query(
+            `INSERT INTO pedidos 
+             (usuario_origem_id, local_destino_id, status, tipo_pedido, motivo_recusa) 
+             VALUES ($1, $2, 'AGUARDANDO_AUTORIZACAO', 'PATRIMONIO', $3) 
+             RETURNING id`,
+            [usuario_origem_id, local_destino_id, observacao]
+        );
+
+        const pedidoId = pedidoRes.rows[0].id;
+
+        // 2. Insere os itens solicitados (apenas quantidade neste momento)
+        for (const item of itens) {
+            await db.query(
+                `INSERT INTO pedido_itens (pedido_id, produto_id, quantidade_solicitada) 
+                 VALUES ($1, $2, $3)`,
+                [pedidoId, item.produto_id, item.quantidade]
+            );
+        }
+
+        await db.query('COMMIT');
+        res.json({ success: true, pedidoId });
+
+    } catch (err) {
+        await db.query('ROLLBACK');
+        console.error("Erro ao solicitar patrimônio:", err.message);
+        res.status(500).json({ error: "Erro interno ao processar solicitação." });
+    }
+});
+
+// ROTA: Entrada de Novos Patrimônios
+router.post('/patrimonio/entrada', verificarToken, async (req, res) => {
+    const { produto_id, quantidade, nota_fiscal, local_id, setor_id } = req.body;
+
+    try {
+        await db.query('BEGIN');
+
+        // 1. Validação de Segurança: O produto é realmente do tipo PATRIMONIO?
+        const checkProd = await db.query(
+            "SELECT tipo FROM produtos WHERE id = $1", [produto_id]
+        );
+
+        if (checkProd.rows[0].tipo !== 'PATRIMONIO') {
+            throw new Error("Este produto não está catalogado como Patrimônio.");
+        }
+
+        // 2. Loop de Individualização: Cria X registros na tabela 'patrimonios'
+        // Note que numero_serie e outros campos ficam nulos para preenchimento tardio
+        for (let i = 0; i < quantidade; i++) {
+            await db.query(
+                `INSERT INTO patrimonios (produto_id, local_id, setor_id, nota_fiscal, status) 
+                 VALUES ($1, $2, $3, $4, 'ESTOQUE')`,
+                [produto_id, local_id, setor_id, nota_fiscal]
+            );
+        }
+
+        // 3. Sincronização: Atualiza a contagem global na tabela 'produtos'
+        await db.query(
+            "UPDATE produtos SET quantidade_estoque = quantidade_estoque + $1 WHERE id = $2",
+            [quantidade, produto_id]
+        );
+
+        await db.query('COMMIT');
+        res.json({ success: true, message: `${quantidade} itens individualizados com sucesso.` });
+
+    } catch (err) {
+        await db.query('ROLLBACK');
+        console.error("Erro na entrada de patrimônio:", err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 1. Listar solicitações de patrimônio pendentes
+router.get('/patrimonio/solicitacoes-pendentes', verificarToken, async (req, res) => {
+    try {
+        const query = `
+            SELECT p.id, p.data_criacao, l.nome as escola_nome, u.nome as solicitante,
+            (SELECT COUNT(*) FROM pedido_itens WHERE pedido_id = p.id) as total_itens
+            FROM pedidos p
+            JOIN locais l ON p.local_destino_id = l.id
+            JOIN usuarios u ON p.usuario_origem_id = u.id
+            WHERE p.tipo_pedido = 'PATRIMONIO' AND p.status = 'AGUARDANDO_AUTORIZACAO'
+            ORDER BY p.data_criacao DESC`;
+        
+        const result = await db.query(query);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 2. Aprovar Solicitação (Transformar em Pedido Oficial)
+router.post('/patrimonio/aprovar', verificarToken, async (req, res) => {
+    const { pedidoId } = req.body;
+    try {
+        await db.query("UPDATE pedidos SET status = 'APROVADO', autorizado_por = $1, data_autorizacao = NOW() WHERE id = $2", 
+        [req.user.id, pedidoId]);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 1. Listar itens físicos disponíveis para um determinado produto
+router.get('/patrimonio/disponiveis/:produtoId', verificarToken, async (req, res) => {
+    try {
+        const { produtoId } = req.params;
+        const query = `
+            SELECT id, numero_serie, nota_fiscal 
+            FROM patrimonios 
+            WHERE produto_id = $1 AND status = 'ESTOQUE'
+            ORDER BY id ASC`;
+        const result = await db.query(query, [produtoId]);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 2. Gerar Remessa de Património (Vinculando IDs individuais)
+router.post('/patrimonio/gerar-remessa', verificarToken, async (req, res) => {
+    const { pedidoId, itensSelecionados } = req.body; // itensSelecionados: [id1, id2, id3...]
+
+    try {
+        await db.query('BEGIN');
+
+        // A. Cria a Remessa principal (status: AGUARDANDO_COLETA)
+        const remessaRes = await db.query(
+            `INSERT INTO remessas (pedido_id, usuario_id, status) 
+             VALUES ($1, $2, 'AGUARDANDO_COLETA') RETURNING id`,
+            [pedidoId, req.user.id]
+        );
+        const remessaId = remessaRes.rows[0].id;
+
+        // B. Vincula cada património à remessa e muda o status do item
+        for (const patId of itensSelecionados) {
+            // Atualiza o património para indicar que está em processo de envio
+            await db.query(
+                `UPDATE patrimonios SET 
+                 status = 'EM_TRANSITO', 
+                 pedido_id = $1 
+                 WHERE id = $2`,
+                [pedidoId, patId]
+            );
+
+            // Se você tiver uma tabela de itens da remessa, insira aqui:
+            await db.query(
+                `INSERT INTO remessa_itens (remessa_id, patrimonio_id) VALUES ($1, $2)`,
+                [remessaId, patId]
+            );
+        }
+
+        await db.query('COMMIT');
+        res.json({ success: true, message: "Remessa gerada com sucesso!" });
+
+    } catch (err) {
+        await db.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 1. Listar remessas de património aguardando coleta
+router.get('/patrimonio/logistica/pendentes', verificarToken, async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                r.id as remessa_id, 
+                r.data_criacao, 
+                p.id as pedido_id, 
+                l.nome as local_destino,
+                (SELECT COUNT(*) FROM remessa_itens WHERE remessa_id = r.id) as total_itens
+            FROM remessas r
+            JOIN pedidos p ON r.pedido_id = p.id
+            JOIN locais l ON p.local_destino_id = l.id
+            WHERE p.tipo_pedido = 'PATRIMONIO' AND r.status = 'AGUARDANDO_COLETA'
+            ORDER BY r.data_criacao ASC`;
+        
+        const result = await db.query(query);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 2. Confirmar Coleta (Mudar status para EM_TRANSPORTE)
+router.post('/patrimonio/logistica/confirmar-coleta', verificarToken, async (req, res) => {
+    const { remessaId } = req.body;
+    try {
+        await db.query(
+            "UPDATE remessas SET status = 'EM_TRANSPORTE', data_saida = NOW() WHERE id = $1",
+            [remessaId]
+        );
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ROTA: Confirmar Recebimento de Património no Destino
+router.post('/patrimonio/confirmar-recebimento', verificarToken, async (req, res) => {
+    const { remessaId } = req.body;
+
+    try {
+        await db.query('BEGIN');
+
+        // 1. Procuramos o local de destino e os itens desta remessa
+        const infoRes = await db.query(`
+            SELECT p.local_destino_id, ri.patrimonio_id 
+            FROM remessas r
+            JOIN pedidos p ON r.pedido_id = p.id
+            JOIN remessa_itens ri ON ri.remessa_id = r.id
+            WHERE r.id = $1`, [remessaId]);
+
+        if (infoRes.rows.length === 0) throw new Error("Remessa não encontrada.");
+
+        const localDestinoId = infoRes.rows[0].local_destino_id;
+        const itens = infoRes.rows.map(r => r.patrimonio_id);
+
+        // 2. Atualizamos cada item na tabela 'patrimonios'
+        // O local_id muda para a escola e o status volta para 'ATIVO' (ou 'ALOCADO')
+        await db.query(`
+            UPDATE patrimonios 
+            SET local_id = $1, 
+                status = 'ATIVO', 
+                data_atualizacao = NOW() 
+            WHERE id = ANY($2)`, 
+            [localDestinoId, itens]);
+
+        // 3. Finalizamos a remessa
+        await db.query("UPDATE remessas SET status = 'ENTREGUE', data_chegada = NOW() WHERE id = $1", [remessaId]);
+
+        await db.query('COMMIT');
+        res.json({ success: true, message: "Património recebido e inventário atualizado!" });
+
+    } catch (err) {
+        await db.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ROTA: Consultar Detalhes e Histórico de um Patrimônio
+router.get('/patrimonio/historico/:identificador', verificarToken, async (req, res) => {
+    const { identificador } = req.params; // Pode ser o ID ou o Número de Série
+
+    try {
+        // 1. Busca os dados atuais do item
+        const itemRes = await db.query(`
+            SELECT p.*, pr.nome as produto_nome, l.nome as local_atual, s.nome as setor_nome
+            FROM patrimonios p
+            JOIN produtos pr ON p.produto_id = pr.id
+            JOIN locais l ON p.local_id = l.id
+            LEFT JOIN setores s ON p.setor_id = s.id
+            WHERE p.id::text = $1 OR p.numero_serie = $1`, [identificador]);
+
+        if (itemRes.rows.length === 0) {
+            return res.status(404).json({ error: "Patrimônio não localizado." });
+        }
+
+        const patrimonio = itemRes.rows[0];
+
+        // 2. Busca o rastro de movimentação (Remessas por onde passou)
+        const trilhaRes = await db.query(`
+            SELECT 
+                r.data_saida, r.data_chegada, r.status,
+                l_dest.nome as destino,
+                u_envio.nome as quem_enviou
+            FROM remessa_itens ri
+            JOIN remessas r ON ri.remessa_id = r.id
+            JOIN pedidos ped ON r.pedido_id = ped.id
+            JOIN locais l_dest ON ped.local_destino_id = l_dest.id
+            JOIN usuarios u_envio ON r.usuario_id = u_envio.id
+            WHERE ri.patrimonio_id = $1
+            ORDER BY r.data_criacao DESC`, [patrimonio.id]);
+
+        res.json({
+            detalhes: patrimonio,
+            historico: trilhaRes.rows
+        });
+
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.get('/produtos', verificarToken, async (req, res) => {
+    try {
+        // Note: usei os nomes 'nome' e 'quantidade_estoque' que seu script.js espera
+        const result = await db.query(`
+            SELECT id, item as nome, quantidade as quantidade_estoque 
+            FROM produtos 
+            WHERE tipo = 'PATRIMONIO' 
+            ORDER BY item ASC
+        `);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+const multer = require('multer');
+const path = require('path');
+
+// Configuração de Armazenamento
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        // Como o script roda na raiz do backend, o caminho é relativo a ele
+        cb(null, 'uploads/notas_fiscais/'); 
+    },
+    filename: (req, file, cb) => {
+        // Geramos um nome único: Prefixo + Timestamp + Número Aleatório + Extensão
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, 'NF-' + uniqueSuffix + path.extname(file.originalname));
+    }
+});
+
+// Filtro de Segurança (Apenas PDF)
+const upload = multer({ 
+    storage: storage,
+    limits: { fileSize: 5 * 1024 * 1024 }, // Limite de 5MB por arquivo
+    fileFilter: (req, file, cb) => {
+        if (path.extname(file.originalname).toLowerCase() === '.pdf') {
+            cb(null, true);
+        } else {
+            cb(new Error('Formato inválido! Envie apenas arquivos PDF.'));
+        }
+    }
+});
+
+// ROTA ATUALIZADA (Recebe arquivo e dados)
+router.post('/patrimonio/escola/registrar', verificarToken, upload.single('arquivo_nf'), async (req, res) => {
+    const { nome, setor_id, quantidade, nota_fiscal, numero_serie, adquirido_pos_2025 } = req.body;
+    const local_id = req.user.local_id;
+    
+    // O Multer coloca os dados do arquivo em req.file
+    // Salvamos o caminho relativo para facilitar o acesso depois
+    const url_nota_fiscal = req.file ? req.file.path : null;
+
+    try {
+        await db.query('BEGIN');
+
+        // 1. Lógica do Produto (mantém como estava)
+        let prodRes = await db.query(
+            "SELECT id FROM produtos WHERE UPPER(nome) = $1 AND local_id = $2 AND tipo = 'PATRIMONIO'",
+            [nome.toUpperCase(), local_id]
+        );
+
+        let produto_id;
+        if (prodRes.rows.length === 0) {
+            const newProd = await db.query(
+                "INSERT INTO produtos (nome, tipo, local_id, quantidade_estoque) VALUES ($1, 'PATRIMONIO', $2, 0) RETURNING id",
+                [nome.toUpperCase(), local_id]
+            );
+            produto_id = newProd.rows[0].id;
+        } else {
+            produto_id = prodRes.rows[0].id;
+        }
+
+        // 2. Inserção do(s) item(ns) de patrimônio com os NOVOS campos
+        for (let i = 0; i < (parseInt(quantidade) || 1); i++) {
+            await db.query(
+                `INSERT INTO patrimonios (
+                    produto_id, local_id, setor_id, numero_serie, 
+                    nota_fiscal, status, adquirido_pos_2025, url_nota_fiscal, estado
+                ) VALUES ($1, $2, $3, $4, $5, 'ESTOQUE', $6, $7, 'BOM')`, // Mudei para 'ESTOQUE' conforme seu enum default
+                [
+                    produto_id, 
+                    local_id, 
+                    setor_id, 
+                    (i === 0 ? (numero_serie || null) : null), // Só grava a série no primeiro item se for lote
+                    nota_fiscal || null, 
+                    adquirido_pos_2025 === 'true',
+                    url_nota_fiscal
+                ]
+            );
+        }
+
+        await db.query('COMMIT');
+        res.json({ success: true, message: "Registro(s) criado(s) com sucesso!" });
+
+    } catch (err) {
+        await db.query('ROLLBACK');
+        console.error("Erro no cadastro:", err);
+        res.status(500).json({ error: "Erro ao salvar os dados e o arquivo." });
+    }
+});
+
+router.get('/patrimonio/meu-inventario', verificarToken, async (req, res) => {
+    const local_id = req.user.local_id; // Pega o ID da escola do token
+    const { setor_id } = req.query; // Pega o filtro de setor se houver
+
+    try {
+        let sql = `
+            SELECT 
+                p.id, 
+                p.numero_serie, 
+                p.nota_fiscal, 
+                p.estado, 
+                p.url_nota_fiscal,
+                p.adquirido_pos_2025,
+                s.nome as setor_nome,
+                prod.nome as produto_nome
+            FROM patrimonios p
+            JOIN setores s ON p.setor_id = s.id
+            JOIN produtos prod ON p.produto_id = prod.id
+            WHERE p.local_id = $1
+        `;
+        
+        const params = [local_id];
+
+        // Se o usuário selecionou um setor específico (e não "todos")
+        if (setor_id && setor_id !== 'todos') {
+            sql += ` AND p.setor_id = $2`;
+            params.push(setor_id);
+        }
+
+        sql += ` ORDER BY s.nome ASC, prod.nome ASC`;
+
+        const result = await db.query(sql, params);
+        res.json(result.rows);
+    } catch (err) {
+        console.error("Erro na query de inventário:", err);
+        res.status(500).json({ error: "Erro interno ao buscar inventário." });
+    }
+});
+
+router.put('/patrimonio/itens/baixa/:id', verificarToken, async (req, res) => {
+    const { id } = req.params;
+    const { motivo, observacao } = req.body; // Motivos: 'QUEBRADO', 'FURTADO', 'OBSOLETO'
+    const local_id = req.user.local_id;
+
+    try {
+        // Validação de propriedade
+        const check = await db.query(
+            "SELECT id FROM patrimonios WHERE id = $1 AND local_id = $2",
+            [id, local_id]
+        );
+
+        if (check.rows.length === 0) return res.status(403).json({ error: "Acesso negado." });
+
+        await db.query(
+            `UPDATE patrimonios SET 
+                status = $1, 
+                observacao_baixa = $2, 
+                data_baixa = NOW() 
+             WHERE id = $3`,
+            [motivo, observacao, id]
+        );
+
+        res.json({ success: true, message: "Baixa registrada com sucesso." });
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao processar baixa." });
+    }
+});
+
+router.put('/patrimonio/itens/:id', verificarToken, async (req, res) => {
+    const { id } = req.params;
+    const { setor_id, numero_serie, nota_fiscal, estado } = req.body;
+    const local_id = req.user.local_id;
+
+    try {
+        const query = `
+            UPDATE patrimonios 
+            SET 
+                setor_id = $1, 
+                numero_serie = $2, 
+                nota_fiscal = $3, 
+                estado = $4,
+                data_atualizacao = NOW()
+            WHERE id = $5 AND local_id = $6
+            RETURNING *
+        `;
+        
+        const result = await db.query(query, [setor_id, numero_serie, nota_fiscal, estado, id, local_id]);
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: "Item não encontrado para atualização." });
+        }
+
+        res.json({ success: true, message: "Item atualizado com sucesso!" });
+    } catch (err) {
+        console.error("Erro ao atualizar item:", err);
+        res.status(500).json({ error: "Erro ao atualizar dados." });
+    }
+});
+
+// ROTA: Registar um novo item de património na unidade
+router.post('/patrimonio/itens', verificarToken, async (req, res) => {
+    const { produto_id, setor_id, numero_serie, nota_fiscal } = req.body;
+    const local_id = req.user.local_id; // Segurança: extraído diretamente do Token
+
+    try {
+        await db.query('BEGIN');
+
+        // 1. Validamos se o setor pertence realmente a esta escola
+        const checkSetor = await db.query(
+            "SELECT id FROM setores WHERE id = $1 AND local_id = $2",
+            [setor_id, local_id]
+        );
+
+        if (checkSetor.rows.length === 0) {
+            throw new Error("Setor inválido ou não pertence a esta unidade.");
+        }
+
+        // 2. Inserimos o item na tabela de patrimónios
+        const result = await db.query(
+            `INSERT INTO patrimonios (produto_id, local_id, setor_id, numero_serie, nota_fiscal, status, data_atualizacao) 
+             VALUES ($1, $2, $3, $4, $5, 'ATIVO', NOW()) RETURNING id`,
+            [produto_id, local_id, setor_id, numero_serie || null, nota_fiscal || null]
+        );
+
+        // 3. Atualizamos o saldo global na tabela de produtos (opcional, dependendo da sua regra de negócio)
+        await db.query(
+            "UPDATE produtos SET quantidade_estoque = quantidade_estoque + 1 WHERE id = $1",
+            [produto_id]
+        );
+
+        await db.query('COMMIT');
+        res.json({ success: true, id: result.rows[0].id });
+
+    } catch (err) {
+        await db.query('ROLLBACK');
+        console.error("Erro ao registar património:", err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/patrimonio/setores', verificarToken, async (req, res) => {
+    const { nome } = req.body;
+    const local_id = req.user.local_id; // Pegamos do token para segurança
+
+    try {
+        await db.query(
+            "INSERT INTO setores (nome, local_id) VALUES ($1, $2)",
+            [nome.toUpperCase(), local_id]
+        );
+        res.json({ success: true });
+    } catch (err) {
+        if (err.code === '23505') {
+            return res.status(400).json({ error: "Este setor já está cadastrado nesta escola." });
+        }
+        res.status(500).json({ error: "Erro ao salvar setor." });
+    }
+});
+
+router.get('/patrimonio/setores/meus', verificarToken, async (req, res) => {
+    try {
+        // Agora req.user.local_id existe graças ao ajuste acima
+        const localId = req.user.local_id;
+
+        if (!localId) {
+            return res.status(400).json({ error: "Local do usuário não encontrado no token." });
+        }
+
+        const result = await db.query(
+            "SELECT id, nome FROM setores WHERE local_id = $1 ORDER BY nome ASC",
+            [localId]
+        );
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Erro ao listar setores." });
+    }
+});
+
+router.delete('/patrimonio/itens/:id', verificarToken, async (req, res) => {
+    const { id } = req.params;
+    const local_id = req.user.local_id;
+
+    try {
+        // Segurança: Só permite deletar se o item pertencer à escola do usuário
+        const deleteRes = await db.query(
+            "DELETE FROM patrimonios WHERE id = $1 AND local_id = $2 RETURNING *",
+            [id, local_id]
+        );
+
+        if (deleteRes.rowCount === 0) {
+            return res.status(404).json({ error: "Item não encontrado ou acesso negado." });
+        }
+
+        res.json({ success: true, message: "Item removido com sucesso." });
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao excluir item." });
+    }
+});
+
+router.get('/patrimonio/ver-nota/:filename', verificarToken, (req, res) => {
+    const { filename } = req.params;
+    const filePath = path.join(__dirname, '..', 'uploads', 'notas_fiscais', filename);
+
+    // Verifica se o arquivo existe fisicamente
+    if (fs.existsSync(filePath)) {
+        res.sendFile(filePath);
+    } else {
+        res.status(404).json({ error: "Arquivo não encontrado." });
+    }
+});
+
+router.get('/patrimonio/item-detalhes/:id', verificarToken, async (req, res) => {
+    const { id } = req.params;
+    const local_id = req.user.local_id; // Segurança: Filtra pela escola do usuário
+
+    try {
+        const query = `
+            SELECT 
+                p.id, 
+                p.numero_serie, 
+                p.nota_fiscal, 
+                p.estado, 
+                p.setor_id,
+                p.url_nota_fiscal,
+                prod.nome as produto_nome
+            FROM patrimonios p
+            JOIN produtos prod ON p.produto_id = prod.id
+            WHERE p.id = $1 AND p.local_id = $2
+        `;
+        
+        const result = await db.query(query, [id, local_id]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: "Item não encontrado." });
+        }
+
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error("Erro ao buscar detalhes do item:", err);
+        res.status(500).json({ error: "Erro interno no servidor." });
+    }
+});
+
+router.use('/uploads', express.static('uploads'));
+
+router.get('/patrimonio/escola/resumo', verificarToken, async (req, res) => {
+    const local_id = req.user.local_id;
+
+    try {
+        // Promessas paralelas para ganhar velocidade
+        const [totalItens, totalSetores, semPlaqueta, estadoPessimo, porSetor] = await Promise.all([
+            db.query("SELECT COUNT(*) FROM patrimonios WHERE local_id = $1", [local_id]),
+            db.query("SELECT COUNT(*) FROM setores WHERE local_id = $1", [local_id]),
+            db.query("SELECT COUNT(*) FROM patrimonios WHERE local_id = $1 AND (numero_serie IS NULL OR numero_serie = '')", [local_id]),
+            db.query("SELECT COUNT(*) FROM patrimonios WHERE local_id = $1 AND estado = 'PÉSSIMO'", [local_id]),
+            db.query(`
+                SELECT s.nome as setor, COUNT(p.id) as total 
+                FROM setores s 
+                LEFT JOIN patrimonios p ON s.id = p.setor_id 
+                WHERE s.local_id = $1 
+                GROUP BY s.nome 
+                ORDER BY total DESC`, [local_id])
+        ]);
+
+        res.json({
+            totalItens: totalItens.rows[0].count,
+            totalSetores: totalSetores.rows[0].count,
+            semPlaqueta: semPlaqueta.rows[0].count,
+            estadoPessimo: estadoPessimo.rows[0].count,
+            distribuicao: porSetor.rows
+        });
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao gerar resumo." });
+    }
+});
+
+router.post('/computadores/chamados/abrir', verificarToken, async (req, res) => {
+    const { tipo_defeito, motivo } = req.body;
+    const usuario_id = req.userId; // ID do usuário logado vindo do token
+
+    try {
+        // 1. Busca o local_id vinculado ao usuário diretamente no banco
+        const userCheck = await db.query("SELECT local_id FROM usuarios WHERE id = $1", [usuario_id]);
+        const local_id = userCheck.rows[0]?.local_id;
+
+        if (!local_id) {
+            return res.status(400).json({ error: "Utilizador sem local (escola) vinculado." });
+        }
+
+        // 2. Insere o chamado com o local_id garantido
+        await db.query(
+            `INSERT INTO chamados_computador (local_id, usuario_origem_id, tipo_defeito, motivo) 
+             VALUES ($1, $2, $3, $4)`,
+            [local_id, usuario_id, tipo_defeito, motivo]
+        );
+
+        res.json({ success: true, message: "Chamado aberto com sucesso!" });
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Erro interno: " + err.message });
+    }
+});
+
+router.get('/computadores/chamados/lista-abertos', verificarToken, async (req, res) => {
+    try {
+        const result = await db.query(`
+            SELECT c.*, l.nome as escola_nome, u.nome as solicitante
+            FROM chamados_computador c
+            JOIN locais l ON c.local_id = l.id
+            JOIN usuarios u ON c.usuario_origem_id = u.id
+            WHERE c.status = 'ABERTO'
+            ORDER BY c.data_abertura ASC`);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao listar chamados: " + err.message });
+    }
+});
+
+router.get('/computadores/chamados/lista', verificarToken, async (req, res) => {
+    try {
+        const result = await db.query(`
+            SELECT c.*, l.nome as escola_nome, u.nome as solicitante
+            FROM chamados_computador c
+            JOIN locais l ON c.local_id = l.id
+            JOIN usuarios u ON c.usuario_origem_id = u.id
+            WHERE c.status = 'ABERTO'
+            ORDER BY c.data_abertura ASC`);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.get('/computadores/chamados/lista', verificarToken, async (req, res) => {
+    try {
+        const result = await db.query(`
+            SELECT c.*, l.nome as escola_nome, u.nome as solicitante
+            FROM chamados_computador c
+            JOIN locais l ON c.local_id = l.id
+            JOIN usuarios u ON c.usuario_origem_id = u.id
+            WHERE c.status = 'ABERTO'
+            ORDER BY c.data_abertura ASC`);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.patch('/computadores/chamados/fechar/:id', verificarToken, async (req, res) => {
+    const { id } = req.params;
+    const { observacoes_tecnicas } = req.body;
+    const tecnico_id = req.userId;
+
+    try {
+        await db.query(
+            `UPDATE chamados_computador 
+             SET status = 'FECHADO', 
+                 data_fechamento = NOW(), 
+                 tecnico_id = $1, 
+                 observacoes_tecnicas = $2
+             WHERE id = $3`,
+            [tecnico_id, observacoes_tecnicas, id]
+        );
+        res.json({ success: true, message: "Chamado finalizado com sucesso!" });
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao fechar chamado: " + err.message });
+    }
 });
 
 module.exports = router;

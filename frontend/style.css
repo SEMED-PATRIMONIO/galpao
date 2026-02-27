@@ -152,13 +152,23 @@
 
 /* Ajuste no Container de Login para o Vidro Fosco */
 #login-container {
-    background: rgba(255, 255, 255, 0.08) !important;
-    backdrop-filter: blur(20px) !important;
-    -webkit-backdrop-filter: blur(20px);
-    border: 1px solid rgba(255, 255, 255, 0.15) !important;
-    border-radius: 24px !important;
-    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4) !important;
-    padding: 50px !important;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%); /* Garante centralização absoluta */
+    width: 350px; /* Define uma largura fixa para não "esticar" ou "encolher" */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.mensagem-erro {
+    color: #ff4d4d;
+    font-size: 0.8rem;
+    position: absolute; /* Opcional: faz o erro "flutuar" sem empurrar o layout */
+    bottom: -20px;
+    width: 100%;
+    text-align: center;
 }
 
 body {

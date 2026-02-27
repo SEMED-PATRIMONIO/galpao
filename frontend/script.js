@@ -9241,35 +9241,43 @@ async function telaListarChamadosAbertos() {
                 <div class="grid-menu-principal" style="grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));">
                     ${chamados.length === 0 ? 
                         `<p style="color:white; text-align:center; grid-column: 1/-1;">Não há chamados abertos no momento.</p>` : 
-                        chamados.map(c => `
-                        <div class="painel-vidro" style="text-align: left; position: relative;">
-                            <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
-                                <img src="${(() => {
-                                const m = c.modelo.trim().toLowerCase();
-                                if (m === 'mono') return 'mono.png';
-                                if (m === 'color') return 'color.png';
-                                if (m === 'duplicadora') return 'copiadora.png';
-                                return 'padrao.png';
-                            })()}" style="width: 50px;">
-                                <div>
-                                    <strong style="color: #fbbf24; font-size: 1.1rem;">${c.tipo.toUpperCase()}</strong><br>
-                                    <small style="color: #cbd5e1;">${c.escola_nome}</small>
-                                </div>
-                            </div>
-                            
-                            <div style="color: white; font-size: 0.9rem; margin-bottom: 15px;">
-                                <strong>Motivo:</strong> ${c.motivo || 'N/A'}<br>
-                                ${c.observacoes ? `<p style="background: rgba(0,0,0,0.2); padding: 8px; border-radius: 5px; margin-top: 5px;">"${c.observacoes}"</p>` : ''}
-                                <small style="color: #94a3b8;">Aberto em: ${new Date(c.data_abertura).toLocaleString('pt-BR')}</small>
-                            </div>
+                        chamados.map(c => {
+                            // LÓGICA DE IF / ELSE PARA DEFINIR A IMAGEM
+                            let imagemFinal = 'mono.png'; // Padrão
+                            let m = c.modelo ? c.modelo.trim().toLowerCase() : '';
 
-                            <button onclick="abrirModalConclusao(${c.id})" 
-                                    class="btn-sair-vidro" 
-                                    style="background: #059669; width: 100%; padding: 10px;">
-                                ✅ FINALIZAR ATENDIMENTO
-                            </button>
-                        </div>
-                    `).join('')}
+                            if (m === 'mono') {
+                                imagemFinal = 'mono.png';
+                            } else if (m === 'color') {
+                                imagemFinal = 'color.png';
+                            } else if (m === 'duplicadora') {
+                                imagemFinal = 'copiadora.png';
+                            }
+
+                            return `
+                            <div class="painel-vidro" style="text-align: left; position: relative;">
+                                <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
+                                    <img src="${imagemFinal}" style="width: 50px;">
+                                    <div>
+                                        <strong style="color: #fbbf24; font-size: 1.1rem;">${c.tipo.toUpperCase()}</strong><br>
+                                        <small style="color: #cbd5e1;">${c.escola_nome}</small>
+                                    </div>
+                                </div>
+                                
+                                <div style="color: white; font-size: 0.9rem; margin-bottom: 15px;">
+                                    <strong>Modelo no Banco:</strong> ${c.modelo.toUpperCase()}<br>
+                                    <strong>Motivo:</strong> ${c.motivo || 'N/A'}<br>
+                                    ${c.observacoes ? `<p style="background: rgba(0,0,0,0.2); padding: 8px; border-radius: 5px; margin-top: 5px;">"${c.observacoes}"</p>` : ''}
+                                    <small style="color: #94a3b8;">Aberto em: ${new Date(c.data_abertura).toLocaleString('pt-BR')}</small>
+                                </div>
+
+                                <button onclick="abrirModalConclusao(${c.id})" 
+                                        class="btn-sair-vidro" 
+                                        style="background: #059669; width: 100%; padding: 10px;">
+                                    ✅ FINALIZAR ATENDIMENTO
+                                </button>
+                            </div>`;
+                        }).join('')}
                 </div>
             </div>
         `;

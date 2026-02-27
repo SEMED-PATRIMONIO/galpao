@@ -9244,7 +9244,7 @@ async function telaListarChamadosAbertos() {
                         chamados.map(c => `
                         <div class="painel-vidro" style="text-align: left; position: relative;">
                             <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
-                                <img src="${c.modelo === 'mono' ? 'mono.png' : 'color.png'}" style="width: 50px;">
+                                <img src="${obterImagemModelo(c.modelo)}" style="width: 50px;">
                                 <div>
                                     <strong style="color: #fbbf24; font-size: 1.1rem;">${c.tipo.toUpperCase()}</strong><br>
                                     <small style="color: #cbd5e1;">${c.escola_nome}</small>
@@ -9270,6 +9270,14 @@ async function telaListarChamadosAbertos() {
     } catch (err) {
         notificar("Erro ao carregar chamados.");
     }
+}
+
+function obterImagemModelo(modelo) {
+    const m = modelo ? modelo.toLowerCase() : '';
+    if (m === 'mono') return 'mono.png';
+    if (m === 'color') return 'color.png';
+    if (m === 'duplicadora') return 'copiadora.png';
+    return 'padrao.png'; // Uma imagem genérica caso o modelo venha vazio
 }
 
 async function executarEncerramentoChamado(chamadoId, dados) {
@@ -9340,9 +9348,9 @@ async function telaCadastroImpressoras() {
                     <label style="color: white; display: block; margin-bottom: 8px;">Modelo da Impressora:</label>
                     <select id="reg-imp-modelo" class="input-vidro" style="width: 100%;">
                         <option value="">Selecione o tipo...</option>
-                        <option value="mono">MONOCROMÁTICA</option>
-                        <option value="color">COLORIDA</option>
-                        <option value="duplicadora">DUPLICADORA</option>
+                        <option value="mono">MONOCROMÁTICA HP 4101</option>
+                        <option value="color">COLORIDA HP 4303</option>
+                        <option value="duplicadora">COPIADORA HP E52645</option>
                     </select>
                 </div>
 

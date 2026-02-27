@@ -22,6 +22,48 @@
     transition: all 0.3s ease;
 }
 
+.notificacao-sucesso-centro {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 40px;
+    border-radius: 20px;
+    z-index: 9999;
+    text-align: center;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    animation: surgirCentro 0.4s ease-out;
+}
+
+@keyframes surgirCentro {
+    from { opacity: 0; transform: translate(-50%, -60%); }
+    to { opacity: 1; transform: translate(-50%, -50%); }
+}
+
+.check-v-animado {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    display: block;
+    stroke-width: 2;
+    stroke: #4ade80;
+    stroke-miterlimit: 10;
+    box-shadow: inset 0px 0px 0px #4ade80;
+    animation: preencher 0.4s ease-in-out 0.4s forwards, balancar 0.5s ease-in-out 0.9s both;
+}
+
+@keyframes preencher {
+    100% { box-shadow: inset 0px 0px 0px 30px rgba(74, 222, 128, 0.1); }
+}
+
 /* Cartões Internos (Pedidos, Remessas, etc) */
 .glass-card {
     background: rgba(255, 255, 255, 0.7);

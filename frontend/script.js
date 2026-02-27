@@ -265,27 +265,30 @@ async function carregarDashboard() {
     }
     if (perfil === 'dti') {
         html += `
-            <button class="btn-grande btn-vidro" onclick="telaCadastroImpressoras()">
-                <i>🖨️</i><span>CADASTRAR IMPRESSORAS</span>
-            </button>
+            <button class="btn-grande btn-vidro" onclick="telaListarChamadosPC_DTI()">
+                <i>💻</i><span>CHAMADOS COMPUTADOR EM ABERTO</span>
+            </button>            
             <button class="btn-grande btn-vidro" onclick="telaFilaAtendimentoImpressoras()">
-                <i>📋</i><span>CHAMADOS EM ABERTO</span>
+                <i>🖨️</i><span>CHAMADOS IMPRESSORA EM ABERTO</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="telaDashboardImpressoras()">
-                <i>📈</i><span>DASHBOARD TÉCNICO</span>
+                <i>📈</i><span>DASHBOARD IMPRESSORAS</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="telaConsumoImpressoras()">
                 <i>📊</i><span>UTILIZAÇÃO E CONSUMO</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="telaRelatorioGeralAtivos()">
-                <i>📋</i><span>IMPRESSORAS DO CONTRATO</span>
+                <i>📋</i><span>STATUS ATUAL IMPRESSORAS</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="telaCadastroImpressoras()">
+                <i>📋</i><span>CADASTRAR IMPRESSORAS</span>
             </button>
         `;
     }
     if (perfil === 'impres') {
         html += `
             <button class="btn-grande btn-vidro" onclick="telaListarChamadosAbertos()">
-                <i>📋</i><span>FILA DE CHAMADOS</span>
+                <i>🖨️</i><span>FILA DE CHAMADOS</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="telaConsumoImpressoras()">
                 <i>📊</i><span>UTILIZAÇÃO E CONSUMO</span>
@@ -311,6 +314,9 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="telaSolicitarServicoImpressora('manutencao')">
                 <i>🛠️</i><span>SOLICITAR MANUTENÇÃO IMPRESSORA</span>
             </button>
+            <button class="btn-grande btn-vidro" onclick="telaSolicitarManutencaoPC('')">
+                <i>💻</i><span>SOLICITAR MANUTENÇÃO COMPUTADOR</span>
+            </button>    
             <button class="btn-grande btn-vidro" onclick="abrirMenuPatrimonioEscola()">
                 <i>🏛️</i><span>PATRIMÔNIO</span>
             </button>       `;
@@ -9207,8 +9213,7 @@ async function enviarChamadoAoServidor(dados) {
         const resultado = await res.json();
 
         if (res.ok) {
-            notificar("✅ " + resultado.message);
-            notificarBreve("SOLICITAÇÃO ENVIADA COM SUCESSO!");
+            exibirSucessoSolicitacao("SOLICITAÇÃO REGISTRADA!");
             carregarDashboard(); // Retorna ao menu principal
         } else {
             // Aqui o servidor avisará se já existe um chamado em aberto
@@ -13026,6 +13031,198 @@ window.confirmarEdicao = async (itemId) => {
         carregarTabelaInventario(); // Recarrega a lista com a nova cor e estado
     }
 };
+
+function telaSolicitarManutencaoPC() {
+    const modal = document.createElement('div');
+    modal.className = 'alerta-vidro-overlay';
+    modal.innerHTML = `
+        <div class="painel-vidro" style="width: 450px; padding: 30px; border: 1px solid rgba(255,255,255,0.2);">
+            <h2 style="color:white; margin:0 0 20px 0;">🖥️ Solicitar Manutenção PC</h2>
+            
+            <label style="color:white; font-size:0.8rem; display:block; margin-bottom:5px;">TIPO DE DEFEITO:</label>
+            <select id="pc-tipo-defeito" class="input-vidro" style="margin-bottom:20px;">
+                <option value="Computador não liga">Computador não liga</option>
+                <option value="Lentidão extrema / Travamento">Lentidão extrema / Travamento</option>
+                <option value="Problemas de Internet / Rede">Problemas de Internet / Rede</option>
+                <option value="Erro de Software / Sistema">Erro de Software / Sistema</option>
+                <option value="Periféricos (Teclado/Mouse/Monitor)">Periféricos (Teclado/Mouse/Monitor)</option>
+                <option value="Outros">Outros (Descrever abaixo)</option>
+            </select>
+
+            <label style="color:white; font-size:0.8rem; display:block; margin-bottom:5px;">DETALHES DO PROBLEMA (OPCIONAL):</label>
+            <textarea id="pc-motivo" class="input-vidro" placeholder="Descreva o que está ocorrendo..." style="height:100px; margin-bottom:20px;"></textarea>
+
+            <div style="display:flex; gap:10px;">
+                <button onclick="this.closest('.alerta-vidro-overlay').remove()" class="btn-sair-vidro" style="flex:1;">CANCELAR</button>
+                <button onclick="enviarSolicitacaoManutencaoPC()" style="flex:1; background:#3b82f6; color:white; border:none; border-radius:10px; font-weight:bold; cursor:pointer;">ABRIR CHAMADO</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
+async function enviarSolicitacaoManutencaoPC() {
+    const dados = {
+        tipo_defeito: document.getElementById('pc-tipo-defeito').value,
+        motivo: document.getElementById('pc-motivo').value
+    };
+
+    const res = await fetch(`${API_URL}/computadores/chamados/abrir`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+        body: JSON.stringify(dados)
+    });
+
+    if (res.ok) {
+        notificar("Chamado aberto com sucesso!", "sucesso");
+        document.querySelector('.alerta-vidro-overlay').remove();
+    }
+}
+
+async function telaListarChamadosPC_DTI() {
+    const mainArea = document.getElementById('app-content');
+    mainArea.innerHTML = '<div style="padding:40px; text-align:center; color:white;">🔍 Buscando fila do DTI...</div>';
+
+    try {
+        const res = await fetch(`${API_URL}/computadores/chamados/lista-abertos`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const chamados = await res.json();
+
+        mainArea.innerHTML = `
+            <div style="padding:20px; color:white;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:30px;">
+                    <button onclick="carregarDashboard()" class="btn-sair-vidro">⬅️ VOLTAR</button>
+                    <h2 style="margin:0;">🛠️ Fila de Manutenção de Computadores</h2>
+                    <div style="width:100px;"></div>
+                </div>
+
+                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:20px;">
+                    ${chamados.length === 0 ? '<p style="grid-column:1/-1; text-align:center; opacity:0.5;">Nenhum chamado aberto no momento.</p>' : 
+                    chamados.map(c => `
+                        <div class="painel-vidro" style="padding:20px; text-align:left;">
+                            <div style="font-weight:bold; color:#60a5fa; margin-bottom:5px;">${c.escola_nome}</div>
+                            <div style="font-size:0.8rem; opacity:0.7; margin-bottom:15px;">Solicitante: ${c.solicitante} | ${new Date(c.data_abertura).toLocaleString()}</div>
+                            
+                            <div style="background:rgba(255,255,255,0.05); padding:10px; border-radius:8px; margin-bottom:15px;">
+                                <strong>${c.tipo_defeito}</strong>
+                                <p style="font-size:0.9rem; margin:5px 0 0 0; opacity:0.8;">${c.motivo || 'Sem observações adicionais.'}</p>
+                            </div>
+
+                            <button onclick="finalizarAtendimentoPC(${c.id})" style="width:100%; padding:12px; background:#10b981; border:none; border-radius:10px; color:white; font-weight:bold; cursor:pointer;">
+                                ✅ FINALIZAR CHAMADO
+                            </button>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    } catch (err) {
+        notificar("Erro ao carregar fila.", "erro");
+    }
+}
+
+async function finalizarAtendimentoPC(id) {
+    const obs = prompt("Relatório Técnico (O que foi feito?):");
+    if (obs === null) return;
+
+    const res = await fetch(`${API_URL}/computadores/chamados/fechar/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+        body: JSON.stringify({ observacoes_tecnicas: obs })
+    });
+
+    if (res.ok) {
+        notificar("Atendimento concluído!");
+        telaListarChamadosPC_DTI();
+    }
+}
+
+async function enviarChamadoPC() {
+    const dados = {
+        tipo_defeito: document.getElementById('pc-defeito').value,
+        motivo: document.getElementById('pc-motivo').value
+    };
+
+    const res = await fetch(`${API_URL}/computadores/chamados/abrir`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+        body: JSON.stringify(dados)
+    });
+
+    if (res.ok) {
+        notificar("Solicitação enviada ao DTI!", "sucesso");
+        document.querySelector('.alerta-vidro-overlay').remove();
+    }
+}
+
+async function telaListarChamadosPC() {
+    const mainArea = document.getElementById('app-content');
+    const res = await fetch(`${API_URL}/computadores/chamados/lista`, {
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+    const chamados = await res.json();
+
+    mainArea.innerHTML = `
+        <div style="padding:20px; color:white;">
+            <h2>📋 Fila de Manutenção PC (DTI)</h2>
+            <button onclick="carregarDashboard()" class="btn-sair-vidro">⬅️ VOLTAR</button>
+            <div style="display:grid; gap:15px; margin-top:20px;">
+                ${chamados.map(c => `
+                    <div class="painel-vidro" style="padding:20px; text-align:left;">
+                        <strong style="color:#60a5fa;">${c.escola_nome}</strong> <br>
+                        <small>Solicitante: ${c.solicitante} | Aberto em: ${new Date(c.data_abertura).toLocaleString()}</small>
+                        <hr style="opacity:0.1; margin:10px 0;">
+                        <p><strong>Defeito:</strong> ${c.tipo_defeito}</p>
+                        <p style="font-style:italic; opacity:0.8;">"${c.motivo || 'Sem descrição adicional'}"</p>
+                        <button onclick="fecharChamadoPC(${c.id})" style="background:#10b981; color:white; border:none; padding:10px; border-radius:8px; cursor:pointer; width:100%;">
+                            ✅ FINALIZAR ATENDIMENTO
+                        </button>
+                    </div>
+                `).join('') || '<p>Nenhum chamado pendente.</p>'}
+            </div>
+        </div>
+    `;
+}
+
+async function fecharChamadoPC(id) {
+    const obs = prompt("O que foi realizado no atendimento? (Opcional)");
+    if (obs === null) return; // Cancelou o prompt
+
+    const res = await fetch(`${API_URL}/computadores/chamados/fechar/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+        body: JSON.stringify({ observacoes: obs })
+    });
+
+    if (res.ok) {
+        notificar("Chamado encerrado!");
+        telaListarChamadosPC();
+    }
+}
+
+function exibirSucessoSolicitacao(mensagem) {
+    const overlay = document.createElement('div');
+    overlay.className = 'notificacao-sucesso-centro';
+    
+    overlay.innerHTML = `
+        <svg class="check-v-animado" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52">
+            <circle cx="26" cy="26" r="25" fill="none" stroke="#4ade80" stroke-width="2"/>
+            <path fill="none" d="M14.1 27.2l7.1 7.2 16.7-16.8" stroke="#4ade80" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <h2 style="color: white; margin: 0; font-family: sans-serif; font-size: 1.5rem;">${mensagem}</h2>
+        <p style="color: rgba(255,255,255,0.7); margin: 0;">Esta mensagem desaparecerá em instantes.</p>
+    `;
+
+    document.body.appendChild(overlay);
+
+    // Remove após 5 segundos (5000ms)
+    setTimeout(() => {
+        overlay.style.transition = "opacity 0.5s";
+        overlay.style.opacity = "0";
+        setTimeout(() => overlay.remove(), 500);
+    }, 5000);
+}
 
 // Isso garante que o onclick="funcao()" funcione sempre
 window.telaVisualizarEstoque = telaVisualizarEstoque;

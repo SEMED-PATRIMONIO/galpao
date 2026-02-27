@@ -314,7 +314,7 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="telaSolicitarServicoImpressora('manutencao')">
                 <i>🛠️</i><span>SOLICITAR MANUTENÇÃO IMPRESSORA</span>
             </button>
-            <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaSolicitarManutencaoPC('')">
+            <button class="btn-grande btn-vidro" onclick="telaSolicitarManutencaoPC('')">
                 <i>💻</i><span>SOLICITAR MANUTENÇÃO COMPUTADOR</span>
             </button>    
             <button class="btn-grande btn-vidro btn-breve" // --- onclick="abrirMenuPatrimonioEscola()">

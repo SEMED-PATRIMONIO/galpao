@@ -8919,10 +8919,8 @@ document.addEventListener('click', async (e) => {
 async function telaSolicitarServicoImpressora(tipoServico) {
     const container = document.getElementById('app-content');
     
-    // 1. Tenta buscar o ID do navegador
     let localId = localStorage.getItem('local_id');
 
-    // 2. Se o ID for inválido (undefined ou null), tenta atualizar a sessão antes de desistir
     if (!localId || localId === "undefined" || localId === "null") {
         await inicializarSessaoUsuario();
         localId = localStorage.getItem('local_id');
@@ -8930,7 +8928,6 @@ async function telaSolicitarServicoImpressora(tipoServico) {
 
     const titulo = tipoServico === 'recarga' ? 'SOLICITAR RECARGA' : 'SOLICITAR MANUTENÇÃO';
 
-    // Monta a estrutura da tela
     container.innerHTML = `
         <div class="painel-vidro">
             <h2 style="color: white; margin-bottom: 20px;">${titulo}</h2>
@@ -8942,7 +8939,6 @@ async function telaSolicitarServicoImpressora(tipoServico) {
     `;
 
     try {
-        // Se após a tentativa de atualização o ID continuar vindo "undefined", paramos aqui
         if (!localId || localId === "undefined") {
             throw new Error("Não foi possível identificar sua unidade escolar. Por favor, saia do sistema e entre novamente.");
         }
@@ -8962,7 +8958,18 @@ async function telaSolicitarServicoImpressora(tipoServico) {
         }
 
         area.innerHTML = dados.map(imp => {
-            const img = imp.modelo === 'mono' ? 'mono.png' : 'color.png';
+            // LÓGICA DE IF/ELSE PARA DEFINIR A IMAGEM CORRETA
+            let img = 'mono.png'; // Valor padrão
+            const m = imp.modelo ? imp.modelo.toLowerCase().trim() : '';
+
+            if (m === 'mono') {
+                img = 'mono.png';
+            } else if (m === 'color') {
+                img = 'color.png';
+            } else if (m === 'duplicadora') {
+                img = 'copiadora.png';
+            }
+
             return `
                 <button class="btn-grande btn-vidro" onclick="abrirChamadoFinal(${imp.id}, '${tipoServico}')">
                     <img src="${img}" style="width:80px; margin-bottom:10px;">
@@ -9132,14 +9139,12 @@ async function compartilharStatusImpressoras() {
 async function abrirChamadoFinal(impressoraId, tipoServico) {
     const container = document.getElementById('app-content');
 
-    // Se for Recarga, o processo é simplificado
     if (tipoServico === 'recarga') {
         if (!confirm("Confirmar solicitação de recarga de toner para esta impressora?")) return;
         enviarChamadoAoServidor({ impressora_id: impressoraId, tipo: 'recarga' });
         return;
     }
 
-    // Se for Manutenção, montamos o formulário de diagnóstico
     container.innerHTML = `
         <div class="painel-vidro" style="max-width: 500px; margin: 0 auto; text-align: left;">
             <h2 style="color: white; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 10px;">
@@ -9214,9 +9219,8 @@ async function enviarChamadoAoServidor(dados) {
 
         if (res.ok) {
             exibirSucessoSolicitacao("SOLICITAÇÃO REGISTRADA!");
-            carregarDashboard(); // Retorna ao menu principal
+            carregarDashboard();
         } else {
-            // Aqui o servidor avisará se já existe um chamado em aberto
             notificar("⚠️ " + resultado.error);
         }
     } catch (err) {

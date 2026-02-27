@@ -224,12 +224,16 @@ body {
     margin: 0;
     padding: 0;
     width: 100vw;
-    height: 100vh;
+    /* min-height garante que o fundo cubra tudo, mesmo que a lista cresça */
+    min-height: 100vh; 
     display: flex;
-    justify-content: center; /* Centraliza horizontalmente */
-    align-items: center;     /* Centraliza verticalmente */
-    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); /* Azul marinho profundo */
-    overflow: hidden;
+    justify-content: center; 
+    /* Mudamos para permitir que o conteúdo dite o início da página */
+    align-items: flex-start; 
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    /* Permitimos o scroll vertical apenas quando necessário */
+    overflow-y: auto; 
+    overflow-x: hidden;
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 

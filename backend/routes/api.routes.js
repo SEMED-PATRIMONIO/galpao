@@ -4856,4 +4856,86 @@ router.get('/patrimonio/escola/resumo', verificarToken, async (req, res) => {
     }
 });
 
+router.post('/computadores/chamados/abrir', verificarToken, async (req, res) => {
+    const { tipo_defeito, motivo } = req.body;
+    const local_id = req.user.local_id; // Pegando do token JWT que corrigimos
+
+    try {
+        await db.query(
+            `INSERT INTO chamados_computador (local_id, usuario_origem_id, tipo_defeito, motivo) 
+             VALUES ($1, $2, $3, $4)`,
+            [local_id, req.userId, tipo_defeito, motivo]
+        );
+        res.json({ success: true, message: "Chamado de manutenção aberto!" });
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao abrir chamado: " + err.message });
+    }
+});
+
+router.get('/computadores/chamados/lista-abertos', verificarToken, async (req, res) => {
+    try {
+        const result = await db.query(`
+            SELECT c.*, l.nome as escola_nome, u.nome as solicitante
+            FROM chamados_computador c
+            JOIN locais l ON c.local_id = l.id
+            JOIN usuarios u ON c.usuario_origem_id = u.id
+            WHERE c.status = 'ABERTO'
+            ORDER BY c.data_abertura ASC`);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao listar chamados: " + err.message });
+    }
+});
+
+router.get('/computadores/chamados/lista', verificarToken, async (req, res) => {
+    try {
+        const result = await db.query(`
+            SELECT c.*, l.nome as escola_nome, u.nome as solicitante
+            FROM chamados_computador c
+            JOIN locais l ON c.local_id = l.id
+            JOIN usuarios u ON c.usuario_origem_id = u.id
+            WHERE c.status = 'ABERTO'
+            ORDER BY c.data_abertura ASC`);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.get('/computadores/chamados/lista', verificarToken, async (req, res) => {
+    try {
+        const result = await db.query(`
+            SELECT c.*, l.nome as escola_nome, u.nome as solicitante
+            FROM chamados_computador c
+            JOIN locais l ON c.local_id = l.id
+            JOIN usuarios u ON c.usuario_origem_id = u.id
+            WHERE c.status = 'ABERTO'
+            ORDER BY c.data_abertura ASC`);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.patch('/computadores/chamados/fechar/:id', verificarToken, async (req, res) => {
+    const { id } = req.params;
+    const { observacoes_tecnicas } = req.body;
+    const tecnico_id = req.userId;
+
+    try {
+        await db.query(
+            `UPDATE chamados_computador 
+             SET status = 'FECHADO', 
+                 data_fechamento = NOW(), 
+                 tecnico_id = $1, 
+                 observacoes_tecnicas = $2
+             WHERE id = $3`,
+            [tecnico_id, observacoes_tecnicas, id]
+        );
+        res.json({ success: true, message: "Chamado finalizado com sucesso!" });
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao fechar chamado: " + err.message });
+    }
+});
+
 module.exports = router;

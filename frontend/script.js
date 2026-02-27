@@ -9610,21 +9610,33 @@ async function telaRelatorioGeralAtivos() {
                             <tr style="border-bottom:2px solid rgba(255,255,255,0.2);">
                                 <th style="padding:12px;">ID</th>
                                 <th style="padding:12px;">Localidade</th>
-                                <th style="padding:12px;">Modelo</th>
+                                <th style="padding:12px; text-align:center;">Modelo</th>
                                 <th style="padding:12px;">Situação Atual</th>
                             </tr>
                         </thead>
                         <tbody>
                             ${ativos.map(a => {
-                                // Lógica de cores para o Status
-                                let corStatus = '#4ade80'; // Verde (Operacional)
+                                // 1. Lógica para a Imagem do Modelo (Sua solicitação)
+                                let imgModelo = 'mono.png'; // Padrão
+                                const m = a.modelo ? a.modelo.trim().toLowerCase() : '';
+
+                                if (m === 'mono') {
+                                    imgModelo = 'mono.png';
+                                } else if (m === 'color') {
+                                    imgModelo = 'color.png';
+                                } else if (m === 'duplicadora') {
+                                    imgModelo = 'copiadora.png';
+                                }
+
+                                // 2. Lógica de cores para o Status (Mantida)
+                                let corStatus = '#4ade80'; 
                                 let textoStatus = '✅ OPERACIONAL';
 
                                 if (a.status_chamado === 'recarga') {
-                                    corStatus = '#fbbf24'; // Amarelo
+                                    corStatus = '#fbbf24'; 
                                     textoStatus = '💧 AGUARDANDO RECARGA';
                                 } else if (a.status_chamado === 'manutencao') {
-                                    corStatus = '#f87171'; // Vermelho
+                                    corStatus = '#f87171'; 
                                     textoStatus = '🛠️ EM MANUTENÇÃO';
                                 }
 
@@ -9632,7 +9644,14 @@ async function telaRelatorioGeralAtivos() {
                                     <tr style="border-bottom:1px solid rgba(255,255,255,0.1); transition: 0.3s;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'">
                                         <td style="padding:12px;">#${a.id}</td>
                                         <td style="padding:12px; font-weight:bold;">${a.local_nome}</td>
-                                        <td style="padding:12px;">${a.modelo.toUpperCase()}</td>
+                                        
+                                        <td style="padding:12px; text-align:center;">
+                                            <div style="display:flex; flex-direction:column; align-items:center; gap:5px;">
+                                                <img src="${imgModelo}" style="width:40px; height:auto;">
+                                                <span style="font-size:0.7rem; color:#fbbf24;">${a.modelo.toUpperCase()}</span>
+                                            </div>
+                                        </td>
+
                                         <td style="padding:12px;">
                                             <span style="background:${corStatus}; color:black; padding:4px 10px; border-radius:15px; font-size:0.75rem; font-weight:bold;">
                                                 ${textoStatus}

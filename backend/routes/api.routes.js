@@ -4858,24 +4858,32 @@ router.get('/patrimonio/escola/resumo', verificarToken, async (req, res) => {
 
 router.post('/computadores/chamados/abrir', verificarToken, async (req, res) => {
     const { tipo_defeito, motivo } = req.body;
-
-    // Tenta capturar os IDs, mas não bloqueia se estiverem vazios
-    const local_id = req.user?.local_id || req.body.local_id;
-    const usuario_id = req.userId || req.user?.id;
+    const usuario_id = req.userId; // ID obtido do token pelo middleware verificarToken
 
     try {
-        // Gravação direta sem validações de 'if'
+        // 1. Procura o local_id do utilizador logado diretamente na tabela 'usuarios'
+        const userRes = await db.query("SELECT local_id FROM usuarios WHERE id = $1", [usuario_id]);
+        const local_id_usuario = userRes.rows[0]?.local_id;
+
+        // 2. Verifica se o utilizador tem um local atribuído
+        if (!local_id_usuario) {
+            return res.status(400).json({ 
+                error: "Utilizador sem local vinculado. Verifique o cadastro na tabela 'usuarios'." 
+            });
+        }
+
+        // 3. Insere o chamado utilizando o local_id recuperado na consulta anterior
         await db.query(
-            `INSERT INTO chamados_computador (local_id, usuario_origem_id, tipo_defeito, motivo) 
-             VALUES ($1, $2, $3, $4)`,
-            [local_id, usuario_id, tipo_defeito, motivo]
+            `INSERT INTO chamados_computador (local_id, usuario_origem_id, tipo_defeito, motivo, status, data_abertura) 
+             VALUES ($1, $2, $3, $4, 'ABERTO', NOW())`,
+            [local_id_usuario, usuario_id, tipo_defeito, motivo]
         );
 
-        res.json({ success: true, message: "Chamado aberto (Sem travas)!" });
+        res.json({ success: true, message: "Chamado de manutenção registado!" });
 
     } catch (err) {
-        // Apenas reporta se o banco de dados rejeitar por erro de sintaxe
-        res.status(500).json({ error: err.message });
+        console.error("Erro ao abrir chamado PC:", err.message);
+        res.status(500).json({ error: "Erro interno no servidor: " + err.message });
     }
 });
 

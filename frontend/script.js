@@ -207,7 +207,7 @@ async function carregarDashboard() {
     const nome = localStorage.getItem('nome');
     const localId = localStorage.getItem('local_id');
     const container = document.getElementById('app-content');
-    const classeGrelha = (PERFIL === 'escola' || PERFIL === 'impres')
+    const classeGrelha = (perfil === 'escola' || perfil === 'impres')
         ? 'grid-movel-celular' 
         : 'grid-menu-principal';
 
@@ -340,8 +340,6 @@ async function carregarDashboard() {
                 </button>
             </div>
         `;
-        // Chama notificaras específicos da escola (Pedidos em transporte para o localId)
-    //    setTimeout(() => verificarnotificarasEscola(), 500);
     }
     // --- 4. PERFIL: ADMIN ---
     if (perfil === 'admin') {
@@ -375,8 +373,6 @@ async function carregarDashboard() {
             </button>
 
         `;
-        // Chama notificaras de novas solicitações de Escolas e Logística
-        // setTimeout(() => verificarSolicitacoesPendentes(), 500);
     }
     // --- 5. PERFIL: ESTOQUE ---
     if (perfil === 'estoque') {
@@ -415,8 +411,6 @@ async function carregarDashboard() {
                 <i>🧮</i><span>CALCULADORA</span>
             </button>
         `;
-        // Chama notificaras de pedidos aguardando separação
-        // setTimeout(verificarPedidosParaSeparar, 500);
     }
     // --- 6. PERFIL: LOGÍSTICA ---
     if (perfil === 'logistica') {
@@ -435,7 +429,6 @@ async function carregarDashboard() {
             </button>
         `;
     }
-    container.innerHTML = htmlBotoes;
     container.innerHTML = html;
 }
 

@@ -207,10 +207,7 @@ async function carregarDashboard() {
     const nome = localStorage.getItem('nome');
     const localId = localStorage.getItem('local_id');
     const container = document.getElementById('app-content');
-    const classeGrelha = (perfil === 'escola' || perfil === 'impres')
-        ? 'grid-movel-celular' 
-        : 'grid-menu-principal';
-
+    const classeGrelha = 'grid-movel-celular';
     let htmlBotoes = '';
     const loginContainer = document.getElementById('login-container');
     let modoComparacao = false;
@@ -238,7 +235,7 @@ async function carregarDashboard() {
 
         <div id="area-notificaras" style="margin-top: 80px; margin-bottom: 20px;"></div>
         
-        <div class="grid-menu-principal">
+        <div class="${classeGrelha}">
     `;
 
     // --- 2. PERFIL: SUPER (Gestão de Usuários) ---
@@ -290,7 +287,7 @@ async function carregarDashboard() {
         `;
     }
     if (perfil === 'impres') {
-        htmlBotoes = `
+        html += `
             <div class="${classeGrelha}">
                 <button class="btn-grande btn-vidro" onclick="telaListarChamadosAbertos()">
                     <i>🖨️</i><span>FILA DE CHAMADOS</span>
@@ -312,7 +309,7 @@ async function carregarDashboard() {
     }
     // --- 3. PERFIL: ESCOLA ---
     if (perfil === 'escola') {
-        htmlBotoes = `
+        html += `
             <div class="${classeGrelha}">
                 <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaEscolaConfirmarRecebimento()">
                     <i>🚚</i><span>CONFIRMAR RECEBIMENTO</span>
@@ -429,6 +426,7 @@ async function carregarDashboard() {
             </button>
         `;
     }
+    html += `</div>`;
     container.innerHTML = html;
 }
 

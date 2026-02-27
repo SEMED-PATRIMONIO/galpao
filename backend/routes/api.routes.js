@@ -521,25 +521,25 @@ router.post('/auth/login', async (req, res) => {
 
         if (result.rows.length > 0) {
             const user = result.rows[0];
+            
+            // Debug temporário: se quiser ver no terminal do servidor se o local_id chegou:
+            console.log("Usuário logado:", user.nome, "Local ID no banco:", user.local_id);
 
-            // GERANDO O TOKEN REAL (JWT)
-            // Aqui guardamos o id, perfil e local_id dentro do token criptografado
             const token = jwt.sign(
                 { 
                     id: user.id, 
                     perfil: user.perfil, 
-                    local_id: user.local_id 
+                    local_id: user.local_id || user.LOCAL_ID // Tenta as duas formas
                 }, 
                 SECRET, 
-                { expiresIn: '24h' } // Opcional: define validade de 24 horas
+                { expiresIn: '24h' }
             );
 
-            // A resposta para o frontend continua EXATAMENTE IGUAL
             res.json({
                 token: token,
                 perfil: user.perfil,
                 nome: user.nome,
-                local_id: user.local_id
+                local_id: user.local_id || user.LOCAL_ID
             });
         } else {
             res.status(401).json({ message: "Usuário ou senha inválidos." });

@@ -290,6 +290,12 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="telaListarChamadosAbertos()">
                 <i>🖨️</i><span>FILA DE CHAMADOS</span>
             </button>
+            <button class="btn-grande btn-vidro" onclick="telaDashboardImpressoras()">
+                <i>📈</i><span>DASHBOARD IMPRESSORAS</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioGeralAtivos()">
+                <i>📋</i><span>STATUS ATUAL IMPRESSORAS</span>
+            </button>                        
             <button class="btn-grande btn-vidro" onclick="telaConsumoImpressoras()">
                 <i>📊</i><span>UTILIZAÇÃO E CONSUMO</span>
             </button>            

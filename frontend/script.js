@@ -9244,7 +9244,13 @@ async function telaListarChamadosAbertos() {
                         chamados.map(c => `
                         <div class="painel-vidro" style="text-align: left; position: relative;">
                             <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
-                                <img src="${c.modelo === 'mono' ? 'mono.png' : (c.modelo === 'color' ? 'color.png' : 'copiadora.png')}" style="width: 50px;">
+                                <img src="${(() => {
+                                const m = c.modelo.trim().toLowerCase();
+                                if (m === 'mono') return 'mono.png';
+                                if (m === 'color') return 'color.png';
+                                if (m === 'duplicadora') return 'copiadora.png';
+                                return 'padrao.png';
+                            })()}" style="width: 50px;">
                                 <div>
                                     <strong style="color: #fbbf24; font-size: 1.1rem;">${c.tipo.toUpperCase()}</strong><br>
                                     <small style="color: #cbd5e1;">${c.escola_nome}</small>

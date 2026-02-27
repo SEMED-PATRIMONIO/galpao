@@ -207,6 +207,11 @@ async function carregarDashboard() {
     const nome = localStorage.getItem('nome');
     const localId = localStorage.getItem('local_id');
     const container = document.getElementById('app-content');
+    const classeGrelha = (PERFIL === 'escola' || PERFIL === 'impres')
+        ? 'grid-movel-celular' 
+        : 'grid-menu-principal';
+
+    let htmlBotoes = '';
     const loginContainer = document.getElementById('login-container');
     let modoComparacao = false;
     if (container) {
@@ -236,13 +241,6 @@ async function carregarDashboard() {
         <div class="grid-menu-principal">
     `;
 
-    // --- 1. FERRAMENTAS COMUNS (Todos os perfis) ---
-    const menuComum = `
-        <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
-            <i>🔑</i><span>ALTERAR MINHA SENHA</span>
-        </button>
-    `;
-
     // --- 2. PERFIL: SUPER (Gestão de Usuários) ---
     if (perfil === 'super') {
         html += `
@@ -261,6 +259,9 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaHistoricoMovimentacoes()">
                 <i>📜</i><span>HISTÓRICO</span>
             </button>
+            <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
+                <i>🔑</i><span>ALTERAR MINHA SENHA</span>
+            </button>            
         `;
     }
     if (perfil === 'dti') {
@@ -283,49 +284,62 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="telaCadastroImpressoras()">
                 <i>📋</i><span>CADASTRAR IMPRESSORAS</span>
             </button>
+            <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
+                <i>🔑</i><span>ALTERAR MINHA SENHA</span>
+            </button>            
         `;
     }
     if (perfil === 'impres') {
-        html += `
-            <button class="btn-grande btn-vidro" onclick="telaListarChamadosAbertos()">
-                <i>🖨️</i><span>FILA DE CHAMADOS</span>
-            </button>
-            <button class="btn-grande btn-vidro" onclick="telaDashboardImpressoras()">
-                <i>📈</i><span>DASHBOARD IMPRESSORAS</span>
-            </button>
-            <button class="btn-grande btn-vidro" onclick="telaRelatorioGeralAtivos()">
-                <i>📋</i><span>STATUS ATUAL IMPRESSORAS</span>
-            </button>                        
-            <button class="btn-grande btn-vidro" onclick="telaConsumoImpressoras()">
-                <i>📊</i><span>UTILIZAÇÃO E CONSUMO</span>
-            </button>            
+        htmlBotoes = `
+            <div class="${classeGrelha}">
+                <button class="btn-grande btn-vidro" onclick="telaListarChamadosAbertos()">
+                    <i>🖨️</i><span>FILA DE CHAMADOS</span>
+                </button>
+                <button class="btn-grande btn-vidro" onclick="telaDashboardImpressoras()">
+                    <i>📈</i><span>DASHBOARD IMPRESSORAS</span>
+                </button>
+                <button class="btn-grande btn-vidro" onclick="telaRelatorioGeralAtivos()">
+                    <i>📋</i><span>STATUS ATUAL IMPRESSORAS</span>
+                </button>                        
+                <button class="btn-grande btn-vidro" onclick="telaConsumoImpressoras()">
+                    <i>📊</i><span>UTILIZAÇÃO E CONSUMO</span>
+                </button>
+                <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
+                    <i>🔑</i><span>ALTERAR MINHA SENHA</span>
+                </button> 
+            </div>    
         `;
     }
     // --- 3. PERFIL: ESCOLA ---
     if (perfil === 'escola') {
-          telaPrincipalEscola
-        html += `
-            <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaEscolaConfirmarRecebimento()">
-                <i>🚚</i><span>CONFIRMAR RECEBIMENTO</span>
-            </button>
-            <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaSolicitarUniforme()">
-                <i>👕</i><span>SOLICITAR UNIFORMES</span>
-            </button>
-            <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaDevolucaoUniforme()">
-                <i>🔄</i><span>DEVOLVER UNIFORMES</span>
-            </button>
-            <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaSolicitarServicoImpressora('recarga')">
-                <i>💧</i><span>SOLICITAR RECARGA DE TONER</span>
-            </button>
-            <button class="btn-grande btn-vidro" onclick="telaSolicitarServicoImpressora('manutencao')">
-                <i>🛠️</i><span>SOLICITAR MANUTENÇÃO IMPRESSORA</span>
-            </button>
-            <button class="btn-grande btn-vidro" onclick="telaSolicitarManutencaoPC('')">
-                <i>💻</i><span>SOLICITAR MANUTENÇÃO COMPUTADOR</span>
-            </button>    
-            <button class="btn-grande btn-vidro btn-breve" // --- onclick="abrirMenuPatrimonioEscola()">
-                <i>🏛️</i><span>PATRIMÔNIO</span>
-            </button>       `;
+        htmlBotoes = `
+            <div class="${classeGrelha}">
+                <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaEscolaConfirmarRecebimento()">
+                    <i>🚚</i><span>CONFIRMAR RECEBIMENTO</span>
+                </button>
+                <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaSolicitarUniforme()">
+                    <i>👕</i><span>SOLICITAR UNIFORMES</span>
+                </button>
+                <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaDevolucaoUniforme()">
+                    <i>🔄</i><span>DEVOLVER UNIFORMES</span>
+                </button>
+                <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaSolicitarServicoImpressora('recarga')">
+                    <i>💧</i><span>SOLICITAR RECARGA DE TONER</span>
+                </button>
+                <button class="btn-grande btn-vidro" onclick="telaSolicitarServicoImpressora('manutencao')">
+                    <i>🛠️</i><span>SOLICITAR MANUTENÇÃO IMPRESSORA</span>
+                </button>
+                <button class="btn-grande btn-vidro" onclick="telaSolicitarManutencaoPC('')">
+                    <i>💻</i><span>SOLICITAR MANUTENÇÃO COMPUTADOR</span>
+                </button>    
+                <button class="btn-grande btn-vidro btn-breve" // --- onclick="abrirMenuPatrimonioEscola()">
+                    <i>🏛️</i><span>PATRIMÔNIO</span>
+                </button>
+                <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
+                    <i>🔑</i><span>ALTERAR MINHA SENHA</span>
+                </button>
+            </div>
+        `;
         // Chama notificaras específicos da escola (Pedidos em transporte para o localId)
     //    setTimeout(() => verificarnotificarasEscola(), 500);
     }
@@ -355,6 +369,9 @@ async function carregarDashboard() {
             </button>
             <button class="btn-grande btn-vidro" onclick="telaHistoricoMovimentacoes()">
                 <i>📜</i><span>HISTÓRICO</span>
+            </button>
+            <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
+                <i>🔑</i><span>ALTERAR MINHA SENHA</span>
             </button>
 
         `;
@@ -391,6 +408,9 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="telaMenuPatrimonio()">
                 <i>🏷️</i><span>PATRIMÔNIO</span>
             </button>
+            <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
+                <i>🔑</i><span>ALTERAR MINHA SENHA</span>
+            </button>
             <button class="btn-grande btn-vidro" onclick="abrirCalculadoraConversao()">
                 <i>🧮</i><span>CALCULADORA</span>
             </button>
@@ -410,14 +430,13 @@ async function carregarDashboard() {
             <button class="btn-grande btn-breve">
                 <i>🏷️</i><span>SOLICITAR PATRIMÔNIO</span>
             </button>
+            <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
+                <i>🔑</i><span>ALTERAR MINHA SENHA</span>
+            </button>
         `;
-        // notificaras de pedidos prontos para coleta no Estoque Central
-        //setTimeout(verificarPedidosParaColeta, 500);
     }
-    html += menuComum + `</div>`; // Fecha a grid e adiciona o menu comum no fim
+    container.innerHTML = htmlBotoes;
     container.innerHTML = html;
-
-    //iniciarnotificaraPedidos();
 }
 
 async function telaVisualizarEstoque() {
@@ -461,29 +480,6 @@ async function telaVisualizarEstoque() {
     } catch (err) {
         container.innerHTML = "<div class='painel-vidro' style='color:#f87171;'>🚨 Erro ao carregar estoque.</div>";
     }
-}
-
-async function telaPrincipalEscola() {
-    const app = document.getElementById('app-content');
-    
-    // Configura o container para centralização total
-    app.style.background = "transparent";
-    app.style.display = "flex";
-    app.style.justifyContent = "center";
-    app.style.alignItems = "center";
-    app.style.minHeight = "70vh"; 
-
-    app.innerHTML = `
-        <div class="painel-vidro" style="max-width: 500px; padding: 50px; text-align: center;">
-            <div style="font-size: 4rem; margin-bottom: 20px;">⚠️</div>
-            <h2 style="color: white; margin: 0; line-height: 1.4; font-size: 1.5rem;">
-                O APLICATIVO ESTÁ PROVISORIAMENTE EM MANUTENÇÃO
-            </h2>
-            <p style="color: rgba(255,255,255,0.6); margin-top: 20px; font-size: 0.9rem;">
-                Estamos realizando atualizações técnicas para melhorar o sistema.
-            </p>
-        </div>
-    `;
 }
 
 function mudarAba(novaCategoria) {
@@ -13125,8 +13121,17 @@ async function enviarSolicitacaoManutencaoPC() {
     });
 
     if (res.ok) {
-        notificar("Chamado aberto com sucesso!", "sucesso");
-        document.querySelector('.alerta-vidro-overlay').remove();
+        // Exibe a animação do V verde por 5 segundos no centro da tela
+        exibirSucessoSolicitacao("SOLICITAÇÃO REGISTRADA!"); 
+        
+        // Remove o modal e volta para o dashboard
+        const overlay = document.querySelector('.alerta-vidro-overlay');
+        if (overlay) overlay.remove();
+        
+        setTimeout(() => { carregarDashboard(); }, 1000);
+    } else {
+        const erro = await res.json();
+        notificar("Erro: " + erro.error, "erro");
     }
 }
 

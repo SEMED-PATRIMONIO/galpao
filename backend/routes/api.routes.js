@@ -4859,31 +4859,23 @@ router.get('/patrimonio/escola/resumo', verificarToken, async (req, res) => {
 router.post('/computadores/chamados/abrir', verificarToken, async (req, res) => {
     const { tipo_defeito, motivo } = req.body;
 
-    // Tentamos pegar o local_id e o userId de forma segura
-    // Verificamos tanto no req.user quanto no req.userId (depende de como seu middleware salva)
-    const local_id = req.user?.local_id || req.local_id;
+    // Tenta capturar os IDs, mas não bloqueia se estiverem vazios
+    const local_id = req.user?.local_id || req.body.local_id;
     const usuario_id = req.userId || req.user?.id;
 
     try {
-        // Validação de segurança: Se os IDs estiverem vazios, não tentamos o INSERT
-        if (!local_id || !usuario_id) {
-            return res.status(400).json({ 
-                error: "Sessão inválida. Local_id ou Usuario_id não encontrados. Por favor, saia e entre novamente no sistema." 
-            });
-        }
-
+        // Gravação direta sem validações de 'if'
         await db.query(
             `INSERT INTO chamados_computador (local_id, usuario_origem_id, tipo_defeito, motivo) 
              VALUES ($1, $2, $3, $4)`,
             [local_id, usuario_id, tipo_defeito, motivo]
         );
 
-        res.json({ success: true, message: "Chamado de manutenção aberto!" });
+        res.json({ success: true, message: "Chamado aberto (Sem travas)!" });
 
     } catch (err) {
-        // Log para você ver o erro exato no terminal do seu servidor Node.js
-        console.error("ERRO NO BANCO DE DADOS:", err.message);
-        res.status(500).json({ error: "Erro interno no banco: " + err.message });
+        // Apenas reporta se o banco de dados rejeitar por erro de sintaxe
+        res.status(500).json({ error: err.message });
     }
 });
 

@@ -266,14 +266,17 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="telaListarChamadosPC_DTI()">
                 <i>💻</i><span>FILA ABERTA DE CHAMADOS COMPUTADOR</span>
             </button>            
-            <button class="btn-grande btn-vidro" onclick="telaFilaAtendimentoImpressoras()">
-                <i>🖨️</i><span>FILA ABERTA DE CHAMADOS IMPRESSORA</span>
-            </button>
             <button class="btn-grande btn-vidro" onclick="telaDashboardComputadores()">
-                <i>📊</i><span>ATENDIMENTOS REALIZADOS COMPUTADOR</span>
+                <i>📈</i><span>ATENDIMENTOS REALIZADOS COMPUTADOR</span>
             </button>
+            <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
+                <i>🔑</i><span>ALTERAR MINHA SENHA</span>
+            </button>                        
             <button class="btn-grande btn-vidro" onclick="telaRelatorioGeralAtivos()">
                 <i>📋</i><span>STATUS ATUAL IMPRESSORAS</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="telaFilaAtendimentoImpressoras()">
+                <i>🖨️</i><span>FILA ABERTA DE CHAMADOS IMPRESSORA</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="telaDashboardImpressoras()">
                 <i>📈</i><span>ATENDIMENTOS REALIZADOS IMPRESSORA</span>
@@ -284,9 +287,6 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="telaCadastroImpressoras()">
                 <i>📋</i><span>CADASTRAR NOVA IMPRESSORA</span>
             </button>
-            <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
-                <i>🔑</i><span>ALTERAR MINHA SENHA</span>
-            </button>            
         `;
     }
     if (perfil === 'impres') {

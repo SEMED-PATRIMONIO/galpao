@@ -1600,3 +1600,18 @@ body.login-body {
     justify-content: center;
     align-items: center;
 }
+
+@media print {
+    body { background: white !important; color: black !important; }
+    .painel-vidro { 
+        background: transparent !important; 
+        border: 1px solid #eee !important; 
+        box-shadow: none !important; 
+        color: black !important;
+    }
+    .btn-vidro, .btn-voltar-vidro, #pc_inicio, #pc_fim { display: none !important; } /* Esconde a interface do sistema */
+    table { page-break-inside: auto; }
+    tr { page-break-inside: avoid; page-break-after: auto; }
+    thead { display: table-header-group; } /* Repete o cabeçalho da tabela em todas as páginas */
+    footer { page-break-after: always; }
+}

@@ -264,22 +264,25 @@ async function carregarDashboard() {
     if (perfil === 'dti') {
         html += `
             <button class="btn-grande btn-vidro" onclick="telaListarChamadosPC_DTI()">
-                <i>💻</i><span>CHAMADOS COMPUTADOR EM ABERTO</span>
+                <i>💻</i><span>FILA ABERTA DE CHAMADOS COMPUTADOR</span>
             </button>            
             <button class="btn-grande btn-vidro" onclick="telaFilaAtendimentoImpressoras()">
-                <i>🖨️</i><span>CHAMADOS IMPRESSORA EM ABERTO</span>
+                <i>🖨️</i><span>FILA ABERTA DE CHAMADOS IMPRESSORA</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="telaDashboardImpressoras()">
-                <i>📈</i><span>DASHBOARD IMPRESSORAS</span>
-            </button>
-            <button class="btn-grande btn-vidro" onclick="telaConsumoImpressoras()">
-                <i>📊</i><span>UTILIZAÇÃO E CONSUMO</span>
+            <button class="btn-grande btn-vidro" onclick="telaDashboardComputadores()">
+                <i>📊</i><span>ATENDIMENTOS REALIZADOS COMPUTADOR</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="telaRelatorioGeralAtivos()">
                 <i>📋</i><span>STATUS ATUAL IMPRESSORAS</span>
             </button>
+            <button class="btn-grande btn-vidro" onclick="telaDashboardImpressoras()">
+                <i>📈</i><span>ATENDIMENTOS REALIZADOS IMPRESSORA</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="telaConsumoImpressoras()">
+                <i>📊</i><span>UTILIZAÇÃO E CONSUMO IMPRESSORA</span>
+            </button>
             <button class="btn-grande btn-vidro" onclick="telaCadastroImpressoras()">
-                <i>📋</i><span>CADASTRAR IMPRESSORAS</span>
+                <i>📋</i><span>CADASTRAR NOVA IMPRESSORA</span>
             </button>
             <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
                 <i>🔑</i><span>ALTERAR MINHA SENHA</span>
@@ -292,12 +295,12 @@ async function carregarDashboard() {
                 <button class="btn-grande btn-vidro" onclick="telaListarChamadosAbertos()">
                     <i>🖨️</i><span>FILA DE CHAMADOS</span>
                 </button>
-                <button class="btn-grande btn-vidro" onclick="telaDashboardImpressoras()">
-                    <i>📈</i><span>DASHBOARD IMPRESSORAS</span>
-                </button>
                 <button class="btn-grande btn-vidro" onclick="telaRelatorioGeralAtivos()">
                     <i>📋</i><span>STATUS ATUAL IMPRESSORAS</span>
-                </button>                        
+                </button>                                       
+                <button class="btn-grande btn-vidro" onclick="telaDashboardImpressoras()">
+                    <i>📈</i><span>ATENDIMENTOS REALIZADOS (IMPRESSORAS)</span>
+                </button>
                 <button class="btn-grande btn-vidro" onclick="telaConsumoImpressoras()">
                     <i>📊</i><span>UTILIZAÇÃO E CONSUMO</span>
                 </button>
@@ -311,15 +314,6 @@ async function carregarDashboard() {
     if (perfil === 'escola') {
         html += `
             <div class="${classeGrelha}">
-                <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaEscolaConfirmarRecebimento()">
-                    <i>🚚</i><span>CONFIRMAR RECEBIMENTO</span>
-                </button>
-                <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaSolicitarUniforme()">
-                    <i>👕</i><span>SOLICITAR UNIFORMES</span>
-                </button>
-                <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaDevolucaoUniforme()">
-                    <i>🔄</i><span>DEVOLVER UNIFORMES</span>
-                </button>
                 <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaSolicitarServicoImpressora('recarga')">
                     <i>💧</i><span>SOLICITAR RECARGA DE TONER</span>
                 </button>
@@ -328,13 +322,22 @@ async function carregarDashboard() {
                 </button>
                 <button class="btn-grande btn-vidro" onclick="telaSolicitarManutencaoPC('')">
                     <i>💻</i><span>SOLICITAR MANUTENÇÃO COMPUTADOR</span>
+                </button>
+                <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
+                    <i>🔑</i><span>ALTERAR MINHA SENHA</span>
                 </button>    
                 <button class="btn-grande btn-vidro btn-breve" // --- onclick="abrirMenuPatrimonioEscola()">
                     <i>🏛️</i><span>PATRIMÔNIO</span>
                 </button>
-                <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
-                    <i>🔑</i><span>ALTERAR MINHA SENHA</span>
+                <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaEscolaConfirmarRecebimento()">
+                    <i>🚚</i><span>CONFIRMAR RECEBIMENTO</span>
                 </button>
+                <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaSolicitarUniforme()">
+                    <i>👕</i><span>SOLICITAR UNIFORMES</span>
+                </button>
+                <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaDevolucaoUniforme()">
+                    <i>🔄</i><span>DEVOLVER UNIFORMES</span>
+                </button>                
             </div>
         `;
     }
@@ -342,7 +345,7 @@ async function carregarDashboard() {
     if (perfil === 'admin') {
         html += `
             <button class="btn-grande btn-vidro" onclick="telaCadastrosBase()">
-                <i>⚙️</i><span>CADASTROS BÁSICOS</span>
+                <i>⚙️</i><span>CADASTROS BÁSICOS INICIAIS</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="telaAdminGerenciarSolicitacoes()">
                 <i>⚖️</i><span>AUTORIZAR SOLICITAÇÕES</span>
@@ -362,9 +365,6 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro btn-breve" // ---onclick="telaAdminDashboard()">
                 <i>📈</i><span>PAINEL DE PEDIDOS</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="telaHistoricoMovimentacoes()">
-                <i>📜</i><span>HISTÓRICO</span>
-            </button>
             <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
                 <i>🔑</i><span>ALTERAR MINHA SENHA</span>
             </button>
@@ -381,10 +381,10 @@ async function carregarDashboard() {
                 <i>🔄</i><span>RECEBER DEVOLUÇÕES</span>
             </button>            
             <button class="btn-grande btn-vidro onclick="telaCadastrosBase()">
-                <i>⚙️</i><span>CADASTROS BÁSICOS</span>
+                <i>⚙️</i><span>CADASTROS BÁSICOS INICIAIS</span>
             </button>            
             <button class="btn-grande btn-vidro" onclick="telaAbastecerEstoque()">
-                <i>📥</i><span>ENTRADA ESTOQUE</span>
+                <i>📥</i><span>ENTRADA ESTOQUE (UNIFORMES/MATERIAIS)</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="telaVisualizarEstoque()">
                 <i>👕</i><span>VER ESTOQUE DE UNIFORMES</span>
@@ -394,9 +394,6 @@ async function carregarDashboard() {
             </button>
             <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaAdminDashboard()">
                 <i>📈</i><span>PAINEL DE PEDIDOS</span>
-            </button>
-            <button class="btn-grande btn-vidro" onclick="telaHistoricoMovimentacoes()">
-                <i>📜</i><span>HISTÓRICO</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="telaMenuPatrimonio()">
                 <i>🏷️</i><span>PATRIMÔNIO</span>
@@ -13269,6 +13266,159 @@ function exibirSucessoSolicitacao(mensagem) {
         overlay.style.opacity = "0";
         setTimeout(() => overlay.remove(), 500);
     }, 5000);
+}
+
+async function telaDashboardComputadores() {
+    const area = document.getElementById('app-content');
+    const hoje = new Date().toISOString().split('T')[0];
+    const inicioMes = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
+
+    area.innerHTML = `
+        <div class="painel-vidro" style="max-width: 1200px; margin: auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                <h2 style="color:white; margin:0;">📊 DASHBOARD MANUTENÇÃO PC</h2>
+                <div style="display:flex; gap:10px;">
+                    <button onclick="exportarExcelPC()" class="btn-vidro" style="background:#16a34a; font-size:0.7rem;">📊 EXCEL</button>
+                    <button onclick="imprimirRelatorioPC()" class="btn-vidro" style="background:#2563eb; font-size:0.7rem;">🖨️ IMPRIMIR / PDF</button>
+                    <button onclick="compartilharRelatorioPC()" class="btn-vidro" style="background:#9333ea; font-size:0.7rem;">📱 COMPARTILHAR</button>
+                </div>
+            </div>
+            
+            <div style="display:flex; gap:15px; justify-content:center; background:rgba(255,255,255,0.05); padding:15px; border-radius:12px; margin-bottom:20px;">
+                <input type="date" id="pc_inicio" value="${inicioMes}" class="input-vidro" style="width:150px;">
+                <input type="date" id="pc_fim" value="${hoje}" class="input-vidro" style="width:150px;">
+                <button onclick="carregarDadosStatsPC()" class="btn-vidro" style="background:#3b82f6; margin:0; width:100px;">FILTRAR</button>
+            </div>
+
+            <div class="grid-movel-celular" id="cards-totais-pc" style="margin-bottom:20px;"></div>
+
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; margin-bottom:20px;">
+                <div class="painel-vidro" style="background:rgba(0,0,0,0.2);">
+                    <h4 style="color:#fbbf24; margin-top:0;">📍 TOTAIS POR LOCAL</h4>
+                    <div id="lista-por-local" style="max-height:200px; overflow-y:auto; font-size:0.85rem;"></div>
+                </div>
+                <div class="painel-vidro" style="background:rgba(0,0,0,0.2);">
+                    <h4 style="color:#60a5fa; margin-top:0;">🛠️ TOTAIS POR DEFEITO</h4>
+                    <div id="lista-por-defeito" style="max-height:200px; overflow-y:auto; font-size:0.85rem;"></div>
+                </div>
+            </div>
+
+            <div class="painel-vidro" style="background:rgba(0,0,0,0.3); padding:0; overflow:hidden;">
+                <table style="width:100%; border-collapse:collapse; color:white; font-size:0.8rem;" id="tabela-geral-pc">
+                    <thead style="background:rgba(255,255,255,0.1);">
+                        <tr>
+                            <th style="padding:10px;">DATA</th>
+                            <th style="padding:10px;">LOCAL</th>
+                            <th style="padding:10px;">DEFEITO</th>
+                            <th style="padding:10px;">STATUS</th>
+                            <th style="padding:10px;">TÉCNICO</th>
+                        </tr>
+                    </thead>
+                    <tbody id="corpo-tabela-pc"></tbody>
+                </table>
+            </div>
+        </div>
+    `;
+    carregarDadosStatsPC();
+}
+
+let dadosGlobaisPC = []; // Cache para exportação
+
+async function carregarDadosStatsPC() {
+    const inicio = document.getElementById('pc_inicio').value;
+    const fim = document.getElementById('pc_fim').value;
+    
+    const res = await fetch(`${API_URL}/computadores/stats?inicio=${inicio}&fim=${fim}`, {
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+    const data = await res.json();
+    dadosGlobaisPC = data; // Salva para o Excel
+
+    // Renderizar Cards
+    const totalGeral = data.registros.length;
+    const concluidos = data.registros.filter(r => r.status === 'CONCLUÍDO').length;
+    document.getElementById('cards-totais-pc').innerHTML = `
+        <div class="painel-vidro" style="text-align:center;"><h3>${totalGeral}</h3><small>TOTAL</small></div>
+        <div class="painel-vidro" style="text-align:center; color:#4ade80;"><h3>${concluidos}</h3><small>CONCLUÍDOS</small></div>
+    `;
+
+    // Renderizar Tabelas de Agrupamento
+    document.getElementById('lista-por-local').innerHTML = data.statsLocal.map(l => 
+        `<div style="display:flex; justify-content:space-between; border-bottom:1px solid rgba(255,255,255,0.05); padding:5px 0;">
+            <span>${l.nome}</span><strong>${l.total}</strong>
+        </div>`).join('');
+
+    document.getElementById('lista-por-defeito').innerHTML = data.statsDefeito.map(d => 
+        `<div style="display:flex; justify-content:space-between; border-bottom:1px solid rgba(255,255,255,0.05); padding:5px 0;">
+            <span>${d.tipo_defeito}</span><strong>${d.total}</strong>
+        </div>`).join('');
+
+    // Renderizar Tabela Geral
+    document.getElementById('corpo-tabela-pc').innerHTML = data.registros.map(r => `
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+            <td style="padding:8px;">${new Date(r.data_abertura).toLocaleDateString('pt-BR')}</td>
+            <td style="padding:8px;">${r.local_nome}</td>
+            <td style="padding:8px;">${r.tipo_defeito}</td>
+            <td style="padding:8px; color:${r.status === 'ABERTO' ? '#f87171' : '#4ade80'}">${r.status}</td>
+            <td style="padding:8px;">${r.tecnico || '-'}</td>
+        </tr>
+    `).join('');
+}
+
+// FUNÇÃO DE IMPRESSÃO A4 (PDF)
+function imprimirRelatorioPC() {
+    const conteudo = document.getElementById('app-content').innerHTML;
+    const janela = window.open('', '', 'width=900,height=700');
+    janela.document.write(`
+        <html>
+            <head>
+                <title>Relatório A4 - Manutenção PC</title>
+                <style>
+                    body { font-family: sans-serif; padding: 20px; color: #000; }
+                    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; font-size: 10px; }
+                    h2, h4 { text-align: center; }
+                    .btn-vidro, .btn-voltar-vidro { display: none; } /* Esconde botões na impressão */
+                </style>
+            </head>
+            <body>
+                <h2>RELATÓRIO DE MANUTENÇÃO DE COMPUTADORES</h2>
+                ${conteudo}
+            </body>
+        </html>
+    `);
+    janela.document.close();
+    janela.print();
+}
+
+// FUNÇÃO DE COMPARTILHAMENTO (WhatsApp, Email, etc)
+async function compartilharRelatorioPC() {
+    const texto = `Resumo de Manutenções PC: Total ${dadosGlobaisPC.registros.length} atendimentos no período.`;
+    if (navigator.share) {
+        try {
+            await navigator.share({
+                title: 'Relatório SEMED',
+                text: texto,
+                url: window.location.href
+            });
+        } catch (err) { console.log("Erro ao compartilhar"); }
+    } else {
+        window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(texto)}`);
+    }
+}
+
+// FUNÇÃO EXPORTAR EXCEL (CSV)
+function exportarExcelPC() {
+    let csv = "Data;Local;Defeito;Status;Tecnico\n";
+    dadosGlobaisPC.registros.forEach(r => {
+        csv += `${new Date(r.data_abertura).toLocaleDateString('pt-BR')};${r.local_nome};${r.tipo_defeito};${r.status};${r.tecnico || '-'}\n`;
+    });
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.setAttribute("download", "relatorio_manutencao_pc.csv");
+    link.click();
 }
 
 // Isso garante que o onclick="funcao()" funcione sempre

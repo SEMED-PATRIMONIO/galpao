@@ -4953,4 +4953,46 @@ router.patch('/computadores/chamados/fechar/:id', verificarToken, async (req, re
     }
 });
 
+router.get('/computadores/stats', verificarToken, async (req, res) => {
+    const { inicio, fim } = req.query;
+
+    try {
+        // 1. Todos os registros no período
+        const chamados = await db.query(`
+            SELECT c.*, l.nome as local_nome, u.nome as solicitante, t.nome as tecnico
+            FROM chamados_computador c
+            JOIN locais l ON c.local_id = l.id
+            JOIN usuarios u ON c.usuario_origem_id = u.id
+            LEFT JOIN usuarios t ON c.tecnico_id = t.id
+            WHERE c.data_abertura::date BETWEEN $1 AND $2
+            ORDER BY c.data_abertura DESC
+        `, [inicio, fim]);
+
+        // 2. Totais por Local (Ordem Alfabética)
+        const porLocal = await db.query(`
+            SELECT l.nome, COUNT(*) as total
+            FROM chamados_computador c
+            JOIN locais l ON c.local_id = l.id
+            WHERE c.data_abertura::date BETWEEN $1 AND $2
+            GROUP BY l.nome ORDER BY l.nome ASC
+        `, [inicio, fim]);
+
+        // 3. Totais por Tipo de Defeito
+        const porDefeito = await db.query(`
+            SELECT tipo_defeito, COUNT(*) as total
+            FROM chamados_computador c
+            WHERE c.data_abertura::date BETWEEN $1 AND $2
+            GROUP BY tipo_defeito ORDER BY total DESC
+        `, [inicio, fim]);
+
+        res.json({
+            registros: chamados.rows,
+            statsLocal: porLocal.rows,
+            statsDefeito: porDefeito.rows
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;

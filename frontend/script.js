@@ -8995,7 +8995,10 @@ function telaDashboardImpressoras() {
                     <input type="date" id="dash_data_inicio" value="${primeiroDia}" class="input-vidro" style="width:125px; font-size:0.8rem; height:32px; padding:0 5px;">
                     <label style="color:white; font-size:0.7rem;">ATÉ:</label>
                     <input type="date" id="dash_data_fim" value="${hoje}" class="input-vidro" style="width:125px; font-size:0.8rem; height:32px; padding:0 5px;">
-                    <button onclick="atualizarStatsImpressoras()" class="btn-vidro" style="background:#3b82f6; font-size:0.7rem; width:80px; height:32px; margin:0;">🔍 FILTRAR</button>
+                    <button onclick="atualizarStatsImpressoras()" class="btn-vidro" 
+                        style="background:#3b82f6; font-size:0.75rem; width:100px; height:32px; margin:0; display:inline-flex; align-items:center; justify-content:center; font-weight:bold; border:none; cursor:pointer;">
+                        🔍 FILTRAR
+                    </button>
                 </div>
             </div>
 
@@ -13288,7 +13291,10 @@ async function telaDashboardComputadores() {
             <div style="display:flex; gap:15px; justify-content:center; background:rgba(255,255,255,0.05); padding:15px; border-radius:12px; margin-bottom:20px;">
                 <input type="date" id="pc_inicio" value="${inicioMes}" class="input-vidro" style="width:150px;">
                 <input type="date" id="pc_fim" value="${hoje}" class="input-vidro" style="width:150px;">
-                <button onclick="carregarDadosStatsPC()" class="btn-vidro" style="background:#3b82f6; margin:0; width:100px;">FILTRAR</button>
+                <button onclick="carregarDadosStatsPC()" class="btn-vidro" 
+                    style="background:#3b82f6; margin:0; width:120px; height:45px; display:inline-flex; align-items:center; justify-content:center; font-weight:bold; border:none; cursor:pointer;">
+                    FILTRAR
+                </button>
             </div>
 
             <div class="grid-movel-celular" id="cards-totais-pc" style="margin-bottom:20px;"></div>

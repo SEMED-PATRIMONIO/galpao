@@ -4722,38 +4722,39 @@ router.post('/patrimonio/itens', verificarToken, async (req, res) => {
 
 router.post('/patrimonio/setores', verificarToken, async (req, res) => {
     const { nome } = req.body;
-    const local_id = req.user.local_id; // Pegamos do token para segurança
+    const local_id = req.user.local_id; // Extraído do Token JWT
+
+    // Validações de segurança
+    if (!nome) return res.status(400).json({ error: "O nome do setor é obrigatório." });
+    if (!local_id) return res.status(400).json({ error: "Seu usuário não possui um local vinculado (local_id ausente)." });
 
     try {
         await db.query(
             "INSERT INTO setores (nome, local_id) VALUES ($1, $2)",
-            [nome.toUpperCase(), local_id]
+            [nome.trim().toUpperCase(), local_id]
         );
         res.json({ success: true });
     } catch (err) {
+        // Erro 23505 = Violação de Unique Constraint (Nome + Local)
         if (err.code === '23505') {
-            return res.status(400).json({ error: "Este setor já está cadastrado nesta escola." });
+            return res.status(400).json({ error: "Este setor já existe na sua unidade." });
         }
-        res.status(500).json({ error: "Erro ao salvar setor." });
+        console.error("Erro ao inserir setor:", err);
+        res.status(500).json({ error: "Erro interno no banco de dados." });
     }
 });
 
 router.get('/patrimonio/setores/meus', verificarToken, async (req, res) => {
+    const local_id = req.user.local_id;
+    if (!local_id) return res.status(400).json({ error: "ID do local não identificado." });
+
     try {
-        // Agora req.user.local_id existe graças ao ajuste acima
-        const localId = req.user.local_id;
-
-        if (!localId) {
-            return res.status(400).json({ error: "Local do usuário não encontrado no token." });
-        }
-
         const result = await db.query(
             "SELECT id, nome FROM setores WHERE local_id = $1 ORDER BY nome ASC",
-            [localId]
+            [local_id]
         );
         res.json(result.rows);
     } catch (err) {
-        console.error(err);
         res.status(500).json({ error: "Erro ao listar setores." });
     }
 });

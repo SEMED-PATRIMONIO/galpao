@@ -4700,47 +4700,51 @@ router.post('/patrimonio/itens', verificarToken, async (req, res) => {
 
 router.post('/patrimonio/setores', verificarToken, async (req, res) => {
     const { nome } = req.body;
-    const usuario_id = req.userId; // ID vindo do middleware
+    const usuario_id = req.userId;
 
     try {
-        // Busca o local_id atualizado do usuário no banco
+        // Busca o local_id no banco para garantir o preenchimento correto
         const userRes = await db.query("SELECT local_id FROM usuarios WHERE id = $1", [usuario_id]);
-        const local_id_usuario = userRes.rows[0]?.local_id;
+        const localId = userRes.rows[0]?.local_id;
 
-        if (!local_id_usuario) {
-            return res.status(400).json({ error: "Usuário sem unidade (local) vinculada." });
+        if (!localId) {
+            return res.status(400).json({ error: "Não foi possível identificar sua unidade para salvar o setor." });
         }
 
-        // Insere o setor com o ID garantido
         await db.query(
             "INSERT INTO setores (nome, local_id) VALUES ($1, $2)",
-            [nome.trim().toUpperCase(), local_id_usuario]
+            [nome.trim().toUpperCase(), localId]
         );
-
         res.json({ success: true });
     } catch (err) {
         if (err.code === '23505') {
-            return res.status(400).json({ error: "Este setor já existe nesta escola." });
+            return res.status(400).json({ error: "Este setor já está cadastrado nesta escola." });
         }
-        console.error("Erro ao salvar setor:", err.message);
-        res.status(500).json({ error: "Erro interno ao processar cadastro." });
+        console.error(err);
+        res.status(500).json({ error: "Erro ao salvar setor no banco de dados." });
     }
 });
 
 router.get('/patrimonio/setores/meus', verificarToken, async (req, res) => {
-    const usuario_id = req.userId;
+    const usuario_id = req.userId; // ID garantido pelo middleware
 
     try {
+        // IGUAL À MANUTENÇÃO: Busca o local_id direto na tabela de usuários
         const userRes = await db.query("SELECT local_id FROM usuarios WHERE id = $1", [usuario_id]);
-        const local_id_usuario = userRes.rows[0]?.local_id;
+        const localId = userRes.rows[0]?.local_id;
+
+        if (!localId) {
+            return res.status(400).json({ error: "Seu usuário não possui um local vinculado no banco de dados." });
+        }
 
         const result = await db.query(
             "SELECT id, nome FROM setores WHERE local_id = $1 ORDER BY nome ASC",
-            [local_id_usuario]
+            [localId]
         );
         res.json(result.rows);
     } catch (err) {
-        res.status(500).json({ error: "Erro ao carregar lista de setores." });
+        console.error(err);
+        res.status(500).json({ error: "Erro ao listar setores." });
     }
 });
 

@@ -12892,54 +12892,73 @@ async function telaPatrimonioRegistarItem() {
 }
 
 async function telaGerenciarSetores() {
-    const modal = document.createElement('div');
-    modal.id = 'modal-setores';
-    modal.className = 'alerta-vidro-overlay';
-    
-    modal.innerHTML = `
-        <div class="painel-vidro" style="width: 800px; display: flex; gap: 20px; padding: 25px;">
-            <div style="flex: 1; border-right: 1px solid rgba(255,255,255,0.1); padding-right: 20px;">
-                <h3 style="color:white; margin-top:0;">📂 NOVO SETOR</h3>
-                <input type="text" id="nome-setor" placeholder="Ex: SALA DE AULA 01" 
-                    style="width:100%; padding:12px; border-radius:10px; background:rgba(255,255,255,0.1); color:white; border:1px solid rgba(255,255,255,0.2);">
-                <button onclick="salvarSetor()" style="width:100%; margin-top:15px; padding:12px; background:#10b981; color:white; border:none; border-radius:10px; cursor:pointer; font-weight:bold;">
-                    SALVAR SETOR
-                </button>
-                <button onclick="document.getElementById('modal-setores').remove()" style="width:100%; margin-top:10px; background:transparent; color:white; border:1px solid rgba(255,255,255,0.3); padding:8px; border-radius:10px; cursor:pointer;">
-                    CANCELAR
-                </button>
+    // 1. Localiza o container correto do seu index.html
+    const mainArea = document.getElementById('app-content');
+    if (!mainArea) return console.error("Container 'app-content' não encontrado!");
+
+    // 2. Garante que ele fique visível (o seu HTML começa com display: none)
+    mainArea.style.display = 'block';
+
+    mainArea.innerHTML = `
+        <div class="animar-entrada" style="padding: 20px; color: white;">
+            <div style="display: flex; align-items: center; gap: 20px; margin-bottom: 30px;">
+                <button onclick="abrirMenuPatrimonioEscola()" class="btn-sair-vidro">⬅️ VOLTAR</button>
+                <h1>Gerenciar Setores</h1>
             </div>
 
-            <div style="flex: 1; display:flex; flex-direction:column;">
-                <h3 style="color:white; margin-top:0;">📋 SETORES CADASTRADOS</h3>
-                <div id="lista-setores-escola" style="flex:1; overflow-y:auto; max-height:300px; background:rgba(0,0,0,0.2); border-radius:10px; padding:10px;">
-                    </div>
+            <div class="painel-vidro" style="display: flex; gap: 30px; padding: 30px; border-radius: 20px;">
+                <div style="flex: 1;">
+                    <h3 style="margin-top:0;">📂 NOVO SETOR</h3>
+                    <p style="font-size: 0.8rem; opacity: 0.7;">Cadastre salas, laboratórios ou depósitos.</p>
+                    <input type="text" id="nome-setor" placeholder="Ex: SALA DE AULA 05" class="input-vidro" style="width:100%; margin-top:10px;">
+                    <button onclick="salvarSetor()" style="width:100%; margin-top:15px; padding:15px; background:#10b981; color:white; border:none; border-radius:10px; cursor:pointer; font-weight:bold;">
+                        CADASTRAR SETOR
+                    </button>
+                </div>
+
+                <div style="flex: 1; border-left: 1px solid rgba(255,255,255,0.1); padding-left: 30px;">
+                    <h3 style="margin-top:0;">📋 SETORES DA UNIDADE</h3>
+                    <div id="lista-setores-escola" style="max-height: 300px; overflow-y: auto; margin-top:15px;">
+                        </div>
+                </div>
             </div>
         </div>
     `;
 
-    document.body.appendChild(modal);
     await atualizarListaSetores();
+}
 
-    window.salvarSetor = async () => {
-        const nome = document.getElementById('nome-setor').value;
-        if (!nome) return alert("Digite o nome do setor.");
+// Função de Salvar aprimorada
+window.salvarSetor = async () => {
+    const input = document.getElementById('nome-setor');
+    const nome = input.value.trim();
+    if (!nome) return alert("Por favor, digite o nome do setor.");
 
+    try {
         const res = await fetch(`${API_URL}/patrimonio/setores`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            headers: { 
+                'Content-Type': 'application/json', 
+                'Authorization': `Bearer ${TOKEN}` 
+            },
             body: JSON.stringify({ nome })
         });
 
+        const dados = await res.json();
+
         if (res.ok) {
-            document.getElementById('nome-setor').value = '';
-            atualizarListaSetores();
+            input.value = '';
+            await atualizarListaSetores();
+            // Se você tiver a função notificar, use-a aqui
+            if (typeof notificar === "function") notificar("Setor cadastrado!", "sucesso");
         } else {
-            const erro = await res.json();
-            alert(erro.error);
+            alert(dados.error || "Erro ao salvar.");
         }
-    };
-}
+    } catch (err) {
+        console.error("Erro na requisição:", err);
+        alert("Erro de conexão com o servidor.");
+    }
+};
 
 async function atualizarListaSetores() {
     const lista = document.getElementById('lista-setores-escola');

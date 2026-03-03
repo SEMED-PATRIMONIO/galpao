@@ -4703,12 +4703,11 @@ router.post('/patrimonio/setores', verificarToken, async (req, res) => {
     const usuario_id = req.userId;
 
     try {
-        // Busca o local_id no banco para garantir o preenchimento correto
         const userRes = await db.query("SELECT local_id FROM usuarios WHERE id = $1", [usuario_id]);
         const localId = userRes.rows[0]?.local_id;
 
         if (!localId) {
-            return res.status(400).json({ error: "Não foi possível identificar sua unidade para salvar o setor." });
+            return res.status(400).json({ error: "Não foi possível vincular o setor à sua unidade." });
         }
 
         await db.query(
@@ -4718,10 +4717,9 @@ router.post('/patrimonio/setores', verificarToken, async (req, res) => {
         res.json({ success: true });
     } catch (err) {
         if (err.code === '23505') {
-            return res.status(400).json({ error: "Este setor já está cadastrado nesta escola." });
+            return res.status(400).json({ error: "Este setor já existe na sua escola." });
         }
-        console.error(err);
-        res.status(500).json({ error: "Erro ao salvar setor no banco de dados." });
+        res.status(500).json({ error: "Erro interno ao salvar setor." });
     }
 });
 
@@ -4729,12 +4727,12 @@ router.get('/patrimonio/setores/meus', verificarToken, async (req, res) => {
     const usuario_id = req.userId; // ID garantido pelo middleware
 
     try {
-        // IGUAL À MANUTENÇÃO: Busca o local_id direto na tabela de usuários
+        // Busca o local_id atualizado direto na tabela de usuários
         const userRes = await db.query("SELECT local_id FROM usuarios WHERE id = $1", [usuario_id]);
         const localId = userRes.rows[0]?.local_id;
 
         if (!localId) {
-            return res.status(400).json({ error: "Seu usuário não possui um local vinculado no banco de dados." });
+            return res.status(404).json({ error: "Local não identificado para este usuário." });
         }
 
         const result = await db.query(
@@ -4743,8 +4741,8 @@ router.get('/patrimonio/setores/meus', verificarToken, async (req, res) => {
         );
         res.json(result.rows);
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: "Erro ao listar setores." });
+        console.error("Erro ao listar setores:", err.message);
+        res.status(500).json({ error: "Erro ao carregar lista de setores." });
     }
 });
 

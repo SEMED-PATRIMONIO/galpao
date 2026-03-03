@@ -326,7 +326,7 @@ async function carregarDashboard() {
                 <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
                     <i>🔑</i><span>ALTERAR MINHA SENHA</span>
                 </button>    
-                <button class="btn-grande btn-vidro btn-breve" // --- onclick="abrirMenuPatrimonioEscola()">
+                <button class="btn-grande btn-vidro" onclick="abrirMenuPatrimonioEscola()">
                     <i>🏛️</i><span>PATRIMÔNIO</span>
                 </button>
                 <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaEscolaConfirmarRecebimento()">

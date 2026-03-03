@@ -4524,59 +4524,37 @@ const upload = multer({
 
 // ROTA ATUALIZADA (Recebe arquivo e dados)
 router.post('/patrimonio/escola/registrar', verificarToken, upload.single('arquivo_nf'), async (req, res) => {
-    const { nome, setor_id, quantidade, nota_fiscal, numero_serie, adquirido_pos_2025 } = req.body;
-    const local_id = req.user.local_id;
-    
-    // O Multer coloca os dados do arquivo em req.file
-    // Salvamos o caminho relativo para facilitar o acesso depois
-    const url_nota_fiscal = req.file ? req.file.path : null;
+    const { nome, setor_id, quantidade, numero_serie, nota_fiscal, adquirido_pos_2025 } = req.body;
+    const usuario_id = req.userId;
 
     try {
-        await db.query('BEGIN');
+        const userRes = await db.query("SELECT local_id FROM usuarios WHERE id = $1", [usuario_id]);
+        const local_id_usuario = userRes.rows[0]?.local_id;
 
-        // 1. Lógica do Produto (mantém como estava)
-        let prodRes = await db.query(
-            "SELECT id FROM produtos WHERE UPPER(nome) = $1 AND local_id = $2 AND tipo = 'PATRIMONIO'",
-            [nome.toUpperCase(), local_id]
-        );
+        const query = `
+            INSERT INTO patrimonios (
+                produto_id, local_id, setor_id, numero_serie, 
+                nota_fiscal, adquirido_pos_2025, url_nota_fiscal, status
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'ESTOQUE')
+        `;
 
-        let produto_id;
-        if (prodRes.rows.length === 0) {
-            const newProd = await db.query(
-                "INSERT INTO produtos (nome, tipo, local_id, quantidade_estoque) VALUES ($1, 'PATRIMONIO', $2, 0) RETURNING id",
-                [nome.toUpperCase(), local_id]
-            );
-            produto_id = newProd.rows[0].id;
-        } else {
-            produto_id = prodRes.rows[0].id;
+        // Lógica de repetição para a quantidade informada
+        for (let i = 0; i < quantidade; i++) {
+            await db.query(query, [
+                nome, // Assume-se que 'nome' aqui é o produto_id do select
+                local_id_usuario,
+                setor_id,
+                quantidade > 1 ? null : numero_serie, // Se for lote, série fica nula
+                nota_fiscal,
+                adquirido_pos_2025 === 'true',
+                req.file ? req.file.filename : null
+            ]);
         }
 
-        // 2. Inserção do(s) item(ns) de patrimônio com os NOVOS campos
-        for (let i = 0; i < (parseInt(quantidade) || 1); i++) {
-            await db.query(
-                `INSERT INTO patrimonios (
-                    produto_id, local_id, setor_id, numero_serie, 
-                    nota_fiscal, status, adquirido_pos_2025, url_nota_fiscal, estado
-                ) VALUES ($1, $2, $3, $4, $5, 'ESTOQUE', $6, $7, 'BOM')`, // Mudei para 'ESTOQUE' conforme seu enum default
-                [
-                    produto_id, 
-                    local_id, 
-                    setor_id, 
-                    (i === 0 ? (numero_serie || null) : null), // Só grava a série no primeiro item se for lote
-                    nota_fiscal || null, 
-                    adquirido_pos_2025 === 'true',
-                    url_nota_fiscal
-                ]
-            );
-        }
-
-        await db.query('COMMIT');
-        res.json({ success: true, message: "Registro(s) criado(s) com sucesso!" });
-
+        res.json({ success: true, message: "Itens registrados com sucesso!" });
     } catch (err) {
-        await db.query('ROLLBACK');
-        console.error("Erro no cadastro:", err);
-        res.status(500).json({ error: "Erro ao salvar os dados e o arquivo." });
+        console.error("Erro no registro de patrimônio:", err.message);
+        res.status(500).json({ error: "Falha ao registrar patrimônio." });
     }
 });
 
@@ -4722,40 +4700,47 @@ router.post('/patrimonio/itens', verificarToken, async (req, res) => {
 
 router.post('/patrimonio/setores', verificarToken, async (req, res) => {
     const { nome } = req.body;
-    const local_id = req.user.local_id; // Extraído do Token JWT
-
-    // Validações de segurança
-    if (!nome) return res.status(400).json({ error: "O nome do setor é obrigatório." });
-    if (!local_id) return res.status(400).json({ error: "Seu usuário não possui um local vinculado (local_id ausente)." });
+    const usuario_id = req.userId; // ID vindo do middleware
 
     try {
+        // Busca o local_id atualizado do usuário no banco
+        const userRes = await db.query("SELECT local_id FROM usuarios WHERE id = $1", [usuario_id]);
+        const local_id_usuario = userRes.rows[0]?.local_id;
+
+        if (!local_id_usuario) {
+            return res.status(400).json({ error: "Usuário sem unidade (local) vinculada." });
+        }
+
+        // Insere o setor com o ID garantido
         await db.query(
             "INSERT INTO setores (nome, local_id) VALUES ($1, $2)",
-            [nome.trim().toUpperCase(), local_id]
+            [nome.trim().toUpperCase(), local_id_usuario]
         );
+
         res.json({ success: true });
     } catch (err) {
-        // Erro 23505 = Violação de Unique Constraint (Nome + Local)
         if (err.code === '23505') {
-            return res.status(400).json({ error: "Este setor já existe na sua unidade." });
+            return res.status(400).json({ error: "Este setor já existe nesta escola." });
         }
-        console.error("Erro ao inserir setor:", err);
-        res.status(500).json({ error: "Erro interno no banco de dados." });
+        console.error("Erro ao salvar setor:", err.message);
+        res.status(500).json({ error: "Erro interno ao processar cadastro." });
     }
 });
 
 router.get('/patrimonio/setores/meus', verificarToken, async (req, res) => {
-    const local_id = req.user.local_id;
-    if (!local_id) return res.status(400).json({ error: "ID do local não identificado." });
+    const usuario_id = req.userId;
 
     try {
+        const userRes = await db.query("SELECT local_id FROM usuarios WHERE id = $1", [usuario_id]);
+        const local_id_usuario = userRes.rows[0]?.local_id;
+
         const result = await db.query(
             "SELECT id, nome FROM setores WHERE local_id = $1 ORDER BY nome ASC",
-            [local_id]
+            [local_id_usuario]
         );
         res.json(result.rows);
     } catch (err) {
-        res.status(500).json({ error: "Erro ao listar setores." });
+        res.status(500).json({ error: "Erro ao carregar lista de setores." });
     }
 });
 

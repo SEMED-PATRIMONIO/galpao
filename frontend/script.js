@@ -12970,8 +12970,8 @@ async function atualizarListaSetores() {
 
     // PROTEÇÃO: Se não for uma lista, exibe o erro e para a execução
     if (!Array.isArray(dados)) {
-        console.error("Erro retornado pelo servidor:", dados);
-        lista.innerHTML = `<p style="color:red; font-size:0.8rem;">Erro: ${dados.error || 'Falha ao carregar'}</p>`;
+        // Aqui é onde você vê o erro na tela
+        lista.innerHTML = `<p style="color:red;">Erro: ${dados.error}</p>`;
         return;
     }
 

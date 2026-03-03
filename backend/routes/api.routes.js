@@ -4700,26 +4700,31 @@ router.post('/patrimonio/itens', verificarToken, async (req, res) => {
 
 router.post('/patrimonio/setores', verificarToken, async (req, res) => {
     const { nome } = req.body;
-    const usuario_id = req.userId;
+    const usuario_id = req.userId; 
 
     try {
+        // Busca o local_id oficial do utilizador na tabela 'usuarios'
         const userRes = await db.query("SELECT local_id FROM usuarios WHERE id = $1", [usuario_id]);
-        const localId = userRes.rows[0]?.local_id;
+        const local_id_usuario = userRes.rows[0]?.local_id;
 
-        if (!localId) {
-            return res.status(400).json({ error: "Não foi possível vincular o setor à sua unidade." });
+        if (!local_id_usuario) {
+            return res.status(400).json({ 
+                error: "Utilizador sem local vinculado no cadastro de usuários." 
+            });
         }
 
+        // Insere o setor garantindo que o local_id seja o mesmo do utilizador logado
         await db.query(
             "INSERT INTO setores (nome, local_id) VALUES ($1, $2)",
-            [nome.trim().toUpperCase(), localId]
+            [nome.toUpperCase(), local_id_usuario]
         );
+
         res.json({ success: true });
     } catch (err) {
         if (err.code === '23505') {
-            return res.status(400).json({ error: "Este setor já existe na sua escola." });
+            return res.status(400).json({ error: "Este setor já está cadastrado nesta escola." });
         }
-        res.status(500).json({ error: "Erro interno ao salvar setor." });
+        res.status(500).json({ error: "Erro ao salvar setor no banco de dados." });
     }
 });
 
@@ -4980,6 +4985,53 @@ router.get('/computadores/stats', verificarToken, async (req, res) => {
         });
     } catch (err) {
         res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/modulo-patrimonio/setores/novo', verificarToken, async (req, res) => {
+    const { nome_setor } = req.body;
+    const id_usuario_logado = req.userId; // Vem do token pelo middleware
+
+    try {
+        // Busca o local_id direto na tabela de usuários para não ter erro
+        const consultaUser = await db.query("SELECT local_id FROM usuarios WHERE id = $1", [id_usuario_logado]);
+        const local_id_real = consultaUser.rows[0]?.local_id;
+
+        if (!local_id_real) {
+            return res.status(400).json({ error: "Sua conta não tem um local vinculado." });
+        }
+
+        // Insere na tabela setores usando o local_id recuperado
+        await db.query(
+            "INSERT INTO setores (nome, local_id) VALUES ($1, $2)",
+            [nome_setor.trim().toUpperCase(), local_id_real]
+        );
+
+        res.json({ success: true, message: "Setor salvo com sucesso!" });
+
+    } catch (err) {
+        if (err.code === '23505') {
+            return res.status(400).json({ error: "Este setor já existe na sua unidade." });
+        }
+        console.error("Erro Patrimônio:", err.message);
+        res.status(500).json({ error: "Erro ao processar setor." });
+    }
+});
+
+router.get('/modulo-patrimonio/setores/lista', verificarToken, async (req, res) => {
+    const id_usuario_logado = req.userId;
+
+    try {
+        const consultaUser = await db.query("SELECT local_id FROM usuarios WHERE id = $1", [id_usuario_logado]);
+        const local_id_real = consultaUser.rows[0]?.local_id;
+
+        const result = await db.query(
+            "SELECT id, nome FROM setores WHERE local_id = $1 ORDER BY nome ASC",
+            [local_id_real]
+        );
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: "Falha ao listar setores." });
     }
 });
 

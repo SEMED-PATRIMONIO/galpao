@@ -12736,38 +12736,48 @@ async function telaPatrimonioConsultaEscola() {
     if (!mainArea) return;
 
     mainArea.innerHTML = `
-        <div class="animar-entrada" style="padding: 20px; color: white; height: 100vh; display: flex; flex-direction: column;">
+        <div class="animar-entrada" style="padding: 20px; color: white; height: 90vh; display: flex; flex-direction: column;">
             
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 25px;">
                 <div style="display: flex; align-items: center; gap: 15px;">
                     <button onclick="abrirMenuPatrimonioEscola()" class="btn-sair-vidro">⬅️ VOLTAR</button>
-                    <h1 style="margin:0;">Inventário por Setor</h1>
+                    <h1 style="margin:0; font-size: 1.8rem;">📦 Inventário de Bens</h1>
                 </div>
-                <div id="info-escola-patrimonio" style="font-size: 0.9rem; opacity: 0.8;"></div>
+                <div style="text-align: right; opacity: 0.7; font-size: 0.8rem;">
+                    Unidade: ${localStorage.getItem('nome') || 'Escola Logada'}<br>
+                    Data: ${new Date().toLocaleDateString('pt-BR')}
+                </div>
             </div>
 
-            <div style="display: grid; grid-template-columns: 300px 1fr; gap: 20px; flex: 1; overflow: hidden; padding-bottom: 20px;">
+            <div style="display: grid; grid-template-columns: 320px 1fr; gap: 20px; flex: 1; overflow: hidden;">
                 
-                <div class="painel-vidro" style="overflow-y: auto; padding: 15px; border-radius: 15px;">
-                    <h3 style="margin-top:0; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;">📍 SETORES</h3>
-                    <div id="lista-setores-inventario">
-                        <p style="color:gray; font-size:0.8rem;">Carregando setores...</p>
+                <div class="painel-vidro" style="padding: 20px; display: flex; flex-direction: column; overflow: hidden;">
+                    <h3 style="margin-top:0; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;">📍 Setores</h3>
+                    <div id="lista-setores-inventario" style="flex: 1; overflow-y: auto; margin-top: 10px;">
+                        <p style="color:gray;">Carregando setores...</p>
                     </div>
                 </div>
 
-                <div class="painel-vidro" style="overflow-y: auto; padding: 20px; border-radius: 15px; position: relative;">
-                    <div id="titulo-setor-selecionado">
-                        <h3 style="color: gray; text-align: center; margin-top: 100px;">Selecione um setor à esquerda para ver os itens.</h3>
+                <div class="painel-vidro" style="padding: 25px; display: flex; flex-direction: column; overflow: hidden;">
+                    <div id="cabecalho-itens" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; visibility: hidden;">
+                        <h3 id="nome-setor-titulo" style="margin:0; color: #60a5fa;"></h3>
+                        <button id="btn-gerar-pdf" class="btn-sair-vidro" style="background: #ef4444; border: none; color: white;">
+                            GERAR PDF 📄
+                        </button>
                     </div>
-                    <div id="tabela-itens-patrimonio"></div>
+                    
+                    <div id="area-tabela-itens" style="flex: 1; overflow-y: auto;">
+                        <div style="text-align: center; margin-top: 100px; color: rgba(255,255,255,0.3);">
+                            <span style="font-size: 4rem;">👈</span>
+                            <p>Selecione um setor à esquerda para visualizar os bens patrimoniados.</p>
+                        </div>
+                    </div>
                 </div>
-
             </div>
         </div>
     `;
 
-    // Carrega os setores para a coluna da esquerda
-    await carregarSetoresParaConsulta();
+    carregarSetoresParaConsulta();
 }
 
 async function carregarSetoresParaConsulta() {
@@ -12795,15 +12805,21 @@ async function carregarSetoresParaConsulta() {
 }
 
 async function carregarItensPorSetor(setor_id, nome_setor) {
-    const tituloDiv = document.getElementById('titulo-setor-selecionado');
-    const tabelaDiv = document.getElementById('tabela-itens-patrimonio');
+    const cabecalho = document.getElementById('cabecalho-itens');
+    const areaTabela = document.getElementById('area-tabela-itens');
+    const titulo = document.getElementById('nome-setor-titulo');
+    const btnPdf = document.getElementById('btn-gerar-pdf');
 
-    // Estilo visual: Destacar o setor selecionado (opcional)
-    document.querySelectorAll('.item-setor-clicavel').forEach(el => el.style.background = 'rgba(255,255,255,0.05)');
-    event.currentTarget.style.background = 'rgba(59, 130, 246, 0.3)';
+    // Destacar o setor selecionado na lista
+    document.querySelectorAll('.item-setor-clicavel').forEach(el => el.classList.remove('setor-ativo'));
+    event.currentTarget.classList.add('setor-ativo');
 
-    tituloDiv.innerHTML = `<h3 style="margin-top:0; color: #60a5fa;">📋 ITENS EM: ${nome_setor}</h3>`;
-    tabelaDiv.innerHTML = '<div class="spinner"></div>';
+    cabecalho.style.visibility = 'visible';
+    titulo.innerText = `ITENS EM: ${nome_setor}`;
+    areaTabela.innerHTML = '<div class="spinner"></div>';
+
+    // Configura o botão de PDF para este setor específico
+    btnPdf.onclick = () => gerarRelatorioPDF(nome_setor);
 
     try {
         const res = await fetch(`${API_URL}/patrimonio/inventario/setor/${setor_id}`, {
@@ -12812,34 +12828,39 @@ async function carregarItensPorSetor(setor_id, nome_setor) {
         const itens = await res.json();
 
         if (itens.length === 0) {
-            tabelaDiv.innerHTML = '<p style="text-align:center; margin-top:50px; color:gray;">Nenhum patrimônio cadastrado neste setor.</p>';
+            areaTabela.innerHTML = `<p style="text-align:center; color:gray; margin-top:50px;">Nenhum item cadastrado neste setor.</p>`;
             return;
         }
 
-        tabelaDiv.innerHTML = `
-            <table style="width:100%; border-collapse: collapse; margin-top:15px; font-size: 0.9rem;">
+        areaTabela.innerHTML = `
+            <table id="tabela-inventario-dados" style="width:100%; border-collapse: collapse; font-size: 0.9rem;">
                 <thead>
-                    <tr style="text-align:left; border-bottom: 2px solid rgba(255,255,255,0.1); color: #aaa;">
-                        <th style="padding:10px;">PRODUTO</th>
-                        <th style="padding:10px;">Nº SÉRIE</th>
-                        <th style="padding:10px;">NOTA FISCAL</th>
-                        <th style="padding:10px;">ESTADO</th>
-                        <th style="padding:10px;">AÇÕES</th>
+                    <tr style="text-align:left; border-bottom: 2px solid rgba(255,255,255,0.1); color: #94a3b8;">
+                        <th style="padding:12px;">DESCRIÇÃO DO BEM</th>
+                        <th style="padding:12px;">Nº SÉRIE</th>
+                        <th style="padding:12px;">ESTADO</th>
+                        <th style="padding:12px; text-align:center;">NF</th>
+                        <th style="padding:12px; text-align:center;">DETALHES</th>
                     </tr>
                 </thead>
                 <tbody>
                     ${itens.map(i => `
-                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); transition: 0.2s;">
                             <td style="padding:12px; font-weight:bold;">${i.nome_produto}</td>
                             <td style="padding:12px;">${i.numero_serie || '---'}</td>
-                            <td style="padding:12px;">${i.nota_fiscal || '---'}</td>
                             <td style="padding:12px;">
-                                <span style="padding:3px 8px; border-radius:5px; background:${i.estado === 'BOM' ? '#065f46' : '#991b1b'};">
+                                <span style="background:${i.estado === 'BOM' ? '#065f46' : '#991b1b'}; padding:2px 8px; border-radius:4px; font-size:0.7rem;">
                                     ${i.estado}
                                 </span>
                             </td>
-                            <td style="padding:12px;">
-                                <button onclick="detalharPatrimonio(${i.id})" style="background:none; border:none; cursor:pointer; color:#60a5fa;">👁️</button>
+                            <td style="padding:12px; text-align:center;">
+                                ${i.url_nota_fiscal ? 
+                                    `<button onclick="window.open('${API_URL}/uploads/notas_fiscais/${i.url_nota_fiscal}', '_blank')" 
+                                             title="Ver Nota Fiscal" style="background:none; border:none; cursor:pointer; font-size:1.2rem;">📄</button>` 
+                                    : '<span style="opacity:0.2">---</span>'}
+                            </td>
+                            <td style="padding:12px; text-align:center;">
+                                <button onclick="detalharPatrimonio(${i.id})" style="background:none; border:none; cursor:pointer; font-size:1.1rem;">👁️</button>
                             </td>
                         </tr>
                     `).join('')}
@@ -12847,8 +12868,77 @@ async function carregarItensPorSetor(setor_id, nome_setor) {
             </table>
         `;
     } catch (err) {
-        tabelaDiv.innerHTML = '<p style="color:red;">Erro ao buscar itens.</p>';
+        areaTabela.innerHTML = '<p style="color:red;">Erro ao buscar dados.</p>';
     }
+}
+
+function gerarRelatorioPDF(nomeSetor) {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    const escola = localStorage.getItem('nome') || 'UNIDADE SEMED';
+
+    // Cabeçalho do PDF
+    doc.setFontSize(16);
+    doc.text("RELATÓRIO DE INVENTÁRIO PATRIMONIAL", 105, 15, { align: "center" });
+    doc.setFontSize(10);
+    doc.text(`Unidade: ${escola}`, 14, 25);
+    doc.text(`Setor: ${nomeSetor}`, 14, 30);
+    doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, 14, 35);
+
+    doc.autoTable({
+        html: '#tabela-inventario-dados',
+        startY: 40,
+        theme: 'striped',
+        headStyles: { fillColor: [30, 58, 138] },
+        columns: [
+            { header: 'DESCRIÇÃO', dataKey: '0' },
+            { header: 'Nº SÉRIE', dataKey: '1' },
+            { header: 'ESTADO', dataKey: '2' }
+        ]
+    });
+
+    const finalY = doc.lastAutoTable.finalY + 30;
+    doc.line(60, finalY, 150, finalY);
+    doc.text("Assinatura do Responsável pelo Setor", 105, finalY + 5, { align: "center" });
+
+    doc.save(`Inventario_${nomeSetor}.pdf`);
+}
+
+// 2. Função para Gerar o PDF (Usando jsPDF e AutoTable)
+function gerarPDFInventario(nomeSetor) {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    const dataAtual = new Date().toLocaleString('pt-BR');
+
+    // Título do Relatório
+    doc.setFontSize(18);
+    doc.text("Relatório de Inventário de Património", 14, 20);
+    
+    doc.setFontSize(11);
+    doc.text(`Setor: ${nomeSetor}`, 14, 30);
+    doc.text(`Data de Emissão: ${dataAtual}`, 14, 36);
+    doc.text(`Unidade: ${localStorage.getItem('nome_unidade') || 'Sua Unidade'}`, 14, 42);
+
+    // Gerar tabela no PDF a partir dos dados da tabela HTML
+    doc.autoTable({
+        html: '#tabela-pdf',
+        startY: 50,
+        theme: 'grid',
+        headStyles: { fillColor: [30, 58, 138] }, // Cor azul marinho
+        columns: [
+            { header: 'PRODUTO', dataKey: 'produto' },
+            { header: 'Nº SÉRIE', dataKey: 'serie' },
+            { header: 'ESTADO', dataKey: 'estado' },
+            { header: 'NOTA FISCAL', dataKey: 'nf' }
+        ]
+    });
+
+    // Rodapé para Assinatura
+    const finalY = doc.lastAutoTable.finalY + 30;
+    doc.line(14, finalY, 80, finalY);
+    doc.text("Assinatura do Responsável", 14, finalY + 5);
+
+    doc.save(`Inventario_${nomeSetor.replace(/ /g, '_')}.pdf`);
 }
 
 async function telaPatrimonioRegistarItem() {

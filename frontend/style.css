@@ -1601,6 +1601,20 @@ body.login-body {
     align-items: center;
 }
 
+.item-setor-clicavel:hover {
+    background: rgba(255, 255, 255, 0.15) !important;
+    transform: translateX(8px);
+    border-left: 4px solid #60a5fa;
+    transition: all 0.3s ease;
+}
+
+/* Classe para destacar o setor que está ativo/selecionado */
+.setor-ativo {
+    background: rgba(59, 130, 246, 0.4) !important;
+    border-left: 4px solid #3b82f6;
+    font-weight: bold;
+}
+
 @media print {
     body { background: white !important; color: black !important; }
     .painel-vidro { 

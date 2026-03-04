@@ -13854,17 +13854,19 @@ async function telaGestaoGlobalPatrimonio() {
                 
                 <div class="painel-vidro" style="display: flex; flex-direction: column; justify-content: center; padding: 20px;">
                     <h3 style="text-align:center; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:10px;">🏛️ UNIDADES</h3>
-                    <div id="col-locais" style="overflow-y: auto; max-height: 70vh;"></div>
+                    <div id="col-locais" style="overflow-y: auto; max-height: 70vh;">
+                        <div class="spinner"></div>
+                    </div>
                 </div>
 
-                <div id="container-setores" class="painel-vidro" style="padding: 20px; display: none; flex-direction: column;">
-                    <h3 id="txt-local-selecionado" style="color:#60a5fa; font-size:1rem;"></h3>
-                    <div id="col-setores" style="overflow-y: auto; margin-top:15px;"></div>
+                <div id="container-setores" class="painel-vidro" style="padding: 20px; display: none; flex-direction: column; overflow: hidden;">
+                    <h3 id="txt-local-selecionado" style="color:#60a5fa; font-size:1rem; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:10px;"></h3>
+                    <div id="col-setores" style="overflow-y: auto; margin-top:10px;"></div>
                 </div>
 
-                <div id="container-bens" class="painel-vidro" style="padding: 20px; display: none; flex-direction: column;">
-                    <h3 id="txt-setor-selecionado" style="color:#34d399; font-size:1rem;"></h3>
-                    <div id="col-bens" style="overflow-y: auto; margin-top:15px;"></div>
+                <div id="container-bens" class="painel-vidro" style="padding: 20px; display: none; flex-direction: column; overflow: hidden;">
+                    <h3 id="txt-setor-selecionado" style="color:#34d399; font-size:1rem; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:10px;"></h3>
+                    <div id="col-bens" style="overflow-y: auto; margin-top:10px;"></div>
                 </div>
 
             </div>
@@ -13875,19 +13877,92 @@ async function telaGestaoGlobalPatrimonio() {
 }
 
 async function carregarListaLocaisGlobal() {
-    const res = await fetch(`${API_URL}/patrimonio/global/locais`, {
-        headers: { 'Authorization': `Bearer ${TOKEN}` }
-    });
-    const locais = await res.json();
-    const container = document.getElementById('col-locais');
+    try {
+        const res = await fetch(`${API_URL}/patrimonio/global/locais`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const locais = await res.json();
+        const container = document.getElementById('col-locais');
 
-    container.innerHTML = locais.map(l => `
-        <div class="item-setor-clicavel item-global" onclick="selecionarLocalGlobal(${l.id}, '${l.nome}')" 
-             style="padding:15px; margin: 10px 0; background:rgba(255,255,255,0.05); border-radius:10px; cursor:pointer; text-align:center;">
-            ${l.nome}
-        </div>
-    `).join('');
+        container.innerHTML = locais.map(l => `
+            <div class="item-setor-clicavel item-global" onclick="selecionarLocalGlobal(${l.id}, '${l.nome}')" 
+                 style="padding:15px; margin: 10px 0; background:rgba(255,255,255,0.05); border-radius:10px; cursor:pointer; text-align:center; transition: 0.3s;">
+                ${l.nome}
+            </div>
+        `).join('');
+    } catch (err) {
+        console.error("Erro locais:", err);
+    }
 }
+
+window.selecionarLocalGlobal = async function(id, nome) {
+    window.localSelecionadoId = id;
+    window.localSelecionadoNome = nome;
+
+    // Reset de visual e colunas
+    document.querySelectorAll('.item-global').forEach(el => el.style.background = 'rgba(255,255,255,0.05)');
+    event.currentTarget.style.background = 'rgba(59, 130, 246, 0.3)';
+    
+    document.getElementById('container-setores').style.display = 'flex';
+    document.getElementById('container-bens').style.display = 'none';
+    document.getElementById('acoes-global').style.display = 'flex';
+    document.getElementById('txt-local-selecionado').innerText = `📍 ${nome}`;
+    document.getElementById('col-setores').innerHTML = '<div class="spinner"></div>';
+
+    try {
+        const res = await fetch(`${API_URL}/patrimonio/global/setores/${id}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const setores = await res.json();
+        
+        document.getElementById('col-setores').innerHTML = setores.map(s => `
+            <div class="item-setor-clicavel item-setor-global" onclick="selecionarSetorGlobal(${s.id}, '${s.nome}')" 
+                 style="padding:12px; margin-bottom:8px; background:rgba(255,255,255,0.05); border-radius:8px; cursor:pointer;">
+                🔹 ${s.nome}
+            </div>
+        `).join('') || '<p style="color:gray; font-size:0.8rem;">Nenhum setor.</p>';
+    } catch (err) {
+        console.error(err);
+    }
+};
+
+window.selecionarSetorGlobal = async function(setor_id, nome_setor) {
+    document.querySelectorAll('.item-setor-global').forEach(el => el.style.background = 'rgba(255,255,255,0.05)');
+    event.currentTarget.style.background = 'rgba(52, 211, 153, 0.3)';
+
+    document.getElementById('container-bens').style.display = 'flex';
+    document.getElementById('txt-setor-selecionado').innerText = `📋 ITENS EM: ${nome_setor}`;
+    document.getElementById('col-bens').innerHTML = '<div class="spinner"></div>';
+
+    try {
+        const res = await fetch(`${API_URL}/patrimonio/global/bens/${setor_id}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const bens = await res.json();
+
+        document.getElementById('col-bens').innerHTML = bens.map(b => {
+            // Tooltip com todos os campos (Hover)
+            const infoHover = `
+PRODUTO: ${b.nome_produto}
+SÉRIE: ${b.numero_serie || 'N/A'}
+PLAQUETA: ${b.documento_id || 'N/A'}
+NF: ${b.nota_fiscal || 'N/A'}
+ESTADO: ${b.estado}
+CADASTRO: ${new Date(b.data_atualizacao).toLocaleDateString()}
+            `.trim();
+
+            return `
+                <div class="linha-patrimonio" title="${infoHover}" 
+                     style="padding:12px; border-bottom:1px solid rgba(255,255,255,0.05); cursor:help; display:flex; justify-content:space-between;">
+                    <strong>${b.nome_produto}</strong>
+                    <span style="opacity:0.5; font-size:0.8rem;">${b.numero_serie || 'S/N'}</span>
+                </div>
+            `;
+        }).join('') || '<p style="color:gray; font-size:0.8rem;">Setor vazio.</p>';
+    } catch (err) {
+        console.error(err);
+    }
+};
 
 function renderizarBensGlobal(bens) {
     const container = document.getElementById('col-bens');

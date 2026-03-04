@@ -4525,36 +4525,60 @@ const upload = multer({
 // ROTA ATUALIZADA (Recebe arquivo e dados)
 router.post('/patrimonio/escola/registrar', verificarToken, upload.single('arquivo_nf'), async (req, res) => {
     const { nome, setor_id, quantidade, numero_serie, nota_fiscal, adquirido_pos_2025 } = req.body;
-    const usuario_id = req.userId;
+    const usuario_id = req.userId; // ID do utilizador logado (vinda do token)
 
     try {
+        // 1. IGUAL À MANUTENÇÃO: Busca o local_id oficial direto no banco
         const userRes = await db.query("SELECT local_id FROM usuarios WHERE id = $1", [usuario_id]);
         const local_id_usuario = userRes.rows[0]?.local_id;
 
-        const query = `
+        if (!local_id_usuario) {
+            return res.status(400).json({ error: "Utilizador sem unidade vinculada." });
+        }
+
+        // 2. VERIFICAÇÃO DO PRODUTO: Se não existir o nome na tabela 'produtos', nós criamos
+        let produtoRes = await db.query("SELECT id FROM produtos WHERE nome = $1", [nome.toUpperCase()]);
+        let produto_id;
+
+        if (produtoRes.rows.length > 0) {
+            produto_id = produtoRes.rows[0].id;
+        } else {
+            // Cria o produto novo se ele não existir
+            const novoProduto = await db.query(
+                "INSERT INTO produtos (nome, local_id) VALUES ($1, $2) RETURNING id",
+                [nome.toUpperCase(), local_id_usuario]
+            );
+            produto_id = novoProduto.rows[0].id;
+        }
+
+        // 3. REGISTO DO PATRIMÓNIO
+        const queryPatrimonio = `
             INSERT INTO patrimonios (
                 produto_id, local_id, setor_id, numero_serie, 
-                nota_fiscal, adquirido_pos_2025, url_nota_fiscal, status
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'ESTOQUE')
+                nota_fiscal, adquirido_pos_2025, url_nota_fiscal, status, estado
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'ESTOQUE', 'BOM')
         `;
 
-        // Lógica de repetição para a quantidade informada
-        for (let i = 0; i < quantidade; i++) {
-            await db.query(query, [
-                nome, // Assume-se que 'nome' aqui é o produto_id do select
+        const qtd = parseInt(quantidade) || 1;
+
+        // Loop para registar a quantidade solicitada (Lote)
+        for (let i = 0; i < qtd; i++) {
+            await db.query(queryPatrimonio, [
+                produto_id,
                 local_id_usuario,
                 setor_id,
-                quantidade > 1 ? null : numero_serie, // Se for lote, série fica nula
+                qtd > 1 ? null : numero_serie, // Se for lote, o número de série é limpo
                 nota_fiscal,
                 adquirido_pos_2025 === 'true',
                 req.file ? req.file.filename : null
             ]);
         }
 
-        res.json({ success: true, message: "Itens registrados com sucesso!" });
+        res.json({ success: true, message: "Catalogação realizada com sucesso!" });
+
     } catch (err) {
-        console.error("Erro no registro de patrimônio:", err.message);
-        res.status(500).json({ error: "Falha ao registrar patrimônio." });
+        console.error("Erro Crítico no Património:", err.message);
+        res.status(500).json({ error: "Erro interno ao processar registo: " + err.message });
     }
 });
 

@@ -12452,7 +12452,7 @@ async function telaPatrimonioEscolaCatalogo() {
                 <div id="container-arquivo-nf" style="display:none;">
                     <label style="color:white; font-size:0.8rem;">ANEXAR NOTA FISCAL (PDF):</label>
                     <input type="file" id="cat-file" accept="application/pdf" class="input-vidro" style="padding: 5px;">
-                    <p style="font-size:0.7rem; color:#aaa; margin-top:5px;">*Obrigatório para bens após 2025.</p>
+                    <p style="font-size:0.7rem; color:#aaa; margin-top:5px;">*Obrigatório para bens adquiridos a partir de 2025.</p>
                 </div>
 
                 <div style="display:flex; gap:10px;">
@@ -12732,63 +12732,123 @@ async function carregarDashboardPatrimonio() {
 }
 
 async function telaPatrimonioConsultaEscola() {
-    const mainArea = document.getElementById('render-area');
-    
+    const mainArea = document.getElementById('app-content');
+    if (!mainArea) return;
+
     mainArea.innerHTML = `
-        <div class="animar-entrada" style="padding: 20px; color: white;">
+        <div class="animar-entrada" style="padding: 20px; color: white; height: 100vh; display: flex; flex-direction: column;">
             
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 25px;">
-                <button onclick="abrirMenuPatrimonioEscola()" class="btn-sair-vidro" style="padding: 10px 20px;">
-                    ⬅️ VOLTAR
-                </button>
-                <h1 style="margin: 0; font-size: 1.4rem;">Inventário da Unidade</h1>
-                <button onclick="telaPatrimonioEscolaCatalogo()" class="btn-vidro" style="background: rgba(59, 130, 246, 0.2); border-color: #3b82f6;">
-                    + NOVO ITEM
-                </button>
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <button onclick="abrirMenuPatrimonioEscola()" class="btn-sair-vidro">⬅️ VOLTAR</button>
+                    <h1 style="margin:0;">Inventário por Setor</h1>
+                </div>
+                <div id="info-escola-patrimonio" style="font-size: 0.9rem; opacity: 0.8;"></div>
             </div>
 
-            <div id="container-resumo-patrimonio" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 25px;">
+            <div style="display: grid; grid-template-columns: 300px 1fr; gap: 20px; flex: 1; overflow: hidden; padding-bottom: 20px;">
+                
+                <div class="painel-vidro" style="overflow-y: auto; padding: 15px; border-radius: 15px;">
+                    <h3 style="margin-top:0; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;">📍 SETORES</h3>
+                    <div id="lista-setores-inventario">
+                        <p style="color:gray; font-size:0.8rem;">Carregando setores...</p>
+                    </div>
                 </div>
 
-            <div class="painel-vidro" style="padding: 20px; margin-bottom: 20px; display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap;">
-                <div style="flex: 1; min-width: 200px;">
-                    <label style="display:block; margin-bottom:5px; font-size:0.8rem; opacity:0.7;">FILTRAR POR SETOR:</label>
-                    <select id="filtro-setor-patrimonio" onchange="carregarTabelaInventario()" 
-                        style="width:100%; padding:10px; border-radius:8px; background:rgba(0,0,0,0.2); color:white; border:1px solid rgba(255,255,255,0.1);">
-                        <option value="todos">--- Todos os Setores ---</option>
-                    </select>
+                <div class="painel-vidro" style="overflow-y: auto; padding: 20px; border-radius: 15px; position: relative;">
+                    <div id="titulo-setor-selecionado">
+                        <h3 style="color: gray; text-align: center; margin-top: 100px;">Selecione um setor à esquerda para ver os itens.</h3>
+                    </div>
+                    <div id="tabela-itens-patrimonio"></div>
                 </div>
 
-                <div style="flex: 2; min-width: 300px;">
-                    <label style="display:block; margin-bottom:5px; font-size:0.8rem; opacity:0.7;">BUSCA RÁPIDA:</label>
-                    <input type="text" id="busca-global-patrimonio" oninput="filtrarTabelaLocalmente()" 
-                        placeholder="Pesquisar por nome, série ou setor..." 
-                        style="width:100%; padding:10px; border-radius:8px; background:rgba(0,0,0,0.2); color:white; border:1px solid rgba(255,255,255,0.1);">
-                </div>
-            </div>
-
-            <div class="painel-vidro" style="overflow-x: auto;">
-                <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
-                    <thead>
-                        <tr style="background: rgba(255,255,255,0.05); text-align: left;">
-                            <th style="padding: 15px;">Setor</th>
-                            <th style="padding: 15px;">Produto / Estado</th>
-                            <th style="padding: 15px;">Nº Série</th>
-                            <th style="padding: 15px;">Nota Fiscal</th>
-                            <th style="padding: 15px; text-align: center;">Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody id="corpo-tabela-inventario">
-                        </tbody>
-                </table>
             </div>
         </div>
     `;
 
-    // 2. ROTINA DE AUTOCARREGAMENTO
-    // Chamamos as funções que buscam os dados no banco de dados assim que a tela abre
-    await carregarOpcoesSetoresFiltro(); // Preenche o <select>
-    await carregarTabelaInventario();    // Preenche o <tbody>
+    // Carrega os setores para a coluna da esquerda
+    await carregarSetoresParaConsulta();
+}
+
+async function carregarSetoresParaConsulta() {
+    const container = document.getElementById('lista-setores-inventario');
+    
+    try {
+        const res = await fetch(`${API_URL}/patrimonio/setores/meus`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const setores = await res.json();
+
+        if (Array.isArray(setores) && setores.length > 0) {
+            container.innerHTML = setores.map(s => `
+                <div class="item-setor-clicavel" onclick="carregarItensPorSetor(${s.id}, '${s.nome}')" 
+                     style="padding: 12px; margin-bottom: 8px; background: rgba(255,255,255,0.05); border-radius: 8px; cursor: pointer; transition: 0.3s;">
+                    🔹 ${s.nome}
+                </div>
+            `).join('');
+        } else {
+            container.innerHTML = '<p style="color:gray; font-size:0.8rem;">Nenhum setor cadastrado.</p>';
+        }
+    } catch (err) {
+        container.innerHTML = '<p style="color:red;">Erro ao carregar.</p>';
+    }
+}
+
+async function carregarItensPorSetor(setor_id, nome_setor) {
+    const tituloDiv = document.getElementById('titulo-setor-selecionado');
+    const tabelaDiv = document.getElementById('tabela-itens-patrimonio');
+
+    // Estilo visual: Destacar o setor selecionado (opcional)
+    document.querySelectorAll('.item-setor-clicavel').forEach(el => el.style.background = 'rgba(255,255,255,0.05)');
+    event.currentTarget.style.background = 'rgba(59, 130, 246, 0.3)';
+
+    tituloDiv.innerHTML = `<h3 style="margin-top:0; color: #60a5fa;">📋 ITENS EM: ${nome_setor}</h3>`;
+    tabelaDiv.innerHTML = '<div class="spinner"></div>';
+
+    try {
+        const res = await fetch(`${API_URL}/patrimonio/inventario/setor/${setor_id}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const itens = await res.json();
+
+        if (itens.length === 0) {
+            tabelaDiv.innerHTML = '<p style="text-align:center; margin-top:50px; color:gray;">Nenhum patrimônio cadastrado neste setor.</p>';
+            return;
+        }
+
+        tabelaDiv.innerHTML = `
+            <table style="width:100%; border-collapse: collapse; margin-top:15px; font-size: 0.9rem;">
+                <thead>
+                    <tr style="text-align:left; border-bottom: 2px solid rgba(255,255,255,0.1); color: #aaa;">
+                        <th style="padding:10px;">PRODUTO</th>
+                        <th style="padding:10px;">Nº SÉRIE</th>
+                        <th style="padding:10px;">NOTA FISCAL</th>
+                        <th style="padding:10px;">ESTADO</th>
+                        <th style="padding:10px;">AÇÕES</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${itens.map(i => `
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                            <td style="padding:12px; font-weight:bold;">${i.nome_produto}</td>
+                            <td style="padding:12px;">${i.numero_serie || '---'}</td>
+                            <td style="padding:12px;">${i.nota_fiscal || '---'}</td>
+                            <td style="padding:12px;">
+                                <span style="padding:3px 8px; border-radius:5px; background:${i.estado === 'BOM' ? '#065f46' : '#991b1b'};">
+                                    ${i.estado}
+                                </span>
+                            </td>
+                            <td style="padding:12px;">
+                                <button onclick="detalharPatrimonio(${i.id})" style="background:none; border:none; cursor:pointer; color:#60a5fa;">👁️</button>
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+    } catch (err) {
+        tabelaDiv.innerHTML = '<p style="color:red;">Erro ao buscar itens.</p>';
+    }
 }
 
 async function telaPatrimonioRegistarItem() {

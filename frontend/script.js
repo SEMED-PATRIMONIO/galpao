@@ -13654,11 +13654,13 @@ async function carregarDadosStatsPC() {
         headers: { 'Authorization': `Bearer ${TOKEN}` }
     });
     const data = await res.json();
-    dadosGlobaisPC = data; // Salva para o Excel
+    dadosGlobaisPC = data; 
 
-    // Renderizar Cards
+    // --- CORREÇÃO AQUI ---
+    // Filtramos por 'FECHADO' que é o que aparece no seu print
     const totalGeral = data.registros.length;
-    const concluidos = data.registros.filter(r => r.status === 'CONCLUÍDO').length;
+    const concluidos = data.registros.filter(r => r.status === 'FECHADO' || r.status === 'CONCLUÍDO').length;
+
     document.getElementById('cards-totais-pc').innerHTML = `
         <div class="painel-vidro" style="text-align:center;"><h3>${totalGeral}</h3><small>TOTAL</small></div>
         <div class="painel-vidro" style="text-align:center; color:#4ade80;"><h3>${concluidos}</h3><small>CONCLUÍDOS</small></div>
@@ -13681,7 +13683,9 @@ async function carregarDadosStatsPC() {
             <td style="padding:8px;">${new Date(r.data_abertura).toLocaleDateString('pt-BR')}</td>
             <td style="padding:8px;">${r.local_nome}</td>
             <td style="padding:8px;">${r.tipo_defeito}</td>
-            <td style="padding:8px; color:${r.status === 'ABERTO' ? '#f87171' : '#4ade80'}">${r.status}</td>
+            <td style="padding:8px; font-weight:bold; color:${(r.status === 'FECHADO' || r.status === 'CONCLUÍDO') ? '#4ade80' : '#f87171'}">
+                ${r.status}
+            </td>
             <td style="padding:8px;">${r.tecnico || '-'}</td>
         </tr>
     `).join('');

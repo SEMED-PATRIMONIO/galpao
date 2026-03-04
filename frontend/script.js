@@ -12919,7 +12919,89 @@ function renderizarTabela(dados) {
     `;
 }
 
+window.detalharPatrimonio = async function(id) {
+    try {
+        const res = await fetch(`${API_URL}/patrimonio/detalhes/${id}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        
+        if (!res.ok) throw new Error("Erro ao carregar dados");
+        const item = await res.json();
 
+        // Criar o overlay do modal
+        const modal = document.createElement('div');
+        modal.id = 'modal-detalhes-patrimonio';
+        modal.className = 'alerta-vidro-overlay';
+
+        const temAnexo = item.url_nota_fiscal;
+        const urlAnexo = `${API_URL}/uploads/notas_fiscais/${item.url_nota_fiscal}`;
+
+        modal.innerHTML = `
+            <div class="painel-vidro" style="width: 700px; padding: 30px; border: 1px solid rgba(255,255,255,0.2); position: relative;">
+                
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+                    <h2 style="color:white; margin:0;">🔍 Detalhes do Patrimônio</h2>
+                    <button onclick="document.getElementById('modal-detalhes-patrimonio').remove()" 
+                            class="btn-sair-vidro" style="padding: 5px 15px; cursor: pointer;">FECHAR</button>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 40px;">
+                    
+                    <div style="color: white; line-height: 1.6;">
+                        <p style="margin-bottom: 15px;">
+                            <span style="color: #60a5fa; font-size: 0.8rem; font-weight: bold; display: block;">NOME DO PRODUTO</span>
+                            <strong style="font-size: 1.1rem;">${item.nome_produto}</strong>
+                        </p>
+                        <p style="margin-bottom: 15px;">
+                            <span style="color: #60a5fa; font-size: 0.8rem; font-weight: bold; display: block;">LOCALIZAÇÃO / SETOR</span>
+                            <strong>${item.nome_setor}</strong>
+                        </p>
+                        <p style="margin-bottom: 15px;">
+                            <span style="color: #60a5fa; font-size: 0.8rem; font-weight: bold; display: block;">NÚMERO DE SÉRIE / PLAQUETA</span>
+                            <strong>${item.numero_serie || 'NÃO INFORMADO'}</strong>
+                        </p>
+                        <div style="display: flex; gap: 20px;">
+                            <p>
+                                <span style="color: #60a5fa; font-size: 0.8rem; font-weight: bold; display: block;">NOTA FISCAL</span>
+                                <strong>${item.nota_fiscal || '---'}</strong>
+                            </p>
+                            <p>
+                                <span style="color: #60a5fa; font-size: 0.8rem; font-weight: bold; display: block;">ESTADO</span>
+                                <strong style="color: ${item.estado === 'BOM' ? '#4ade80' : '#f87171'};">${item.estado}</strong>
+                            </p>
+                        </div>
+                    </div>
+
+                    <div style="background: rgba(255,255,255,0.05); border-radius: 15px; padding: 20px; text-align: center; display: flex; flex-direction: column; justify-content: center; border: 1px dashed rgba(255,255,255,0.1);">
+                        <h4 style="color: white; margin-top: 0;">COMPROVANTE DE ORIGEM</h4>
+                        
+                        ${temAnexo ? `
+                            <div style="font-size: 4rem; margin: 20px 0;">📄</div>
+                            <p style="color: #ccc; font-size: 0.8rem; margin-bottom: 20px;">Nota Fiscal disponível.</p>
+                            <a href="${urlAnexo}" target="_blank" class="btn-sair-vidro" 
+                               style="text-decoration: none; display: inline-block; background: #3b82f6; color: white; border: none; padding: 12px 20px; font-weight: bold;">
+                                ABRIR NOTA FISCAL
+                            </a>
+                        ` : `
+                            <div style="font-size: 4rem; margin: 20px 0; opacity: 0.2;">📂</div>
+                            <p style="color: #888; font-size: 0.8rem;">Nenhum documento anexado.</p>
+                        `}
+                    </div>
+                </div>
+
+                <div style="margin-top: 30px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 0.7rem; color: #aaa;">
+                    Registro atualizado em: ${new Date(item.data_atualizacao).toLocaleString('pt-BR')}
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+
+    } catch (err) {
+        console.error(err);
+        alert("Não foi possível carregar os detalhes.");
+    }
+};
 
 function gerarRelatorioPDF(nomeSetor) {
     const { jsPDF } = window.jspdf;

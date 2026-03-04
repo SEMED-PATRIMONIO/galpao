@@ -4542,10 +4542,12 @@ router.post('/patrimonio/escola/registrar', verificarToken, upload.single('arqui
 
         if (produtoRes.rows.length > 0) {
             produto_id = produtoRes.rows[0].id;
+            // Atualiza para 'PATRIMONIO' caso o produto já exista como 'MATERIAL'
+            await db.query("UPDATE produtos SET tipo = 'PATRIMONIO' WHERE id = $1", [produto_id]);
         } else {
-            // Cria o produto novo se ele não existir
+            // Cria o produto novo ESPECIFICANDO o tipo 'PATRIMONIO'
             const novoProduto = await db.query(
-                "INSERT INTO produtos (nome, local_id) VALUES ($1, $2) RETURNING id",
+                "INSERT INTO produtos (nome, local_id, tipo) VALUES ($1, $2, 'PATRIMONIO') RETURNING id",
                 [nome.toUpperCase(), local_id_usuario]
             );
             produto_id = novoProduto.rows[0].id;
@@ -5129,6 +5131,94 @@ router.get('/patrimonio/inventario/setor/:setor_id', verificarToken, async (req,
     } catch (err) {
         console.error("Erro ao consultar inventário:", err.message);
         res.status(500).json({ error: "Erro ao carregar itens do setor." });
+    }
+});
+
+router.get('/patrimonio/detalhes/:id', verificarToken, async (req, res) => {
+    const { id } = req.params;
+    const usuario_id = req.userId; // ID vindo do middleware verificarToken
+
+    try {
+        // 1. Busca o local_id do usuário logado (Segurança)
+        const userRes = await db.query("SELECT local_id FROM usuarios WHERE id = $1", [usuario_id]);
+        const local_id_usuario = userRes.rows[0]?.local_id;
+
+        // 2. Busca o bem garantindo que pertença à mesma escola
+        const result = await db.query(`
+            SELECT p.*, prod.nome as nome_produto, s.nome as nome_setor
+            FROM patrimonios p
+            JOIN produtos prod ON p.produto_id = prod.id
+            JOIN setores s ON p.setor_id = s.id
+            WHERE p.id = $1 AND p.local_id = $2
+        `, [id, local_id_usuario]);
+
+        if (result.rows.length === 0) {
+            // Se não encontrar, retorna JSON de erro em vez de HTML
+            return res.status(404).json({ error: "Item não encontrado nesta unidade." });
+        }
+
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error("Erro detalhes patrimônio:", err.message);
+        res.status(500).json({ error: "Erro interno ao carregar detalhes." });
+    }
+});
+
+// 1. Listar todos os locais cadastrados
+router.get('/patrimonio/global/locais', verificarToken, async (req, res) => {
+    try {
+        const result = await db.query("SELECT id, nome FROM locais ORDER BY nome ASC");
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao listar locais." });
+    }
+});
+
+// 2. Listar setores de um local selecionado
+router.get('/patrimonio/global/setores/:local_id', verificarToken, async (req, res) => {
+    try {
+        const result = await db.query(
+            "SELECT id, nome FROM setores WHERE local_id = $1 ORDER BY nome ASC",
+            [req.params.local_id]
+        );
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao listar setores." });
+    }
+});
+
+// 3. Listar bens de um setor selecionado (com JOIN para obter nomes)
+router.get('/patrimonio/global/bens/:setor_id', verificarToken, async (req, res) => {
+    try {
+        const result = await db.query(`
+            SELECT p.*, prod.nome as nome_produto, s.nome as nome_setor, l.nome as nome_local
+            FROM patrimonios p
+            JOIN produtos prod ON p.produto_id = prod.id
+            JOIN setores s ON p.setor_id = s.id
+            JOIN locais l ON p.local_id = l.id
+            WHERE p.setor_id = $1
+            ORDER BY prod.nome ASC
+        `, [req.params.setor_id]);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao listar bens." });
+    }
+});
+
+// 4. Rota para Relatório Consolidado (PDF/Excel)
+router.get('/patrimonio/global/relatorio/:local_id', verificarToken, async (req, res) => {
+    try {
+        const result = await db.query(`
+            SELECT s.nome as setor, prod.nome as produto, p.numero_serie, p.estado, p.nota_fiscal, p.data_atualizacao
+            FROM patrimonios p
+            JOIN setores s ON p.setor_id = s.id
+            JOIN produtos prod ON p.produto_id = prod.id
+            WHERE p.local_id = $1
+            ORDER BY s.nome ASC, prod.nome ASC
+        `, [req.params.local_id]);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao gerar dados do relatório." });
     }
 });
 

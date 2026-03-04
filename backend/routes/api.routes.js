@@ -4525,35 +4525,30 @@ const upload = multer({
 // ROTA ATUALIZADA (Recebe arquivo e dados)
 router.post('/patrimonio/escola/registrar', verificarToken, upload.single('arquivo_nf'), async (req, res) => {
     const { nome, setor_id, quantidade, numero_serie, nota_fiscal, adquirido_pos_2025 } = req.body;
-    const usuario_id = req.userId; // ID do utilizador logado (vinda do token)
+    const usuario_id = req.userId;
 
     try {
-        // 1. IGUAL À MANUTENÇÃO: Busca o local_id oficial direto no banco
         const userRes = await db.query("SELECT local_id FROM usuarios WHERE id = $1", [usuario_id]);
         const local_id_usuario = userRes.rows[0]?.local_id;
 
-        if (!local_id_usuario) {
-            return res.status(400).json({ error: "Utilizador sem unidade vinculada." });
-        }
-
-        // 2. VERIFICAÇÃO DO PRODUTO: Se não existir o nome na tabela 'produtos', nós criamos
-        let produtoRes = await db.query("SELECT id FROM produtos WHERE nome = $1", [nome.toUpperCase()]);
+        // 1. Garante que o produto existe e é do tipo PATRIMONIO
+        let produtoRes = await db.query("SELECT id FROM produtos WHERE nome = $1", [nome.trim().toUpperCase()]);
         let produto_id;
 
         if (produtoRes.rows.length > 0) {
             produto_id = produtoRes.rows[0].id;
-            // Atualiza para 'PATRIMONIO' caso o produto já exista como 'MATERIAL'
             await db.query("UPDATE produtos SET tipo = 'PATRIMONIO' WHERE id = $1", [produto_id]);
         } else {
-            // Cria o produto novo ESPECIFICANDO o tipo 'PATRIMONIO'
             const novoProduto = await db.query(
                 "INSERT INTO produtos (nome, local_id, tipo) VALUES ($1, $2, 'PATRIMONIO') RETURNING id",
-                [nome.toUpperCase(), local_id_usuario]
+                [nome.trim().toUpperCase(), local_id_usuario]
             );
             produto_id = novoProduto.rows[0].id;
         }
 
-        // 3. REGISTO DO PATRIMÓNIO
+        // 2. TRATAMENTO DA SÉRIE: Se estiver vazio, vira NULL para não violar a UNIQUE CONSTRAINT
+        const serie_final = (numero_serie && numero_serie.trim() !== "") ? numero_serie.trim().toUpperCase() : null;
+
         const queryPatrimonio = `
             INSERT INTO patrimonios (
                 produto_id, local_id, setor_id, numero_serie, 
@@ -4563,24 +4558,27 @@ router.post('/patrimonio/escola/registrar', verificarToken, upload.single('arqui
 
         const qtd = parseInt(quantidade) || 1;
 
-        // Loop para registar a quantidade solicitada (Lote)
         for (let i = 0; i < qtd; i++) {
             await db.query(queryPatrimonio, [
                 produto_id,
                 local_id_usuario,
                 setor_id,
-                qtd > 1 ? null : numero_serie, // Se for lote, o número de série é limpo
-                nota_fiscal,
+                // Se for mais de 1 item (lote), a série PRECISA ser nula para não dar erro de duplicidade
+                qtd > 1 ? null : serie_final, 
+                nota_fiscal || null,
                 adquirido_pos_2025 === 'true',
                 req.file ? req.file.filename : null
             ]);
         }
 
-        res.json({ success: true, message: "Catalogação realizada com sucesso!" });
+        res.json({ success: true });
 
     } catch (err) {
-        console.error("Erro Crítico no Património:", err.message);
-        res.status(500).json({ error: "Erro interno ao processar registo: " + err.message });
+        if (err.code === '23505') {
+            return res.status(400).json({ error: "Este Número de Série ou Plaqueta já existe no sistema." });
+        }
+        console.error("Erro no cadastro:", err.message);
+        res.status(500).json({ error: "Erro interno ao gravar patrimônio." });
     }
 });
 

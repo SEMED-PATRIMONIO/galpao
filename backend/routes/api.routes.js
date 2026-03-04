@@ -5035,4 +5035,51 @@ router.get('/modulo-patrimonio/setores/lista', verificarToken, async (req, res) 
     }
 });
 
+// =========================================================
+// MÓDULO PATRIMÔNIO: GESTÃO DE SETORES (ISOLADO)
+// =========================================================
+router.post('/patrimonio/setores/registrar', verificarToken, async (req, res) => {
+    const { nome } = req.body;
+    const usuario_id = req.userId; // Extraído com segurança pelo middleware
+
+    try {
+        // Lógica idêntica à Manutenção: busca o local_id direto na fonte
+        const userRes = await db.query("SELECT local_id FROM usuarios WHERE id = $1", [usuario_id]);
+        const local_id_real = userRes.rows[0]?.local_id;
+
+        if (!local_id_real) {
+            return res.status(400).json({ error: "Usuário não possui unidade vinculada no banco." });
+        }
+
+        // Gravação garantida com o local_id correto
+        await db.query(
+            "INSERT INTO setores (nome, local_id) VALUES ($1, $2)",
+            [nome.trim().toUpperCase(), local_id_real]
+        );
+
+        res.json({ success: true });
+    } catch (err) {
+        if (err.code === '23505') {
+            return res.status(400).json({ error: "Setor já cadastrado nesta unidade." });
+        }
+        res.status(500).json({ error: "Erro interno: " + err.message });
+    }
+});
+
+router.get('/patrimonio/setores/listar', verificarToken, async (req, res) => {
+    const usuario_id = req.userId;
+    try {
+        const userRes = await db.query("SELECT local_id FROM usuarios WHERE id = $1", [usuario_id]);
+        const local_id_real = userRes.rows[0]?.local_id;
+
+        const result = await db.query(
+            "SELECT id, nome FROM setores WHERE local_id = $1 ORDER BY nome ASC",
+            [local_id_real]
+        );
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;

@@ -318,7 +318,7 @@ async function carregarDashboard() {
                 <button class="btn-grande btn-vidro" onclick="telaSolicitarManutencaoPC('')">
                     <i>💻</i><span>SOLICITAR MANUTENÇÃO COMPUTADOR</span>
                 </button>
-                <button class="btn-grande btn-vidro" onclick="abrirMenuPatrimonioEscola()">
+                <button class="btn-grande btn-vidro btn-breve" // --- onclick="abrirMenuPatrimonioEscola()">
                     <i>🏛️</i><span>PATRIMÔNIO</span>
                 </button>
                 <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
@@ -389,9 +389,6 @@ async function carregarDashboard() {
             </button>
             <button class="btn-grande btn-vidro" style="background:rgba(16, 185, 129, 0.2);" onclick="telaEstoqueMateriaisEPatrimonios()">
                 <i>📦</i><span>VER ESTOQUE DE MATERIAIS</span>
-            </button>
-            <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaAdminDashboard()">
-                <i>📈</i><span>PAINEL DE PEDIDOS</span>
             </button>
             <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
                 <i>🔑</i><span>ALTERAR MINHA SENHA</span>

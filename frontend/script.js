@@ -254,9 +254,6 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" style="background:rgba(16, 185, 129, 0.2);" onclick="telaEstoqueMateriaisEPatrimonios()">
                 <i>📦</i><span>VER ESTOQUE DE MATERIAIS</span>
             </button>
-            <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaHistoricoMovimentacoes()">
-                <i>📜</i><span>HISTÓRICO</span>
-            </button>
             <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
                 <i>🔑</i><span>ALTERAR MINHA SENHA</span>
             </button>            
@@ -302,9 +299,6 @@ async function carregarDashboard() {
                 <button class="btn-grande btn-vidro" onclick="telaDashboardImpressoras()">
                     <i>📈</i><span>ATENDIMENTOS REALIZADOS (IMPRESSORAS)</span>
                 </button>
-                <button class="btn-grande btn-vidro" onclick="telaConsumoImpressoras()">
-                    <i>📊</i><span>UTILIZAÇÃO E CONSUMO</span>
-                </button>
                 <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
                     <i>🔑</i><span>ALTERAR MINHA SENHA</span>
                 </button> 
@@ -324,12 +318,12 @@ async function carregarDashboard() {
                 <button class="btn-grande btn-vidro" onclick="telaSolicitarManutencaoPC('')">
                     <i>💻</i><span>SOLICITAR MANUTENÇÃO COMPUTADOR</span>
                 </button>
-                <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
-                    <i>🔑</i><span>ALTERAR MINHA SENHA</span>
-                </button>    
                 <button class="btn-grande btn-vidro" onclick="abrirMenuPatrimonioEscola()">
                     <i>🏛️</i><span>PATRIMÔNIO</span>
                 </button>
+                <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
+                    <i>🔑</i><span>ALTERAR MINHA SENHA</span>
+                </button>    
                 <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaEscolaConfirmarRecebimento()">
                     <i>🚚</i><span>CONFIRMAR RECEBIMENTO</span>
                 </button>
@@ -375,6 +369,9 @@ async function carregarDashboard() {
     // --- 5. PERFIL: ESTOQUE ---
     if (perfil === 'estoque') {
         html += `
+            <button class="btn-grande btn-vidro" onclick="telaGestaoGlobalPatrimonio()">
+                <i>🏷️</i><span>PATRIMÔNIO</span>
+            </button>
             <button class="btn-grande btn-vidro" onclick="telaEstoquePedidosPendentes()">
                 <i>📦</i><span>SEPARAÇÃO DE VOLUMES</span>
             </button>
@@ -396,9 +393,6 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaAdminDashboard()">
                 <i>📈</i><span>PAINEL DE PEDIDOS</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="telaMenuPatrimonio()">
-                <i>🏷️</i><span>PATRIMÔNIO</span>
-            </button>
             <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
                 <i>🔑</i><span>ALTERAR MINHA SENHA</span>
             </button>
@@ -415,9 +409,6 @@ async function carregarDashboard() {
             </button>
             <button class="btn-grande btn-vidro" onclick="listarDevolucoesLogistica()">
                 <i>🔄</i><span>RECOLHER NA ESCOLA E TRANSPORTAR DEVOLUÇÃO</span>
-            </button>
-            <button class="btn-grande btn-breve">
-                <i>🏷️</i><span>SOLICITAR PATRIMÔNIO</span>
             </button>
             <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
                 <i>🔑</i><span>ALTERAR MINHA SENHA</span>
@@ -12920,86 +12911,56 @@ function renderizarTabela(dados) {
 }
 
 window.detalharPatrimonio = async function(id) {
+    if (!id) return;
+
     try {
         const res = await fetch(`${API_URL}/patrimonio/detalhes/${id}`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
         
-        if (!res.ok) throw new Error("Erro ao carregar dados");
+        // Verifica se a resposta é realmente um JSON antes de tentar ler
+        const contentType = res.headers.get("content-type");
+        if (!res.ok || !contentType || !contentType.includes("application/json")) {
+            console.error("O servidor não retornou um JSON válido. Verifique a rota no backend.");
+            return alert("Erro ao carregar detalhes: Rota não encontrada ou erro no servidor.");
+        }
+
         const item = await res.json();
 
-        // Criar o overlay do modal
+        // MANTENDO A SUA INTERFACE LINDA (Apenas injetando os dados)
         const modal = document.createElement('div');
         modal.id = 'modal-detalhes-patrimonio';
         modal.className = 'alerta-vidro-overlay';
 
-        const temAnexo = item.url_nota_fiscal;
-        const urlAnexo = `${API_URL}/uploads/notas_fiscais/${item.url_nota_fiscal}`;
+        const urlAnexo = item.url_nota_fiscal ? `${API_URL}/uploads/notas_fiscais/${item.url_nota_fiscal}` : null;
 
         modal.innerHTML = `
-            <div class="painel-vidro" style="width: 700px; padding: 30px; border: 1px solid rgba(255,255,255,0.2); position: relative;">
-                
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
-                    <h2 style="color:white; margin:0;">🔍 Detalhes do Patrimônio</h2>
-                    <button onclick="document.getElementById('modal-detalhes-patrimonio').remove()" 
-                            class="btn-sair-vidro" style="padding: 5px 15px; cursor: pointer;">FECHAR</button>
+            <div class="painel-vidro" style="width: 700px; padding: 30px; border: 1px solid rgba(255,255,255,0.2);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
+                    <h2 style="color:white; margin:0;">🔍 Detalhes: ${item.nome_produto}</h2>
+                    <button onclick="document.getElementById('modal-detalhes-patrimonio').remove()" class="btn-sair-vidro">FECHAR</button>
                 </div>
-
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 40px;">
-                    
-                    <div style="color: white; line-height: 1.6;">
-                        <p style="margin-bottom: 15px;">
-                            <span style="color: #60a5fa; font-size: 0.8rem; font-weight: bold; display: block;">NOME DO PRODUTO</span>
-                            <strong style="font-size: 1.1rem;">${item.nome_produto}</strong>
-                        </p>
-                        <p style="margin-bottom: 15px;">
-                            <span style="color: #60a5fa; font-size: 0.8rem; font-weight: bold; display: block;">LOCALIZAÇÃO / SETOR</span>
-                            <strong>${item.nome_setor}</strong>
-                        </p>
-                        <p style="margin-bottom: 15px;">
-                            <span style="color: #60a5fa; font-size: 0.8rem; font-weight: bold; display: block;">NÚMERO DE SÉRIE / PLAQUETA</span>
-                            <strong>${item.numero_serie || 'NÃO INFORMADO'}</strong>
-                        </p>
-                        <div style="display: flex; gap: 20px;">
-                            <p>
-                                <span style="color: #60a5fa; font-size: 0.8rem; font-weight: bold; display: block;">NOTA FISCAL</span>
-                                <strong>${item.nota_fiscal || '---'}</strong>
-                            </p>
-                            <p>
-                                <span style="color: #60a5fa; font-size: 0.8rem; font-weight: bold; display: block;">ESTADO</span>
-                                <strong style="color: ${item.estado === 'BOM' ? '#4ade80' : '#f87171'};">${item.estado}</strong>
-                            </p>
-                        </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; color: white;">
+                    <div>
+                        <p><small style="color:#60a5fa;">SETOR:</small><br><strong>${item.nome_setor}</strong></p>
+                        <p><small style="color:#60a5fa;">SÉRIE / PLAQUETA:</small><br><strong>${item.numero_serie || '---'}</strong></p>
+                        <p><small style="color:#60a5fa;">NOTA FISCAL:</small><br><strong>${item.nota_fiscal || '---'}</strong></p>
+                        <p><small style="color:#60a5fa;">ESTADO:</small><br><strong style="color:${item.estado === 'BOM' ? '#4ade80' : '#f87171'}">${item.estado}</strong></p>
                     </div>
-
-                    <div style="background: rgba(255,255,255,0.05); border-radius: 15px; padding: 20px; text-align: center; display: flex; flex-direction: column; justify-content: center; border: 1px dashed rgba(255,255,255,0.1);">
-                        <h4 style="color: white; margin-top: 0;">COMPROVANTE DE ORIGEM</h4>
-                        
-                        ${temAnexo ? `
-                            <div style="font-size: 4rem; margin: 20px 0;">📄</div>
-                            <p style="color: #ccc; font-size: 0.8rem; margin-bottom: 20px;">Nota Fiscal disponível.</p>
-                            <a href="${urlAnexo}" target="_blank" class="btn-sair-vidro" 
-                               style="text-decoration: none; display: inline-block; background: #3b82f6; color: white; border: none; padding: 12px 20px; font-weight: bold;">
-                                ABRIR NOTA FISCAL
-                            </a>
-                        ` : `
-                            <div style="font-size: 4rem; margin: 20px 0; opacity: 0.2;">📂</div>
-                            <p style="color: #888; font-size: 0.8rem;">Nenhum documento anexado.</p>
-                        `}
+                    <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; text-align: center; border: 1px dashed rgba(255,255,255,0.2);">
+                        ${urlAnexo ? `
+                            <div style="font-size: 3rem;">📄</div>
+                            <p style="font-size: 0.8rem; margin-bottom: 15px;">Nota Fiscal anexada.</p>
+                            <a href="${urlAnexo}" target="_blank" class="btn-sair-vidro" style="text-decoration:none; display:inline-block; background:#3b82f6;">VER NOTA FISCAL</a>
+                        ` : `<div style="opacity: 0.3; font-size: 3rem;">📂</div><p style="color:#888;">Sem anexo.</p>`}
                     </div>
-                </div>
-
-                <div style="margin-top: 30px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 0.7rem; color: #aaa;">
-                    Registro atualizado em: ${new Date(item.data_atualizacao).toLocaleString('pt-BR')}
                 </div>
             </div>
         `;
-
         document.body.appendChild(modal);
 
     } catch (err) {
-        console.error(err);
-        alert("Não foi possível carregar os detalhes.");
+        console.error("Erro no fetch:", err);
     }
 };
 
@@ -13872,6 +13833,126 @@ async function atualizarListaSetoresExclusiva() {
             <div style="padding:10px; border-bottom:1px solid rgba(255,255,255,0.1);">🔹 ${s.nome}</div>
         `).join('') || '<p>Nenhum setor.</p>';
     }
+}
+
+async function telaGestaoGlobalPatrimonio() {
+    const app = document.getElementById('app-content');
+    app.style.display = 'block';
+
+    app.innerHTML = `
+        <div class="animar-entrada" style="height: 100vh; display: flex; flex-direction: column; padding: 20px; color: white;">
+            
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <button onclick="carregarDashboard()" class="btn-sair-vidro">⬅️ VOLTAR</button>
+                <div id="acoes-global" style="display: none; gap: 10px;">
+                    <button onclick="exportarGlobalPDF()" class="btn-sair-vidro" style="background:#dc2626; border:none;">PDF 📄</button>
+                    <button onclick="exportarGlobalExcel()" class="btn-sair-vidro" style="background:#16a34a; border:none;">EXCEL 📊</button>
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 320px 320px 1fr; gap: 20px; flex: 1; overflow: hidden;">
+                
+                <div class="painel-vidro" style="display: flex; flex-direction: column; justify-content: center; padding: 20px;">
+                    <h3 style="text-align:center; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:10px;">🏛️ UNIDADES</h3>
+                    <div id="col-locais" style="overflow-y: auto; max-height: 70vh;"></div>
+                </div>
+
+                <div id="container-setores" class="painel-vidro" style="padding: 20px; display: none; flex-direction: column;">
+                    <h3 id="txt-local-selecionado" style="color:#60a5fa; font-size:1rem;"></h3>
+                    <div id="col-setores" style="overflow-y: auto; margin-top:15px;"></div>
+                </div>
+
+                <div id="container-bens" class="painel-vidro" style="padding: 20px; display: none; flex-direction: column;">
+                    <h3 id="txt-setor-selecionado" style="color:#34d399; font-size:1rem;"></h3>
+                    <div id="col-bens" style="overflow-y: auto; margin-top:15px;"></div>
+                </div>
+
+            </div>
+        </div>
+    `;
+
+    carregarListaLocaisGlobal();
+}
+
+async function carregarListaLocaisGlobal() {
+    const res = await fetch(`${API_URL}/patrimonio/global/locais`, {
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+    const locais = await res.json();
+    const container = document.getElementById('col-locais');
+
+    container.innerHTML = locais.map(l => `
+        <div class="item-setor-clicavel item-global" onclick="selecionarLocalGlobal(${l.id}, '${l.nome}')" 
+             style="padding:15px; margin: 10px 0; background:rgba(255,255,255,0.05); border-radius:10px; cursor:pointer; text-align:center;">
+            ${l.nome}
+        </div>
+    `).join('');
+}
+
+function renderizarBensGlobal(bens) {
+    const container = document.getElementById('col-bens');
+    container.innerHTML = bens.map(b => {
+        // Monta o texto do Hover com todos os campos
+        const detalhes = `
+            Nº SÉRIE: ${b.numero_serie || 'N/A'}
+            PLAQUETA: ${b.documento_id || 'N/A'}
+            NOTA FISCAL: ${b.nota_fiscal || 'N/A'}
+            ESTADO: ${b.estado}
+            CADASTRO: ${new Date(b.data_atualizacao).toLocaleDateString()}
+            STATUS: ${b.status}
+        `.trim();
+
+        return `
+            <div class="linha-patrimonio" title="${detalhes}" 
+                 style="padding:15px; border-bottom:1px solid rgba(255,255,255,0.1); cursor:help; display:flex; justify-content:space-between;">
+                <span><strong>${b.nome_produto}</strong></span>
+                <span style="opacity:0.6; font-size:0.8rem;">${b.numero_serie || 'S/N'}</span>
+            </div>
+        `;
+    }).join('');
+}
+
+async function exportarGlobalExcel() {
+    const localId = window.localSelecionadoId;
+    const nomeLocal = window.localSelecionadoNome;
+
+    const res = await fetch(`${API_URL}/patrimonio/global/relatorio/${localId}`, {
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+    const dados = await res.json();
+
+    const ws = XLSX.utils.json_to_sheet(dados);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Patrimonio");
+
+    // Aciona a caixa de diálogo de salvamento do navegador
+    XLSX.writeFile(wb, `Relatorio_Patrimonio_${nomeLocal.replace(/ /g, '_')}.xlsx`);
+}
+
+async function exportarGlobalPDF() {
+    const localId = window.localSelecionadoId;
+    const nomeLocal = window.localSelecionadoNome;
+
+    const res = await fetch(`${API_URL}/patrimonio/global/relatorio/${localId}`, {
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+    const dados = await res.json();
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+
+    doc.setFontSize(16);
+    doc.text(`RELATÓRIO DE INVENTÁRIO - ${nomeLocal}`, 105, 15, { align: "center" });
+
+    doc.autoTable({
+        head: [['SETOR', 'PRODUTO', 'SÉRIE', 'ESTADO', 'NF']],
+        body: dados.map(d => [d.setor, d.produto, d.numero_serie, d.estado, d.nota_fiscal]),
+        startY: 25,
+        theme: 'grid',
+        headStyles: { fillColor: [31, 58, 138] }
+    });
+
+    doc.save(`Inventario_${nomeLocal}.pdf`);
 }
 
 // Isso garante que o onclick="funcao()" funcione sempre

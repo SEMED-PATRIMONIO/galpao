@@ -3941,13 +3941,26 @@ async function renderizarInventarioAtual() {
 }
 
 function filtrarTabelaInventario() {
-    const input = document.getElementById('filtro_inventario').value.toUpperCase();
-    const rows = document.querySelectorAll('#tabela-inventario tbody tr');
-    
-    rows.forEach(row => {
-        const text = row.innerText.toUpperCase();
-        row.style.display = text.includes(input) ? '' : 'none';
-    });
+    const termo = document.getElementById('filtro-inventario').value.toUpperCase();
+    const filtrados = window.itensAtuaisSetor.filter(i => 
+        i.nome_produto.toUpperCase().includes(termo) || 
+        (i.numero_serie && i.numero_serie.toUpperCase().includes(termo))
+    );
+    renderizarTabela(filtrados);
+}
+
+function gerarExcelInventario(nomeSetor) {
+    const dadosParaExcel = window.itensAtuaisSetor.map(i => ({
+        'Produto': i.nome_produto,
+        'Série/Plaqueta': i.numero_serie || 'N/A',
+        'Estado': i.estado,
+        'Nota Fiscal': i.nota_fiscal || 'N/A'
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(dadosParaExcel);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Inventário");
+    XLSX.writeFile(wb, `Inventario_${nomeSetor}.xlsx`);
 }
 
 function exportarPDFInventario() {
@@ -12808,69 +12821,105 @@ async function carregarItensPorSetor(setor_id, nome_setor) {
     const cabecalho = document.getElementById('cabecalho-itens');
     const areaTabela = document.getElementById('area-tabela-itens');
     const titulo = document.getElementById('nome-setor-titulo');
-    const btnPdf = document.getElementById('btn-gerar-pdf');
 
-    // Destacar o setor selecionado na lista
+    // Destacar o setor selecionado
     document.querySelectorAll('.item-setor-clicavel').forEach(el => el.classList.remove('setor-ativo'));
     event.currentTarget.classList.add('setor-ativo');
 
     cabecalho.style.visibility = 'visible';
-    titulo.innerText = `ITENS EM: ${nome_setor}`;
-    areaTabela.innerHTML = '<div class="spinner"></div>';
-
-    // Configura o botão de PDF para este setor específico
-    btnPdf.onclick = () => gerarRelatorioPDF(nome_setor);
+    titulo.innerText = `BENS: ${nome_setor}`;
+    
+    // Injeta a Barra de Pesquisa e os Botões de Exportação/Partilha
+    areaTabela.innerHTML = `
+        <div style="display: flex; gap: 10px; margin-bottom: 20px; align-items: center;">
+            <input type="text" id="filtro-inventario" onkeyup="filtrarTabelaInventario()" 
+                   placeholder="🔍 Pesquisar por nome ou série..." class="input-vidro" style="flex: 1;">
+            
+            <button onclick="gerarExcelInventario('${nome_setor}')" class="btn-sair-vidro" style="background: #16a34a; border:none; color:white;" title="Exportar para Excel">
+                Excel 📊
+            </button>
+            
+            <button onclick="partilharInventario('${nome_setor}')" class="btn-sair-vidro" style="background: #7c3aed; border:none; color:white;" title="Partilhar">
+                Partilhar 🔗
+            </button>
+        </div>
+        <div id="corpo-tabela-dinamica"><div class="spinner"></div></div>
+    `;
 
     try {
         const res = await fetch(`${API_URL}/patrimonio/inventario/setor/${setor_id}`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
         const itens = await res.json();
+        window.itensAtuaisSetor = itens; // Guarda para exportação
 
-        if (itens.length === 0) {
-            areaTabela.innerHTML = `<p style="text-align:center; color:gray; margin-top:50px;">Nenhum item cadastrado neste setor.</p>`;
-            return;
-        }
-
-        areaTabela.innerHTML = `
-            <table id="tabela-inventario-dados" style="width:100%; border-collapse: collapse; font-size: 0.9rem;">
-                <thead>
-                    <tr style="text-align:left; border-bottom: 2px solid rgba(255,255,255,0.1); color: #94a3b8;">
-                        <th style="padding:12px;">DESCRIÇÃO DO BEM</th>
-                        <th style="padding:12px;">Nº SÉRIE</th>
-                        <th style="padding:12px;">ESTADO</th>
-                        <th style="padding:12px; text-align:center;">NF</th>
-                        <th style="padding:12px; text-align:center;">DETALHES</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${itens.map(i => `
-                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); transition: 0.2s;">
-                            <td style="padding:12px; font-weight:bold;">${i.nome_produto}</td>
-                            <td style="padding:12px;">${i.numero_serie || '---'}</td>
-                            <td style="padding:12px;">
-                                <span style="background:${i.estado === 'BOM' ? '#065f46' : '#991b1b'}; padding:2px 8px; border-radius:4px; font-size:0.7rem;">
-                                    ${i.estado}
-                                </span>
-                            </td>
-                            <td style="padding:12px; text-align:center;">
-                                ${i.url_nota_fiscal ? 
-                                    `<button onclick="window.open('${API_URL}/uploads/notas_fiscais/${i.url_nota_fiscal}', '_blank')" 
-                                             title="Ver Nota Fiscal" style="background:none; border:none; cursor:pointer; font-size:1.2rem;">📄</button>` 
-                                    : '<span style="opacity:0.2">---</span>'}
-                            </td>
-                            <td style="padding:12px; text-align:center;">
-                                <button onclick="detalharPatrimonio(${i.id})" style="background:none; border:none; cursor:pointer; font-size:1.1rem;">👁️</button>
-                            </td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>
-        `;
+        renderizarTabela(itens);
     } catch (err) {
-        areaTabela.innerHTML = '<p style="color:red;">Erro ao buscar dados.</p>';
+        document.getElementById('corpo-tabela-dinamica').innerHTML = '<p style="color:red;">Erro ao carregar.</p>';
     }
 }
+
+async function partilharInventario(nomeSetor) {
+    const texto = `📋 *Inventário SEMED*\nSetor: ${nomeSetor}\nTotal de itens: ${window.itensAtuaisSetor.length}\nGerado em: ${new Date().toLocaleDateString()}`;
+    
+    // Tenta usar a partilha nativa do telemóvel/browser
+    if (navigator.share) {
+        try {
+            await navigator.share({
+                title: 'Inventário de Património',
+                text: texto,
+                url: window.location.href
+            });
+        } catch (err) { console.log("Partilha cancelada"); }
+    } else {
+        // Fallback para WhatsApp Web se não houver partilha nativa
+        const urlWhatsapp = `https://api.whatsapp.com/send?text=${encodeURIComponent(texto)}`;
+        window.open(urlWhatsapp, '_blank');
+    }
+}
+
+function renderizarTabela(dados) {
+    const container = document.getElementById('corpo-tabela-dinamica');
+    if (dados.length === 0) {
+        container.innerHTML = '<p style="text-align:center; color:gray; margin-top:30px;">Nenhum item encontrado.</p>';
+        return;
+    }
+
+    container.innerHTML = `
+        <table id="tabela-dados-final" style="width:100%; border-collapse: collapse; font-size: 0.9rem;">
+            <thead>
+                <tr style="text-align:left; border-bottom: 2px solid rgba(255,255,255,0.1); color: #94a3b8;">
+                    <th style="padding:12px;">DESCRIÇÃO</th>
+                    <th style="padding:12px;">Nº SÉRIE</th>
+                    <th style="padding:12px;">ESTADO</th>
+                    <th style="padding:12px; text-align:center;">NF</th>
+                    <th style="padding:12px; text-align:center;">VER</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${dados.map(i => `
+                    <tr class="linha-patrimonio" style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                        <td style="padding:12px; font-weight:bold;">${i.nome_produto}</td>
+                        <td style="padding:12px;">${i.numero_serie || '---'}</td>
+                        <td style="padding:12px;">
+                            <span style="background:${i.estado === 'BOM' ? '#065f46' : '#991b1b'}; padding:2px 8px; border-radius:4px; font-size:0.7rem;">
+                                ${i.estado}
+                            </span>
+                        </td>
+                        <td style="padding:12px; text-align:center;">
+                            ${i.url_nota_fiscal ? `<button onclick="window.open('${API_URL}/uploads/notas_fiscais/${i.url_nota_fiscal}', '_blank')" style="background:none; border:none; cursor:pointer;">📄</button>` : '---'}
+                        </td>
+                        <td style="padding:12px; text-align:center;">
+                            <button onclick="detalharPatrimonio(${i.id})" style="background:none; border:none; cursor:pointer;">👁️</button>
+                        </td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
+}
+
+
 
 function gerarRelatorioPDF(nomeSetor) {
     const { jsPDF } = window.jspdf;

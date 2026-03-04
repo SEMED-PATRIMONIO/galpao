@@ -5106,4 +5106,30 @@ router.get('/patrimonio/setores/listar', verificarToken, async (req, res) => {
     }
 });
 
+// ROTA PARA LISTAR ITENS DE UM SETOR ESPECÍFICO (INVENTÁRIO)
+router.get('/patrimonio/inventario/setor/:setor_id', verificarToken, async (req, res) => {
+    const { setor_id } = req.params;
+    const usuario_id = req.userId;
+
+    try {
+        // 1. Confirma o local_id do usuário (Segurança)
+        const userRes = await db.query("SELECT local_id FROM usuarios WHERE id = $1", [usuario_id]);
+        const local_id_usuario = userRes.rows[0]?.local_id;
+
+        // 2. Busca os itens cruzando com a tabela de produtos para pegar o nome
+        const result = await db.query(`
+            SELECT p.*, prod.nome as nome_produto 
+            FROM patrimonios p
+            JOIN produtos prod ON p.produto_id = prod.id
+            WHERE p.setor_id = $1 AND p.local_id = $2
+            ORDER BY prod.nome ASC
+        `, [setor_id, local_id_usuario]);
+
+        res.json(result.rows);
+    } catch (err) {
+        console.error("Erro ao consultar inventário:", err.message);
+        res.status(500).json({ error: "Erro ao carregar itens do setor." });
+    }
+});
+
 module.exports = router;

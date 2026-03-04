@@ -126,6 +126,7 @@ function mostrarLogin() {
 
 // Carregar notificaras para Perfil Escola
 async function verificarnotificarasEscola() { // Removi o localId daqui
+    if (!TOKEN || TOKEN === 'null') return;
     try {
         // A rota correta no seu server.js + pedidos.routes.js
         const res = await fetch(`${API_URL}/pedidos/notificaras-escola`, { 
@@ -13514,6 +13515,79 @@ async function atualizarListaSetoresPatrimonio() {
     }
 }
 
+async function telaGerenciarSetoresPatrimonio() {
+    const mainArea = document.getElementById('app-content');
+    if (!mainArea) return;
+
+    // Garante visibilidade e mantém o visual
+    mainArea.style.display = 'block';
+    document.getElementById('login-container').style.display = 'none';
+
+    mainArea.innerHTML = `
+        <div class="animar-entrada" style="padding: 20px; color: white;">
+            <div style="display: flex; align-items: center; gap: 20px; margin-bottom: 30px;">
+                <button onclick="carregarDashboard()" class="btn-sair-vidro">⬅️ VOLTAR</button>
+                <h1>Configuração de Setores</h1>
+            </div>
+
+            <div class="painel-vidro" style="display: flex; gap: 30px; padding: 30px;">
+                <div style="flex: 1;">
+                    <h3>📂 ADICIONAR NOVO</h3>
+                    <input type="text" id="novo-nome-setor" placeholder="Ex: SALA DE INFORMÁTICA" 
+                           class="input-vidro" style="width:100%; margin-top:10px;">
+                    <button onclick="executarSalvarSetor()" style="width:100%; margin-top:15px; padding:12px; background:#10b981; color:white; border:none; border-radius:10px; cursor:pointer; font-weight:bold;">
+                        SALVAR SETOR
+                    </button>
+                </div>
+
+                <div style="flex: 1; border-left: 1px solid rgba(255,255,255,0.1); padding-left: 30px;">
+                    <h3>📋 SETORES DA UNIDADE</h3>
+                    <div id="lista-setores-patrimonio" style="max-height: 300px; overflow-y: auto; margin-top:15px;">
+                        </div>
+                </div>
+            </div>
+        </div>
+    `;
+    await atualizarListaSetoresExclusiva();
+}
+
+async function executarSalvarSetor() {
+    const nome = document.getElementById('novo-nome-setor').value;
+    if (!nome) return alert("Digite o nome.");
+
+    const res = await fetch(`${API_URL}/patrimonio/setores/registrar`, {
+        method: 'POST',
+        headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${TOKEN}` 
+        },
+        body: JSON.stringify({ nome })
+    });
+
+    if (res.ok) {
+        document.getElementById('novo-nome-setor').value = '';
+        await atualizarListaSetoresExclusiva();
+    } else {
+        const erro = await res.json();
+        alert(erro.error);
+    }
+}
+
+async function atualizarListaSetoresExclusiva() {
+    const container = document.getElementById('lista-setores-patrimonio');
+    if (!container) return;
+
+    const res = await fetch(`${API_URL}/patrimonio/setores/listar`, {
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+
+    const dados = await res.json();
+    if (Array.isArray(dados)) {
+        container.innerHTML = dados.map(s => `
+            <div style="padding:10px; border-bottom:1px solid rgba(255,255,255,0.1);">🔹 ${s.nome}</div>
+        `).join('') || '<p>Nenhum setor.</p>';
+    }
+}
 
 // Isso garante que o onclick="funcao()" funcione sempre
 window.telaVisualizarEstoque = telaVisualizarEstoque;

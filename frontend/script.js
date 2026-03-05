@@ -316,7 +316,7 @@ async function carregarDashboard() {
                     <i>🛠️</i><span>SOLICITAR MANUTENÇÃO IMPRESSORA</span>
                 </button>
                 <button class="btn-grande btn-vidro" onclick="telaSolicitarManutencaoPC('')">
-                    <i>💻</i><span>SOLICITAR MANUTENÇÃO COMPUTADOR</span>
+                    <i>💻</i><span>SOLICITAR MANUTENÇÃO INFORMÁTICA</span>
                 </button>
                 <button class="btn-grande btn-vidro" onclick="abrirMenuPatrimonioEscola()">
                     <i>🏛️</i><span>PATRIMÔNIO</span>

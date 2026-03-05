@@ -324,13 +324,13 @@ async function carregarDashboard() {
                 <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
                     <i>🔑</i><span>ALTERAR MINHA SENHA</span>
                 </button>    
-                <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaEscolaConfirmarRecebimento()">
+                <button class="btn-grande btn-vidro" onclick="telaEscolaConfirmarRecebimento()">
                     <i>🚚</i><span>CONFIRMAR RECEBIMENTO</span>
                 </button>
-                <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaSolicitarUniforme()">
+                <button class="btn-grande btn-vidro" onclick="telaSolicitarUniforme()">
                     <i>👕</i><span>SOLICITAR UNIFORMES</span>
                 </button>
-                <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaDevolucaoUniforme()">
+                <button class="btn-grande btn-vidro" onclick="telaDevolucaoUniforme()">
                     <i>🔄</i><span>DEVOLVER UNIFORMES</span>
                 </button>                
             </div>

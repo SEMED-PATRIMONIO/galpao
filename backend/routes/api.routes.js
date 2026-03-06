@@ -5220,4 +5220,19 @@ router.get('/patrimonio/global/relatorio/:local_id', verificarToken, async (req,
     }
 });
 
+router.patch('/patrimonio/item/:id/estado', verificarToken, async (req, res) => {
+    const { id } = req.params;
+    const { estado } = req.body;
+
+    try {
+        await db.query(
+            "UPDATE patrimonios SET estado = $1, data_atualizacao = NOW() WHERE id = $2",
+            [estado, id]
+        );
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;

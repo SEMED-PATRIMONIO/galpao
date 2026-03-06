@@ -12622,7 +12622,6 @@ window.alternarLogica2025 = (marcado) => {
 async function enviarCadastroComAnexo() {
     const formData = new FormData();
     const is2025 = document.getElementById('check-2025').checked;
-    
     const nome = document.getElementById('cat-nome').value;
     const setor_id = document.getElementById('cat-setor').value;
     const quantidade = document.getElementById('cat-qtd').value;
@@ -12631,11 +12630,6 @@ async function enviarCadastroComAnexo() {
     const arquivo = document.getElementById('cat-file').files[0];
 
     if (!nome || !setor_id) return alert("Nome e Setor são obrigatórios!");
-
-    if (is2025) {
-        if (!nf) return alert("O número da NF ou CE é obrigatório!");
-        if (!arquivo) return alert("Você deve anexar o PDF!");
-    }
 
     formData.append('nome', nome);
     formData.append('setor_id', setor_id);
@@ -12652,14 +12646,16 @@ async function enviarCadastroComAnexo() {
     });
 
     if (res.ok) {
-        notificar("Bem registrado com sucesso!", "sucesso");
-        
-        // LIMPEZA CIRÚRGICA DOS CAMPOS (Exceto Setor e Quantidade)
+        // DISPARA O ALERTA INDEPENDENTE
+        alertaSucessoPatrimonio();
+
+        // LIMPA OS CAMPOS PARA O PRÓXIMO REGISTRO
         document.getElementById('cat-nome').value = '';
         document.getElementById('cat-serie').value = '';
-        await carregarBensRecentesModal();
+        document.getElementById('cat-nome').focus(); // Mantém o foco para rapidez
+        
+        // Atualiza a tabela ao fundo se necessário
         if (typeof carregarTabelaInventario === 'function') carregarTabelaInventario();
-        document.getElementById('cat-nome').focus();
     } else {
         const error = await res.json();
         alert(error.error || "Erro ao salvar");
@@ -12667,62 +12663,72 @@ async function enviarCadastroComAnexo() {
 }
 
 async function carregarTabelaInventario() {
-    // 1. Identifica o contentor da tabela. 
-    // Tentamos os dois IDs que podem ter sido usados (o da área principal e o do corpo dinâmico).
-    const corpo = document.getElementById('corpo-tabela-dinamica') || document.getElementById('area-tabela-itens');
-
-    // 2. PROTEÇÃO DE EXISTÊNCIA (O "Stop" Cirúrgico):
-    // Se a função for chamada e a tabela não estiver presente no ecrã (ex: utilizador no meio de um cadastro),
-    // a função para aqui e evita o erro "Cannot set properties of null (setting 'innerHTML')".
-    if (!corpo) {
-        console.warn("Aviso: O contentor da tabela não foi encontrado no DOM. A atualização foi ignorada.");
-        return; 
-    }
-
-    // 3. Feedback visual para o utilizador enquanto os dados são procurados
-    corpo.innerHTML = `
-        <div style="text-align:center; padding:50px;">
-            <div class="spinner"></div>
-            <p style="color:gray; margin-top:10px;">A atualizar lista de bens...</p>
-        </div>
-    `;
-
+    const setorId = document.getElementById('filtro-setor-patrimonio').value;
+    const corpo = document.getElementById('corpo-tabela-inventario');
+    
     try {
-        // 4. Captura o filtro de setor de forma segura
-        const filtroElem = document.getElementById('filtro-setor-patrimonio');
-        
-        // Se o filtro existir, usa o valor selecionado. Se não existir, assume 'todos'.
-        // Isso evita o erro "Cannot read properties of null (reading 'value')".
-        const setorId = filtroElem ? filtroElem.value : 'todos';
-
-        // 5. Faz a requisição ao servidor
-        const resposta = await fetch(`${API_URL}/patrimonio/meu-inventario?setor_id=${setorId}`, {
-            method: 'GET',
-            headers: { 
-                'Authorization': `Bearer ${TOKEN}`,
-                'Content-Type': 'application/json'
-            }
+        const res = await fetch(`${API_URL}/patrimonio/meu-inventario?setor_id=${setorId}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
+        const itens = await res.json();
 
-        // 6. Verifica se a resposta do servidor foi bem-sucedida
-        if (!resposta.ok) {
-            throw new Error("Não foi possível obter os dados do servidor.");
-        }
+        corpo.innerHTML = itens.map(item => {
+            const temSerie = item.numero_serie && item.numero_serie.trim() !== '';
+            const ehNovo = item.adquirido_pos_2025 === true;
 
-        const itensDoInventario = await resposta.json();
+            // DEFINIÇÃO CIRÚRGICA DE CORES (LEGENDA)
+            let corLinha = '#ffffff'; // Branco padrão
+            if (!ehNovo && temSerie) corLinha = '#0ea5e9';    // AZUL CIANO (Antigo e OK)
+            if (!ehNovo && !temSerie) corLinha = '#fbbf24';   // LARANJA (Não Patrimonializado)
+            if (ehNovo && !temSerie) corLinha = '#f472b6';    // ROSA (Solicitar Patrimônio)
+            if (ehNovo && temSerie) corLinha = '#4ade80';     // VERDE (Recente e OK)
 
-        // 7. Renderiza a tabela final chamando a função que contém a legenda e as cores
-        // Certifica-te de que a função 'renderizarTabela' existe no teu script.
-        renderizarTabela(itensDoInventario);
+            // Lógica do ponto de estado (independente da cor da linha)
+            const coresEstado = { 'BOM': '#4ade80', 'RUIM': '#fbbf24', 'PÉSSIMO': '#ef4444' };
+            const corPonto = coresEstado[item.estado] || '#ffffff';
 
-    } catch (erro) {
-        console.error("Erro crítico ao carregar inventário:", erro);
-        corpo.innerHTML = `
-            <div style="text-align:center; padding:30px; color:#f87171;">
-                <p>⚠️ Erro ao carregar os dados do inventário.</p>
-                <small>${erro.message}</small>
-            </div>
-        `;
+            return `
+                <tr onclick="window.itemSelecionadoId = ${item.id}; habilitarBotaoEdicao();" 
+                    style="border-bottom: 1px solid rgba(255,255,255,0.05); color: ${corLinha}; cursor:pointer;" 
+                    class="linha-inventario-selecionavel">
+                    
+                    <td style="padding:15px; font-weight:bold;">${item.produto_nome}</td>
+                    
+                    <td style="padding:15px; font-family: monospace;">
+                        ${temSerie ? item.numero_serie : '<span style="opacity:0.3;">---</span>'}
+                    </td>
+                    
+                    <td style="padding:15px;">
+                        <span style="color:${corPonto}; font-weight:bold;">● ${item.estado}</span>
+                    </td>
+                    
+                    <td style="padding:15px;">
+                        ${item.nota_fiscal || '---'}
+                    </td>
+                    
+                    <td style="padding:15px; text-align:center;">
+                        <button onclick="detalharPatrimonio(${item.id})" style="background:none; border:none; cursor:pointer;">👁️</button>
+                    </td>
+                </tr>
+            `;
+        }).join('') || '<tr><td colspan="5" style="text-align:center; padding:40px; opacity:0.5;">Vazio.</td></tr>';
+
+    } catch (err) {
+        console.error(err);
+    }
+}
+
+function habilitarBotaoEdicao() {
+    const btn = document.getElementById('btn-editar-estado-conservacao');
+    if (btn) {
+        btn.style.opacity = '1';
+        btn.style.cursor = 'pointer';
+        // Garante que o clique agora chame a função correta com o ID salvo
+        btn.onclick = () => {
+            if (window.itemSelecionadoId) {
+                telaEditarItemPatrimonio(window.itemSelecionadoId);
+            }
+        };
     }
 }
 
@@ -14195,6 +14201,25 @@ window.prepararEdicaoItem = () => {
         alert("Por favor, selecione um item na lista primeiro clicando sobre ele.");
     }
 };
+
+function alertaSucessoPatrimonio() {
+    const alerta = document.createElement('div');
+    alerta.style.cssText = `
+        position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+        background: rgba(34, 197, 94, 0.95); color: white; padding: 60px 100px;
+        border-radius: 30px; font-size: 2.5rem; font-weight: 900; z-index: 10001;
+        box-shadow: 0 20px 50px rgba(0,0,0,0.5); backdrop-filter: blur(15px);
+        text-align: center; border: 2px solid rgba(255,255,255,0.2); pointer-events: none;
+    `;
+    alerta.innerHTML = `✅ BEM REGISTRADO!`;
+    document.body.appendChild(alerta);
+
+    setTimeout(() => {
+        alerta.style.opacity = '0';
+        alerta.style.transition = 'opacity 0.5s ease';
+        setTimeout(() => alerta.remove(), 500);
+    }, 1000);
+}
 
 // Isso garante que o onclick="funcao()" funcione sempre
 window.telaVisualizarEstoque = telaVisualizarEstoque;

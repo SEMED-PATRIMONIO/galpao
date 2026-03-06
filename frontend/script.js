@@ -12661,81 +12661,62 @@ async function enviarCadastroComAnexo() {
 }
 
 async function carregarTabelaInventario() {
-    // 1. Limpa a busca para não esconder itens novos carregados
-    const campoBusca = document.getElementById('busca-global-patrimonio');
-    if (campoBusca) campoBusca.value = '';
+    // 1. Identifica o contentor da tabela. 
+    // Tentamos os dois IDs que podem ter sido usados (o da área principal e o do corpo dinâmico).
+    const corpo = document.getElementById('corpo-tabela-dinamica') || document.getElementById('area-tabela-itens');
 
-    const filtroElem = document.getElementById('filtro-setor-patrimonio');
-    const setorId = filtroElem ? filtroElem.value : 'todos';
-    const corpo = document.getElementById('corpo-tabela-inventario');
-    
-    // Feedback visual de carregamento
-    corpo.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px;">Atualizando inventário...</td></tr>';
+    // 2. PROTEÇÃO DE EXISTÊNCIA (O "Stop" Cirúrgico):
+    // Se a função for chamada e a tabela não estiver presente no ecrã (ex: utilizador no meio de um cadastro),
+    // a função para aqui e evita o erro "Cannot set properties of null (setting 'innerHTML')".
+    if (!corpo) {
+        console.warn("Aviso: O contentor da tabela não foi encontrado no DOM. A atualização foi ignorada.");
+        return; 
+    }
+
+    // 3. Feedback visual para o utilizador enquanto os dados são procurados
+    corpo.innerHTML = `
+        <div style="text-align:center; padding:50px;">
+            <div class="spinner"></div>
+            <p style="color:gray; margin-top:10px;">A atualizar lista de bens...</p>
+        </div>
+    `;
 
     try {
-        const res = await fetch(`${API_URL}/patrimonio/meu-inventario?setor_id=${setorId}`, {
-            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        // 4. Captura o filtro de setor de forma segura
+        const filtroElem = document.getElementById('filtro-setor-patrimonio');
+        
+        // Se o filtro existir, usa o valor selecionado. Se não existir, assume 'todos'.
+        // Isso evita o erro "Cannot read properties of null (reading 'value')".
+        const setorId = filtroElem ? filtroElem.value : 'todos';
+
+        // 5. Faz a requisição ao servidor
+        const resposta = await fetch(`${API_URL}/patrimonio/meu-inventario?setor_id=${setorId}`, {
+            method: 'GET',
+            headers: { 
+                'Authorization': `Bearer ${TOKEN}`,
+                'Content-Type': 'application/json'
+            }
         });
-        const itens = await res.json();
 
-        corpo.innerHTML = itens.map(item => {
-            // Lógica 1: Item sem placa/série (Pendente) -> Fica Amarelo
-            const semPlaqueta = !item.numero_serie || item.numero_serie.trim() === '';
-            const corTexto = semPlaqueta ? '#fbbf24' : '#ffffff';
+        // 6. Verifica se a resposta do servidor foi bem-sucedida
+        if (!resposta.ok) {
+            throw new Error("Não foi possível obter os dados do servidor.");
+        }
 
-            // Lógica 2: Cores do Estado de Conservação
-            const coresEstado = { 'BOM': '#4ade80', 'RUIM': '#fbbf24', 'PÉSSIMO': '#ef4444' };
-            const corPonto = coresEstado[item.estado] || '#ffffff';
+        const itensDoInventario = await resposta.json();
 
-            // Lógica 3: Link para o PDF da Nota Fiscal
-            const temArquivo = item.url_nota_fiscal && item.url_nota_fiscal !== '';
-            const colunaNota = temArquivo 
-                ? `<button onclick="visualizarPDF('${item.url_nota_fiscal}')" style="background:none; border:none; cursor:pointer; color:#60a5fa; font-size:1.1rem; display:flex; align-items:center; gap:5px;" title="Abrir PDF">
-                    📄 <span style="font-size:0.85rem; text-decoration:underline;">${item.nota_fiscal}</span>
-                   </button>`
-                : `<span style="opacity:0.6;">${item.nota_fiscal || '---'}</span>`;
+        // 7. Renderiza a tabela final chamando a função que contém a legenda e as cores
+        // Certifica-te de que a função 'renderizarTabela' existe no teu script.
+        renderizarTabela(itensDoInventario);
 
-            return `
-                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); color: ${corTexto}; transition: 0.3s;" 
-                    onmouseover="this.style.background='rgba(255,255,255,0.03)'" 
-                    onmouseout="this.style.background='transparent'">
-                    
-                    <td style="padding:15px; font-weight:bold; opacity: 0.9;">${item.setor_nome}</td>
-                    
-                    <td style="padding:15px;">
-                        <div style="font-weight:500;">${item.produto_nome}</div>
-                        <div style="font-size:0.75rem; color:${corPonto}; margin-top:4px;">
-                            ● Estado: ${item.estado}
-                            ${semPlaqueta ? ' <span style="margin-left:8px; background:rgba(251,191,36,0.2); padding:2px 5px; border-radius:4px; color:#fbbf24; font-size:0.65rem;">PENDENTE</span>' : ''}
-                        </div>
-                    </td>
-                    
-                    <td style="padding:15px; font-family: monospace; opacity: 0.8;">
-                        ${semPlaqueta ? '<span style="opacity:0.4;">AGUARDANDO...</span>' : item.numero_serie}
-                    </td>
-                    
-                    <td style="padding:15px;">
-                        ${colunaNota}
-                    </td>
-                    
-                    <td style="padding:15px; text-align:center;">
-                        <button onclick="telaEditarItemPatrimonio(${item.id})" 
-                            style="background:rgba(255,255,255,0.1); border:none; border-radius:8px; padding:8px; cursor:pointer; color:white;" 
-                            title="Editar">
-                            ✏️
-                        </button>
-                        <button onclick="deletarItemPatrimonio(${item.id}, '${item.produto_nome}')" 
-                            style="background:rgba(239,68,68,0.2); border:1px solid rgba(239,68,68,0.4); border-radius:8px; padding:8px; cursor:pointer; color:#ef4444;" title="Excluir">
-                            🗑️
-                        </button>                        
-                    </td>
-                </tr>
-            `;
-        }).join('') || '<tr><td colspan="5" style="text-align:center; padding:40px; opacity:0.5;">Nenhum item cadastrado.</td></tr>';
-
-    } catch (err) {
-        console.error(err);
-        corpo.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#ef4444; padding:20px;">Erro ao carregar dados.</td></tr>';
+    } catch (erro) {
+        console.error("Erro crítico ao carregar inventário:", erro);
+        corpo.innerHTML = `
+            <div style="text-align:center; padding:30px; color:#f87171;">
+                <p>⚠️ Erro ao carregar os dados do inventário.</p>
+                <small>${erro.message}</small>
+            </div>
+        `;
     }
 }
 

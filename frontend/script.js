@@ -196,13 +196,14 @@ async function carregarDashboard() {
     const app = document.getElementById('app-content');
     if (app) {
         app.style.background = "transparent";
-        app.innerHTML = ''; // Limpa o conteúdo antes de reconstruir os cards
+        app.innerHTML = ''; // Limpa o conteúdo antes de reconstruir os cards [cite: 2, 3]
     }   
     let chart1, chart2;
     let dadosEstoqueCache = [];
     let categoriaAtual = 'UNIFORMES';
     let carrinhoAdmin = [];
-    let chartTecnicos = null; // Variável global para controle do gráfico
+    let chartTecnicos = null; // Variável global para controle do gráfico [cite: 4, 5]
+    
     await inicializarSessaoUsuario();
     const perfil = localStorage.getItem('perfil') ? localStorage.getItem('perfil').toLowerCase() : null;
     const nome = localStorage.getItem('nome');
@@ -211,23 +212,24 @@ async function carregarDashboard() {
     const classeGrelha = 'grid-movel-celular';
     let htmlBotoes = '';
     const loginContainer = document.getElementById('login-container');
-    let modoComparacao = false;
+    let modoComparacao = false; // [cite: 6, 7]
+
     if (container) {
         container.style.display = 'block';
-        container.style.position = 'relative'; // Reforço via JS
-        container.style.zIndex = '20';         // Reforço via JS
+        container.style.position = 'relative'; // Reforço via JS [cite: 8]
+        container.style.zIndex = '20'; // Reforço via JS [cite: 9]
     }
 
     if (!perfil) {
         if (loginContainer) loginContainer.style.display = 'block';
         if (container) container.style.display = 'none';
-        return;
+        return; // [cite: 10]
     }
 
     if (loginContainer) loginContainer.style.display = 'none';
     if (container) container.style.display = 'block';
 
-    // Cabeçalho Padrão
+    // Cabeçalho Padrão [cite: 11]
     let html = `
         <div class="painel-usuario-vidro">
             <span class="nome-usuario-painel">${nome.toUpperCase()}</span>
@@ -239,13 +241,13 @@ async function carregarDashboard() {
         <div class="${classeGrelha}">
     `;
 
-    // --- 2. PERFIL: SUPER (Gestão de Usuários) ---
+    // --- 2. PERFIL: SUPER (Gestão de Usuários) --- [cite: 12]
     if (perfil === 'super') {
         html += `
             <button class="btn-grande btn-vidro" onclick="telaGerenciarUsuarios()">
                 <i>👥</i><span>GERENCIAR USUÁRIOS</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()">
+            <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaAdminDashboard()">
                 <i>📈</i><span>PAINEL DE PEDIDOS</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="telaVisualizarEstoque()">
@@ -257,8 +259,10 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
                 <i>🔑</i><span>ALTERAR MINHA SENHA</span>
             </button>            
-        `;
+        `; // [cite: 13, 14, 15]
     }
+
+    // --- PERFIL: DTI --- [cite: 16]
     if (perfil === 'dti') {
         html += `
             <button class="btn-grande btn-vidro" onclick="telaListarChamadosPC_DTI()">
@@ -267,9 +271,6 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="telaDashboardComputadores()">
                 <i>📈</i><span>ATENDIMENTOS REALIZADOS COMPUTADOR</span>
             </button>
-            <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
-                <i>🔑</i><span>ALTERAR MINHA SENHA</span>
-            </button>                        
             <button class="btn-grande btn-vidro" onclick="telaRelatorioGeralAtivos()">
                 <i>📋</i><span>STATUS ATUAL IMPRESSORAS</span>
             </button>
@@ -285,63 +286,178 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="telaCadastroImpressoras()">
                 <i>📋</i><span>CADASTRAR NOVA IMPRESSORA</span>
             </button>
-        `;
+            <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
+                <i>🔑</i><span>ALTERAR MINHA SENHA</span>
+            </button>                        
+        `; // [cite: 17, 18, 19, 20]
     }
+
+    // --- PERFIL: IMPRES --- [cite: 21]
     if (perfil === 'impres') {
         html += `
-            <div class="${classeGrelha}">
-                <button class="btn-grande btn-vidro" onclick="telaListarChamadosAbertos()">
-                    <i>🖨️</i><span>FILA DE CHAMADOS</span>
-                </button>
-                <button class="btn-grande btn-vidro" onclick="telaRelatorioGeralAtivos()">
-                    <i>📋</i><span>STATUS ATUAL IMPRESSORAS</span>
-                </button>                                       
-                <button class="btn-grande btn-vidro" onclick="telaDashboardImpressoras()">
-                    <i>📈</i><span>ATENDIMENTOS REALIZADOS (IMPRESSORAS)</span>
-                </button>
-                <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
-                    <i>🔑</i><span>ALTERAR MINHA SENHA</span>
-                </button> 
-            </div>    
-        `;
+            <button class="btn-grande btn-vidro" onclick="telaListarChamadosAbertos()">
+                <i>🖨️</i><span>FILA DE CHAMADOS</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioGeralAtivos()">
+                <i>📋</i><span>STATUS ATUAL IMPRESSORAS</span>
+            </button>                                       
+            <button class="btn-grande btn-vidro" onclick="telaDashboardImpressoras()">
+                <i>📈</i><span>ATENDIMENTOS REALIZADOS (IMPRESSORAS)</span>
+            </button>
+            <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
+                <i>🔑</i><span>ALTERAR MINHA SENHA</span>
+            </button> 
+        `; // [cite: 22, 23, 24]
     }
-    // --- 3. PERFIL: ESCOLA ---
+
+    // --- 3. PERFIL: ESCOLA --- [cite: 25]
     if (perfil === 'escola') {
         html += `
-            <div class="${classeGrelha}">
-                <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaSolicitarServicoImpressora('recarga')">
-                    <i>💧</i><span>SOLICITAR RECARGA DE TONER</span>
-                </button>
-                <button class="btn-grande btn-vidro" onclick="telaSolicitarServicoImpressora('manutencao')">
-                    <i>🛠️</i><span>SOLICITAR MANUTENÇÃO IMPRESSORA</span>
-                </button>
-                <button class="btn-grande btn-vidro" onclick="telaSolicitarManutencaoPC('')">
-                    <i>💻</i><span>SOLICITAR MANUTENÇÃO INFORMÁTICA</span>
-                </button>
-                <button class="btn-grande btn-vidro" onclick="abrirMenuPatrimonioEscola()">
-                    <i>🏛️</i><span>PATRIMÔNIO</span>
-                </button>
-                <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
-                    <i>🔑</i><span>ALTERAR MINHA SENHA</span>
-                </button>    
-                <button class="btn-grande btn-vidro" onclick="telaEscolaConfirmarRecebimento()">
-                    <i>🚚</i><span>CONFIRMAR RECEBIMENTO</span>
-                </button>
-                <button class="btn-grande btn-vidro" onclick="telaSolicitarUniforme()">
-                    <i>👕</i><span>SOLICITAR UNIFORMES</span>
-                </button>
-                <button class="btn-grande btn-vidro" onclick="telaDevolucaoUniforme()">
-                    <i>🔄</i><span>DEVOLVER UNIFORMES</span>
-                </button>                
-            </div>
-        `;
+            <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaSolicitarServicoImpressora('recarga')">
+                <i>💧</i><span>SOLICITAR RECARGA DE TONER</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="telaSolicitarServicoImpressora('manutencao')">
+                <i>🛠️</i><span>SOLICITAR MANUTENÇÃO IMPRESSORA</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="telaSolicitarManutencaoPC('')">
+                <i>💻</i><span>SOLICITAR MANUTENÇÃO INFORMÁTICA</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="abrirMenuPatrimonioEscola()">
+                <i>🏛️</i><span>PATRIMÔNIO</span>
+            </button>
+            <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
+                <i>🔑</i><span>ALTERAR MINHA SENHA</span>
+            </button>    
+            <button class="btn-grande btn-vidro" onclick="telaEscolaConfirmarRecebimento()">
+                <i>🚚</i><span>CONFIRMAR RECEBIMENTO</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="telaSolicitarUniforme()">
+                <i>👕</i><span>SOLICITAR UNIFORMES</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="telaDevolucaoUniforme()">
+                <i>🔄</i><span>DEVOLVER UNIFORMES</span>
+            </button>                
+        `; // [cite: 26, 27, 28, 29, 30, 31]
     }
-    // --- 4. PERFIL: ADMIN ---
+
+    // --- 4. PERFIL: ADMIN (NOVA INTERFACE) --- [cite: 32]
     if (perfil === 'admin') {
         html += `
+            <button class="btn-grande btn-vidro" onclick="telaEstoqueMateriaisEPatrimonios()">
+                <i>🏛️</i><span>PATRIMÔNIO</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('DEMAIS ITENS')">
+                <i>📦</i><span>DEMAIS ITENS</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('PEDIDOS')">
+                <i>📝</i><span>PEDIDOS</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('RELATÓRIOS')">
+                <i>📊</i><span>RELATÓRIOS</span>
+            </button>
+            <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
+                <i>🔑</i><span>ALTERAR MINHA SENHA</span>
+            </button>    
+        `; // Note: Você moverá os botões de [cite: 33, 34, 35, 36] para dentro da função abaixo.
+    }
+
+    // --- 5. PERFIL: ESTOQUE (NOVA INTERFACE) --- [cite: 37]
+    if (perfil === 'estoque') {
+        html += `
+            <button class="btn-grande btn-vidro" onclick="telaGestaoGlobalPatrimonio()">
+                <i>🏛️</i><span>PATRIMÔNIO</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('DEMAIS ITENS')">
+                <i>📦</i><span>DEMAIS ITENS</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('PEDIDOS')">
+                <i>📝</i><span>PEDIDOS</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('RELATÓRIOS')">
+                <i>📊</i><span>RELATÓRIOS</span>
+            </button>
+            <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
+                <i>🔑</i><span>ALTERAR MINHA SENHA</span>
+            </button>            
+        `; // Note: Você moverá os botões de [cite: 38, 39, 40, 41] para dentro da função abaixo.
+    }
+
+    html += `</div>`;
+    container.innerHTML = html; // [cite: 45]
+}
+
+// FUNÇÃO PARA A TELA SOBRE TELA (VITRIFICADA)
+function abrirSubmenuVitrificado(titulo) {
+    const perfil = localStorage.getItem('perfil').toLowerCase();
+    
+    // Cria o elemento da overlay
+    const overlay = document.createElement('div');
+    overlay.id = 'submenu-overlay';
+    overlay.style.cssText = `
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(15px);
+        -webkit-backdrop-filter: blur(15px); z-index: 1000;
+        display: flex; flex-direction: column; align-items: center; padding: 20px;
+        overflow-y: auto;
+    `;
+
+    let botoesExtra = '';
+
+    // --- LÓGICA DE DISTRIBUIÇÃO MANUAL ---
+    if (perfil === 'estoque') {
+        if (titulo === 'DEMAIS ITENS') {
+            botoesExtra = `
+            <button class="btn-grande btn-vidro onclick="telaCadastrosBase()">
+                <i>⚙️</i><span>CADASTROS BÁSICOS INICIAIS</span>
+            </button>            
+            <button class="btn-grande btn-vidro" onclick="telaAbastecerEstoque()">
+                <i>📥</i><span>LANÇAR ENTRADA NO ESTOQUE (UNIFORMES/MATERIAIS)</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="telaVisualizarEstoque()">
+                <i>👕</i><span>VER ESTOQUE DE UNIFORMES</span>
+            </button>
+            <button class="btn-grande btn-vidro" style="background:rgba(16, 185, 129, 0.2);" onclick="telaEstoqueMateriaisEPatrimonios()">
+                <i>📦</i><span>VER ESTOQUE DE MATERIAIS</span>
+            </button>
+            `;
+        } else if (titulo === 'PEDIDOS') {
+            botoesExtra = `
+            <button class="btn-grande btn-vidro" onclick="telaEstoquePedidosPendentes()">
+                <i>📦</i><span>SEPARAÇÃO DE VOLUMES</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="telaLogisticaEntregas()">
+                <i>🚚</i><span>LIBERAR TRANSPORTE DE PEDIDO</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="listarDevolucoesLogistica()">
+                <i>🚚</i><span>INICIAR RECEBIMENTO DE DEVOLUÇÃO</span>
+            </button>                        
+            <button class="btn-grande btn-vidro" onclick="listarDevolucoesEstoque()">
+                <i>🔄</i><span>CONCLUIR DEVOLUÇÃO RECEBIDA</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="abrirCalculadoraConversao()">
+                <i>🧮</i><span>CALCULADORA</span>
+            </button>            
+            `;
+        } else if (titulo === 'RELATÓRIOS') {
+            botoesExtra = `<p style="color:white">Sem relatórios no momento.</p>`;
+        }
+    }
+
+    if (perfil === 'admin') {
+        if (titulo === 'DEMAIS ITENS') {
+            botoesExtra = `
             <button class="btn-grande btn-vidro" onclick="telaCadastrosBase()">
                 <i>⚙️</i><span>CADASTROS BÁSICOS INICIAIS</span>
             </button>
+            <button class="btn-grande btn-vidro" onclick="telaVisualizarEstoque()">
+                <i>👕</i><span>VER ESTOQUE DE UNIFORMES</span>
+            </button>
+            <button class="btn-grande btn-vidro" style="background:rgba(16, 185, 129, 0.2);" onclick="telaEstoqueMateriaisEPatrimonios()">
+                <i>📦</i><span>VER ESTOQUE DE MATERIAIS</span>
+            </button>
+            `;
+        } else if (titulo === 'PEDIDOS') {
+            botoesExtra = `
             <button class="btn-grande btn-vidro" onclick="telaAdminGerenciarSolicitacoes()">
                 <i>⚖️</i><span>AUTORIZAR SOLICITAÇÕES</span>
             </button>
@@ -351,69 +467,27 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="modalEscolhaTipoPedido()">
                 <i>➕</i><span>CRIAR PEDIDO</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="telaVisualizarEstoque()">
-                <i>👕</i><span>VER ESTOQUE DE UNIFORMES</span>
-            </button>
-            <button class="btn-grande btn-vidro" style="background:rgba(16, 185, 129, 0.2);" onclick="telaEstoqueMateriaisEPatrimonios()">
-                <i>📦</i><span>VER ESTOQUE DE MATERIAIS</span>
-            </button>
-            <button class="btn-grande btn-vidro btn-breve" // ---onclick="telaAdminDashboard()">
-                <i>📈</i><span>PAINEL DE PEDIDOS</span>
-            </button>
+            `;
+        } else if (titulo === 'RELATÓRIOS') {
+            botoesExtra = `
+                <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()"><i>📈</i><span>PAINEL DE PEDIDOS</span></button>
+            `;
+        }
+    }
+    overlay.innerHTML = `
+        <div style="width:100%; max-width:500px; display:flex; justify-content:space-between; align-items:center; margin-bottom:40px;">
+            <h2 style="color:white; margin:0; font-family:sans-serif;">${titulo}</h2>
+            <button onclick="this.parentElement.parentElement.remove()" class="btn-sair-vidro" style="position:static;">VOLTAR</button>
+        </div>
+        <div class="grid-movel-celular" style="width:100%; max-width:500px;">
+            ${botoesExtra}
             <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
                 <i>🔑</i><span>ALTERAR MINHA SENHA</span>
-            </button>
+            </button> 
+        </div>
+    `;
 
-        `;
-    }
-    // --- 5. PERFIL: ESTOQUE ---
-    if (perfil === 'estoque') {
-        html += `
-            <button class="btn-grande btn-vidro" onclick="telaGestaoGlobalPatrimonio()">
-                <i>🏷️</i><span>PATRIMÔNIO</span>
-            </button>
-            <button class="btn-grande btn-vidro" onclick="telaEstoquePedidosPendentes()">
-                <i>📦</i><span>SEPARAÇÃO DE VOLUMES</span>
-            </button>
-            <button class="btn-grande btn-vidro" onclick="listarDevolucoesEstoque()">
-                <i>🔄</i><span>RECEBER DEVOLUÇÕES</span>
-            </button>            
-            <button class="btn-grande btn-vidro onclick="telaCadastrosBase()">
-                <i>⚙️</i><span>CADASTROS BÁSICOS INICIAIS</span>
-            </button>            
-            <button class="btn-grande btn-vidro" onclick="telaAbastecerEstoque()">
-                <i>📥</i><span>ENTRADA ESTOQUE (UNIFORMES/MATERIAIS)</span>
-            </button>
-            <button class="btn-grande btn-vidro" onclick="telaVisualizarEstoque()">
-                <i>👕</i><span>VER ESTOQUE DE UNIFORMES</span>
-            </button>
-            <button class="btn-grande btn-vidro" style="background:rgba(16, 185, 129, 0.2);" onclick="telaEstoqueMateriaisEPatrimonios()">
-                <i>📦</i><span>VER ESTOQUE DE MATERIAIS</span>
-            </button>
-            <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
-                <i>🔑</i><span>ALTERAR MINHA SENHA</span>
-            </button>
-            <button class="btn-grande btn-vidro" onclick="abrirCalculadoraConversao()">
-                <i>🧮</i><span>CALCULADORA</span>
-            </button>
-        `;
-    }
-    // --- 6. PERFIL: LOGÍSTICA ---
-    if (perfil === 'logistica') {
-        html += `
-            <button class="btn-grande btn-vidro" onclick="telaLogisticaEntregas()">
-                <i>🚚</i><span>RECOLHER NO GALPÃO E TRANSPORTAR PEDIDO</span>
-            </button>
-            <button class="btn-grande btn-vidro" onclick="listarDevolucoesLogistica()">
-                <i>🔄</i><span>RECOLHER NA ESCOLA E TRANSPORTAR DEVOLUÇÃO</span>
-            </button>
-            <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
-                <i>🔑</i><span>ALTERAR MINHA SENHA</span>
-            </button>
-        `;
-    }
-    html += `</div>`;
-    container.innerHTML = html;
+    document.body.appendChild(overlay);
 }
 
 async function telaVisualizarEstoque() {

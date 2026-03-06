@@ -12553,29 +12553,38 @@ async function telaPatrimonioEscolaCatalogo() {
 
 async function carregarBensRecentesModal() {
     const container = document.getElementById('lista-bens-recentes');
+    if (!container) return; // Proteção caso o modal seja fechado rápido demais
+
     try {
         const res = await fetch(`${API_URL}/patrimonio/meu-inventario`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
-        const itens = await res.json();
+        let itens = await res.json();
 
-        // Pega apenas os últimos 20 para não pesar
-        const recentes = itens.slice(0, 20);
+        // ORDENAÇÃO MANUAL: Garante que o ID maior (mais recente) fique no topo da lista
+        itens.sort((a, b) => b.id - a.id);
+
+        // Pegamos apenas os 15 últimos para a lista não ficar infinita
+        const recentes = itens.slice(0, 15);
 
         container.innerHTML = recentes.map(i => `
-            <div style="padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.8rem; color: white; display: flex; justify-content: space-between; align-items: center;">
+            <div style="padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 0.8rem; color: white; display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.02); margin-bottom: 5px; border-radius: 5px;">
                 <div>
-                    <strong>${i.produto_nome}</strong><br>
-                    <span style="color:#60a5fa; font-size:0.7rem;">${i.setor_nome}</span>
+                    <strong style="color: #60a5fa;">${i.produto_nome}</strong><br>
+                    <span style="opacity: 0.7; font-size: 0.75rem;">Setor: ${i.setor_nome}</span>
                 </div>
                 <div style="text-align: right;">
-                    <span style="opacity:0.6;">${i.numero_serie || 'S/N'}</span><br>
-                    <span style="font-size:0.6rem; color:#4ade80;">${i.estado}</span>
+                    <span style="font-family: monospace; background: rgba(0,0,0,0.3); padding: 2px 5px; border-radius: 3px;">
+                        ${i.numero_serie || 'S/N'}
+                    </span><br>
+                    <span style="font-size:0.65rem; color:#4ade80;">${i.estado}</span>
                 </div>
             </div>
-        `).join('') || '<p style="color:gray; text-align:center;">Nenhum bem cadastrado.</p>';
+        `).join('') || '<p style="color:gray; text-align:center; margin-top: 20px;">Nenhum bem cadastrado ainda.</p>';
+
     } catch (err) {
-        container.innerHTML = '<p style="color:red;">Erro ao atualizar lista.</p>';
+        console.error("Erro ao carregar lista lateral:", err);
+        container.innerHTML = '<p style="color:red; text-align:center;">Erro ao atualizar lista.</p>';
     }
 }
 
@@ -12648,12 +12657,9 @@ async function enviarCadastroComAnexo() {
         // LIMPEZA CIRÚRGICA DOS CAMPOS (Exceto Setor e Quantidade)
         document.getElementById('cat-nome').value = '';
         document.getElementById('cat-serie').value = '';
-        document.getElementById('cat-nf').value = '';
-        if(document.getElementById('cat-file')) document.getElementById('cat-file').value = '';
-
-        // ATUALIZA A LISTA LATERAL E A TABELA DE FUNDO
-        carregarBensRecentesModal();
+        await carregarBensRecentesModal();
         if (typeof carregarTabelaInventario === 'function') carregarTabelaInventario();
+        document.getElementById('cat-nome').focus();
     } else {
         const error = await res.json();
         alert(error.error || "Erro ao salvar");

@@ -12479,64 +12479,104 @@ async function telaPatrimonioEscolaCatalogo() {
     });
     const setores = await resSetores.json();
 
+    // Layout de duas colunas: Esquerda (Form) | Direita (Lista)
     modal.innerHTML = `
-        <div class="painel-vidro" style="width: 550px; padding: 30px; border: 1px solid rgba(255,255,255,0.2);">
-            <h2 style="color:white; margin:0 0 15px 0;">📝 NOVO BEM</h2>
+        <div class="painel-vidro" style="width: 1100px; height: 600px; display: flex; gap: 20px; padding: 25px; border: 1px solid rgba(255,255,255,0.2); overflow: hidden;">
             
-            <div style="display:grid; gap:20px;">
+            <div style="flex: 1; display: flex; flex-direction: column; gap: 15px;">
+                <h2 style="color:white; margin:0 0 10px 0;">📝 NOVO BEM</h2>
                 
-                <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 12px; border: 1px solid rgba(59, 130, 246, 0.3);">
-                    <label style="color:#60a5fa; font-weight:bold; display:flex; align-items:center; gap:10px; cursor:pointer;">
-                        <input type="checkbox" id="check-2025" onchange="alternarLogica2025(this.checked)" style="transform: scale(1.5);">
+                <div style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 12px; border: 1px solid rgba(59, 130, 246, 0.3);">
+                    <label style="color:#60a5fa; font-weight:bold; display:flex; align-items:center; gap:10px; cursor:pointer; font-size: 0.85rem;">
+                        <input type="checkbox" id="check-2025" onchange="alternarLogica2025(this.checked)" style="transform: scale(1.3);">
                         BEM ADQUIRIDO A PARTIR DE 01/01/2025?
                     </label>
                 </div>
 
-                <div>
-                    <label style="color:white; font-size:0.8rem;">NOME DO PRODUTO:</label>
-                    <input type="text" id="cat-nome" class="input-vidro" placeholder="Ex: PROJETOR EPSON">
+                <div style="overflow-y: auto; flex: 1; padding-right: 10px;">
+                    <div style="margin-bottom: 12px;">
+                        <label style="color:white; font-size:0.8rem;">NOME DO BEM:</label>
+                        <input type="text" id="cat-nome" class="input-vidro" placeholder="Ex: PROJETOR EPSON">
+                    </div>
+
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom: 12px;">
+                        <div>
+                            <label style="color:white; font-size:0.8rem;">SETOR:</label>
+                            <select id="cat-setor" class="input-vidro">
+                                ${setores.map(s => `<option value="${s.id}" style="color:black;">${s.nome}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div>
+                            <label style="color:white; font-size:0.8rem;">QUANTIDADE:</label>
+                            <input type="number" id="cat-qtd" value="1" min="1" class="input-vidro">
+                        </div>
+                    </div>
+
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom: 12px;">
+                        <div>
+                            <label id="label-serie" style="color:white; font-size:0.8rem;">Nº PATRIMÔNIO:</label>
+                            <input type="text" id="cat-serie" class="input-vidro" placeholder="Opcional">
+                        </div>
+                        <div>
+                            <label id="label-nf" style="color:white; font-size:0.8rem;">Nº NF ou CE:</label>
+                            <input type="text" id="cat-nf" class="input-vidro">
+                        </div>
+                    </div>
+
+                    <div id="container-arquivo-nf" style="display:none; margin-bottom: 12px;">
+                        <label style="color:white; font-size:0.8rem;">ANEXAR NF ou CE (PDF):</label>
+                        <input type="file" id="cat-file" accept="application/pdf" class="input-vidro" style="padding: 5px;">
+                    </div>
                 </div>
 
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px;">
-                    <div>
-                        <label style="color:white; font-size:0.8rem;">SETOR:</label>
-                        <select id="cat-setor" class="input-vidro">
-                            ${setores.map(s => `<option value="${s.id}" style="color:black;">${s.nome}</option>`).join('')}
-                        </select>
-                    </div>
-                    <div>
-                        <label style="color:white; font-size:0.8rem;">QUANTIDADE:</label>
-                        <input type="number" id="cat-qtd" value="1" min="1" class="input-vidro">
-                    </div>
-                </div>
-
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px;">
-                    <div>
-                        <label id="label-serie" style="color:white; font-size:0.8rem;">Nº PATRIMÔNIO (OPCIONAL):</label>
-                        <input type="text" id="cat-serie" class="input-vidro" placeholder="Pode deixar vazio se não houver">
-                    </div>
-                    <div>
-                        <label id="label-nf" style="color:white; font-size:0.8rem;">Nº NF / CE:</label>
-                        <input type="text" id="cat-nf" class="input-vidro">
-                    </div>
-                </div>
-
-                <div id="container-arquivo-nf" style="display:none;">
-                    <label style="color:white; font-size:0.8rem;">ANEXAR NF / CE (PDF):</label>
-                    <input type="file" id="cat-file" accept="application/pdf" class="input-vidro" style="padding: 5px;">
-                    <p style="font-size:0.7rem; color:#aaa; margin-top:5px;">*Obrigatório para bens adquiridos a partir de 2025.</p>
-                </div>
-
-                <div style="display:flex; gap:10px;">
-                    <button onclick="document.getElementById('modal-catalogo-entrada').remove()" class="btn-sair-vidro" style="flex:1;">CANCELAR</button>
+                <div style="display:flex; gap:10px; margin-top: auto;">
+                    <button onclick="document.getElementById('modal-catalogo-entrada').remove()" class="btn-sair-vidro" style="flex:1;">FECHAR</button>
                     <button onclick="enviarCadastroComAnexo()" id="btn-salvar" style="flex:2; background:#3b82f6; color:white; border:none; border-radius:10px; font-weight:bold; cursor:pointer;">
                         SALVAR REGISTRO
                     </button>
                 </div>
             </div>
+
+            <div style="flex: 1.2; display: flex; flex-direction: column; background: rgba(0,0,0,0.2); border-radius: 15px; padding: 15px; border: 1px solid rgba(255,255,255,0.05);">
+                <h3 style="color:#aaa; font-size:0.9rem; margin:0 0 10px 0; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 5px;">
+                    BENS CADASTRADOS RECENTEMENTE
+                </h3>
+                <div id="lista-bens-recentes" style="flex: 1; overflow-y: auto;">
+                    <p style="color:gray; text-align:center; margin-top:50px;">Carregando bens...</p>
+                </div>
+            </div>
         </div>
     `;
     document.body.appendChild(modal);
+    carregarBensRecentesModal(); // Chama a lista assim que abrir
+}
+
+async function carregarBensRecentesModal() {
+    const container = document.getElementById('lista-bens-recentes');
+    try {
+        const res = await fetch(`${API_URL}/patrimonio/meu-inventario`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const itens = await res.json();
+
+        // Pega apenas os últimos 20 para não pesar
+        const recentes = itens.slice(0, 20);
+
+        container.innerHTML = recentes.map(i => `
+            <div style="padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.8rem; color: white; display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <strong>${i.produto_nome}</strong><br>
+                    <span style="color:#60a5fa; font-size:0.7rem;">${i.setor_nome}</span>
+                </div>
+                <div style="text-align: right;">
+                    <span style="opacity:0.6;">${i.numero_serie || 'S/N'}</span><br>
+                    <span style="font-size:0.6rem; color:#4ade80;">${i.estado}</span>
+                </div>
+            </div>
+        `).join('') || '<p style="color:gray; text-align:center;">Nenhum bem cadastrado.</p>';
+    } catch (err) {
+        container.innerHTML = '<p style="color:red;">Erro ao atualizar lista.</p>';
+    }
 }
 
 // LÓGICA DE INTERFACE
@@ -12577,34 +12617,46 @@ async function enviarCadastroComAnexo() {
     const nome = document.getElementById('cat-nome').value;
     const setor_id = document.getElementById('cat-setor').value;
     const quantidade = document.getElementById('cat-qtd').value;
-    const serie = document.getElementById('cat-serie').value; // <--- Faltava isso!
+    const serie = document.getElementById('cat-serie').value;
     const nf = document.getElementById('cat-nf').value;
     const arquivo = document.getElementById('cat-file').files[0];
+
     if (!nome || !setor_id) return alert("Nome e Setor são obrigatórios!");
 
     if (is2025) {
-        if (!nf) return alert("O número da Nota Fiscal é obrigatório para bens após 2025!");
-        if (!arquivo) return alert("Você deve anexar o PDF da Nota Fiscal!");
+        if (!nf) return alert("O número da NF ou CE é obrigatório!");
+        if (!arquivo) return alert("Você deve anexar o PDF!");
     }
 
     formData.append('nome', nome);
     formData.append('setor_id', setor_id);
     formData.append('quantidade', quantidade);
-    formData.append('numero_serie', serie); // Agora a variável 'serie' existe
+    formData.append('numero_serie', serie);
     formData.append('nota_fiscal', nf);
     formData.append('adquirido_pos_2025', is2025);
     if (arquivo) formData.append('arquivo_nf', arquivo);
 
     const res = await fetch(`${API_URL}/patrimonio/escola/registrar`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${TOKEN}` }, // Note: Não defina Content-Type manual aqui
+        headers: { 'Authorization': `Bearer ${TOKEN}` },
         body: formData
     });
 
     if (res.ok) {
-        notificar("Patrimônio registrado com sucesso!", "sucesso");
-        document.getElementById('modal-catalogo-entrada').remove();
-        carregarTabelaInventario();
+        notificar("Bem registrado com sucesso!", "sucesso");
+        
+        // LIMPEZA CIRÚRGICA DOS CAMPOS (Exceto Setor e Quantidade)
+        document.getElementById('cat-nome').value = '';
+        document.getElementById('cat-serie').value = '';
+        document.getElementById('cat-nf').value = '';
+        if(document.getElementById('cat-file')) document.getElementById('cat-file').value = '';
+
+        // ATUALIZA A LISTA LATERAL E A TABELA DE FUNDO
+        carregarBensRecentesModal();
+        if (typeof carregarTabelaInventario === 'function') carregarTabelaInventario();
+    } else {
+        const error = await res.json();
+        alert(error.error || "Erro ao salvar");
     }
 }
 
@@ -13230,7 +13282,7 @@ async function telaGerenciarSetores() {
     modal.className = 'alerta-vidro-overlay';
     
     modal.innerHTML = `
-        <div class="painel-vidro" style="width: 800px; display: flex; gap: 20px; padding: 25px;">
+        <div class="painel-vidro" style="width: 800px; height: 500px; display: flex; gap: 20px; padding: 25px;">
             <div style="flex: 1; border-right: 1px solid rgba(255,255,255,0.1); padding-right: 20px;">
                 <h3 style="color:white; margin-top:0;">📂 NOVO SETOR</h3>
                 <input type="text" id="nome-setor" placeholder="Ex: SALA DE AULA 01" 

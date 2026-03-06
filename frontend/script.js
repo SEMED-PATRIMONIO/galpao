@@ -12665,7 +12665,8 @@ async function carregarTabelaInventario() {
     const campoBusca = document.getElementById('busca-global-patrimonio');
     if (campoBusca) campoBusca.value = '';
 
-    const setorId = document.getElementById('filtro-setor-patrimonio').value;
+    const filtroElem = document.getElementById('filtro-setor-patrimonio');
+    const setorId = filtroElem ? filtroElem.value : 'todos';
     const corpo = document.getElementById('corpo-tabela-inventario');
     
     // Feedback visual de carregamento

@@ -475,16 +475,16 @@ function abrirSubmenuVitrificado(titulo) {
         }
     }
     overlay.innerHTML = `
-        <div style="width:100%; max-width:500px; display:flex; justify-content:space-between; align-items:center; margin-bottom:40px;">
+        <div style="width:100%; max-width:500px; display:flex; justify-content:space-between; align-items:center; margin-top: 20px; margin-bottom:40px;">
             <h2 style="color:white; margin:0; font-family:sans-serif;">${titulo}</h2>
-            <button onclick="this.parentElement.parentElement.remove()" class="btn-sair-vidro" style="position:static;">VOLTAR</button>
+            
+            <button onclick="document.getElementById('submenu-overlay').remove()" class="btn-sair-vidro" style="position:static; padding: 10px 20px;">
+                VOLTAR
+            </button>
         </div>
         <div class="grid-movel-celular" style="width:100%; max-width:500px;">
-            ${botoesExtra}
-            <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
-                <i>🔑</i><span>ALTERAR MINHA SENHA</span>
-            </button> 
-        </div>
+                ${botoesExtra}
+            </div>
     `;
 
     document.body.appendChild(overlay);

@@ -251,10 +251,10 @@ async function carregarDashboard() {
                 <i>📈</i><span>PAINEL DE PEDIDOS</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="telaVisualizarEstoque()">
-                <i>👕</i><span>VER ESTOQUE DE UNIFORMES</span>
+                <i>👕</i><span>ESTOQUE UNIFORMES</span>
             </button>
             <button class="btn-grande btn-vidro" style="background:rgba(16, 185, 129, 0.2);" onclick="telaEstoqueMateriaisEPatrimonios()">
-                <i>📦</i><span>VER ESTOQUE DE MATERIAIS</span>
+                <i>📦</i><span>ESTOQUE OUTROS MATERIAIS</span>
             </button>
             <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
                 <i>🔑</i><span>ALTERAR MINHA SENHA</span>
@@ -343,11 +343,8 @@ async function carregarDashboard() {
     // --- 4. PERFIL: ADMIN (NOVA INTERFACE) --- [cite: 32]
     if (perfil === 'admin') {
         html += `
-            <button class="btn-grande btn-vidro" onclick="telaEstoqueMateriaisEPatrimonios()">
-                <i>🏛️</i><span>PATRIMÔNIO</span>
-            </button>
             <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('DEMAIS ITENS')">
-                <i>📦</i><span>DEMAIS ITENS</span>
+                <i>📦</i><span>ESTOQUE</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('PEDIDOS')">
                 <i>📝</i><span>PEDIDOS</span>
@@ -368,7 +365,7 @@ async function carregarDashboard() {
                 <i>🏛️</i><span>PATRIMÔNIO</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('DEMAIS ITENS')">
-                <i>📦</i><span>DEMAIS ITENS</span>
+                <i>📦</i><span>ESTOQUE GALPÃO</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('PEDIDOS')">
                 <i>📝</i><span>PEDIDOS</span>
@@ -414,10 +411,10 @@ function abrirSubmenuVitrificado(titulo) {
                 <i>📥</i><span>LANÇAR ENTRADA NO ESTOQUE (UNIFORMES/MATERIAIS)</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="telaVisualizarEstoque()">
-                <i>👕</i><span>VER ESTOQUE DE UNIFORMES</span>
+                <i>👕</i><span>UNIFORMES</span>
             </button>
             <button class="btn-grande btn-vidro" style="background:rgba(16, 185, 129, 0.2);" onclick="telaEstoqueMateriaisEPatrimonios()">
-                <i>📦</i><span>VER ESTOQUE DE MATERIAIS</span>
+                <i>📦</i><span>OUTROS MATERIAIS</span>
             </button>
             `;
         } else if (titulo === 'PEDIDOS') {
@@ -450,10 +447,10 @@ function abrirSubmenuVitrificado(titulo) {
                 <i>⚙️</i><span>CADASTROS BÁSICOS INICIAIS</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="telaVisualizarEstoque()">
-                <i>👕</i><span>VER ESTOQUE DE UNIFORMES</span>
+                <i>👕</i><span>UNIFORMES</span>
             </button>
             <button class="btn-grande btn-vidro" style="background:rgba(16, 185, 129, 0.2);" onclick="telaEstoqueMateriaisEPatrimonios()">
-                <i>📦</i><span>VER ESTOQUE DE MATERIAIS</span>
+                <i>📦</i><span>OUTROS MATERIAIS</span>
             </button>
             `;
         } else if (titulo === 'PEDIDOS') {
@@ -12484,7 +12481,7 @@ async function telaPatrimonioEscolaCatalogo() {
 
     modal.innerHTML = `
         <div class="painel-vidro" style="width: 550px; padding: 30px; border: 1px solid rgba(255,255,255,0.2);">
-            <h2 style="color:white; margin:0 0 15px 0;">📝 NOVO PATRIMÔNIO</h2>
+            <h2 style="color:white; margin:0 0 15px 0;">📝 NOVO BEM</h2>
             
             <div style="display:grid; gap:20px;">
                 
@@ -12515,17 +12512,17 @@ async function telaPatrimonioEscolaCatalogo() {
 
                 <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px;">
                     <div>
-                        <label id="label-serie" style="color:white; font-size:0.8rem;">Nº SÉRIE / PLAQUETA (OPCIONAL):</label>
+                        <label id="label-serie" style="color:white; font-size:0.8rem;">Nº PATRIMÔNIO (OPCIONAL):</label>
                         <input type="text" id="cat-serie" class="input-vidro" placeholder="Pode deixar vazio se não houver">
                     </div>
                     <div>
-                        <label id="label-nf" style="color:white; font-size:0.8rem;">Nº NOTA FISCAL:</label>
+                        <label id="label-nf" style="color:white; font-size:0.8rem;">Nº NF / CE:</label>
                         <input type="text" id="cat-nf" class="input-vidro">
                     </div>
                 </div>
 
                 <div id="container-arquivo-nf" style="display:none;">
-                    <label style="color:white; font-size:0.8rem;">ANEXAR NOTA FISCAL (PDF):</label>
+                    <label style="color:white; font-size:0.8rem;">ANEXAR NF / CE (PDF):</label>
                     <input type="file" id="cat-file" accept="application/pdf" class="input-vidro" style="padding: 5px;">
                     <p style="font-size:0.7rem; color:#aaa; margin-top:5px;">*Obrigatório para bens adquiridos a partir de 2025.</p>
                 </div>
@@ -12740,7 +12737,7 @@ function abrirMenuPatrimonioEscola() {
                 <button onclick="carregarDashboard()" class="btn-sair-vidro" style="padding: 10px 20px; cursor: pointer;">
                     ⬅️ VOLTAR
                 </button>
-                <h1 style="margin: 0; font-size: 1.5rem;">Gestão de Património</h1>
+                <h1 style="margin: 0; font-size: 1.5rem;">Gestão de PatrimÔnio</h1>
                 <div style="width: 100px;"></div> 
             </div>
 
@@ -12823,7 +12820,6 @@ async function telaPatrimonioConsultaEscola() {
                     Data: ${new Date().toLocaleDateString('pt-BR')}
                 </div>
             </div>
-
             <div style="display: grid; grid-template-columns: 320px 1fr; gap: 20px; flex: 1; overflow: hidden;">
                 
                 <div class="painel-vidro" style="padding: 20px; display: flex; flex-direction: column; overflow: hidden;">
@@ -12836,11 +12832,13 @@ async function telaPatrimonioConsultaEscola() {
                 <div class="painel-vidro" style="padding: 25px; display: flex; flex-direction: column; overflow: hidden;">
                     <div id="cabecalho-itens" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; visibility: hidden;">
                         <h3 id="nome-setor-titulo" style="margin:0; color: #60a5fa;"></h3>
+                        <button id="btn-editar-estado" onclick="prepararEdicaoItem()" class="btn-sair-vidro" 
+                            style="background: #f59e0b; border: none; color: white; display: none;">✏️ EDITAR ESTADO CONSERVAÇÃO 
+                        </button> 
                         <button id="btn-gerar-pdf" class="btn-sair-vidro" style="background: #ef4444; border: none; color: white;">
-                            GERAR PDF 📄
+                           📄 GERAR PDF 
                         </button>
                     </div>
-                    
                     <div id="area-tabela-itens" style="flex: 1; overflow-y: auto;">
                         <div style="text-align: center; margin-top: 100px; color: rgba(255,255,255,0.3);">
                             <span style="font-size: 4rem;">👈</span>
@@ -12946,36 +12944,57 @@ function renderizarTabela(dados) {
         container.innerHTML = '<p style="text-align:center; color:gray; margin-top:30px;">Nenhum item encontrado.</p>';
         return;
     }
-
-    container.innerHTML = `
+    const legendaHtml = `
+        <div class="legenda-container">
+            <div class="legenda-item"><div class="ponto-cor" style="background:#3b82f6;"></div> ANTERIOR A 2025 E PATRIMONIALIZADO</div>
+            <div class="legenda-item"><div class="ponto-cor" style="background:#eab308;"></div> NÃO PATRIMONIALIZADO</div>
+            <div class="legenda-item"><div class="ponto-cor" style="background:#ec4899;"></div> SOLICITAR PATRIMONIALIZAÇÃO</div>
+            <div class="legenda-item"><div class="ponto-cor" style="background:#22c55e;"></div> RECENTE E PATRIMONIALIZADO</div>
+        </div>
+    `;
+    container.innerHTML = legendaHtml + `
         <table id="tabela-dados-final" style="width:100%; border-collapse: collapse; font-size: 0.9rem;">
             <thead>
                 <tr style="text-align:left; border-bottom: 2px solid rgba(255,255,255,0.1); color: #94a3b8;">
                     <th style="padding:12px;">DESCRIÇÃO</th>
-                    <th style="padding:12px;">Nº SÉRIE</th>
-                    <th style="padding:12px;">ESTADO</th>
-                    <th style="padding:12px; text-align:center;">NF</th>
+                    <th style="padding:12px;">Nº PATRIMÔNIO</th>
+                    <th style="padding:12px;">CONSERVAÇÃO</th>
+                    <th style="padding:12px; text-align:center;">NF / CE</th>
                     <th style="padding:12px; text-align:center;">VER</th>
                 </tr>
             </thead>
             <tbody>
-                ${dados.map(i => `
-                    <tr class="linha-patrimonio" style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                        <td style="padding:12px; font-weight:bold;">${i.nome_produto}</td>
-                        <td style="padding:12px;">${i.numero_serie || '---'}</td>
-                        <td style="padding:12px;">
-                            <span style="background:${i.estado === 'BOM' ? '#065f46' : '#991b1b'}; padding:2px 8px; border-radius:4px; font-size:0.7rem;">
-                                ${i.estado}
-                            </span>
-                        </td>
-                        <td style="padding:12px; text-align:center;">
-                            ${i.url_nota_fiscal ? `<button onclick="window.open('${API_URL}/uploads/notas_fiscais/${i.url_nota_fiscal}', '_blank')" style="background:none; border:none; cursor:pointer;">📄</button>` : '---'}
-                        </td>
-                        <td style="padding:12px; text-align:center;">
-                            <button onclick="detalharPatrimonio(${i.id})" style="background:none; border:none; cursor:pointer;">👁️</button>
-                        </td>
-                    </tr>
-                `).join('')}
+                ${dados.map(i => {
+                    // LÓGICA DE CORES
+                    let classeCor = '';
+                    const temSerie = (i.numero_serie && i.numero_serie.trim() !== "");
+                    const ehNovo = i.adquirido_pos_2025 === true;
+
+                    if (!ehNovo && temSerie) classeCor = 'status-antigo-ok';
+                    else if (!ehNovo && !temSerie) classeCor = 'status-antigo-pendente';
+                    else if (ehNovo && !temSerie) classeCor = 'status-novo-pendente';
+                    else if (ehNovo && temSerie) classeCor = 'status-novo-ok';
+
+                    return `
+                        <tr onclick="window.itemSelecionadoId = ${i.id}; document.getElementById('btn-editar-estado').style.display = 'block';" 
+                            class="linha-patrimonio" 
+                            style="border-bottom: 1px solid rgba(255,255,255,0.05); cursor: pointer;">
+                            <td style="padding:12px; font-weight:bold;">${i.nome_produto}</td>
+                            <td style="padding:12px;">${i.numero_serie || '---'}</td>
+                            <td style="padding:12px;">
+                                <span style="background:${i.estado === 'BOM' ? '#065f46' : '#991b1b'}; padding:2px 8px; border-radius:4px; font-size:0.7rem;">
+                                    ${i.estado}
+                                </span>
+                            </td>
+                            <td style="padding:12px; text-align:center;">
+                                ${i.url_nota_fiscal ? `<button onclick="window.open('${API_URL}/uploads/notas_fiscais/${i.url_nota_fiscal}', '_blank')" style="background:none; border:none; cursor:pointer;">📄</button>` : '---'}
+                            </td>
+                            <td style="padding:12px; text-align:center;">
+                                <button onclick="detalharPatrimonio(${i.id})" style="background:none; border:none; cursor:pointer;">👁️</button>
+                            </td>
+                        </tr>
+                    `;                        
+                }).join('')}
             </tbody>
         </table>
     `;
@@ -13368,7 +13387,7 @@ async function telaEditarItemPatrimonio(id) {
 
     modal.innerHTML = `
         <div class="painel-vidro" style="width: 400px; padding: 30px;">
-            <h2 style="color:white; margin:0 0 20px 0;">✏️ ATUALIZAR ITEM</h2>
+            <h2 style="color:white; margin:0 0 20px 0;">✏️ ATUALIZAR CONDIÇÃO</h2>
             
             <div style="display:flex; flex-direction:column; gap:15px;">
                 <div>
@@ -14041,8 +14060,8 @@ function renderizarBensGlobal(bens) {
         // Monta o texto do Hover com todos os campos
         const detalhes = `
             Nº SÉRIE: ${b.numero_serie || 'N/A'}
-            PLAQUETA: ${b.documento_id || 'N/A'}
-            NOTA FISCAL: ${b.nota_fiscal || 'N/A'}
+            PATRIMÔNIO: ${b.documento_id || 'N/A'}
+            NF / CE: ${b.nota_fiscal || 'N/A'}
             ESTADO: ${b.estado}
             CADASTRO: ${new Date(b.data_atualizacao).toLocaleDateString()}
             STATUS: ${b.status}
@@ -14100,6 +14119,42 @@ async function exportarGlobalPDF() {
 
     doc.save(`Inventario_${nomeLocal}.pdf`);
 }
+
+async function salvarAlteracaoEstado(id) {
+    const novoEstado = document.getElementById('novo-estado-bem').value;
+
+    try {
+        const res = await fetch(`${API_URL}/patrimonio/item/${id}/estado`, {
+            method: 'PATCH',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${TOKEN}` 
+            },
+            body: JSON.stringify({ estado: novoEstado })
+        });
+
+        if (res.ok) {
+            document.getElementById('modal-editar-estado').remove();
+            // Atualiza a lista atual para refletir a mudança
+            if (typeof carregarItensPorSetor === 'function') {
+                const setorId = document.querySelector('.item-setor-clicavel.setor-ativo')?.getAttribute('data-id');
+                const nomeSetor = document.getElementById('nome-setor-titulo').innerText.replace('ITENS EM: ', '');
+                await carregarItensPorSetor(setorId, nomeSetor);
+            }
+            alert("Estado atualizado com sucesso!");
+        }
+    } catch (err) {
+        alert("Erro ao salvar alteração.");
+    }
+}
+
+window.prepararEdicaoItem = () => {
+    if (window.itemSelecionadoId) {
+        telaEditarItemPatrimonio(window.itemSelecionadoId);
+    } else {
+        alert("Por favor, selecione um item na lista primeiro clicando sobre ele.");
+    }
+};
 
 // Isso garante que o onclick="funcao()" funcione sempre
 window.telaVisualizarEstoque = telaVisualizarEstoque;

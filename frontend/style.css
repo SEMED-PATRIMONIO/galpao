@@ -1629,3 +1629,37 @@ body.login-body {
     thead { display: table-header-group; } /* Repete o cabeçalho da tabela em todas as páginas */
     footer { page-break-after: always; }
 }
+
+.linha-patrimonio:active {
+    background: rgba(59, 130, 246, 0.2) !important;
+}
+
+/* Estilos para as bordas indicadoras na tabela */
+.status-antigo-ok { border-left: 5px solid #3b82f6 !important; } /* Azul */
+.status-antigo-pendente { border-left: 5px solid #eab308 !important; } /* Amarelo */
+.status-novo-pendente { border-left: 5px solid #ec4899 !important; } /* Rosa/Roxo */
+.status-novo-ok { border-left: 5px solid #22c55e !important; } /* Verde */
+
+/* Estilo para a Legenda */
+.legenda-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    margin-bottom: 15px;
+    padding: 10px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+}
+.legenda-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.65rem;
+    color: #ccc;
+    text-transform: uppercase;
+}
+.ponto-cor {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+}

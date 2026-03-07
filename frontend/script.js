@@ -12881,9 +12881,6 @@ async function telaPatrimonioConsultaEscola() {
                         <button id="btn-editar-estado" onclick="prepararEdicaoItem()" class="btn-sair-vidro" 
                             style="background: #f59e0b; border: none; color: white; display: none;">✏️ EDITAR ESTADO CONSERVAÇÃO 
                         </button> 
-                        <button id="btn-gerar-pdf" class="btn-sair-vidro" style="background: #ef4444; border: none; color: white;">
-                           📄 GERAR PDF 
-                        </button>
                     </div>
                     <div id="area-tabela-itens" style="flex: 1; overflow-y: auto;">
                         <div style="text-align: center; margin-top: 100px; color: rgba(255,255,255,0.3);">
@@ -12987,62 +12984,89 @@ async function partilharInventario(nomeSetor) {
 function renderizarTabela(dados) {
     const container = document.getElementById('corpo-tabela-dinamica');
     if (dados.length === 0) {
-        container.innerHTML = '<p style="text-align:center; color:gray; margin-top:30px;">Nenhum item encontrado.</p>';
+        container.innerHTML = '<p style="text-align:center; color:gray; margin-top:30px; font-size:0.8rem;">Nenhum bem encontrado neste setor.</p>';
         return;
     }
+
+    // Legenda compacta no topo
     const legendaHtml = `
-        <div class="legenda-container">
-            <div class="legenda-item"><div class="ponto-cor" style="background:#3b82f6;"></div> ANTERIOR A 2025 E PATRIMONIALIZADO</div>
-            <div class="legenda-item"><div class="ponto-cor" style="background:#eab308;"></div> NÃO PATRIMONIALIZADO</div>
-            <div class="legenda-item"><div class="ponto-cor" style="background:#ec4899;"></div> SOLICITAR PATRIMONIALIZAÇÃO</div>
-            <div class="legenda-item"><div class="ponto-cor" style="background:#22c55e;"></div> RECENTE E PATRIMONIALIZADO</div>
+        <div style="display: flex; gap: 15px; margin-bottom: 12px; padding: 8px; background: rgba(255, 255, 255, 0.03); border-radius: 8px; flex-wrap: wrap; border: 1px solid rgba(255,255,255,0.05);">
+            <div style="display:flex; align-items:center; gap:5px; font-size:0.65rem; color:#00e5ff;">● ANTERIOR A 2025 E PATRIMONIALIZADO</div>
+            <div style="display:flex; align-items:center; gap:5px; font-size:0.65rem; color:#fbbf24;">● NÃO PATRIMONIALIZADO (ANTIGO)</div>
+            <div style="display:flex; align-items:center; gap:5px; font-size:0.65rem; color:#f472b6;">● SOLICITAR PATRIMONIALIZAÇÃO (NOVO)</div>
+            <div style="display:flex; align-items:center; gap:5px; font-size:0.65rem; color:#4ade80;">● RECENTE E PATRIMONIALIZADO</div>
         </div>
     `;
+
     container.innerHTML = legendaHtml + `
-        <table id="tabela-dados-final" style="width:100%; border-collapse: collapse; font-size: 0.9rem;">
-            <thead>
-                <tr style="text-align:left; border-bottom: 2px solid rgba(255,255,255,0.1); color: #94a3b8;">
-                    <th style="padding:12px;">DESCRIÇÃO</th>
-                    <th style="padding:12px;">Nº PATRIMÔNIO</th>
-                    <th style="padding:12px;">CONSERVAÇÃO</th>
-                    <th style="padding:12px; text-align:center;">NF / CE</th>
-                    <th style="padding:12px; text-align:center;">VER</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${dados.map(i => {
-                    // LÓGICA DE CORES
-                    let classeCor = '';
-                    const temSerie = (i.numero_serie && i.numero_serie.trim() !== "");
-                    const ehNovo = i.adquirido_pos_2025 === true;
+        <div style="overflow-x: auto; border-radius: 10px; background: rgba(0,0,0,0.2);">
+            <table style="width:100%; border-collapse: collapse; font-size: 0.82rem; color: white;">
+                <thead>
+                    <tr style="text-align:left; border-bottom: 2px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.02);">
+                        <th style="padding:10px 12px; width: 50px;">ID</th>
+                        <th style="padding:10px 12px;">DESCRIÇÃO DO BEM</th>
+                        <th style="padding:10px 12px;">Nº PATRIMÔNIO</th>
+                        <th style="padding:10px 12px;">CONSERVAÇÃO</th>
+                        <th style="padding:10px 12px;">NF / CE</th>
+                        <th style="padding:10px 12px;">CADASTRO</th>
+                        <th style="padding:10px 12px; text-align:center;">VER</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${dados.map((i, index) => {
+                        const temSerie = i.numero_serie && i.numero_serie.trim() !== '';
+                        const ehNovo = i.adquirido_pos_2025 === true;
 
-                    if (!ehNovo && temSerie) classeCor = 'status-antigo-ok';
-                    else if (!ehNovo && !temSerie) classeCor = 'status-antigo-pendente';
-                    else if (ehNovo && !temSerie) classeCor = 'status-novo-pendente';
-                    else if (ehNovo && temSerie) classeCor = 'status-novo-ok';
+                        // LÓGICA DE CORES DA LINHA (LEGENDA)
+                        let corTexto = '#ffffff'; 
+                        if (!ehNovo && temSerie) corTexto = '#00e5ff';    // Ciano (Antigo OK)
+                        if (!ehNovo && !temSerie) corTexto = '#fbbf24';   // Laranja (Pendente Antigo)
+                        if (ehNovo && !temSerie) corTexto = '#f472b6';    // Rosa (Pendente Novo)
+                        if (ehNovo && temSerie) corTexto = '#4ade80';     // Verde (Novo OK)
 
-                    return `
-                        <tr onclick="window.itemSelecionadoId = ${i.id}; document.getElementById('btn-editar-estado').style.display = 'block';" 
-                            class="linha-patrimonio" 
-                            style="border-bottom: 1px solid rgba(255,255,255,0.05); cursor: pointer;">
-                            <td style="padding:12px; font-weight:bold;">${i.nome_produto}</td>
-                            <td style="padding:12px;">${i.numero_serie || '---'}</td>
-                            <td style="padding:12px;">
-                                <span style="background:${i.estado === 'BOM' ? '#065f46' : '#991b1b'}; padding:2px 8px; border-radius:4px; font-size:0.7rem;">
-                                    ${i.estado}
-                                </span>
-                            </td>
-                            <td style="padding:12px; text-align:center;">
-                                ${i.url_nota_fiscal ? `<button onclick="window.open('${API_URL}/uploads/notas_fiscais/${i.url_nota_fiscal}', '_blank')" style="background:none; border:none; cursor:pointer;">📄</button>` : '---'}
-                            </td>
-                            <td style="padding:12px; text-align:center;">
-                                <button onclick="detalharPatrimonio(${i.id})" style="background:none; border:none; cursor:pointer;">👁️</button>
-                            </td>
-                        </tr>
-                    `;                        
-                }).join('')}
-            </tbody>
-        </table>
+                        // Cores do estado (ponto visual apenas)
+                        const coresEstado = { 'BOM': '#4ade80', 'RUIM': '#fbbf24', 'PÉSSIMO': '#ef4444' };
+                        const corPonto = coresEstado[i.estado] || '#ffffff';
+
+                        return `
+                            <tr onclick="window.itemSelecionadoId = ${i.id}; habilitarBotaoEdicao();" 
+                                style="border-bottom: 1px solid rgba(255,255,255,0.03); color: ${corTexto}; cursor: pointer; transition: 0.2s;"
+                                onmouseover="this.style.background='rgba(255,255,255,0.05)'" 
+                                onmouseout="this.style.background='transparent'">
+                                
+                                <td style="padding:6px 12px; opacity:0.5; font-size:0.75rem;">#${i.id}</td>
+                                
+                                <td style="padding:6px 12px; font-weight:600; text-transform: uppercase;">
+                                    ${i.produto_nome}
+                                </td>
+                                
+                                <td style="padding:6px 12px; font-family: 'Courier New', monospace; letter-spacing: 1px;">
+                                    ${temSerie ? i.numero_serie : '<span style="opacity:0.2;">---------</span>'}
+                                </td>
+                                
+                                <td style="padding:6px 12px;">
+                                    <span style="display:inline-flex; align-items:center; gap:5px; background:rgba(0,0,0,0.3); padding:2px 8px; border-radius:12px; font-size:0.7rem; color:${corPonto}; border: 1px solid ${corPonto}44;">
+                                        ● ${i.estado}
+                                    </span>
+                                </td>
+                                
+                                <td style="padding:6px 12px; opacity:0.8;">
+                                    ${i.nota_fiscal || '<span style="opacity:0.3;">---</span>'}
+                                </td>
+
+                                <td style="padding:6px 12px; font-size:0.75rem; opacity:0.6;">
+                                    ${i.data_atualizacao ? new Date(i.data_atualizacao).toLocaleDateString('pt-BR') : '---'}
+                                </td>
+                                
+                                <td style="padding:6px 12px; text-align:center;">
+                                    <button onclick="detalharPatrimonio(${i.id})" style="background:none; border:none; cursor:pointer; font-size:1rem; opacity:0.7;" title="Ver Detalhes">👁️</button>
+                                </td>
+                            </tr>
+                        `;
+                    }).join('')}
+                </tbody>
+            </table>
+        </div>
     `;
 }
 

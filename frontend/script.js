@@ -12663,7 +12663,10 @@ async function enviarCadastroComAnexo() {
 }
 
 async function carregarTabelaInventario() {
-    const setorId = document.getElementById('filtro-setor-patrimonio').value;
+    const filtroSetor = document.getElementById('filtro-setor-patrimonio');
+    if (!filtroSetor) return;
+
+    const setorId = filtroSetor.value;
     const corpo = document.getElementById('corpo-tabela-inventario');
     
     try {
@@ -12676,14 +12679,13 @@ async function carregarTabelaInventario() {
             const temSerie = item.numero_serie && item.numero_serie.trim() !== '';
             const ehNovo = item.adquirido_pos_2025 === true;
 
-            // DEFINIÇÃO CIRÚRGICA DE CORES (LEGENDA)
-            let corLinha = '#ffffff'; // Branco padrão
-            if (!ehNovo && temSerie) corLinha = '#0ea5e9';    // AZUL CIANO (Antigo e OK)
-            if (!ehNovo && !temSerie) corLinha = '#fbbf24';   // LARANJA (Não Patrimonializado)
-            if (ehNovo && !temSerie) corLinha = '#f472b6';    // ROSA (Solicitar Patrimônio)
-            if (ehNovo && temSerie) corLinha = '#4ade80';     // VERDE (Recente e OK)
+            // DEFINIÇÃO DE CORES SEGUNDO A LEGENDA
+            let corLinha = '#ffffff'; 
+            if (!ehNovo && temSerie) corLinha = '#00e5ff';    // Ciano Vibrante (Antigo e Patrimonializado)
+            if (!ehNovo && !temSerie) corLinha = '#fbbf24';   // Laranja (Não Patrimonializado)
+            if (ehNovo && !temSerie) corLinha = '#f472b6';    // Rosa (Solicitar Patrimonialização)
+            if (ehNovo && temSerie) corLinha = '#4ade80';     // Verde (Recente e Patrimonializado)
 
-            // Lógica do ponto de estado (independente da cor da linha)
             const coresEstado = { 'BOM': '#4ade80', 'RUIM': '#fbbf24', 'PÉSSIMO': '#ef4444' };
             const corPonto = coresEstado[item.estado] || '#ffffff';
 
@@ -12692,29 +12694,31 @@ async function carregarTabelaInventario() {
                     style="border-bottom: 1px solid rgba(255,255,255,0.05); color: ${corLinha}; cursor:pointer;" 
                     class="linha-inventario-selecionavel">
                     
-                    <td style="padding:15px; font-weight:bold;">${item.produto_nome}</td>
+                    <td style="padding:8px 15px; font-weight:bold; font-size:0.85rem;">${item.produto_nome}</td>
                     
-                    <td style="padding:15px; font-family: monospace;">
-                        ${temSerie ? item.numero_serie : '<span style="opacity:0.3;">---</span>'}
+                    <td style="padding:8px 15px; font-family: monospace; font-size:0.85rem;">
+                        ${temSerie ? item.numero_serie : '---'}
                     </td>
                     
-                    <td style="padding:15px;">
-                        <span style="color:${corPonto}; font-weight:bold;">● ${item.estado}</span>
+                    <td style="padding:8px 15px; font-size:0.8rem;">
+                        <span style="background:${corPonto}; color:black; padding:2px 8px; border-radius:4px; font-weight:bold;">
+                            ${item.estado}
+                        </span>
                     </td>
                     
-                    <td style="padding:15px;">
+                    <td style="padding:8px 15px; font-size:0.85rem;">
                         ${item.nota_fiscal || '---'}
                     </td>
                     
-                    <td style="padding:15px; text-align:center;">
+                    <td style="padding:8px 15px; text-align:center;">
                         <button onclick="detalharPatrimonio(${item.id})" style="background:none; border:none; cursor:pointer;">👁️</button>
                     </td>
                 </tr>
             `;
-        }).join('') || '<tr><td colspan="5" style="text-align:center; padding:40px; opacity:0.5;">Vazio.</td></tr>';
+        }).join('') || '<tr><td colspan="5" style="text-align:center; padding:20px; opacity:0.5;">Nenhum bem neste setor.</td></tr>';
 
     } catch (err) {
-        console.error(err);
+        console.error("Erro ao carregar inventário:", err);
     }
 }
 
@@ -12722,12 +12726,8 @@ function habilitarBotaoEdicao() {
     const btn = document.getElementById('btn-editar-estado-conservacao');
     if (btn) {
         btn.style.opacity = '1';
-        btn.style.cursor = 'pointer';
-        // Garante que o clique agora chame a função correta com o ID salvo
         btn.onclick = () => {
-            if (window.itemSelecionadoId) {
-                telaEditarItemPatrimonio(window.itemSelecionadoId);
-            }
+            if (window.itemSelecionadoId) telaEditarItemPatrimonio(window.itemSelecionadoId);
         };
     }
 }
@@ -13421,47 +13421,44 @@ async function carregarOpcoesSetoresFiltro() {
     }
 }
 
-async function telaEditarItemPatrimonio(id) {
-    const res = await fetch(`${API_URL}/patrimonio/item-detalhes/${id}`, {
-        headers: { 'Authorization': `Bearer ${TOKEN}` }
-    });
-    const item = await res.json();
+window.telaEditarItemPatrimonio = async function(id) {
+    try {
+        const res = await fetch(`${API_URL}/patrimonio/item/${id}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        
+        if (!res.ok) throw new Error("Erro ao buscar dados do bem.");
+        const item = await res.json();
 
-    const modal = document.createElement('div');
-    modal.id = 'modal-edicao-item';
-    modal.className = 'alerta-vidro-overlay';
+        const modal = document.createElement('div');
+        modal.id = 'modal-editar-estado';
+        modal.className = 'alerta-vidro-overlay';
+        modal.style.zIndex = "10002";
 
-    modal.innerHTML = `
-        <div class="painel-vidro" style="width: 400px; padding: 30px;">
-            <h2 style="color:white; margin:0 0 20px 0;">✏️ ATUALIZAR CONDIÇÃO</h2>
-            
-            <div style="display:flex; flex-direction:column; gap:15px;">
-                <div>
-                    <label style="color:white; font-size:0.8rem;">ESTADO DE CONSERVAÇÃO:</label>
-                    <select id="edit-estado" style="width:100%; padding:10px; border-radius:8px; background:rgba(255,255,255,0.1); color:white; border:1px solid rgba(255,255,255,0.2);">
-                        <option value="BOM" ${item.estado === 'BOM' ? 'selected' : ''} style="color:black;">🟢 BOM</option>
-                        <option value="RUIM" ${item.estado === 'RUIM' ? 'selected' : ''} style="color:black;">🟡 RUIM</option>
-                        <option value="PÉSSIMO" ${item.estado === 'PÉSSIMO' ? 'selected' : ''} style="color:black;">🔴 PÉSSIMO</option>
-                    </select>
-                </div>
+        modal.innerHTML = `
+            <div class="painel-vidro" style="width: 400px; padding: 30px; text-align: center;">
+                <h3 style="color:white; margin-bottom:10px;">Atualizar Conservação</h3>
+                <p style="color:#60a5fa; font-weight:bold; margin-bottom:20px;">${item.produto_nome}</p>
+                
+                <select id="novo-estado-bem" class="input-vidro" style="width:100%; margin-bottom: 25px; background:#1e293b; color:white;">
+                    <option value="BOM" ${item.estado === 'BOM' ? 'selected' : ''}>🟢 BOM</option>
+                    <option value="RUIM" ${item.estado === 'RUIM' ? 'selected' : ''}>🟡 RUIM</option>
+                    <option value="PÉSSIMO" ${item.estado === 'PÉSSIMO' ? 'selected' : ''}>🔴 PÉSSIMO</option>
+                </select>
 
-                <div>
-                    <label style="color:white; font-size:0.8rem;">Nº SÉRIE / PLAQUETA:</label>
-                    <input type="text" id="edit-serie" value="${item.numero_serie || ''}" 
-                        style="width:100%; padding:10px; border-radius:8px; background:rgba(255,255,255,0.1); color:white; border:1px solid rgba(255,255,255,0.2);">
-                </div>
-
-                <div style="display:flex; gap:10px; margin-top:10px;">
-                    <button onclick="document.getElementById('modal-edicao-item').remove()" class="btn-sair-vidro" style="flex:1;">CANCELAR</button>
-                    <button onclick="confirmarEdicao(${id})" style="flex:1; background:#10b981; color:white; border:none; border-radius:10px; font-weight:bold; cursor:pointer;">
+                <div style="display:flex; gap:10px;">
+                    <button onclick="document.getElementById('modal-editar-estado').remove()" class="btn-sair-vidro" style="flex:1;">CANCELAR</button>
+                    <button onclick="salvarAlteracaoEstado(${id})" style="flex:1; background:#22c55e; color:white; border:none; border-radius:10px; font-weight:bold; cursor:pointer;">
                         SALVAR
                     </button>
                 </div>
             </div>
-        </div>
-    `;
-    document.body.appendChild(modal);
-}
+        `;
+        document.body.appendChild(modal);
+    } catch (err) {
+        alert("Erro ao abrir edição: " + err.message);
+    }
+};
 
 window.confirmarEdicao = async (itemId) => {
     const payload = {
@@ -14207,7 +14204,7 @@ function alertaSucessoPatrimonio() {
     alerta.style.cssText = `
         position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
         background: rgba(34, 197, 94, 0.95); color: white; padding: 60px 100px;
-        border-radius: 30px; font-size: 2.5rem; font-weight: 900; z-index: 10001;
+        border-radius: 30px; font-size: 2.2rem; font-weight: 900; z-index: 10001;
         box-shadow: 0 20px 50px rgba(0,0,0,0.5); backdrop-filter: blur(15px);
         text-align: center; border: 2px solid rgba(255,255,255,0.2); pointer-events: none;
     `;

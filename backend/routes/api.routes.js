@@ -5221,17 +5221,32 @@ router.get('/patrimonio/global/relatorio/:local_id', verificarToken, async (req,
 });
 
 router.patch('/patrimonio/item/:id/estado', verificarToken, async (req, res) => {
-    const { id } = req.params;
     const { estado } = req.body;
-
     try {
         await db.query(
             "UPDATE patrimonios SET estado = $1, data_atualizacao = NOW() WHERE id = $2",
-            [estado, id]
+            [estado, req.params.id]
         );
         res.json({ success: true });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: "Erro ao atualizar estado." });
+    }
+});
+
+router.get('/patrimonio/item/:id', verificarToken, async (req, res) => {
+    try {
+        const result = await db.query(`
+            SELECT p.*, prod.nome as produto_nome 
+            FROM patrimonios p 
+            JOIN produtos prod ON p.produto_id = prod.id 
+            WHERE p.id = $1`, 
+            [req.params.id]
+        );
+        
+        if (result.rows.length === 0) return res.status(404).json({ error: "Item não encontrado." });
+        res.json(result.rows[0]);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao buscar detalhes do item." });
     }
 });
 

@@ -4524,67 +4524,81 @@ const upload = multer({
 
 // ROTA ATUALIZADA (Recebe arquivo e dados)
 router.post('/patrimonio/escola/registrar', verificarToken, upload.single('arquivo_nf'), async (req, res) => {
-    const { nome, setor_id, quantidade, nota_fiscal, numero_serie, adquirido_pos_2025 } = req.body;
-    const local_id = req.user.local_id;
-    
-    // O Multer coloca os dados do arquivo em req.file
-    // Salvamos o caminho relativo para facilitar o acesso depois
-    const url_nota_fiscal = req.file ? req.file.path : null;
+    const { nome, setor_id, quantidade, numero_serie, nota_fiscal, adquirido_pos_2025 } = req.body;
+    const usuario_id = req.userId;
 
     try {
-        await db.query('BEGIN');
+        const userRes = await db.query("SELECT local_id FROM usuarios WHERE id = $1", [usuario_id]);
+        const local_id_usuario = userRes.rows[0]?.local_id;
 
-        // 1. Lógica do Produto (mantém como estava)
-        let prodRes = await db.query(
-            "SELECT id FROM produtos WHERE UPPER(nome) = $1 AND local_id = $2 AND tipo = 'PATRIMONIO'",
-            [nome.toUpperCase(), local_id]
-        );
-
+        // 1. Garante que o produto existe e é do tipo PATRIMONIO
+        let produtoRes = await db.query("SELECT id FROM produtos WHERE nome = $1", [nome.trim().toUpperCase()]);
         let produto_id;
-        if (prodRes.rows.length === 0) {
-            const newProd = await db.query(
-                "INSERT INTO produtos (nome, tipo, local_id, quantidade_estoque) VALUES ($1, 'PATRIMONIO', $2, 0) RETURNING id",
-                [nome.toUpperCase(), local_id]
-            );
-            produto_id = newProd.rows[0].id;
+
+        if (produtoRes.rows.length > 0) {
+            produto_id = produtoRes.rows[0].id;
+            await db.query("UPDATE produtos SET tipo = 'PATRIMONIO' WHERE id = $1", [produto_id]);
         } else {
-            produto_id = prodRes.rows[0].id;
-        }
-
-        // 2. Inserção do(s) item(ns) de patrimônio com os NOVOS campos
-        for (let i = 0; i < (parseInt(quantidade) || 1); i++) {
-            await db.query(
-                `INSERT INTO patrimonios (
-                    produto_id, local_id, setor_id, numero_serie, 
-                    nota_fiscal, status, adquirido_pos_2025, url_nota_fiscal, estado
-                ) VALUES ($1, $2, $3, $4, $5, 'ESTOQUE', $6, $7, 'BOM')`, // Mudei para 'ESTOQUE' conforme seu enum default
-                [
-                    produto_id, 
-                    local_id, 
-                    setor_id, 
-                    (i === 0 ? (numero_serie || null) : null), // Só grava a série no primeiro item se for lote
-                    nota_fiscal || null, 
-                    adquirido_pos_2025 === 'true',
-                    url_nota_fiscal
-                ]
+            const novoProduto = await db.query(
+                "INSERT INTO produtos (nome, local_id, tipo) VALUES ($1, $2, 'PATRIMONIO') RETURNING id",
+                [nome.trim().toUpperCase(), local_id_usuario]
             );
+            produto_id = novoProduto.rows[0].id;
         }
 
-        await db.query('COMMIT');
-        res.json({ success: true, message: "Registro(s) criado(s) com sucesso!" });
+        // 2. TRATAMENTO DA SÉRIE: Se estiver vazio, vira NULL para não violar a UNIQUE CONSTRAINT
+        const serie_final = (numero_serie && numero_serie.trim() !== "") ? numero_serie.trim().toUpperCase() : null;
+
+        const queryPatrimonio = `
+            INSERT INTO patrimonios (
+                produto_id, local_id, setor_id, numero_serie, 
+                nota_fiscal, adquirido_pos_2025, url_nota_fiscal, status, estado
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'ESTOQUE', 'BOM')
+        `;
+
+        const qtd = parseInt(quantidade) || 1;
+
+        for (let i = 0; i < qtd; i++) {
+            await db.query(queryPatrimonio, [
+                produto_id,
+                local_id_usuario,
+                setor_id,
+                // Se for mais de 1 item (lote), a série PRECISA ser nula para não dar erro de duplicidade
+                qtd > 1 ? null : serie_final, 
+                nota_fiscal || null,
+                adquirido_pos_2025 === 'true',
+                req.file ? req.file.filename : null
+            ]);
+        }
+
+        res.json({ success: true });
 
     } catch (err) {
-        await db.query('ROLLBACK');
-        console.error("Erro no cadastro:", err);
-        res.status(500).json({ error: "Erro ao salvar os dados e o arquivo." });
+        if (err.code === '23505') {
+            return res.status(400).json({ error: "Este Número de Série ou Plaqueta já existe no sistema." });
+        }
+        console.error("Erro no cadastro:", err.message);
+        res.status(500).json({ error: "Erro interno ao gravar patrimônio." });
     }
 });
 
 router.get('/patrimonio/meu-inventario', verificarToken, async (req, res) => {
-    const local_id = req.user.local_id; // Pega o ID da escola do token
-    const { setor_id } = req.query; // Pega o filtro de setor se houver
+    // Usamos o req.userId (padrão das suas outras rotas) para buscar o local_id oficial
+    const usuario_id = req.userId; 
 
     try {
+        // 1. Busca o local_id do usuário logado para garantir segurança
+        const userRes = await db.query("SELECT local_id FROM usuarios WHERE id = $1", [usuario_id]);
+        const localIdOficial = userRes.rows[0]?.local_id;
+
+        if (!localIdOficial) {
+            return res.status(400).json({ error: "Usuário sem local vinculado." });
+        }
+
+        const { setor_id } = req.query;
+
+        // 2. Query com JOIN para trazer o nome do produto e do setor
+        // O segredo está no 'prod.nome AS produto_nome'
         let sql = `
             SELECT 
                 p.id, 
@@ -4593,6 +4607,7 @@ router.get('/patrimonio/meu-inventario', verificarToken, async (req, res) => {
                 p.estado, 
                 p.url_nota_fiscal,
                 p.adquirido_pos_2025,
+                p.data_atualizacao,
                 s.nome as setor_nome,
                 prod.nome as produto_nome
             FROM patrimonios p
@@ -4601,20 +4616,24 @@ router.get('/patrimonio/meu-inventario', verificarToken, async (req, res) => {
             WHERE p.local_id = $1
         `;
         
-        const params = [local_id];
+        const params = [localIdOficial];
 
-        // Se o usuário selecionou um setor específico (e não "todos")
-        if (setor_id && setor_id !== 'todos') {
+        // 3. Aplica o filtro de setor se não for "todos"
+        if (setor_id && setor_id !== 'todos' && setor_id !== '') {
             sql += ` AND p.setor_id = $2`;
             params.push(setor_id);
         }
 
+        // Ordenação por nome do setor e depois nome do produto
         sql += ` ORDER BY s.nome ASC, prod.nome ASC`;
 
         const result = await db.query(sql, params);
+        
+        // Retorna a lista para o Frontend
         res.json(result.rows);
+
     } catch (err) {
-        console.error("Erro na query de inventário:", err);
+        console.error("Erro na query de inventário:", err.message);
         res.status(500).json({ error: "Erro interno ao buscar inventário." });
     }
 });
@@ -4722,29 +4741,44 @@ router.post('/patrimonio/itens', verificarToken, async (req, res) => {
 
 router.post('/patrimonio/setores', verificarToken, async (req, res) => {
     const { nome } = req.body;
-    const local_id = req.user.local_id; // Pegamos do token para segurança
+    const usuario_id = req.userId; 
 
     try {
+        // Busca o local_id oficial do utilizador na tabela 'usuarios'
+        const userRes = await db.query("SELECT local_id FROM usuarios WHERE id = $1", [usuario_id]);
+        const local_id_usuario = userRes.rows[0]?.local_id;
+
+        if (!local_id_usuario) {
+            return res.status(400).json({ 
+                error: "Utilizador sem local vinculado no cadastro de usuários." 
+            });
+        }
+
+        // Insere o setor garantindo que o local_id seja o mesmo do utilizador logado
         await db.query(
             "INSERT INTO setores (nome, local_id) VALUES ($1, $2)",
-            [nome.toUpperCase(), local_id]
+            [nome.toUpperCase(), local_id_usuario]
         );
+
         res.json({ success: true });
     } catch (err) {
         if (err.code === '23505') {
             return res.status(400).json({ error: "Este setor já está cadastrado nesta escola." });
         }
-        res.status(500).json({ error: "Erro ao salvar setor." });
+        res.status(500).json({ error: "Erro ao salvar setor no banco de dados." });
     }
 });
 
 router.get('/patrimonio/setores/meus', verificarToken, async (req, res) => {
+    const usuario_id = req.userId; // ID garantido pelo middleware
+
     try {
-        // Agora req.user.local_id existe graças ao ajuste acima
-        const localId = req.user.local_id;
+        // Busca o local_id atualizado direto na tabela de usuários
+        const userRes = await db.query("SELECT local_id FROM usuarios WHERE id = $1", [usuario_id]);
+        const localId = userRes.rows[0]?.local_id;
 
         if (!localId) {
-            return res.status(400).json({ error: "Local do usuário não encontrado no token." });
+            return res.status(404).json({ error: "Local não identificado para este usuário." });
         }
 
         const result = await db.query(
@@ -4753,8 +4787,8 @@ router.get('/patrimonio/setores/meus', verificarToken, async (req, res) => {
         );
         res.json(result.rows);
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: "Erro ao listar setores." });
+        console.error("Erro ao listar setores:", err.message);
+        res.status(500).json({ error: "Erro ao carregar lista de setores." });
     }
 });
 
@@ -4858,29 +4892,32 @@ router.get('/patrimonio/escola/resumo', verificarToken, async (req, res) => {
 
 router.post('/computadores/chamados/abrir', verificarToken, async (req, res) => {
     const { tipo_defeito, motivo } = req.body;
-    const usuario_id = req.userId; // ID do usuário logado vindo do token
+    const usuario_id = req.userId; // ID obtido do token pelo middleware verificarToken
 
     try {
-        // 1. Busca o local_id vinculado ao usuário diretamente no banco
-        const userCheck = await db.query("SELECT local_id FROM usuarios WHERE id = $1", [usuario_id]);
-        const local_id = userCheck.rows[0]?.local_id;
+        // 1. Procura o local_id do utilizador logado diretamente na tabela 'usuarios'
+        const userRes = await db.query("SELECT local_id FROM usuarios WHERE id = $1", [usuario_id]);
+        const local_id_usuario = userRes.rows[0]?.local_id;
 
-        if (!local_id) {
-            return res.status(400).json({ error: "Utilizador sem local (escola) vinculado." });
+        // 2. Verifica se o utilizador tem um local atribuído
+        if (!local_id_usuario) {
+            return res.status(400).json({ 
+                error: "Utilizador sem local vinculado. Verifique o cadastro na tabela 'usuarios'." 
+            });
         }
 
-        // 2. Insere o chamado com o local_id garantido
+        // 3. Insere o chamado utilizando o local_id recuperado na consulta anterior
         await db.query(
-            `INSERT INTO chamados_computador (local_id, usuario_origem_id, tipo_defeito, motivo) 
-             VALUES ($1, $2, $3, $4)`,
-            [local_id, usuario_id, tipo_defeito, motivo]
+            `INSERT INTO chamados_computador (local_id, usuario_origem_id, tipo_defeito, motivo, status, data_abertura) 
+             VALUES ($1, $2, $3, $4, 'ABERTO', NOW())`,
+            [local_id_usuario, usuario_id, tipo_defeito, motivo]
         );
 
-        res.json({ success: true, message: "Chamado aberto com sucesso!" });
+        res.json({ success: true, message: "Chamado de manutenção registado!" });
 
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: "Erro interno: " + err.message });
+        console.error("Erro ao abrir chamado PC:", err.message);
+        res.status(500).json({ error: "Erro interno no servidor: " + err.message });
     }
 });
 
@@ -4947,6 +4984,312 @@ router.patch('/computadores/chamados/fechar/:id', verificarToken, async (req, re
         res.json({ success: true, message: "Chamado finalizado com sucesso!" });
     } catch (err) {
         res.status(500).json({ error: "Erro ao fechar chamado: " + err.message });
+    }
+});
+
+router.get('/computadores/stats', verificarToken, async (req, res) => {
+    const { inicio, fim } = req.query;
+
+    try {
+        // 1. Todos os registros no período
+        const chamados = await db.query(`
+            SELECT c.*, l.nome as local_nome, u.nome as solicitante, t.nome as tecnico
+            FROM chamados_computador c
+            JOIN locais l ON c.local_id = l.id
+            JOIN usuarios u ON c.usuario_origem_id = u.id
+            LEFT JOIN usuarios t ON c.tecnico_id = t.id
+            WHERE c.data_abertura::date BETWEEN $1 AND $2
+            ORDER BY c.data_abertura DESC
+        `, [inicio, fim]);
+
+        // 2. Totais por Local (Ordem Alfabética)
+        const porLocal = await db.query(`
+            SELECT l.nome, COUNT(*) as total
+            FROM chamados_computador c
+            JOIN locais l ON c.local_id = l.id
+            WHERE c.data_abertura::date BETWEEN $1 AND $2
+            GROUP BY l.nome ORDER BY l.nome ASC
+        `, [inicio, fim]);
+
+        // 3. Totais por Tipo de Defeito
+        const porDefeito = await db.query(`
+            SELECT tipo_defeito, COUNT(*) as total
+            FROM chamados_computador c
+            WHERE c.data_abertura::date BETWEEN $1 AND $2
+            GROUP BY tipo_defeito ORDER BY total DESC
+        `, [inicio, fim]);
+
+        res.json({
+            registros: chamados.rows,
+            statsLocal: porLocal.rows,
+            statsDefeito: porDefeito.rows
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/modulo-patrimonio/setores/novo', verificarToken, async (req, res) => {
+    const { nome_setor } = req.body;
+    const id_usuario_logado = req.userId; // Vem do token pelo middleware
+
+    try {
+        // Busca o local_id direto na tabela de usuários para não ter erro
+        const consultaUser = await db.query("SELECT local_id FROM usuarios WHERE id = $1", [id_usuario_logado]);
+        const local_id_real = consultaUser.rows[0]?.local_id;
+
+        if (!local_id_real) {
+            return res.status(400).json({ error: "Sua conta não tem um local vinculado." });
+        }
+
+        // Insere na tabela setores usando o local_id recuperado
+        await db.query(
+            "INSERT INTO setores (nome, local_id) VALUES ($1, $2)",
+            [nome_setor.trim().toUpperCase(), local_id_real]
+        );
+
+        res.json({ success: true, message: "Setor salvo com sucesso!" });
+
+    } catch (err) {
+        if (err.code === '23505') {
+            return res.status(400).json({ error: "Este setor já existe na sua unidade." });
+        }
+        console.error("Erro Patrimônio:", err.message);
+        res.status(500).json({ error: "Erro ao processar setor." });
+    }
+});
+
+router.get('/modulo-patrimonio/setores/lista', verificarToken, async (req, res) => {
+    const id_usuario_logado = req.userId;
+
+    try {
+        const consultaUser = await db.query("SELECT local_id FROM usuarios WHERE id = $1", [id_usuario_logado]);
+        const local_id_real = consultaUser.rows[0]?.local_id;
+
+        const result = await db.query(
+            "SELECT id, nome FROM setores WHERE local_id = $1 ORDER BY nome ASC",
+            [local_id_real]
+        );
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: "Falha ao listar setores." });
+    }
+});
+
+// =========================================================
+// MÓDULO PATRIMÔNIO: GESTÃO DE SETORES (ISOLADO)
+// =========================================================
+router.post('/patrimonio/setores/registrar', verificarToken, async (req, res) => {
+    const { nome } = req.body;
+    const usuario_id = req.userId; // Extraído com segurança pelo middleware
+
+    try {
+        // Lógica idêntica à Manutenção: busca o local_id direto na fonte
+        const userRes = await db.query("SELECT local_id FROM usuarios WHERE id = $1", [usuario_id]);
+        const local_id_real = userRes.rows[0]?.local_id;
+
+        if (!local_id_real) {
+            return res.status(400).json({ error: "Usuário não possui unidade vinculada no banco." });
+        }
+
+        // Gravação garantida com o local_id correto
+        await db.query(
+            "INSERT INTO setores (nome, local_id) VALUES ($1, $2)",
+            [nome.trim().toUpperCase(), local_id_real]
+        );
+
+        res.json({ success: true });
+    } catch (err) {
+        if (err.code === '23505') {
+            return res.status(400).json({ error: "Setor já cadastrado nesta unidade." });
+        }
+        res.status(500).json({ error: "Erro interno: " + err.message });
+    }
+});
+
+router.get('/patrimonio/setores/listar', verificarToken, async (req, res) => {
+    const usuario_id = req.userId;
+    try {
+        const userRes = await db.query("SELECT local_id FROM usuarios WHERE id = $1", [usuario_id]);
+        const local_id_real = userRes.rows[0]?.local_id;
+
+        const result = await db.query(
+            "SELECT id, nome FROM setores WHERE local_id = $1 ORDER BY nome ASC",
+            [local_id_real]
+        );
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ROTA PARA LISTAR ITENS DE UM SETOR ESPECÍFICO (INVENTÁRIO)
+router.get('/patrimonio/inventario/setor/:setor_id', verificarToken, async (req, res) => {
+    const { setor_id } = req.params;
+    const usuario_id = req.userId;
+
+    try {
+        // 1. Confirma o local_id do usuário (Segurança)
+        const userRes = await db.query("SELECT local_id FROM usuarios WHERE id = $1", [usuario_id]);
+        const local_id_usuario = userRes.rows[0]?.local_id;
+
+        // 2. Busca os itens cruzando com a tabela de produtos para pegar o nome
+        const result = await db.query(`
+            SELECT p.*, prod.nome as nome_produto 
+            FROM patrimonios p
+            JOIN produtos prod ON p.produto_id = prod.id
+            WHERE p.setor_id = $1 AND p.local_id = $2
+            ORDER BY prod.nome ASC
+        `, [setor_id, local_id_usuario]);
+
+        res.json(result.rows);
+    } catch (err) {
+        console.error("Erro ao consultar inventário:", err.message);
+        res.status(500).json({ error: "Erro ao carregar itens do setor." });
+    }
+});
+
+router.get('/patrimonio/detalhes/:id', verificarToken, async (req, res) => {
+    const { id } = req.params;
+    const usuario_id = req.userId; // ID vindo do middleware verificarToken
+
+    try {
+        // 1. Busca o local_id do usuário logado (Segurança)
+        const userRes = await db.query("SELECT local_id FROM usuarios WHERE id = $1", [usuario_id]);
+        const local_id_usuario = userRes.rows[0]?.local_id;
+
+        // 2. Busca o bem garantindo que pertença à mesma escola
+        const result = await db.query(`
+            SELECT p.*, prod.nome as nome_produto, s.nome as nome_setor
+            FROM patrimonios p
+            JOIN produtos prod ON p.produto_id = prod.id
+            JOIN setores s ON p.setor_id = s.id
+            WHERE p.id = $1 AND p.local_id = $2
+        `, [id, local_id_usuario]);
+
+        if (result.rows.length === 0) {
+            // Se não encontrar, retorna JSON de erro em vez de HTML
+            return res.status(404).json({ error: "Item não encontrado nesta unidade." });
+        }
+
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error("Erro detalhes patrimônio:", err.message);
+        res.status(500).json({ error: "Erro interno ao carregar detalhes." });
+    }
+});
+
+// 1. Listar todos os locais cadastrados
+router.get('/patrimonio/global/locais', verificarToken, async (req, res) => {
+    try {
+        const result = await db.query("SELECT id, nome FROM locais ORDER BY nome ASC");
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao listar locais." });
+    }
+});
+
+// 2. Listar setores de um local selecionado
+router.get('/patrimonio/global/setores/:local_id', verificarToken, async (req, res) => {
+    try {
+        const result = await db.query(
+            "SELECT id, nome FROM setores WHERE local_id = $1 ORDER BY nome ASC",
+            [req.params.local_id]
+        );
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao listar setores." });
+    }
+});
+
+// 3. Listar bens de um setor selecionado (com JOIN para obter nomes)
+router.get('/patrimonio/global/bens/:setor_id', verificarToken, async (req, res) => {
+    try {
+        const result = await db.query(`
+            SELECT p.*, prod.nome as nome_produto, s.nome as nome_setor, l.nome as nome_local
+            FROM patrimonios p
+            JOIN produtos prod ON p.produto_id = prod.id
+            JOIN setores s ON p.setor_id = s.id
+            JOIN locais l ON p.local_id = l.id
+            WHERE p.setor_id = $1
+            ORDER BY prod.nome ASC
+        `, [req.params.setor_id]);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao listar bens." });
+    }
+});
+
+// 4. Rota para Relatório Consolidado (PDF/Excel)
+router.get('/patrimonio/global/relatorio/:local_id', verificarToken, async (req, res) => {
+    try {
+        const result = await db.query(`
+            SELECT s.nome as setor, prod.nome as produto, p.numero_serie, p.estado, p.nota_fiscal, p.data_atualizacao
+            FROM patrimonios p
+            JOIN setores s ON p.setor_id = s.id
+            JOIN produtos prod ON p.produto_id = prod.id
+            WHERE p.local_id = $1
+            ORDER BY s.nome ASC, prod.nome ASC
+        `, [req.params.local_id]);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao gerar dados do relatório." });
+    }
+});
+
+router.patch('/patrimonio/item/:id/estado', verificarToken, async (req, res) => {
+    const { estado } = req.body;
+    try {
+        await db.query(
+            "UPDATE patrimonios SET estado = $1, data_atualizacao = NOW() WHERE id = $2",
+            [estado, req.params.id]
+        );
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao atualizar estado." });
+    }
+});
+
+router.get('/patrimonio/item/:id', verificarToken, async (req, res) => {
+    try {
+        const result = await db.query(`
+            SELECT p.*, prod.nome as produto_nome 
+            FROM patrimonios p 
+            JOIN produtos prod ON p.produto_id = prod.id 
+            WHERE p.id = $1`, 
+            [req.params.id]
+        );
+        
+        if (result.rows.length === 0) return res.status(404).json({ error: "Item não encontrado." });
+        res.json(result.rows[0]);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao buscar detalhes do item." });
+    }
+});
+
+router.patch('/patrimonio/transferir/interno', verificarToken, async (req, res) => {
+    const { patrimonio_id, novo_setor_id } = req.body;
+    const usuario_id = req.userId;
+
+    try {
+        // Busca o local_id do usuário para segurança
+        const userRes = await db.query("SELECT local_id FROM usuarios WHERE id = $1", [usuario_id]);
+        const localId = userRes.rows[0]?.local_id;
+
+        // Executa a atualização garantindo que o bem pertence ao local do usuário
+        const result = await db.query(
+            "UPDATE patrimonios SET setor_id = $1, data_atualizacao = NOW() WHERE id = $2 AND local_id = $3 RETURNING *",
+            [novo_setor_id, patrimonio_id, localId]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: "Item não encontrado ou permissão negada." });
+        }
+
+        res.json({ success: true, message: "Transferência concluída." });
+    } catch (err) {
+        console.error("Erro na transferência interna:", err);
+        res.status(500).json({ error: "Erro ao processar transferência no banco." });
     }
 });
 

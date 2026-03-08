@@ -12850,50 +12850,81 @@ async function carregarDashboardPatrimonio() {
 }
 
 async function telaPatrimonioConsultaEscola() {
-    const mainArea = document.getElementById('app-content');
-    if (!mainArea) return;
-
+    const mainArea = document.getElementById('area-conteudo-principal');
+    
+    // Container Principal em Flex para separar Tabela de Botões
     mainArea.innerHTML = `
-        <div class="animar-entrada" style="padding: 20px; color: white; height: 90vh; display: flex; flex-direction: column;">
+        <div style="display: flex; flex-direction: column; height: 100vh; padding: 20px; box-sizing: border-box;">
             
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 25px;">
-                <div style="display: flex; align-items: center; gap: 15px;">
-                    <button onclick="abrirMenuPatrimonioEscola()" class="btn-sair-vidro">⬅️ VOLTAR</button>
-                    <h1 style="margin:0; font-size: 1.8rem;">📦 Inventário de Bens</h1>
-                </div>
-                <div style="text-align: right; opacity: 0.7; font-size: 0.8rem;">
-                    Unidade: ${localStorage.getItem('nome') || 'Escola Logada'}<br>
-                    Data: ${new Date().toLocaleDateString('pt-BR')}
-                </div>
+            <div style="margin-bottom: 20px; display: flex; align-items: center; gap: 15px;">
+                <h2 style="color:white; margin:0;">INVENTÁRIO DE BENS</h2>
+                <select id="filtro-setor-patrimonio" class="input-vidro" style="width: 300px;" onchange="carregarItensPorSetor(this.value, this.options[this.selectedIndex].text)">
+                    <option value="todos">TODOS OS SETORES</option>
+                </select>
+                <div id="titulo-setor-atual" style="color: #60a5fa; font-weight: bold; font-size: 1.2rem; margin-left: auto;"></div>
             </div>
-            <div style="display: grid; grid-template-columns: 320px 1fr; gap: 20px; flex: 1; overflow: hidden;">
+
+            <div style="display: flex; flex: 1; gap: 15px; overflow: hidden;">
                 
-                <div class="painel-vidro" style="padding: 20px; display: flex; flex-direction: column; overflow: hidden;">
-                    <h3 style="margin-top:0; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;">📍 Setores</h3>
-                    <div id="lista-setores-inventario" style="flex: 1; overflow-y: auto; margin-top: 10px;">
-                        <p style="color:gray;">Carregando setores...</p>
-                    </div>
+                <div id="corpo-tabela-dinamica" style="flex: 1; overflow-y: auto; background: rgba(0,0,0,0.2); border-radius: 12px; padding: 10px;">
+                    <p style="color:gray; text-align:center; margin-top:50px;">Selecione um setor para visualizar os bens.</p>
                 </div>
 
-                <div class="painel-vidro" style="padding: 25px; display: flex; flex-direction: column; overflow: hidden;">
-                    <div id="cabecalho-itens" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; visibility: hidden;">
-                        <h3 id="nome-setor-titulo" style="margin:0; color: #60a5fa;"></h3>
-                        <button id="btn-editar-estado" onclick="prepararEdicaoItem()" class="btn-sair-vidro" 
-                            style="background: #f59e0b; border: none; color: white; display: none;">✏️ EDITAR ESTADO CONSERVAÇÃO 
-                        </button> 
-                    </div>
-                    <div id="area-tabela-itens" style="flex: 1; overflow-y: auto;">
-                        <div style="text-align: center; margin-top: 100px; color: rgba(255,255,255,0.3);">
-                            <span style="font-size: 4rem;">👈</span>
-                            <p>Selecione um setor à esquerda para visualizar os bens patrimoniados.</p>
-                        </div>
-                    </div>
+                <div id="painel-transferencia-lateral" style="width: 220px; display: flex; flex-direction: column; gap: 10px; height: 100%;">
+                    <button id="btn-transferir-interno" disabled class="btn-lateral-estilizado" onclick="abrirModalTransferenciaInterna()">
+                        <span>TRANSFERIR</span><br>INTERNAMENTE
+                    </button>
+                    <button id="btn-transferir-externo" disabled class="btn-lateral-estilizado">
+                        <span>TRANSFERIR P/</span><br>OUTRO LOCAL
+                    </button>
                 </div>
             </div>
         </div>
     `;
 
-    carregarSetoresParaConsulta();
+    // Carrega os setores no select de filtro
+    await carregarSetoresParaConsulta();
+    
+    // Injeção de estilo para os botões laterais (mantendo independência)
+    if (!document.getElementById('style-botoes-patrimonio')) {
+        const style = document.createElement('style');
+        style.id = 'style-botoes-patrimonio';
+        style.innerHTML = `
+            .btn-lateral-estilizado {
+                flex: 1;
+                background: rgba(255, 255, 255, 0.05);
+                color: rgba(255, 255, 255, 0.3);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 12px;
+                font-weight: 900;
+                font-size: 0.8rem;
+                cursor: not-allowed;
+                transition: all 0.3s ease;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                text-align: center;
+                line-height: 1.2;
+            }
+            .btn-lateral-estilizado.ativo {
+                background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+                color: white;
+                cursor: pointer;
+                box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);
+                border: 1px solid rgba(255, 255, 255, 0.2);
+            }
+            .btn-lateral-estilizado.ativo:hover {
+                filter: brightness(1.2);
+                transform: scale(1.02);
+            }
+            .linha-selecionada {
+                background: rgba(59, 130, 246, 0.2) !important;
+                outline: 1px solid #3b82f6;
+            }
+        `;
+        document.head.appendChild(style);
+    }
 }
 
 async function carregarSetoresParaConsulta() {
@@ -13029,10 +13060,10 @@ function renderizarTabela(dados) {
                         const corPonto = coresEstado[i.estado] || '#ffffff';
 
                         return `
-                            <tr onclick="window.itemSelecionadoId = ${i.id}; habilitarBotaoEdicao();" 
-                                style="border-bottom: 1px solid rgba(255,255,255,0.03); color: ${corTexto}; cursor: pointer; transition: 0.2s;"
-                                onmouseover="this.style.background='rgba(255,255,255,0.05)'" 
-                                onmouseout="this.style.background='transparent'">
+                            <tr onclick="selecionarItemParaTransferencia(this, ${i.id}, ${i.setor_id})" 
+                                    style="border-bottom: 1px solid rgba(255,255,255,0.03); color: ${corTexto}; cursor: pointer; transition: 0.2s;"
+                                    onmouseover="this.style.background='rgba(255,255,255,0.05)'" 
+                                    onmouseout="this.style.background='transparent'">
                                 
                                 <td style="padding:6px 12px; opacity:0.5; font-size:0.75rem;">#${i.id}</td>
                                 
@@ -14240,6 +14271,136 @@ function alertaSucessoPatrimonio() {
         alerta.style.transition = 'opacity 0.5s ease';
         setTimeout(() => alerta.remove(), 500);
     }, 1000);
+}
+
+function habilitarAcoesTransferencia(id, setorIdAtual) {
+    window.itemSelecionadoId = id;
+    window.setorIdOrigem = setorIdAtual;
+
+    const btnInterno = document.getElementById('btn-transferir-interno');
+    const btnExterno = document.getElementById('btn-transferir-externo');
+
+    if (btnInterno && btnExterno) {
+        [btnInterno, btnExterno].forEach(btn => {
+            btn.disabled = false;
+            btn.classList.add('active');
+        });
+    }
+}
+
+function selecionarItemParaTransferencia(elemento, id, setorIdAtual) {
+    // 1. Remove seleção anterior
+    document.querySelectorAll('.linha-selecionada').forEach(el => el.classList.remove('linha-selecionada'));
+    
+    // 2. Marca a linha atual
+    elemento.classList.add('linha-selecionada');
+    
+    // 3. Salva dados na memória global
+    window.itemSelecionadoId = id;
+    window.setorIdOrigem = setorIdAtual;
+
+    // 4. Ativa os botões laterais
+    const btnInterno = document.getElementById('btn-transferir-interno');
+    const btnExterno = document.getElementById('btn-transferir-externo');
+    
+    if (btnInterno) {
+        btnInterno.disabled = false;
+        btnInterno.classList.add('ativo');
+    }
+    if (btnExterno) {
+        btnExterno.disabled = false;
+        btnExterno.classList.add('ativo');
+    }
+}
+
+async function abrirModalTransferenciaInterna() {
+    const id = window.itemSelecionadoId;
+    const setorAtual = window.setorIdOrigem;
+
+    // Busca setores para o local atual
+    const res = await fetch(`${API_URL}/patrimonio/setores/meus`, {
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+    const setores = await res.json();
+
+    // Filtra para não mostrar o setor onde o bem já está
+    const outrosSetores = setores.filter(s => s.id !== setorAtual);
+
+    const modal = document.createElement('div');
+    modal.id = 'modal-transferencia-interna';
+    modal.className = 'alerta-vidro-overlay';
+    modal.style.zIndex = "20000";
+
+    modal.innerHTML = `
+        <div class="painel-vidro" style="width: 450px; padding: 35px; text-align: center; border: 1px solid rgba(59, 130, 246, 0.5);">
+            <h3 style="color:white; margin-top:0;">TRANSFERIR BEM</h3>
+            <p style="color:#94a3b8; font-size:0.9rem; margin-bottom:25px;">Selecione o setor de destino para o item selecionado.</p>
+            
+            <select id="select-destino-interno" class="input-vidro" style="width:100%; margin-bottom:30px; background:#0f172a; color:white;" onchange="document.getElementById('btn-confirmar-transferencia').disabled = false">
+                <option value="" disabled selected>Escolha o novo setor...</option>
+                ${outrosSetores.map(s => `<option value="${s.id}">${s.nome}</option>`).join('')}
+            </select>
+
+            <div style="display:flex; gap:15px;">
+                <button onclick="cancelarTransferenciaInterna()" class="btn-sair-vidro" style="flex:1;">CANCELAR</button>
+                <button id="btn-confirmar-transferencia" disabled onclick="executarTransferenciaInterna()" style="flex:1; background:#10b981; color:white; border:none; border-radius:10px; font-weight:bold; cursor:pointer;">
+                    CONFIRMAR
+                </button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
+function cancelarTransferenciaInterna() {
+    const modal = document.getElementById('modal-transferencia-interna');
+    if (modal) modal.remove();
+    
+    // Desativa seleção e botões conforme regra
+    document.querySelectorAll('.linha-selecionada').forEach(el => el.classList.remove('linha-selecionada'));
+    const btnInterno = document.getElementById('btn-transferir-interno');
+    const btnExterno = document.getElementById('btn-transferir-externo');
+    if (btnInterno) { btnInterno.disabled = true; btnInterno.classList.remove('ativo'); }
+    if (btnExterno) { btnExterno.disabled = true; btnExterno.classList.remove('ativo'); }
+}
+
+function fecharModalTransferencia() {
+    const modal = document.getElementById('modal-transferencia-interna');
+    if (modal) modal.remove();
+    // Deseleciona visualmente mas mantém no registro (lógica de UI)
+}
+
+async function executarTransferenciaInterna() {
+    const novoSetorId = document.getElementById('select-destino-interno').value;
+    const patrimonioId = window.itemSelecionadoId;
+
+    try {
+        const res = await fetch(`${API_URL}/patrimonio/transferir/interno`, {
+            method: 'PATCH',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${TOKEN}` 
+            },
+            body: JSON.stringify({ patrimonio_id: patrimonioId, novo_setor_id: novoSetorId })
+        });
+
+        if (res.ok) {
+            // Usa sua função de alerta de 1 segundo
+            if (typeof alertaSucessoPatrimonio === 'function') alertaSucessoPatrimonio();
+            
+            const modal = document.getElementById('modal-transferencia-interna');
+            if (modal) modal.remove();
+
+            // Atualiza a listagem do setor de origem
+            const nomeSetor = document.getElementById('titulo-setor-atual').innerText;
+            await carregarItensPorSetor(window.setorIdOrigem, nomeSetor);
+            
+            // Lógica de posicionamento: A função carregarItensPorSetor irá renderizar a tabela novamente.
+            // O item transferido não existirá mais ali.
+        }
+    } catch (err) {
+        alert("Erro na transferência: " + err.message);
+    }
 }
 
 // Isso garante que o onclick="funcao()" funcione sempre

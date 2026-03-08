@@ -5267,4 +5267,30 @@ router.get('/patrimonio/item/:id', verificarToken, async (req, res) => {
     }
 });
 
+router.patch('/patrimonio/transferir/interno', verificarToken, async (req, res) => {
+    const { patrimonio_id, novo_setor_id } = req.body;
+    const usuario_id = req.userId;
+
+    try {
+        // Busca o local_id do usuário para segurança
+        const userRes = await db.query("SELECT local_id FROM usuarios WHERE id = $1", [usuario_id]);
+        const localId = userRes.rows[0]?.local_id;
+
+        // Executa a atualização garantindo que o bem pertence ao local do usuário
+        const result = await db.query(
+            "UPDATE patrimonios SET setor_id = $1, data_atualizacao = NOW() WHERE id = $2 AND local_id = $3 RETURNING *",
+            [novo_setor_id, patrimonio_id, localId]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: "Item não encontrado ou permissão negada." });
+        }
+
+        res.json({ success: true, message: "Transferência concluída." });
+    } catch (err) {
+        console.error("Erro na transferência interna:", err);
+        res.status(500).json({ error: "Erro ao processar transferência no banco." });
+    }
+});
+
 module.exports = router;

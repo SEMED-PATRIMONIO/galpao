@@ -12950,7 +12950,7 @@ async function carregarItensPorSetor(setor_id, nome_setor) {
     `;
 
     try {
-        const res = await fetch(`${API_URL}/patrimonio/inventario/setor/${setor_id}`, {
+        const res = await fetch(`${API_URL}/patrimonio/meu-inventario?setor_id=${setor_id}`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
         const itens = await res.json();

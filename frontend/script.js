@@ -12850,78 +12850,61 @@ async function carregarDashboardPatrimonio() {
 }
 
 async function telaPatrimonioConsultaEscola() {
-    const mainArea = document.getElementById('area-conteudo-principal');
+    // CORREÇÃO: Usando o ID 'area-vazia' que é o padrão do seu sistema
+    const mainArea = document.getElementById('area-vazia');
     
-    // Container Principal em Flex para separar Tabela de Botões
+    if (!mainArea) {
+        console.error("Erro: Container 'area-vazia' não encontrado no index.html");
+        return;
+    }
+
     mainArea.innerHTML = `
-        <div style="display: flex; flex-direction: column; height: 100vh; padding: 20px; box-sizing: border-box;">
+        <div style="display: flex; flex-direction: column; height: 90vh; padding: 15px; box-sizing: border-box;">
             
-            <div style="margin-bottom: 20px; display: flex; align-items: center; gap: 15px;">
-                <h2 style="color:white; margin:0;">INVENTÁRIO DE BENS</h2>
-                <select id="filtro-setor-patrimonio" class="input-vidro" style="width: 300px;" onchange="carregarItensPorSetor(this.value, this.options[this.selectedIndex].text)">
+            <div style="margin-bottom: 15px; display: flex; align-items: center; gap: 15px;">
+                <h2 style="color:white; margin:0; font-size: 1.5rem;">INVENTÁRIO DE BENS</h2>
+                <select id="filtro-setor-patrimonio" class="input-vidro" style="width: 300px;" 
+                    onchange="carregarItensPorSetor(this.value, this.options[this.selectedIndex].text)">
                     <option value="todos">TODOS OS SETORES</option>
                 </select>
-                <div id="titulo-setor-atual" style="color: #60a5fa; font-weight: bold; font-size: 1.2rem; margin-left: auto;"></div>
+                <div id="titulo-setor-atual" style="color: #60a5fa; font-weight: bold; font-size: 1.1rem; margin-left: auto;"></div>
             </div>
 
             <div style="display: flex; flex: 1; gap: 15px; overflow: hidden;">
                 
-                <div id="corpo-tabela-dinamica" style="flex: 1; overflow-y: auto; background: rgba(0,0,0,0.2); border-radius: 12px; padding: 10px;">
+                <div id="corpo-tabela-dinamica" style="flex: 1; overflow-y: auto; background: rgba(0,0,0,0.2); border-radius: 12px; padding: 10px; border: 1px solid rgba(255,255,255,0.05);">
                     <p style="color:gray; text-align:center; margin-top:50px;">Selecione um setor para visualizar os bens.</p>
                 </div>
 
-                <div id="painel-transferencia-lateral" style="width: 220px; display: flex; flex-direction: column; gap: 10px; height: 100%;">
+                <div id="painel-transferencia-lateral" style="width: 200px; display: flex; flex-direction: column; gap: 10px;">
                     <button id="btn-transferir-interno" disabled class="btn-lateral-estilizado" onclick="abrirModalTransferenciaInterna()">
-                        <span>TRANSFERIR</span><br>INTERNAMENTE
+                        TRANSFERIR<br>INTERNAMENTE
                     </button>
                     <button id="btn-transferir-externo" disabled class="btn-lateral-estilizado">
-                        <span>TRANSFERIR P/</span><br>OUTRO LOCAL
+                        TRANSFERIR P/<br>OUTRO LOCAL
                     </button>
                 </div>
             </div>
         </div>
     `;
 
-    // Carrega os setores no select de filtro
     await carregarSetoresParaConsulta();
     
-    // Injeção de estilo para os botões laterais (mantendo independência)
+    // Injeção do estilo dos botões se não existir
     if (!document.getElementById('style-botoes-patrimonio')) {
         const style = document.createElement('style');
         style.id = 'style-botoes-patrimonio';
         style.innerHTML = `
             .btn-lateral-estilizado {
-                flex: 1;
-                background: rgba(255, 255, 255, 0.05);
-                color: rgba(255, 255, 255, 0.3);
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 12px;
-                font-weight: 900;
-                font-size: 0.8rem;
-                cursor: not-allowed;
-                transition: all 0.3s ease;
-                display: flex;
-                flex-direction: column;
-                justify-content: center;
-                align-items: center;
-                text-align: center;
-                line-height: 1.2;
+                flex: 1; background: rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.2);
+                border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 10px;
+                font-weight: 900; font-size: 0.75rem; cursor: not-allowed; transition: 0.3s;
             }
             .btn-lateral-estilizado.ativo {
-                background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
-                color: white;
-                cursor: pointer;
-                box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);
-                border: 1px solid rgba(255, 255, 255, 0.2);
+                background: #3b82f6; color: white; cursor: pointer; opacity: 1;
+                box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
             }
-            .btn-lateral-estilizado.ativo:hover {
-                filter: brightness(1.2);
-                transform: scale(1.02);
-            }
-            .linha-selecionada {
-                background: rgba(59, 130, 246, 0.2) !important;
-                outline: 1px solid #3b82f6;
-            }
+            .linha-selecionada { background: rgba(59, 130, 246, 0.2) !important; outline: 1px solid #3b82f6; }
         `;
         document.head.appendChild(style);
     }
@@ -13014,6 +12997,10 @@ async function partilharInventario(nomeSetor) {
 
 function renderizarTabela(dados) {
     const container = document.getElementById('corpo-tabela-dinamica');
+    
+    // Proteção para evitar erros caso o container não exista no DOM no momento da chamada
+    if (!container) return;
+
     if (dados.length === 0) {
         container.innerHTML = '<p style="text-align:center; color:gray; margin-top:30px; font-size:0.8rem;">Nenhum bem encontrado neste setor.</p>';
         return;
@@ -13045,7 +13032,8 @@ function renderizarTabela(dados) {
                 </thead>
                 <tbody>
                     ${dados.map((i, index) => {
-                        const temSerie = i.numero_serie && i.numero_serie.trim() !== '';
+                        // Verificações de segurança para evitar erros de string null/undefined
+                        const temSerie = i.numero_serie && String(i.numero_serie).trim() !== '';
                         const ehNovo = i.adquirido_pos_2025 === true;
 
                         // LÓGICA DE CORES DA LINHA (LEGENDA)
@@ -13063,12 +13051,13 @@ function renderizarTabela(dados) {
                             <tr onclick="selecionarItemParaTransferencia(this, ${i.id}, ${i.setor_id})" 
                                     style="border-bottom: 1px solid rgba(255,255,255,0.03); color: ${corTexto}; cursor: pointer; transition: 0.2s;"
                                     onmouseover="this.style.background='rgba(255,255,255,0.05)'" 
-                                    onmouseout="this.style.background='transparent'">
+                                    onmouseout="this.style.background='transparent'"
+                                    class="linha-inventario-selecionavel">
                                 
                                 <td style="padding:6px 12px; opacity:0.5; font-size:0.75rem;">#${i.id}</td>
                                 
                                 <td style="padding:6px 12px; font-weight:600; text-transform: uppercase;">
-                                    ${i.produto_nome}
+                                    ${i.produto_nome || 'PRODUTO NÃO IDENTIFICADO'}
                                 </td>
                                 
                                 <td style="padding:6px 12px; font-family: 'Courier New', monospace; letter-spacing: 1px;">
@@ -13090,7 +13079,7 @@ function renderizarTabela(dados) {
                                 </td>
                                 
                                 <td style="padding:6px 12px; text-align:center;">
-                                    <button onclick="detalharPatrimonio(${i.id})" style="background:none; border:none; cursor:pointer; font-size:1rem; opacity:0.7;" title="Ver Detalhes">👁️</button>
+                                    <button onclick="event.stopPropagation(); detalharPatrimonio(${i.id})" style="background:none; border:none; cursor:pointer; font-size:1rem; opacity:0.7;" title="Ver Detalhes">👁️</button>
                                 </td>
                             </tr>
                         `;
@@ -14289,27 +14278,27 @@ function habilitarAcoesTransferencia(id, setorIdAtual) {
 }
 
 function selecionarItemParaTransferencia(elemento, id, setorIdAtual) {
-    // 1. Remove seleção anterior
+    // 1. Remove destaque visual de qualquer outra linha selecionada anteriormente
     document.querySelectorAll('.linha-selecionada').forEach(el => el.classList.remove('linha-selecionada'));
     
-    // 2. Marca a linha atual
+    // 2. Marca a linha atual (a que você clicou) com a cor de destaque
     elemento.classList.add('linha-selecionada');
     
-    // 3. Salva dados na memória global
+    // 3. Salva os IDs na memória global para que as outras funções saibam QUEM e de ONDE estamos movendo
     window.itemSelecionadoId = id;
     window.setorIdOrigem = setorIdAtual;
 
-    // 4. Ativa os botões laterais
+    // 4. Localiza e "acende" os botões de transferência na extrema direita
     const btnInterno = document.getElementById('btn-transferir-interno');
     const btnExterno = document.getElementById('btn-transferir-externo');
     
     if (btnInterno) {
         btnInterno.disabled = false;
-        btnInterno.classList.add('ativo');
+        btnInterno.classList.add('ativo'); // Ativa o gradiente azul definido no CSS
     }
     if (btnExterno) {
         btnExterno.disabled = false;
-        btnExterno.classList.add('ativo');
+        btnExterno.classList.add('ativo'); // Ativa o gradiente azul definido no CSS
     }
 }
 

@@ -4583,10 +4583,22 @@ router.post('/patrimonio/escola/registrar', verificarToken, upload.single('arqui
 });
 
 router.get('/patrimonio/meu-inventario', verificarToken, async (req, res) => {
-    const local_id = req.user.local_id; // Pega o ID da escola do token
-    const { setor_id } = req.query; // Pega o filtro de setor se houver
+    // Usamos o req.userId (padrão das suas outras rotas) para buscar o local_id oficial
+    const usuario_id = req.userId; 
 
     try {
+        // 1. Busca o local_id do usuário logado para garantir segurança
+        const userRes = await db.query("SELECT local_id FROM usuarios WHERE id = $1", [usuario_id]);
+        const localIdOficial = userRes.rows[0]?.local_id;
+
+        if (!localIdOficial) {
+            return res.status(400).json({ error: "Usuário sem local vinculado." });
+        }
+
+        const { setor_id } = req.query;
+
+        // 2. Query com JOIN para trazer o nome do produto e do setor
+        // O segredo está no 'prod.nome AS produto_nome'
         let sql = `
             SELECT 
                 p.id, 
@@ -4595,6 +4607,7 @@ router.get('/patrimonio/meu-inventario', verificarToken, async (req, res) => {
                 p.estado, 
                 p.url_nota_fiscal,
                 p.adquirido_pos_2025,
+                p.data_atualizacao,
                 s.nome as setor_nome,
                 prod.nome as produto_nome
             FROM patrimonios p
@@ -4603,20 +4616,24 @@ router.get('/patrimonio/meu-inventario', verificarToken, async (req, res) => {
             WHERE p.local_id = $1
         `;
         
-        const params = [local_id];
+        const params = [localIdOficial];
 
-        // Se o usuário selecionou um setor específico (e não "todos")
-        if (setor_id && setor_id !== 'todos') {
+        // 3. Aplica o filtro de setor se não for "todos"
+        if (setor_id && setor_id !== 'todos' && setor_id !== '') {
             sql += ` AND p.setor_id = $2`;
             params.push(setor_id);
         }
 
+        // Ordenação por nome do setor e depois nome do produto
         sql += ` ORDER BY s.nome ASC, prod.nome ASC`;
 
         const result = await db.query(sql, params);
+        
+        // Retorna a lista para o Frontend
         res.json(result.rows);
+
     } catch (err) {
-        console.error("Erro na query de inventário:", err);
+        console.error("Erro na query de inventário:", err.message);
         res.status(500).json({ error: "Erro interno ao buscar inventário." });
     }
 });

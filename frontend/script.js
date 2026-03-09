@@ -12850,64 +12850,100 @@ async function carregarDashboardPatrimonio() {
 }
 
 async function telaPatrimonioConsultaEscola() {
-    // CORREÇÃO: Usando o ID 'area-vazia' que é o padrão do seu sistema
-    const mainArea = document.getElementById('area-vazia');
-    
-    if (!mainArea) {
-        console.error("Erro: Container 'area-vazia' não encontrado no index.html");
-        return;
-    }
+    const mainArea = document.getElementById('app-content');
+    if (!mainArea) return;
 
     mainArea.innerHTML = `
-        <div style="display: flex; flex-direction: column; height: 90vh; padding: 15px; box-sizing: border-box;">
+        <div class="animar-entrada" style="padding: 20px; color: white; height: 90vh; display: flex; flex-direction: column;">
             
-            <div style="margin-bottom: 15px; display: flex; align-items: center; gap: 15px;">
-                <h2 style="color:white; margin:0; font-size: 1.5rem;">INVENTÁRIO DE BENS</h2>
-                <select id="filtro-setor-patrimonio" class="input-vidro" style="width: 300px;" 
-                    onchange="carregarItensPorSetor(this.value, this.options[this.selectedIndex].text)">
-                    <option value="todos">TODOS OS SETORES</option>
-                </select>
-                <div id="titulo-setor-atual" style="color: #60a5fa; font-weight: bold; font-size: 1.1rem; margin-left: auto;"></div>
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 25px;">
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <button onclick="abrirMenuPatrimonioEscola()" class="btn-sair-vidro">⬅️ VOLTAR</button>
+                    <h1 style="margin:0; font-size: 1.8rem;">📦 Inventário de Bens</h1>
+                </div>
+                <div style="text-align: right; opacity: 0.7; font-size: 0.8rem;">
+                    Unidade: ${localStorage.getItem('nome') || 'Escola Logada'}<br>
+                    Data: ${new Date().toLocaleDateString('pt-BR')}
+                </div>
             </div>
 
-            <div style="display: flex; flex: 1; gap: 15px; overflow: hidden;">
+            <div style="display: grid; grid-template-columns: 320px 1fr 220px; gap: 20px; flex: 1; overflow: hidden;">
                 
-                <div id="corpo-tabela-dinamica" style="flex: 1; overflow-y: auto; background: rgba(0,0,0,0.2); border-radius: 12px; padding: 10px; border: 1px solid rgba(255,255,255,0.05);">
-                    <p style="color:gray; text-align:center; margin-top:50px;">Selecione um setor para visualizar os bens.</p>
+                <div class="painel-vidro" style="padding: 20px; display: flex; flex-direction: column; overflow: hidden;">
+                    <h3 style="margin-top:0; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;">📍 Setores</h3>
+                    <div id="lista-setores-inventario" style="flex: 1; overflow-y: auto; margin-top: 10px;">
+                        <p style="color:gray;">Carregando setores...</p>
+                    </div>
                 </div>
 
-                <div id="painel-transferencia-lateral" style="width: 200px; display: flex; flex-direction: column; gap: 10px;">
+                <div class="painel-vidro" style="padding: 25px; display: flex; flex-direction: column; overflow: hidden;">
+                    <div id="cabecalho-itens" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; visibility: hidden;">
+                        <h3 id="nome-setor-titulo" style="margin:0; color: #60a5fa;"></h3>
+                        <div style="display: flex; gap: 10px;">
+                            <button id="btn-editar-estado" onclick="prepararEdicaoItem()" class="btn-sair-vidro" 
+                                style="background: #f59e0b; border: none; color: white; display: none;">✏️ EDITAR
+                            </button> 
+                            <button id="btn-gerar-pdf" class="btn-sair-vidro" style="background: #ef4444; border: none; color: white;">
+                                📄 PDF 
+                            </button>
+                        </div>
+                    </div>
+                    <div id="area-tabela-itens" style="flex: 1; overflow-y: auto;">
+                        <div style="text-align: center; margin-top: 100px; color: rgba(255,255,255,0.3);">
+                            <span style="font-size: 4rem;">👈</span>
+                            <p>Selecione um setor à esquerda para visualizar os bens patrimoniados.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="painel-transferencia-lateral" style="display: flex; flex-direction: column; gap: 15px; height: 100%;">
                     <button id="btn-transferir-interno" disabled class="btn-lateral-estilizado" onclick="abrirModalTransferenciaInterna()">
-                        TRANSFERIR<br>INTERNAMENTE
+                        TRANSFERIR INTERNAMENTE
                     </button>
                     <button id="btn-transferir-externo" disabled class="btn-lateral-estilizado">
-                        TRANSFERIR P/<br>OUTRO LOCAL
+                        TRANSFERIR P/ OUTRO LOCAL
                     </button>
                 </div>
+
             </div>
         </div>
     `;
 
-    await carregarSetoresParaConsulta();
-    
-    // Injeção do estilo dos botões se não existir
-    if (!document.getElementById('style-botoes-patrimonio')) {
+    // Injeção do estilo CSS necessário
+    if (!document.getElementById('style-transferencia')) {
         const style = document.createElement('style');
-        style.id = 'style-botoes-patrimonio';
+        style.id = 'style-transferencia';
         style.innerHTML = `
             .btn-lateral-estilizado {
-                flex: 1; background: rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.2);
-                border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 10px;
-                font-weight: 900; font-size: 0.75rem; cursor: not-allowed; transition: 0.3s;
+                flex: 1;
+                background: rgba(255, 255, 255, 0.05);
+                color: rgba(255, 255, 255, 0.2);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 15px;
+                font-weight: 900;
+                font-size: 0.85rem;
+                cursor: not-allowed;
+                transition: all 0.3s ease;
+                padding: 20px;
+                text-align: center;
+                backdrop-filter: blur(10px);
             }
             .btn-lateral-estilizado.ativo {
-                background: #3b82f6; color: white; cursor: pointer; opacity: 1;
-                box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
+                background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+                color: white;
+                cursor: pointer;
+                box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+                border: 1px solid rgba(255, 255, 255, 0.2);
             }
-            .linha-selecionada { background: rgba(59, 130, 246, 0.2) !important; outline: 1px solid #3b82f6; }
+            .linha-selecionada {
+                background: rgba(59, 130, 246, 0.3) !important;
+                outline: 1px solid #3b82f6;
+            }
         `;
         document.head.appendChild(style);
     }
+
+    carregarSetoresParaConsulta();
 }
 
 async function carregarSetoresParaConsulta() {

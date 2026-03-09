@@ -14412,21 +14412,73 @@ async function executarTransferenciaInterna() {
         });
 
         if (res.ok) {
-            // Usa sua função de alerta de 1 segundo
-            if (typeof alertaSucessoPatrimonio === 'function') alertaSucessoPatrimonio();
-            
+            // 1. Fecha o modal primeiro para limpar a tela
             const modal = document.getElementById('modal-transferencia-interna');
             if (modal) modal.remove();
 
-            // Atualiza a listagem do setor de origem
-            const nomeSetor = document.getElementById('titulo-setor-atual').innerText;
-            await carregarItensPorSetor(window.setorIdOrigem, nomeSetor);
+            // 2. Alerta de sucesso
+            if (typeof alertaSucessoPatrimonio === 'function') alertaSucessoPatrimonio();
             
-            // Lógica de posicionamento: A função carregarItensPorSetor irá renderizar a tabela novamente.
-            // O item transferido não existirá mais ali.
+            // 3. ATUALIZAÇÃO DA LISTA (Onde o erro acontecia)
+            // Em vez de travar tentando ler o innerText, usamos um fallback
+            const elTitulo = document.getElementById('nome-setor-titulo');
+            const nomeSetor = elTitulo ? elTitulo.innerText : "Setor";
+
+            // 4. Recarrega o setor de ORIGEM. 
+            // Como o banco já mudou o setor do item, ele vai sumir da lista automaticamente aqui.
+            await carregarItensPorSetor(window.setorIdOrigem, nomeSetor);
+
+            // 5. Reseta os botões de ação do topo
+            document.getElementById('btn-transferir-interno').disabled = true;
+            document.getElementById('btn-transferir-interno').classList.remove('ativo');
+            document.getElementById('btn-transferir-externo').disabled = true;
+            document.getElementById('btn-transferir-externo').classList.remove('ativo');
         }
     } catch (err) {
-        alert("Erro na transferência: " + err.message);
+        console.error("Erro ao processar atualização da lista:", err);
+    }
+}
+
+async function confirmarTransferenciaInterna() {
+    const selectDestino = document.getElementById('select-destino');
+    if (!selectDestino) return;
+    
+    const novoSetorId = selectDestino.value;
+    
+    try {
+        const res = await fetch(`${API_URL}/patrimonio/transferir/interno`, {
+            method: 'PATCH',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${TOKEN}` 
+            },
+            body: JSON.stringify({ 
+                patrimonio_id: window.itemSelecionadoId, 
+                novo_setor_id: novoSetorId 
+            })
+        });
+
+        if (res.ok) {
+            // 1. Alerta de Sucesso
+            if (typeof alertaSucessoPatrimonio === 'function') alertaSucessoPatrimonio();
+            
+            // 2. Fecha o modal
+            const modal = document.getElementById('modal-transferencia-interna');
+            if (modal) modal.remove();
+            
+            // 3. ATUALIZAÇÃO DA LISTA (O PONTO CRÍTICO)
+            // Verificamos se o elemento do título existe para evitar o erro de 'null'
+            const elementoTitulo = document.getElementById('nome-setor-titulo');
+            const nomeSetor = elementoTitulo ? elementoTitulo.innerText : 'Setor';
+
+            // 4. Recarrega os itens do setor de origem (onde o bem acabou de sair)
+            if (window.setorIdOrigem) {
+                // Força a atualização da tabela para que o bem transferido desapareça da vista
+                await carregarItensPorSetor(window.setorIdOrigem, nomeSetor);
+            }
+        }
+    } catch (err) {
+        console.error("Erro ao atualizar lista após transferência:", err);
     }
 }
 

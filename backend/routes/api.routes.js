@@ -515,8 +515,9 @@ router.put('/pedidos/itens/:itemId', verificarToken, async (req, res) => {
 router.post('/auth/login', async (req, res) => {
     const { usuario, senha } = req.body;
     try {
+        // SQL ajustado para ser insensível a maiúsculas/minúsculas e usar o nome correto da coluna
         const result = await db.query(
-            "SELECT id, nome, perfil, local_id FROM usuarios WHERE usuario = $1 AND senha = $2",
+            "SELECT id, nome, perfil, local_id FROM usuarios WHERE UPPER(nome) = UPPER($1) AND UPPER(senha) = UPPER($2)",
             [usuario, senha]
         );
 
@@ -5450,6 +5451,37 @@ router.post('/patrimonio/importar-excel', verificarToken, async (req, res) => {
         res.status(500).json({ error: "Falha técnica ao processar planilha." });
     } finally {
         client.release();
+    }
+});
+
+// 1. ROTA ESPECÍFICA PARA LISTAR LOCAIS NO MODAL (GET)
+// Criamos um caminho novo: /locais/lista-para-transferencia
+router.get('/locais/lista-para-transferencia', verificarToken, async (req, res) => {
+    try {
+        const result = await db.query("SELECT id, nome FROM locais ORDER BY nome ASC");
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao listar locais para transferência: " + err.message });
+    }
+});
+
+// 2. ROTA ESPECÍFICA PARA EXECUTAR A TRANSFERÊNCIA (POST/PATCH)
+// Já utiliza os campos 'em_transito' e 'local_destino_id' da sua tabela 'patrimonios'
+router.post('/patrimonio/executar-transferencia-externa', verificarToken, async (req, res) => {
+    const { patrimonio_id, local_destino_id } = req.body;
+    
+    try {
+        await db.query(`
+            UPDATE patrimonios 
+            SET em_transito = true, 
+                local_destino_id = $1, 
+                data_atualizacao = NOW() 
+            WHERE id = $2`, 
+            [local_destino_id, patrimonio_id]
+        );
+        res.json({ success: true, message: "Bem colocado em trânsito com sucesso!" });
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao processar transferência externa: " + err.message });
     }
 });
 

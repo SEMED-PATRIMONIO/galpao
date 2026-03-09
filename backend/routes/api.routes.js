@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const { verificarToken, verificarPerfil } = require('../auth/auth.middleware');
+const XLSX = require('xlsx');
 
 // ALTERAR STATUS DO USUÁRIO (Ativar/Inativar)
 router.patch('/usuarios/:id/status', verificarToken, async (req, res) => {
@@ -5290,6 +5291,165 @@ router.patch('/patrimonio/transferir/interno', verificarToken, async (req, res) 
     } catch (err) {
         console.error("Erro na transferência interna:", err);
         res.status(500).json({ error: "Erro ao processar transferência no banco." });
+    }
+});
+
+router.post('/patrimonio/transferir/externo', verificarToken, async (req, res) => {
+    const { patrimonio_id, local_destino_id } = req.body;
+    try {
+        await db.query(`
+            UPDATE patrimonios 
+            SET em_transito = true, local_destino_id = $1, data_atualizacao = NOW() 
+            WHERE id = $2 AND local_id = (SELECT local_id FROM usuarios WHERE id = $3)`,
+            [local_destino_id, patrimonio_id, req.userId]);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao iniciar transferência externa." });
+    }
+});
+
+router.get('/patrimonio/pendencias-recebimento', verificarToken, async (req, res) => {
+    try {
+        const result = await db.query(`
+            SELECT p.id, prod.nome as produto_nome, l_origem.nome as local_origem
+            FROM patrimonios p
+            JOIN produtos prod ON p.produto_id = prod.id
+            JOIN locais l_origem ON p.local_id = l_origem.id
+            WHERE p.local_destino_id = (SELECT local_id FROM usuarios WHERE id = $1) 
+            AND p.em_transito = true`, [req.userId]);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao buscar pendências." });
+    }
+});
+
+router.post('/patrimonio/responder-transferencia', verificarToken, async (req, res) => {
+    const { patrimonio_id, decisao, setor_id, motivo_recusa } = req.body;
+    const client = await db.connect();
+    try {
+        await client.query('BEGIN');
+        const userRes = await client.query("SELECT local_id, nome FROM usuarios WHERE id = $1", [req.userId]);
+        const { local_id, nome: usuario_nome } = userRes.rows[0];
+
+        if (decisao === 'ACEITAR') {
+            await client.query(`
+                UPDATE patrimonios 
+                SET local_id = $1, setor_id = $2, em_transito = false, local_destino_id = NULL, data_atualizacao = NOW() 
+                WHERE id = $3`, [local_id, setor_id, patrimonio_id]);
+            
+            await client.query(`
+                INSERT INTO historico (usuario_id, acao, observacoes, local_id, tipo) 
+                VALUES ($1, $2, $3, $4, 'ENTRADA')`,
+                [req.userId, `RECEBIMENTO PATRIMÔNIO ID ${patrimonio_id}`, `Aceito por ${usuario_nome}`, local_id]);
+        } else {
+            await client.query(`
+                UPDATE patrimonios SET em_transito = false, local_destino_id = NULL, data_atualizacao = NOW() 
+                WHERE id = $1`, [patrimonio_id]);
+            
+            await client.query(`
+                INSERT INTO historico (usuario_id, acao, observacoes, local_id, tipo) 
+                VALUES ($1, $2, $3, $4, 'RECUSA')`,
+                [req.userId, `RECUSA PATRIMÔNIO ID ${patrimonio_id}`, `Motivo: ${motivo_recusa}`, local_id]);
+        }
+        await client.query('COMMIT');
+        res.json({ success: true });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ error: "Erro ao processar resposta." });
+    } finally { client.release(); }
+});
+
+router.post('/patrimonio/importar-excel', verificarToken, async (req, res) => {
+    const { base64File } = req.body;
+    const usuario_id = req.userId;
+    
+    let processados = 0;
+    let novosProdutosCriados = 0;
+    let erros = [];
+    
+    const client = await db.connect();
+
+    try {
+        await client.query('BEGIN');
+
+        const userRes = await client.query("SELECT local_id FROM usuarios WHERE id = $1", [usuario_id]);
+        const localId = userRes.rows[0]?.local_id;
+
+        const buffer = Buffer.from(base64File, 'base64');
+        const workbook = XLSX.read(buffer, { type: 'buffer' });
+        const sheetName = workbook.SheetNames[0];
+        const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+
+        for (const row of rows) {
+            const { produto_nome, setor_nome, numero_serie, nota_fiscal, estado } = row;
+
+            // 1. VALIDAÇÃO DE SÉRIE DUPLICADA (A "Cereja do Bolo")
+            // Só validamos se o número de série for preenchido na planilha
+            if (numero_serie && String(numero_serie).trim() !== '') {
+                const serieExiste = await client.query(
+                    "SELECT id FROM patrimonios WHERE LOWER(numero_serie) = LOWER($1)",
+                    [String(numero_serie).trim()]
+                );
+
+                if (serieExiste.rowCount > 0) {
+                    erros.push({ 
+                        item: produto_nome, 
+                        motivo: `O número de série '${numero_serie}' já existe no banco de dados.` 
+                    });
+                    continue; // Pula para o próximo item sem importar este
+                }
+            }
+
+            // 2. VALIDAÇÃO DE SETOR
+            const setorRes = await client.query(
+                "SELECT id FROM setores WHERE LOWER(nome) = LOWER($1) AND local_id = $2",
+                [String(setor_nome).trim(), localId]
+            );
+
+            if (setorRes.rowCount === 0) {
+                erros.push({ item: produto_nome, motivo: `Setor '${setor_nome}' não encontrado.` });
+                continue;
+            }
+            const setorId = setorRes.rows[0].id;
+
+            // 3. BUSCA OU CRIAÇÃO DE PRODUTO
+            let produtoId;
+            const buscaProd = await client.query("SELECT id FROM produtos WHERE LOWER(nome) = LOWER($1)", [String(produto_nome).trim()]);
+            
+            if (buscaProd.rowCount > 0) {
+                produtoId = buscaProd.rows[0].id;
+            } else {
+                const novoProd = await client.query(
+                    "INSERT INTO produtos (nome, data_cadastro) VALUES ($1, NOW()) RETURNING id",
+                    [String(produto_nome).trim().toUpperCase()]
+                );
+                produtoId = novoProd.rows[0].id;
+                novosProdutosCriados++;
+            }
+
+            // 4. INSERÇÃO FINAL
+            await client.query(
+                `INSERT INTO patrimonios (produto_id, setor_id, local_id, numero_serie, nota_fiscal, estado, data_atualizacao) 
+                 VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
+                [produtoId, setorId, localId, numero_serie, nota_fiscal, String(estado).toUpperCase()]
+            );
+            processados++;
+        }
+
+        await client.query('COMMIT');
+        res.json({ 
+            success: true, 
+            importados: processados, 
+            novos_produtos: novosProdutosCriados, 
+            falhas: erros 
+        });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error("Erro crítico na importação:", err);
+        res.status(500).json({ error: "Falha técnica ao processar planilha." });
+    } finally {
+        client.release();
     }
 });
 

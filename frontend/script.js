@@ -380,7 +380,8 @@ async function carregarDashboard() {
     }
 
     html += `</div>`;
-    container.innerHTML = html; // [cite: 45]
+    container.innerHTML = html;
+    verificarAlertasPatrimonio();
 }
 
 // FUNÇÃO PARA A TELA SOBRE TELA (VITRIFICADA)
@@ -12871,8 +12872,11 @@ async function telaPatrimonioConsultaEscola() {
                 <button id="btn-transferir-interno" disabled class="btn-acao-topo" onclick="abrirModalTransferenciaInterna()">
                     🔄 TRANSFERIR INTERNAMENTE
                 </button>
-                <button id="btn-transferir-externo" disabled class="btn-acao-topo">
+                <button id="btn-transferir-externo" disabled class="btn-acao-topo"> onclick="abrirModalTransferenciaExterna()">
                     🚚 TRANSFERIR P/ OUTRO LOCAL
+                </button>
+                <button class="btn-acao-topo" style="background:#8b5cf6; color:white; opacity:1; cursor:pointer;" onclick="abrirModalImportarExcel()">
+                    📊 IMPORTAR DO EXCEL
                 </button>
             </div>
 
@@ -13070,32 +13074,34 @@ function renderizarTabela(dados) {
                 </thead>
                 <tbody>
                     ${dados.map((i, index) => {
-                        // Verificações de segurança para evitar erros de string null/undefined
+                        // Verificações de segurança e lógica de bloqueio
                         const temSerie = i.numero_serie && String(i.numero_serie).trim() !== '';
                         const ehNovo = i.adquirido_pos_2025 === true;
+                        const emTransito = i.em_transito === true; // Campo de controle para o fluxo externo
 
                         // LÓGICA DE CORES DA LINHA (LEGENDA)
-                        let corTexto = '#ffffff'; 
-                        if (!ehNovo && temSerie) corTexto = '#00e5ff';    // Ciano (Antigo OK)
-                        if (!ehNovo && !temSerie) corTexto = '#fbbf24';   // Laranja (Pendente Antigo)
-                        if (ehNovo && !temSerie) corTexto = '#f472b6';    // Rosa (Pendente Novo)
-                        if (ehNovo && temSerie) corTexto = '#4ade80';     // Verde (Novo OK)
+                        let corTexto = '#ffffff';
+                        if (!ehNovo && temSerie) corTexto = '#00e5ff';
+                        if (!ehNovo && !temSerie) corTexto = '#fbbf24';
+                        if (ehNovo && !temSerie) corTexto = '#f472b6';
+                        if (ehNovo && temSerie) corTexto = '#4ade80';
 
                         // Cores do estado (ponto visual apenas)
                         const coresEstado = { 'BOM': '#4ade80', 'RUIM': '#fbbf24', 'PÉSSIMO': '#ef4444' };
                         const corPonto = coresEstado[i.estado] || '#ffffff';
 
                         return `
-                            <tr onclick="selecionarItemParaTransferencia(this, ${i.id}, ${i.setor_id})" 
-                                    style="border-bottom: 1px solid rgba(255,255,255,0.03); color: ${corTexto}; cursor: pointer; transition: 0.2s;"
-                                    onmouseover="this.style.background='rgba(255,255,255,0.05)'" 
-                                    onmouseout="this.style.background='transparent'"
-                                    class="linha-inventario-selecionavel">
+                            <tr onclick="${emTransito ? '' : `selecionarItemParaTransferencia(this, ${i.id}, ${i.setor_id})`}" 
+                                style="border-bottom: 1px solid rgba(255,255,255,0.03); color: ${corTexto}; cursor: ${emTransito ? 'not-allowed' : 'pointer'}; transition: 0.2s; opacity: ${emTransito ? '0.4' : '1'};"
+                                onmouseover="${emTransito ? '' : "this.style.background='rgba(255,255,255,0.05)'"}" 
+                                onmouseout="this.style.background='transparent'"
+                                class="linha-inventario-selecionavel">
                                 
                                 <td style="padding:6px 12px; opacity:0.5; font-size:0.75rem;">#${i.id}</td>
                                 
-                                <td style="padding:6px 12px; font-weight:600; text-transform: uppercase;">
+                                <td style="padding:6px 12px; font-weight:600; text-transform: uppercase;"> 
                                     ${i.produto_nome || 'PRODUTO NÃO IDENTIFICADO'}
+                                    ${emTransito ? '<br><span style="font-size:0.6rem; color:#fbbf24; font-weight:bold;">[ EM TRÂNSITO ]</span>' : ''}
                                 </td>
                                 
                                 <td style="padding:6px 12px; font-family: 'Courier New', monospace; letter-spacing: 1px;">
@@ -13117,7 +13123,8 @@ function renderizarTabela(dados) {
                                 </td>
                                 
                                 <td style="padding:6px 12px; text-align:center;">
-                                    <button onclick="event.stopPropagation(); detalharPatrimonio(${i.id})" style="background:none; border:none; cursor:pointer; font-size:1rem; opacity:0.7;" title="Ver Detalhes">👁️</button>
+                                    <button onclick="event.stopPropagation(); detalharPatrimonio(${i.id})" style="background:none; border:none; cursor:pointer; font-size:1rem; opacity:0.7;"
+                                        title="Ver Detalhes">👁️</button>
                                 </td>
                             </tr>
                         `;
@@ -13126,7 +13133,7 @@ function renderizarTabela(dados) {
             </table>
         </div>
     `;
-}
+} 
 
 window.detalharPatrimonio = async function(id) {
     if (!id) return;
@@ -14158,12 +14165,12 @@ window.selecionarSetorGlobal = async function(setor_id, nome_setor) {
         document.getElementById('col-bens').innerHTML = bens.map(b => {
             // Tooltip com todos os campos (Hover)
             const infoHover = `
-PRODUTO: ${b.nome_produto}
-SÉRIE: ${b.numero_serie || 'N/A'}
-PLAQUETA: ${b.documento_id || 'N/A'}
-NF: ${b.nota_fiscal || 'N/A'}
-ESTADO: ${b.estado}
-CADASTRO: ${new Date(b.data_atualizacao).toLocaleDateString()}
+                PRODUTO: ${b.nome_produto}
+                SÉRIE: ${b.numero_serie || 'N/A'}
+                PLAQUETA: ${b.documento_id || 'N/A'}
+                NF: ${b.nota_fiscal || 'N/A'}
+                ESTADO: ${b.estado}
+                CADASTRO: ${new Date(b.data_atualizacao).toLocaleDateString()}
             `.trim();
 
             return `
@@ -14480,6 +14487,317 @@ async function confirmarTransferenciaInterna() {
     } catch (err) {
         console.error("Erro ao atualizar lista após transferência:", err);
     }
+}
+
+async function verificarAlertasPatrimonio() {
+    const res = await fetch(`${API_URL}/patrimonio/pendencias-recebimento`, {
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+    const pendencias = await res.json();
+
+    const btnPatrimonio = document.getElementById('btn-menu-patrimonio'); // Ajuste o ID se necessário
+    if (pendencias.length > 0 && btnPatrimonio) {
+        // Remove alerta anterior se houver
+        const antigo = document.getElementById('alerta-patrimonio-pulsa');
+        if (antigo) antigo.remove();
+
+        const esfera = document.createElement('div');
+        esfera.id = 'alerta-patrimonio-pulsa';
+        esfera.style.cssText = `
+            position: absolute; top: -5px; right: -5px; width: 15px; height: 15px;
+            background: #ef4444; border-radius: 50%; box-shadow: 0 0 10px #ef4444;
+            animation: pulsar 1.5s infinite; cursor: pointer; z-index: 10;
+        `;
+        esfera.title = `Você tem ${pendencias.length} transferência(s) pendente(s)!`;
+        esfera.onclick = (e) => { e.stopPropagation(); abrirModalDecisaoTransferencia(pendencias); };
+        
+        btnPatrimonio.style.position = 'relative';
+        btnPatrimonio.appendChild(esfera);
+    }
+}
+
+async function abrirModalDecisaoTransferencia(pendencias) {
+    const modal = document.createElement('div');
+    modal.id = 'modal-lista-pendencias';
+    modal.className = 'alerta-vidro-overlay';
+    modal.style.zIndex = "10000";
+
+    modal.innerHTML = `
+        <div class="painel-vidro" style="width: 500px; padding: 25px; border: 1px solid #ef4444;">
+            <h3 style="color:white; margin-top:0; display:flex; align-items:center; gap:10px;">
+                🚨 BENS AGUARDANDO RECEBIMENTO
+            </h3>
+            <p style="color:rgba(255,255,255,0.6); font-size:0.8rem; margin-bottom:20px;">
+                Existem itens transferidos para a sua unidade que precisam de validação.
+            </p>
+            
+            <div style="max-height: 300px; overflow-y: auto; margin-bottom:20px;">
+                ${pendencias.map(p => `
+                    <div style="background:rgba(255,255,255,0.05); padding:12px; border-radius:10px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
+                        <div style="text-align:left;">
+                            <strong style="color:#60a5fa; font-size:0.9rem;">${p.produto_nome}</strong><br>
+                            <small style="color:gray;">Origem: ${p.local_origem}</small>
+                        </div>
+                        <button onclick="abrirModalAcaoEspecifica(${p.id}, '${p.produto_nome}', '${p.local_origem}')" 
+                                style="background:#3b82f6; color:white; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; font-weight:bold; font-size:0.75rem;">
+                            ANALISAR
+                        </button>
+                    </div>
+                `).join('')}
+            </div>
+
+            <button onclick="document.getElementById('modal-lista-pendencias').remove()" class="btn-sair-vidro" style="width:100%;">FECHAR</button>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
+async function abrirModalAcaoEspecifica(id, nome, origem) {
+    // Busca setores da unidade atual para o select de aceite
+    const res = await fetch(`${API_URL}/patrimonio/setores/meus`, {
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+    const setores = await res.json();
+
+    const modal = document.createElement('div');
+    modal.id = 'modal-acao-transferencia';
+    modal.className = 'alerta-vidro-overlay';
+    modal.style.zIndex = "11000";
+
+    modal.innerHTML = `
+        <div class="painel-vidro" style="width: 450px; padding: 30px; text-align: center; border: 1px solid #3b82f6;">
+            <h2 style="color:white; margin-top:0;">CONFERÊNCIA DE BEM</h2>
+            <div style="background:rgba(0,0,0,0.3); padding:15px; border-radius:12px; margin-bottom:25px; text-align:left;">
+                <p style="margin:0; color:gray; font-size:0.75rem;">ITEM:</p>
+                <p style="margin:5px 0 15px 0; color:white; font-weight:bold;">${nome}</p>
+                <p style="margin:0; color:gray; font-size:0.75rem;">VINDO DE:</p>
+                <p style="margin:5px 0 0 0; color:#fbbf24; font-weight:bold;">${origem}</p>
+            </div>
+
+            <div id="bloco-aceite" style="margin-bottom:20px;">
+                <p style="color:white; font-size:0.85rem; margin-bottom:10px;">Para ACEITAR, selecione o setor de destino:</p>
+                <select id="select-setor-recebimento" class="input-vidro" style="width:100%; background:#0f172a;">
+                    <option value="" disabled selected>Escolha o setor...</option>
+                    ${setores.map(s => `<option value="${s.id}">${s.nome}</option>`).join('')}
+                </select>
+                <button onclick="processarRespostaTransferencia(${id}, 'ACEITAR')" 
+                    style="width:100%; margin-top:10px; background:#10b981; color:white; border:none; padding:12px; border-radius:10px; font-weight:bold; cursor:pointer;">
+                    ✅ ACEITAR E INCORPORAR AO PATRIMÓNIO
+                </button>
+            </div>
+
+            <div style="border-top: 1px solid rgba(255,255,255,0.1); padding-top:20px;">
+                <p style="color:white; font-size:0.85rem; margin-bottom:10px;">Para RECUSAR, informe o motivo:</p>
+                <textarea id="motivo-recusa-transf" class="input-vidro" placeholder="Ex: Item não confere, danificado, etc..." style="width:100%; height:60px; margin-bottom:10px;"></textarea>
+                <button onclick="processarRespostaTransferencia(${id}, 'RECUSAR')" 
+                    style="width:100%; background:#ef4444; color:white; border:none; padding:10px; border-radius:10px; font-weight:bold; cursor:pointer;">
+                    ❌ RECUSAR E DEVOLVER
+                </button>
+            </div>
+
+            <button onclick="document.getElementById('modal-acao-transferencia').remove()" class="btn-sair-vidro" style="margin-top:20px; width:100%;">CANCELAR</button>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
+async function processarRespostaTransferencia(patrimonio_id, decisao) {
+    const setor_id = document.getElementById('select-setor-recebimento')?.value;
+    const motivo_recusa = document.getElementById('motivo-recusa-transf')?.value;
+
+    if (decisao === 'ACEITAR' && !setor_id) {
+        alert("Por favor, selecione o setor de destino.");
+        return;
+    }
+    if (decisao === 'RECUSAR' && !motivo_recusa.trim()) {
+        alert("Por favor, informe o motivo da recusa.");
+        return;
+    }
+
+    try {
+        const res = await fetch(`${API_URL}/patrimonio/responder-transferencia`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ patrimonio_id, decisao, setor_id, motivo_recusa })
+        });
+
+        if (res.ok) {
+            if (typeof alertaSucessoPatrimonio === 'function') alertaSucessoPatrimonio();
+            
+            // Fecha os modais
+            if (document.getElementById('modal-acao-transferencia')) document.getElementById('modal-acao-transferencia').remove();
+            if (document.getElementById('modal-lista-pendencias')) document.getElementById('modal-lista-pendencias').remove();
+            
+            // Recarrega o dashboard para atualizar o alerta visual (esfera)
+            if (typeof carregarDashboard === 'function') carregarDashboard();
+        }
+    } catch (err) {
+        console.error("Erro ao processar resposta:", err);
+    }
+}
+
+async function abrirModalTransferenciaExterna() {
+    const id = window.itemSelecionadoId;
+    if (!id) return;
+
+    // 1. Busca todos os locais (escolas/unidades) cadastrados
+    const res = await fetch(`${API_URL}/locais`, {
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+    const locais = await res.json();
+
+    // 2. Filtra para não mostrar a própria unidade atual (quem envia não pode ser o destino)
+    const localAtualId = localStorage.getItem('local_id'); 
+    const outrasUnidades = locais.filter(l => l.id != localAtualId);
+
+    const modal = document.createElement('div');
+    modal.id = 'modal-transferencia-externa';
+    modal.className = 'alerta-vidro-overlay';
+    modal.style.zIndex = "10000";
+
+    modal.innerHTML = `
+        <div class="painel-vidro" style="width: 450px; padding: 35px; text-align: center; border: 1px solid #fbbf24;">
+            <h3 style="color:white; margin-top:0;">TRANSFERÊNCIA PARA OUTRA UNIDADE</h3>
+            <p style="color:rgba(255,255,255,0.6); font-size:0.85rem; margin-bottom:25px;">
+                O bem ficará bloqueado para uso até que o destino aceite o recebimento.
+            </p>
+            
+            <select id="select-unidade-destino" class="input-vidro" style="width:100%; margin-bottom:30px; background:#0f172a;" 
+                onchange="document.getElementById('btn-enviar-externo').disabled = false; document.getElementById('btn-enviar-externo').style.opacity = '1'">
+                <option value="" disabled selected>Selecionar Unidade de Destino...</option>
+                ${outrasUnidades.map(l => `<option value="${l.id}">${l.nome}</option>`).join('')}
+            </select>
+
+            <div style="display:flex; gap:15px;">
+                <button onclick="document.getElementById('modal-transferencia-externa').remove()" class="btn-sair-vidro" style="flex:1;">CANCELAR</button>
+                <button id="btn-enviar-externo" disabled onclick="executarEnvioExterno()" 
+                    style="flex:1; background:#fbbf24; color:#000; border:none; border-radius:10px; font-weight:bold; cursor:pointer; opacity:0.3; transition:0.3s;">
+                    🚀 INICIAR ENVIO
+                </button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
+async function executarEnvioExterno() {
+    const localDestinoId = document.getElementById('select-unidade-destino').value;
+    const patrimonioId = window.itemSelecionadoId;
+
+    try {
+        const res = await fetch(`${API_URL}/patrimonio/transferir/externo`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${TOKEN}` 
+            },
+            body: JSON.stringify({ 
+                patrimonio_id: patrimonioId, 
+                local_destino_id: localDestinoId 
+            })
+        });
+
+        if (res.ok) {
+            if (typeof alertaSucessoPatrimonio === 'function') alertaSucessoPatrimonio();
+            
+            // Fecha o modal
+            document.getElementById('modal-transferencia-externa').remove();
+
+            // Atualiza a tabela imediatamente
+            // O item agora aparecerá com opacidade reduzida e a tag [ EM TRÂNSITO ]
+            const nomeSetor = document.getElementById('nome-setor-titulo')?.innerText || "Setor";
+            carregarItensPorSetor(window.setorIdOrigem, nomeSetor);
+
+            // Reseta a seleção e os botões do topo
+            window.itemSelecionadoId = null;
+            const btnInt = document.getElementById('btn-transferir-interno');
+            const btnExt = document.getElementById('btn-transferir-externo');
+            if (btnInt) { btnInt.disabled = true; btnInt.classList.remove('ativo'); }
+            if (btnExt) { btnExt.disabled = true; btnExt.classList.remove('ativo'); }
+        }
+    } catch (err) {
+        console.error("Erro ao iniciar envio externo:", err);
+    }
+}
+
+// Injeção do CSS da animação
+const style = document.createElement('style');
+style.innerHTML = `@keyframes pulsar { 0% { transform: scale(0.9); opacity: 1; } 50% { transform: scale(1.3); opacity: 0.7; } 100% { transform: scale(0.9); opacity: 1; } }`;
+document.head.appendChild(style);
+
+function abrirModalImportarExcel() {
+    const modal = document.createElement('div');
+    modal.id = 'modal-importacao';
+    modal.className = 'alerta-vidro-overlay';
+    modal.innerHTML = `
+        <div class="painel-vidro" style="width: 450px; padding: 30px; text-align: center;">
+            <h3 style="color:white; margin:0;">IMPORTAÇÃO EM MASSA</h3>
+            <p style="color:gray; font-size:0.8rem; margin: 15px 0;">O nome do Setor deve ser IDENTICO ao do sistema.</p>
+            
+            <input type="file" id="input-file-excel" accept=".xlsx, .xls" style="display:none;" onchange="processarArquivoExcel(this)">
+            <label for="input-file-excel" style="display:block; padding:20px; border:2px dashed rgba(255,255,255,0.2); border-radius:12px; cursor:pointer; color:#60a5fa; font-weight:bold; margin-bottom:20px;">
+                📁 CLIQUE PARA SELECIONAR A PLANILHA
+            </label>
+
+            <button onclick="document.getElementById('modal-importacao').remove()" class="btn-sair-vidro" style="width:100%;">CANCELAR</button>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
+function processarArquivoExcel(input) {
+    const file = input.files[0];
+    const reader = new FileReader();
+
+    reader.onload = async function(e) {
+        const base64File = e.target.result.split(',')[1];
+        
+        // Exibe loading
+        document.getElementById('modal-importacao').innerHTML = `<div class="painel-vidro" style="padding:40px;"><p style="color:white;">Processando planilha, aguarde...</p></div>`;
+
+        const res = await fetch(`${API_URL}/patrimonio/importar-excel`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ base64File })
+        });
+
+        const resultado = await res.json();
+        exibirResumoImportacao(resultado);
+    };
+    reader.readAsDataURL(file);
+}
+
+function exibirResumoImportacao(res) {
+    const modal = document.getElementById('modal-importacao');
+    modal.innerHTML = `
+        <div class="painel-vidro" style="width: 500px; padding: 30px;">
+            <h2 style="color:white; margin-top:0;">RESUMO DA IMPORTAÇÃO</h2>
+            
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:20px;">
+                <div style="background:rgba(16,185,129,0.1); padding:10px; border-radius:8px; border:1px solid #10b981; text-align:center;">
+                    <span style="font-size:1.2rem; color:#10b981; font-weight:bold;">${res.importados}</span><br>
+                    <small style="color:white; font-size:0.6rem;">BENS IMPORTADOS</small>
+                </div>
+                <div style="background:rgba(59,130,246,0.1); padding:10px; border-radius:8px; border:1px solid #3b82f6; text-align:center;">
+                    <span style="font-size:1.2rem; color:#3b82f6; font-weight:bold;">${res.novos_produtos}</span><br>
+                    <small style="color:white; font-size:0.6rem;">NOVOS PRODUTOS CRIADOS</small>
+                </div>
+            </div>
+
+            ${res.falhas.length > 0 ? `
+                <div style="text-align:left; background:rgba(255,0,0,0.1); padding:10px; border-radius:8px; border:1px solid #ef4444;">
+                    <h4 style="color:#ef4444; margin:0 0 5px 0; font-size:0.8rem;">Itens não importados (${res.falhas.length}):</h4>
+                    <div style="max-height:150px; overflow-y:auto; font-size:0.7rem; color:rgba(255,255,255,0.7);">
+                        ${res.falhas.map(f => `• ${f.item}: ${f.motivo}`).join('<br>')}
+                    </div>
+                </div>
+            ` : '<p style="color:#4ade80; font-size:0.8rem;">✓ Todos os itens foram processados com sucesso!</p>'}
+
+            <button onclick="window.location.reload()" style="width:100%; margin-top:20px; background:#3b82f6; color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold;">
+                CONCLUIR E RECARREGAR
+            </button>
+        </div>
+    `;
 }
 
 // Isso garante que o onclick="funcao()" funcione sempre

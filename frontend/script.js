@@ -31,8 +31,8 @@ function inicializarFundo() {
 }
 // Forçar maiúsculas sem acentos APENAS em campos de texto
 document.addEventListener('input', (e) => {
-    // Adicionamos a verificação: e.target.type === 'text'
-    if (e.target.tagName === 'INPUT' && e.target.type === 'text') {
+
+    if (e.target.tagName === 'INPUT' && e.target.type === 'text' && e.target.id !== 'senha') {
         const start = e.target.selectionStart;
         const end = e.target.selectionEnd;
         
@@ -63,14 +63,12 @@ document.getElementById('form-login')?.addEventListener('submit', async (e) => {
         const data = await res.json();
 
         if (res.ok) {
-            // --- INÍCIO DO TRECHO QUE VOCÊ PERGUNTOU ---
             localStorage.setItem('token', data.token);
             localStorage.setItem('perfil', data.perfil);
             localStorage.setItem('nome', data.nome);
-            localStorage.setItem('local_id', data.local_id); // Salva o ID da Escola no navegador
+            localStorage.setItem('local_id', data.local_id); 
             TOKEN = data.token;
             carregarDashboard();
-            // --- FIM DO TRECHO ---
         } else {
             notificar('ERRO: ' + (data.message || 'Falha no login'));
         }
@@ -80,17 +78,27 @@ document.getElementById('form-login')?.addEventListener('submit', async (e) => {
     }
 });
 
+// --- 4. CORREÇÃO: PERMITIR LOGIN AO TECLAR 'ENTER' EM QUALQUER CAMPO ---
+document.getElementById('form-login')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+        e.preventDefault(); // Evita comportamentos duplicados
+        // Aciona o evento de submit definido acima
+        document.getElementById('form-login').requestSubmit();
+    }
+});
+
 function toggleSenha() {
     const senhaInput = document.getElementById('senha');
     const eyeIcon = document.getElementById('eye-icon');
     
     if (senhaInput.type === 'password') {
         senhaInput.type = 'text';
-        eyeIcon.innerHTML = '👁️‍🗨️'; // Ícone de olho aberto
+        eyeIcon.innerHTML = '🔓'; // Ícone de olho aberto
     } else {
         senhaInput.type = 'password';
-        eyeIcon.innerHTML = '👁️'; // Ícone de olho fechado/normal
+        eyeIcon.innerHTML = '🔒'; // Ícone de olho fechado/normal
     }
+    senhaInput.focus();
 }
 
 function mostrarLogin() {
@@ -14640,83 +14648,78 @@ async function abrirModalTransferenciaExterna() {
     const id = window.itemSelecionadoId;
     if (!id) return;
 
-    // 1. Busca todos os locais (escolas/unidades) cadastrados
-    const res = await fetch(`${API_URL}/locais`, {
-        headers: { 'Authorization': `Bearer ${TOKEN}` }
-    });
-    const locais = await res.json();
+    try {
+        // Chamada para a NOVA ROTA independente
+        const res = await fetch(`${API_URL}/locais/lista-para-transferencia`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
 
-    // 2. Filtra para não mostrar a própria unidade atual (quem envia não pode ser o destino)
-    const localAtualId = localStorage.getItem('local_id'); 
-    const outrasUnidades = locais.filter(l => l.id != localAtualId);
+        if (!res.ok) throw new Error("Falha ao carregar lista de locais");
+        
+        const locais = await res.json();
+        const localAtualId = localStorage.getItem('local_id'); 
+        const outrasUnidades = locais.filter(l => l.id != localAtualId);
 
-    const modal = document.createElement('div');
-    modal.id = 'modal-transferencia-externa';
-    modal.className = 'alerta-vidro-overlay';
-    modal.style.zIndex = "10000";
+        const modal = document.createElement('div');
+        modal.id = 'modal-transferencia-externa';
+        modal.className = 'alerta-vidro-overlay';
+        modal.style.zIndex = "10000";
 
-    modal.innerHTML = `
-        <div class="painel-vidro" style="width: 450px; padding: 35px; text-align: center; border: 1px solid #fbbf24;">
-            <h3 style="color:white; margin-top:0;">TRANSFERÊNCIA PARA OUTRA UNIDADE</h3>
-            <p style="color:rgba(255,255,255,0.6); font-size:0.85rem; margin-bottom:25px;">
-                O bem ficará bloqueado para uso até que o destino aceite o recebimento.
-            </p>
-            
-            <select id="select-unidade-destino" class="input-vidro" style="width:100%; margin-bottom:30px; background:#0f172a;" 
-                onchange="document.getElementById('btn-enviar-externo').disabled = false; document.getElementById('btn-enviar-externo').style.opacity = '1'">
-                <option value="" disabled selected>Selecionar Unidade de Destino...</option>
-                ${outrasUnidades.map(l => `<option value="${l.id}">${l.nome}</option>`).join('')}
-            </select>
+        modal.innerHTML = `
+            <div class="painel-vidro" style="width: 450px; padding: 35px; text-align: center; border: 1px solid #fbbf24;">
+                <h3 style="color:white; margin-top:0;">TRANSFERIR PARA OUTRA UNIDADE</h3>
+                <p style="color:rgba(255,255,255,0.6); font-size:0.85rem; margin-bottom:25px;">
+                    O bem será bloqueado até que o destino aceite o recebimento.
+                </p>
+                
+                <select id="select-unidade-destino" class="input-vidro" style="width:100%; margin-bottom:30px; background:#0f172a; color:white;">
+                    <option value="" disabled selected>Selecionar Unidade de Destino...</option>
+                    ${outrasUnidades.map(l => `<option value="${l.id}">${l.nome}</option>`).join('')}
+                </select>
 
-            <div style="display:flex; gap:15px;">
-                <button onclick="document.getElementById('modal-transferencia-externa').remove()" class="btn-sair-vidro" style="flex:1;">CANCELAR</button>
-                <button id="btn-enviar-externo" disabled onclick="executarEnvioExterno()" 
-                    style="flex:1; background:#fbbf24; color:#000; border:none; border-radius:10px; font-weight:bold; cursor:pointer; opacity:0.3; transition:0.3s;">
-                    🚀 INICIAR ENVIO
-                </button>
+                <div style="display:flex; gap:15px;">
+                    <button onclick="document.getElementById('modal-transferencia-externa').remove()" class="btn-sair-vidro" style="flex:1;">CANCELAR</button>
+                    <button id="btn-enviar-externo" onclick="executarEnvioExterno()" 
+                        style="flex:1; background:#fbbf24; color:#000; border:none; border-radius:10px; font-weight:bold; cursor:pointer;">
+                        🚀 CONFIRMAR ENVIO
+                    </button>
+                </div>
             </div>
-        </div>
-    `;
-    document.body.appendChild(modal);
+        `;
+        document.body.appendChild(modal);
+    } catch (err) {
+        console.error(err);
+        alert("Erro ao carregar locais. Verifique a conexão com o servidor.");
+    }
 }
 
 async function executarEnvioExterno() {
     const localDestinoId = document.getElementById('select-unidade-destino').value;
-    const patrimonioId = window.itemSelecionadoId;
+    if (!localDestinoId) return alert("Selecione um destino!");
 
     try {
-        const res = await fetch(`${API_URL}/patrimonio/transferir/externo`, {
+        const res = await fetch(`${API_URL}/patrimonio/executar-transferencia-externa`, {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${TOKEN}` 
             },
             body: JSON.stringify({ 
-                patrimonio_id: patrimonioId, 
+                patrimonio_id: window.itemSelecionadoId, 
                 local_destino_id: localDestinoId 
             })
         });
 
         if (res.ok) {
-            if (typeof alertaSucessoPatrimonio === 'function') alertaSucessoPatrimonio();
-            
-            // Fecha o modal
+            alert("Bem enviado com sucesso! Aguardando aceite do destino.");
             document.getElementById('modal-transferencia-externa').remove();
-
-            // Atualiza a tabela imediatamente
-            // O item agora aparecerá com opacidade reduzida e a tag [ EM TRÂNSITO ]
+            
+            // Recarrega a tabela para mostrar o item com opacidade e tag [EM TRÂNSITO]
             const nomeSetor = document.getElementById('nome-setor-titulo')?.innerText || "Setor";
             carregarItensPorSetor(window.setorIdOrigem, nomeSetor);
-
-            // Reseta a seleção e os botões do topo
-            window.itemSelecionadoId = null;
-            const btnInt = document.getElementById('btn-transferir-interno');
-            const btnExt = document.getElementById('btn-transferir-externo');
-            if (btnInt) { btnInt.disabled = true; btnInt.classList.remove('ativo'); }
-            if (btnExt) { btnExt.disabled = true; btnExt.classList.remove('ativo'); }
         }
     } catch (err) {
-        console.error("Erro ao iniciar envio externo:", err);
+        console.error(err);
     }
 }
 

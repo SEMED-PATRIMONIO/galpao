@@ -1,6 +1,15 @@
 const API_URL = 'https://patrimoniosemed.paiva.api.br';
 let TOKEN = localStorage.getItem('token');
 const tokenParaUso = localStorage.getItem('token');
+const styleAlerta = document.createElement('style');
+styleAlerta.innerHTML = `
+    @keyframes pulsoEsfera {
+        0% { transform: scale(1); opacity: 1; }
+        50% { transform: scale(1.3); opacity: 0.8; }
+        100% { transform: scale(1); opacity: 1; }
+    }
+`;
+document.head.appendChild(styleAlerta);
 
 function prepararContainerPrincipal() {
     const app = document.getElementById('app-content');
@@ -331,6 +340,9 @@ async function carregarDashboard() {
             </button>
             <button class="btn-grande btn-vidro" onclick="abrirMenuPatrimonioEscola()">
                 <i>🏛️</i><span>PATRIMÔNIO</span>
+            </button>
+            <button class="btn-acao-topo" style="background:#ef4444; color:white; cursor:pointer;" onclick="abrirModalPendenciasTransferencia()">
+                🔔 PENDÊNCIAS DE RECEBIMENTO DE BEM
             </button>
             <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
                 <i>🔑</i><span>ALTERAR MINHA SENHA</span>
@@ -14497,30 +14509,34 @@ async function confirmarTransferenciaInterna() {
 }
 
 async function verificarAlertasPatrimonio() {
-    const res = await fetch(`${API_URL}/patrimonio/pendencias-recebimento`, {
-        headers: { 'Authorization': `Bearer ${TOKEN}` }
-    });
-    const pendencias = await res.json();
+    try {
+        const res = await fetch(`${API_URL}/patrimonio/verificar-pendencias`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const pendencias = await res.json();
 
-    const btnPatrimonio = document.getElementById('btn-menu-patrimonio'); // Ajuste o ID se necessário
-    if (pendencias.length > 0 && btnPatrimonio) {
-        // Remove alerta anterior se houver
-        const antigo = document.getElementById('alerta-patrimonio-pulsa');
-        if (antigo) antigo.remove();
+        const btnPatrimonio = document.getElementById('btn-menu-patrimonio');
+        if (!btnPatrimonio) return;
 
-        const esfera = document.createElement('div');
-        esfera.id = 'alerta-patrimonio-pulsa';
-        esfera.style.cssText = `
-            position: absolute; top: -5px; right: -5px; width: 15px; height: 15px;
-            background: #ef4444; border-radius: 50%; box-shadow: 0 0 10px #ef4444;
-            animation: pulsar 1.5s infinite; cursor: pointer; z-index: 10;
-        `;
-        esfera.title = `Você tem ${pendencias.length} transferência(s) pendente(s)!`;
-        esfera.onclick = (e) => { e.stopPropagation(); abrirModalDecisaoTransferencia(pendencias); };
-        
-        btnPatrimonio.style.position = 'relative';
-        btnPatrimonio.appendChild(esfera);
-    }
+        // Limpa alerta anterior se existir
+        const alertaExistente = document.getElementById('esfera-alerta-patrimonio');
+        if (alertaExistente) alertaExistente.remove();
+
+        if (pendencias.length > 0) {
+            const esfera = document.createElement('div');
+            esfera.id = 'esfera-alerta-patrimonio';
+            esfera.innerHTML = pendencias.length;
+            esfera.style.cssText = `
+                position: absolute; top: -10px; right: -10px; width: 24px; height: 24px;
+                background: #ef4444; color: white; border-radius: 50%; display: flex;
+                align-items: center; justify-content: center; font-size: 0.75rem;
+                font-weight: bold; box-shadow: 0 0 15px rgba(239, 68, 68, 0.7);
+                animation: pulsoEsfera 1.5s infinite; z-index: 100;
+            `;
+            btnPatrimonio.style.position = 'relative';
+            btnPatrimonio.appendChild(esfera);
+        }
+    } catch (err) { console.error("Erro ao verificar alertas:", err); }
 }
 
 async function abrirModalDecisaoTransferencia(pendencias) {
@@ -14800,6 +14816,91 @@ function exibirResumoImportacao(res) {
             </button>
         </div>
     `;
+}
+
+async function abrirModalPendenciasTransferencia() {
+    const res = await fetch(`${API_URL}/patrimonio/verificar-pendencias`, {
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+    const pendencias = await res.json();
+
+    const modal = document.createElement('div');
+    modal.className = 'alerta-vidro-overlay';
+    modal.id = 'modal-pendencias-geral';
+    modal.innerHTML = `
+        <div class="painel-vidro" style="width: 600px; padding: 25px; max-height: 80vh; overflow-y: auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <h3 style="color:white; margin:0;">📦 TRANSFERÊNCIAS RECEBIDAS</h3>
+                <button onclick="document.getElementById('modal-pendencias-geral').remove()" class="btn-sair-vidro">VOLTAR</button>
+            </div>
+            
+            <div id="lista-itens-pendentes">
+                ${pendencias.length === 0 ? '<p style="color:gray; text-align:center;">Nenhuma pendência encontrada.</p>' : 
+                pendencias.map(p => `
+                    <div style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:15px; margin-bottom:15px;">
+                        <div style="display:flex; justify-content:space-between;">
+                            <div>
+                                <strong style="color:#60a5fa; font-size:1.1rem;">${p.produto_nome}</strong><br>
+                                <small style="color:gray;">Vindo de: ${p.local_origem}</small>
+                            </div>
+                            <div style="display:flex; gap:10px;">
+                                <button onclick="prepararAceite(${p.id}, '${p.produto_nome}')" style="background:#10b981; color:white; border:none; padding:8px 15px; border-radius:8px; cursor:pointer; font-weight:bold;">ACEITAR</button>
+                                <button onclick="prepararRecusa(${p.id}, '${p.produto_nome}')" style="background:#ef4444; color:white; border:none; padding:8px 15px; border-radius:8px; cursor:pointer; font-weight:bold;">RECUSAR</button>
+                            </div>
+                        </div>
+                        <div id="form-decisao-${p.id}" style="margin-top:15px; display:none; border-top:1px solid rgba(255,255,255,0.1); padding-top:15px;"></div>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
+async function prepararAceite(id, nome) {
+    const res = await fetch(`${API_URL}/patrimonio/setores/meus`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+    const setores = await res.json();
+    
+    const container = document.getElementById(`form-decisao-${id}`);
+    container.style.display = 'block';
+    container.innerHTML = `
+        <p style="color:white; font-size:0.8rem; margin-bottom:10px;">Selecione o setor de destino para <strong>${nome}</strong>:</p>
+        <div style="display:flex; gap:10px;">
+            <select id="sel-setor-${id}" class="input-vidro" style="flex:1; background:#0f172a;">
+                ${setores.map(s => `<option value="${s.id}">${s.nome}</option>`).join('')}
+            </select>
+            <button onclick="enviarResposta(${id}, 'ACEITAR')" style="background:#10b981; border:none; color:white; padding:10px 20px; border-radius:8px; font-weight:bold; cursor:pointer;">CONFIRMAR ACEITE</button>
+        </div>
+    `;
+}
+
+function prepararRecusa(id, nome) {
+    const container = document.getElementById(`form-decisao-${id}`);
+    container.style.display = 'block';
+    container.innerHTML = `
+        <p style="color:white; font-size:0.8rem; margin-bottom:10px;">Motivo da recusa para <strong>${nome}</strong>:</p>
+        <textarea id="motivo-${id}" class="input-vidro" style="width:100%; height:60px; margin-bottom:10px;" placeholder="Digite o motivo resumido..."></textarea>
+        <button onclick="enviarResposta(${id}, 'RECUSAR')" style="width:100%; background:#ef4444; border:none; color:white; padding:10px; border-radius:8px; font-weight:bold; cursor:pointer;">CONFIRMAR RECUSA</button>
+    `;
+}
+
+async function enviarResposta(patrimonio_id, decisao) {
+    const setor_id = document.getElementById(`sel-setor-${patrimonio_id}`)?.value;
+    const motivo_recusa = document.getElementById(`motivo-${patrimonio_id}`)?.value;
+
+    if (decisao === 'RECUSAR' && !motivo_recusa) return alert("Motivo da recusa é obrigatório!");
+
+    const res = await fetch(`${API_URL}/patrimonio/responder-transferencia`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+        body: JSON.stringify({ patrimonio_id, decisao, setor_id, motivo_recusa })
+    });
+
+    if (res.ok) {
+        alert("Processado com sucesso!");
+        abrirModalPendenciasTransferencia(); // Recarrega a lista
+        verificarAlertasPatrimonio(); // Atualiza a esfera no dashboard
+    }
 }
 
 // Isso garante que o onclick="funcao()" funcione sempre

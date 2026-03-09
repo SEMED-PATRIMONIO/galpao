@@ -515,7 +515,7 @@ router.put('/pedidos/itens/:itemId', verificarToken, async (req, res) => {
 router.post('/auth/login', async (req, res) => {
     const { usuario, senha } = req.body;
     try {
-        // SQL ajustado para ser insensível a maiúsculas/minúsculas e usar o nome correto da coluna
+        // A função UPPER() em ambos os lados garante a flexibilidade total
         const result = await db.query(
             "SELECT id, nome, perfil, local_id FROM usuarios WHERE UPPER(nome) = UPPER($1) AND UPPER(senha) = UPPER($2)",
             [usuario, senha]
@@ -524,14 +524,11 @@ router.post('/auth/login', async (req, res) => {
         if (result.rows.length > 0) {
             const user = result.rows[0];
             
-            // Debug temporário: se quiser ver no terminal do servidor se o local_id chegou:
-            console.log("Usuário logado:", user.nome, "Local ID no banco:", user.local_id);
-
             const token = jwt.sign(
                 { 
                     id: user.id, 
                     perfil: user.perfil, 
-                    local_id: user.local_id || user.LOCAL_ID // Tenta as duas formas
+                    local_id: user.local_id
                 }, 
                 SECRET, 
                 { expiresIn: '24h' }
@@ -541,10 +538,10 @@ router.post('/auth/login', async (req, res) => {
                 token: token,
                 perfil: user.perfil,
                 nome: user.nome,
-                local_id: user.local_id || user.LOCAL_ID
+                local_id: user.local_id
             });
         } else {
-            res.status(401).json({ message: "Usuário ou senha inválidos." });
+            res.status(401).json({ message: "Utilizador ou senha inválidos." });
         }
     } catch (err) { 
         res.status(500).json({ error: err.message }); 

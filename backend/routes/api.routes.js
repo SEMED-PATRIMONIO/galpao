@@ -5323,38 +5323,32 @@ router.get('/patrimonio/pendencias-recebimento', verificarToken, async (req, res
 
 router.post('/patrimonio/responder-transferencia', verificarToken, async (req, res) => {
     const { patrimonio_id, decisao, setor_id, motivo_recusa } = req.body;
-    const client = await db.connect();
     try {
-        await client.query('BEGIN');
-        const userRes = await client.query("SELECT local_id, nome FROM usuarios WHERE id = $1", [req.userId]);
-        const { local_id, nome: usuario_nome } = userRes.rows[0];
-
         if (decisao === 'ACEITAR') {
-            await client.query(`
+            // Se aceitou: Muda o local_id para o novo local, define o setor e desativa o trânsito
+            await db.query(`
                 UPDATE patrimonios 
-                SET local_id = $1, setor_id = $2, em_transito = false, local_destino_id = NULL, data_atualizacao = NOW() 
-                WHERE id = $3`, [local_id, setor_id, patrimonio_id]);
-            
-            await client.query(`
-                INSERT INTO historico (usuario_id, acao, observacoes, local_id, tipo) 
-                VALUES ($1, $2, $3, $4, 'ENTRADA')`,
-                [req.userId, `RECEBIMENTO PATRIMÔNIO ID ${patrimonio_id}`, `Aceito por ${usuario_nome}`, local_id]);
+                SET local_id = local_destino_id, 
+                    setor_id = $1, 
+                    em_transito = false, 
+                    local_destino_id = NULL, 
+                    data_atualizacao = NOW() 
+                WHERE id = $2`, [setor_id, patrimonio_id]);
         } else {
-            await client.query(`
-                UPDATE patrimonios SET em_transito = false, local_destino_id = NULL, data_atualizacao = NOW() 
+            // Se recusou: Apenas desativa o trânsito e limpa o destino (o bem volta a ficar livre na origem)
+            await db.query(`
+                UPDATE patrimonios 
+                SET em_transito = false, 
+                    local_destino_id = NULL, 
+                    data_atualizacao = NOW() 
                 WHERE id = $1`, [patrimonio_id]);
             
-            await client.query(`
-                INSERT INTO historico (usuario_id, acao, observacoes, local_id, tipo) 
-                VALUES ($1, $2, $3, $4, 'RECUSA')`,
-                [req.userId, `RECUSA PATRIMÔNIO ID ${patrimonio_id}`, `Motivo: ${motivo_recusa}`, local_id]);
+            // Aqui você pode inserir no histórico o motivo_recusa se desejar
         }
-        await client.query('COMMIT');
         res.json({ success: true });
     } catch (err) {
-        await client.query('ROLLBACK');
-        res.status(500).json({ error: "Erro ao processar resposta." });
-    } finally { client.release(); }
+        res.status(500).json({ error: "Erro ao processar resposta: " + err.message });
+    }
 });
 
 router.post('/patrimonio/importar-excel', verificarToken, async (req, res) => {
@@ -5479,6 +5473,21 @@ router.post('/patrimonio/executar-transferencia-externa', verificarToken, async 
         res.json({ success: true, message: "Bem colocado em trânsito com sucesso!" });
     } catch (err) {
         res.status(500).json({ error: "Erro ao processar transferência externa: " + err.message });
+    }
+});
+
+router.get('/patrimonio/verificar-pendencias', verificarToken, async (req, res) => {
+    try {
+        const result = await db.query(`
+            SELECT p.id, prod.nome as produto_nome, l_origem.nome as local_origem, p.local_id as local_origem_id
+            FROM patrimonios p
+            JOIN produtos prod ON p.produto_id = prod.id
+            JOIN locais l_origem ON p.local_id = l_origem.id
+            WHERE p.local_destino_id = (SELECT local_id FROM usuarios WHERE id = $1) 
+            AND p.em_transito = true`, [req.userId]);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao buscar pendências: " + err.message });
     }
 });
 

@@ -31,7 +31,7 @@ function inicializarFundo() {
 }
 // Forçar maiúsculas sem acentos APENAS em campos de texto
 document.addEventListener('input', (e) => {
-
+    // A regra && e.target.id !== 'senha' é fundamental aqui
     if (e.target.tagName === 'INPUT' && e.target.type === 'text' && e.target.id !== 'senha') {
         const start = e.target.selectionStart;
         const end = e.target.selectionEnd;
@@ -41,11 +41,11 @@ document.addEventListener('input', (e) => {
             .replace(/[\u0300-\u036f]/g, "")
             .toUpperCase();
             
-        // Só tenta redefinir a posição do cursor se o navegador suportar (evita o erro)
         if (start !== null && e.target.setSelectionRange) {
             e.target.setSelectionRange(start, end);
         }
-    }});
+    }
+});
 
 document.getElementById('form-login')?.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -66,23 +66,22 @@ document.getElementById('form-login')?.addEventListener('submit', async (e) => {
             localStorage.setItem('token', data.token);
             localStorage.setItem('perfil', data.perfil);
             localStorage.setItem('nome', data.nome);
-            localStorage.setItem('local_id', data.local_id); 
+            localStorage.setItem('local_id', data.local_id);
             TOKEN = data.token;
             carregarDashboard();
         } else {
             notificar('ERRO: ' + (data.message || 'Falha no login'));
         }
     } catch (err) {
-        console.error("Erro na conexão de login:", err);
+        console.error("Erro na conexão:", err);
         notificar("Erro ao conectar com o servidor.");
     }
 });
 
-// --- 4. CORREÇÃO: PERMITIR LOGIN AO TECLAR 'ENTER' EM QUALQUER CAMPO ---
+// Listener para a tecla ENTER (fora do submit)
 document.getElementById('form-login')?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
-        e.preventDefault(); // Evita comportamentos duplicados
-        // Aciona o evento de submit definido acima
+        e.preventDefault();
         document.getElementById('form-login').requestSubmit();
     }
 });
@@ -93,10 +92,10 @@ function toggleSenha() {
     
     if (senhaInput.type === 'password') {
         senhaInput.type = 'text';
-        eyeIcon.innerHTML = '🔓'; // Ícone de olho aberto
+        eyeIcon.innerHTML = '🔓'; // Cadeado aberto
     } else {
         senhaInput.type = 'password';
-        eyeIcon.innerHTML = '🔒'; // Ícone de olho fechado/normal
+        eyeIcon.innerHTML = '🔒'; // Cadeado fechado
     }
     senhaInput.focus();
 }

@@ -12872,7 +12872,7 @@ async function telaPatrimonioConsultaEscola() {
                 <button id="btn-transferir-interno" disabled class="btn-acao-topo" onclick="abrirModalTransferenciaInterna()">
                     🔄 TRANSFERIR INTERNAMENTE
                 </button>
-                <button id="btn-transferir-externo" disabled class="btn-acao-topo"> onclick="abrirModalTransferenciaExterna()">
+                <button id="btn-transferir-externo" disabled class="btn-acao-topo" onclick="abrirModalTransferenciaExterna()">
                     🚚 TRANSFERIR P/ OUTRO LOCAL
                 </button>
                 <button class="btn-acao-topo" style="background:#8b5cf6; color:white; opacity:1; cursor:pointer;" onclick="abrirModalImportarExcel()">

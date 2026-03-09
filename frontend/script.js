@@ -12854,89 +12854,91 @@ async function telaPatrimonioConsultaEscola() {
     if (!mainArea) return;
 
     mainArea.innerHTML = `
-        <div class="animar-entrada" style="padding: 20px; color: white; height: 90vh; display: flex; flex-direction: column;">
+        <div class="animar-entrada" style="padding: 20px; color: white; height: 95vh; display: flex; flex-direction: column;">
             
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 25px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
                 <div style="display: flex; align-items: center; gap: 15px;">
                     <button onclick="abrirMenuPatrimonioEscola()" class="btn-sair-vidro">⬅️ VOLTAR</button>
-                    <h1 style="margin:0; font-size: 1.8rem;">📦 Inventário de Bens</h1>
+                    <h1 style="margin:0; font-size: 1.5rem;">📦 Inventário de Bens</h1>
                 </div>
-                <div style="text-align: right; opacity: 0.7; font-size: 0.8rem;">
+                <div style="text-align: right; opacity: 0.7; font-size: 0.75rem;">
                     Unidade: ${localStorage.getItem('nome') || 'Escola Logada'}<br>
                     Data: ${new Date().toLocaleDateString('pt-BR')}
                 </div>
             </div>
 
-            <div style="display: grid; grid-template-columns: 320px 1fr 220px; gap: 20px; flex: 1; overflow: hidden;">
+            <div id="barra-acoes-patrimonio" style="display: flex; gap: 10px; margin-bottom: 15px; padding-left: 5px;">
+                <button id="btn-transferir-interno" disabled class="btn-acao-topo" onclick="abrirModalTransferenciaInterna()">
+                    🔄 TRANSFERIR INTERNAMENTE
+                </button>
+                <button id="btn-transferir-externo" disabled class="btn-acao-topo">
+                    🚚 TRANSFERIR P/ OUTRO LOCAL
+                </button>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 300px 1fr; gap: 15px; flex: 1; overflow: hidden;">
                 
-                <div class="painel-vidro" style="padding: 20px; display: flex; flex-direction: column; overflow: hidden;">
-                    <h3 style="margin-top:0; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;">📍 Setores</h3>
+                <div class="painel-vidro" style="padding: 15px; display: flex; flex-direction: column; overflow: hidden;">
+                    <h3 style="margin-top:0; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; font-size: 1rem;">📍 Setores</h3>
                     <div id="lista-setores-inventario" style="flex: 1; overflow-y: auto; margin-top: 10px;">
-                        <p style="color:gray;">Carregando setores...</p>
+                        <p style="color:gray; font-size: 0.8rem;">Carregando...</p>
                     </div>
                 </div>
 
-                <div class="painel-vidro" style="padding: 25px; display: flex; flex-direction: column; overflow: hidden;">
-                    <div id="cabecalho-itens" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; visibility: hidden;">
-                        <h3 id="nome-setor-titulo" style="margin:0; color: #60a5fa;"></h3>
-                        <div style="display: flex; gap: 10px;">
+                <div class="painel-vidro" style="padding: 20px; display: flex; flex-direction: column; overflow: hidden;">
+                    <div id="cabecalho-itens" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; visibility: hidden;">
+                        <h3 id="nome-setor-titulo" style="margin:0; color: #60a5fa; font-size: 1.1rem;"></h3>
+                        <div style="display: flex; gap: 8px;">
                             <button id="btn-editar-estado" onclick="prepararEdicaoItem()" class="btn-sair-vidro" 
-                                style="background: #f59e0b; border: none; color: white; display: none;">✏️ EDITAR
+                                style="background: #f59e0b; border: none; color: white; display: none; padding: 5px 12px; font-size: 0.75rem;">
+                                ✏️ EDITAR
                             </button> 
-                            <button id="btn-gerar-pdf" class="btn-sair-vidro" style="background: #ef4444; border: none; color: white;">
+                            <button id="btn-gerar-pdf" class="btn-sair-vidro" style="background: #ef4444; border: none; color: white; padding: 5px 12px; font-size: 0.75rem;">
                                 📄 PDF 
                             </button>
                         </div>
                     </div>
                     <div id="area-tabela-itens" style="flex: 1; overflow-y: auto;">
-                        <div style="text-align: center; margin-top: 100px; color: rgba(255,255,255,0.3);">
-                            <span style="font-size: 4rem;">👈</span>
-                            <p>Selecione um setor à esquerda para visualizar os bens patrimoniados.</p>
+                        <div style="text-align: center; margin-top: 80px; color: rgba(255,255,255,0.3);">
+                            <p>Selecione um setor à esquerda.</p>
                         </div>
                     </div>
-                </div>
-
-                <div id="painel-transferencia-lateral" style="display: flex; flex-direction: column; gap: 15px; height: 100%;">
-                    <button id="btn-transferir-interno" disabled class="btn-lateral-estilizado" onclick="abrirModalTransferenciaInterna()">
-                        TRANSFERIR INTERNAMENTE
-                    </button>
-                    <button id="btn-transferir-externo" disabled class="btn-lateral-estilizado">
-                        TRANSFERIR P/ OUTRO LOCAL
-                    </button>
                 </div>
 
             </div>
         </div>
     `;
 
-    // Injeção do estilo CSS necessário
-    if (!document.getElementById('style-transferencia')) {
+    // 4. ESTILO DOS NOVOS BOTÕES
+    if (!document.getElementById('style-botoes-topo')) {
         const style = document.createElement('style');
-        style.id = 'style-transferencia';
+        style.id = 'style-botoes-topo';
         style.innerHTML = `
-            .btn-lateral-estilizado {
-                flex: 1;
+            .btn-acao-topo {
                 background: rgba(255, 255, 255, 0.05);
-                color: rgba(255, 255, 255, 0.2);
+                color: rgba(255, 255, 255, 0.3);
                 border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 15px;
-                font-weight: 900;
-                font-size: 0.85rem;
+                border-radius: 8px;
+                padding: 8px 15px;
+                font-size: 0.7rem;
+                font-weight: bold;
                 cursor: not-allowed;
-                transition: all 0.3s ease;
-                padding: 20px;
-                text-align: center;
-                backdrop-filter: blur(10px);
+                transition: all 0.2s ease;
+                text-transform: uppercase;
             }
-            .btn-lateral-estilizado.ativo {
-                background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+            .btn-acao-topo.ativo {
+                background: #3b82f6;
                 color: white;
                 cursor: pointer;
-                box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
                 border: 1px solid rgba(255, 255, 255, 0.2);
+                box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+            }
+            .btn-acao-topo.ativo:hover {
+                background: #2563eb;
+                transform: translateY(-1px);
             }
             .linha-selecionada {
-                background: rgba(59, 130, 246, 0.3) !important;
+                background: rgba(59, 130, 246, 0.25) !important;
                 outline: 1px solid #3b82f6;
             }
         `;

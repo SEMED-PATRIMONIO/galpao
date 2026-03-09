@@ -341,9 +341,6 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="abrirMenuPatrimonioEscola()">
                 <i>🏛️</i><span>PATRIMÔNIO</span>
             </button>
-            <button class="btn-acao-topo" style="background:#ef4444; color:white; cursor:pointer;" onclick="abrirModalPendenciasTransferencia()">
-                🔔 PENDÊNCIAS DE RECEBIMENTO DE BEM
-            </button>
             <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
                 <i>🔑</i><span>ALTERAR MINHA SENHA</span>
             </button>    
@@ -12808,6 +12805,9 @@ function abrirMenuPatrimonioEscola() {
             </div>
 
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; max-width: 1000px; margin: 0 auto;">
+                <button class="btn-acao-topo" style="background:#ef4444; color:white; cursor:pointer;" onclick="abrirModalPendenciasTransferencia()">
+                    🔔 PENDÊNCIAS DE RECEBIMENTO DE BEM
+                </button>
                 <div onclick="telaGerenciarSetores()" class="painel-vidro card-interativo" style="cursor:pointer; padding: 20px; text-align: center;">
                     <div style="font-size: 3rem; margin-bottom: 15px;">📍</div>
                     <h3>1. CADASTRAR SETORES</h3>

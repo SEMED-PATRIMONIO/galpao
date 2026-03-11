@@ -41,10 +41,10 @@ app.get('/buscar', async (req, res) => {
 });
 
 // 3. ROTA: Salvar/Atualizar Inscrição com Auditoria de IP
-app.post('/salvar', async (req, res) => {
+app.post('/salvar', async (req, res) => { // Corrigido de appQuiz para app
     const { escola, ano, email, turma, turno, alunos } = req.body;
 
-    // CAPTURA DO IP AUTOMÁTICA (Auditável)
+    // CAPTURA DO IP AUTOMÁTICA
     const ipReal = req.headers['cf-connecting-ip'] || 
                    req.headers['x-forwarded-for'] || 
                    req.socket.remoteAddress;
@@ -53,7 +53,7 @@ app.post('/salvar', async (req, res) => {
         await pool.query(
             `INSERT INTO inscricoes_omeq (escola, ano, email, turma, turno, alunos, ip_endereco, data_hora_envio)
              VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-             ON CONFLICT (escola, turma) 
+             ON CONFLICT (escola, turma) -- CORRIGIDO: Deve ser 'turma' para bater com o banco
              DO UPDATE SET 
                 ano = $2, 
                 email = $3, 
@@ -65,8 +65,9 @@ app.post('/salvar', async (req, res) => {
         );
         res.json({ success: true });
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: "Erro ao salvar no banco de dados." });
+        // Isso vai mostrar o erro exato no terminal onde o Node está rodando
+        console.error("ERRO NO POSTGRES:", err.message); 
+        res.status(500).json({ error: err.message });
     }
 });
 

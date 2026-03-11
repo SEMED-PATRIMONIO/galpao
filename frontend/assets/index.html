@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard OMEQ - Gestão de Inscrições</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        :root { --gov-blue: #004587; --gov-gold: #ffcc00; }
+        body { background: #f4f7f6; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        
+        /* Estilos do Painel */
+        .sidebar-title { color: var(--gov-blue); font-weight: 800; letter-spacing: -1px; }
+        
+        /* CORREÇÃO: 'border-none' e 'shadow' não existem no CSS. O correto é 'border: none' e 'box-shadow' */
+        .stat-card { 
+            background: white; 
+            border-radius: 15px; 
+            padding: 25px; 
+            border: none; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05); 
+            transition: 0.3s; 
+            position: relative; 
+        }
+        .stat-card:hover { transform: translateY(-5px); }
+        .stat-icon { font-size: 2rem; opacity: 0.3; position: absolute; right: 20px; top: 20px; }
+        .stat-value { font-size: 2.5rem; font-weight: bold; color: var(--gov-blue); margin: 10px 0; }
+        .stat-label { text-transform: uppercase; font-size: 0.75rem; font-weight: bold; color: #6c757d; }
+        
+        .table-container { 
+            background: white; 
+            border-radius: 15px; 
+            overflow: hidden; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05); 
+        }
+        .table thead { background: var(--gov-blue); color: white; }
+        
+        /* Formatação de Impressão A4 Retrato */
+        @media print {
+            .no-print { display: none !important; }
+            body { background: white; padding: 0; margin: 0; }
+            .print-page { 
+                display: block !important; 
+                width: 210mm; 
+                height: 297mm; 
+                padding: 15mm; 
+                margin: auto;
+                page-break-after: always;
+            }
+            .ficha-header { border-bottom: 2px solid var(--gov-blue); margin-bottom: 20px; padding-bottom: 10px; }
+        }
+        
+        .print-page { display: none; }
+        .badge-turno { font-size: 0.8rem; padding: 5px 10px; border-radius: 20px; font-weight: bold; }
+        .bg-manha { background: #e3f2fd; color: #0d47a1; }
+        .bg-tarde { background: #fff8e1; color: #ff8f00; }
+        .bg-noite { background: #ede7f6; color: #4527a0; }
+    </style>
+</head>
+<body>
+
+    <div class="container-fluid py-4 no-print">
+        <div class="container">
+            <div class="d-flex justify-content-between align-items-center mb-5">
+                <div>
+                    <h1 class="sidebar-title m-0">OMEQ <span style="color: var(--gov-gold)">2026</span></h1>
+                    <p class="text-muted m-0">Gestão de Inscrições e Auditoria</p>
+                </div>
+                <div class="d-flex gap-2">
+                    <a href="/gerar-pdf-geral" target="_blank" class="btn btn-danger d-flex align-items-center gap-2">
+                        <i class="bi bi-file-earmark-pdf-fill"></i> Imprimir Todas as Fichas
+                    </a>
+                    <button onclick="window.location.reload()" class="btn btn-outline-primary">
+                        <i class="bi bi-arrow-clockwise"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="row g-4 mb-5">
+                <div class="col-md-3">
+                    <div class="stat-card">
+                        <i class="bi bi-people stat-icon"></i>
+                        <div class="stat-label">Total de Alunos</div>
+                        <div class="stat-value" id="count-alunos">0</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="stat-card">
+                        <i class="bi bi-door-open stat-icon"></i>
+                        <div class="stat-label">Turmas Inscritas</div>
+                        <div class="stat-value" id="count-turmas">0</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="stat-card">
+                        <i class="bi bi-building stat-icon"></i>
+                        <div class="stat-label">Escolas Ativas</div>
+                        <div class="stat-value" id="count-escolas">0</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="stat-card">
+                        <i class="bi bi-clock-history stat-icon"></i>
+                        <div class="stat-label">Último Envio</div>
+                        <div class="stat-value" id="last-update" style="font-size: 1.2rem; margin-top: 25px;">--:--</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-4">
+                <div class="col-md-4">
+                    <div class="stat-card">
+                        <h5 class="fw-bold mb-4">Distribuição por Turno</h5>
+                        <div style="height: 250px;">
+                            <canvas id="chartTurnos"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-8">
+                    <div class="stat-card">
+                        <h5 class="fw-bold mb-4">Inscrições por Unidade Escolar</h5>
+                        <div class="table-responsive" style="max-height: 250px;">
+                            <table class="table table-sm table-borderless align-middle">
+                                <tbody id="lista-escolas"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="table-container mt-5">
+                <table class="table table-hover align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th class="ps-4">Unidade Escolar</th>
+                            <th>Ano / Turma</th>
+                            <th>Turno</th>
+                            <th>Auditoria (IP / Data)</th>
+                            <th class="text-center pe-4">Ação</th>
+                        </tr>
+                    </thead>
+                    <tbody id="main-table-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="print-area" class="print-page bg-white">
+        <div class="ficha-header text-center">
+            <img src="logobrasao.png" alt="Brasão" style="width: 80px; margin-bottom: 10px;">
+            <h2 style="font-family: 'Times New Roman', serif; font-weight: bold; margin: 0;">OLIMPÍADA DE MATEMÁTICA ESTUDANTIL DE QUEIMADOS</h2>
+            <p style="margin: 0; font-size: 1.2rem;">Ficha Oficial de Inscrição de Turma</p>
+        </div>
+        <div id="print-content"></div>
+    </div>
+
+    <script>
+        let rawData = [];
+        let chartInstance = null;
+
+        async function fetchData() {
+            try {
+                const response = await fetch('/dados');
+                rawData = await response.json();
+                processData();
+            } catch (error) {
+                console.error("Erro ao buscar dados:", error);
+            }
+        }
+
+        function processData() {
+            let totalAlunos = 0;
+            let escolasCount = {};
+            let turnosCount = { 'MANHÃ': 0, 'TARDE': 0, 'NOITE': 0 };
+            let ultimaData = null;
+
+            const tableBody = document.getElementById('main-table-body');
+            const listEscolas = document.getElementById('lista-escolas');
+            tableBody.innerHTML = "";
+            listEscolas.innerHTML = "";
+
+            rawData.forEach((item, index) => {
+                // Processamento de Alunos (JSON)
+                const listaAlunos = typeof item.alunos === 'string' ? JSON.parse(item.alunos) : item.alunos;
+                const alunosValidos = Array.isArray(listaAlunos) ? listaAlunos.filter(n => n && n.trim() !== "").length : 0;
+                totalAlunos += alunosValidos;
+
+                // Escolas e Turnos
+                escolasCount[item.escola] = (escolasCount[item.escola] || 0) + 1;
+                
+                const turnoUpper = (item.turno || '').toUpperCase();
+                if (turnosCount[turnoUpper] !== undefined) turnosCount[turnoUpper]++;
+
+                // Auditoria de Data
+                const dataEnvio = new Date(item.data_hora_envio);
+                if (!isNaN(dataEnvio.getTime())) {
+                    if (!ultimaData || dataEnvio > ultimaData) ultimaData = dataEnvio;
+                }
+
+                // Renderizar Tabela Principal
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="ps-4 fw-bold">${item.escola}</td>
+                    <td>${item.ano} - <span class="badge bg-secondary">${item.turma}</span></td>
+                    <td><span class="badge-turno bg-${turnoUpper === 'MANHÃ' ? 'manha' : turnoUpper === 'TARDE' ? 'tarde' : 'noite'}">${item.turno}</span></td>
+                    <td>
+                        <div style="font-size: 0.8rem;">
+                            <i class="bi bi-geo-alt"></i> ${item.ip_endereco || '0.0.0.0'}<br>
+                            <i class="bi bi-calendar3"></i> ${!isNaN(dataEnvio.getTime()) ? dataEnvio.toLocaleString('pt-BR') : 'Data Inválida'}
+                        </div>
+                    </td>
+                    <td class="text-center pe-4">
+                        <button onclick="gerarFichaIndividual(${index})" class="btn btn-sm btn-primary">
+                            <i class="bi bi-printer"></i> Ficha
+                        </button>
+                    </td>
+                `;
+                tableBody.appendChild(tr);
+            });
+
+            // Atualizar Contadores
+            document.getElementById('count-alunos').innerText = totalAlunos;
+            document.getElementById('count-turmas').innerText = rawData.length;
+            document.getElementById('count-escolas').innerText = Object.keys(escolasCount).length;
+            document.getElementById('last-update').innerText = ultimaData ? ultimaData.toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'}) : '--:--';
+
+            // Lista Lateral de Escolas
+            Object.keys(escolasCount).sort().forEach(esc => {
+                const row = `<tr><td>${esc}</td><td class="text-end"><span class="badge rounded-pill bg-primary">${escolasCount[esc]} turmas</span></td></tr>`;
+                listEscolas.innerHTML += row;
+            });
+
+            renderChart(turnosCount);
+        }
+
+        function renderChart(data) {
+            const ctx = document.getElementById('chartTurnos').getContext('2d');
+            if (chartInstance) chartInstance.destroy();
+            chartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(data),
+                    datasets: [{
+                        data: Object.values(data),
+                        backgroundColor: ['#004587', '#ffcc00', '#2c3e50'],
+                        borderWidth: 0
+                    }]
+                },
+                options: { maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+            });
+        }
+
+        function gerarFichaIndividual(idx) {
+            const r = rawData[idx];
+            const listaAlunos = typeof r.alunos === 'string' ? JSON.parse(r.alunos) : r.alunos;
+            
+            let alunosTabela = "";
+            for(let i=0; i<15; i++) {
+                const nome = listaAlunos[i] || "";
+                if(nome) alunosTabela += `<tr><td width="50" align="center">${i+1}</td><td>${nome}</td></tr>`;
+            }
+
+            const dataFormatada = new Date(r.data_hora_envio);
+
+            document.getElementById('print-content').innerHTML = `
+                <div style="margin-bottom: 30px;">
+                    <h4 style="border-bottom: 1px solid #ccc; padding-bottom: 5px;">DADOS DA UNIDADE</h4>
+                    <p><b>Escola:</b> ${r.escola}</p>
+                    <div style="display: flex; gap: 40px;">
+                        <p><b>Ano:</b> ${r.ano}</p>
+                        <p><b>Turma:</b> ${r.turma}</p>
+                        <p><b>Turno:</b> ${r.turno}</p>
+                    </div>
+                    <p><b>E-mail Institucional:</b> ${r.email}</p>
+                </div>
+                <h4 style="border-bottom: 1px solid #ccc; padding-bottom: 5px;">RELAÇÃO DE ALUNOS INSCRITOS</h4>
+                <table class="table table-bordered w-100">
+                    <thead class="table-light"><tr><th class="text-center">Nº</th><th>Nome Completo</th></tr></thead>
+                    <tbody>${alunosTabela}</tbody>
+                </table>
+                <div style="margin-top: 50px; font-size: 0.8rem; color: #666; text-align: right;">
+                    Documento Auditado via IP: ${r.ip_endereco}<br>
+                    Protocolo Digital: ${r.id} - ${!isNaN(dataFormatada.getTime()) ? dataFormatada.toLocaleString() : 'Sem data'}
+                </div>
+            `;
+            window.print();
+        }
+
+        // Inicialização
+        fetchData();
+    </script>
+</body>
+</html>

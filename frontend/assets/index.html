@@ -219,7 +219,7 @@
             alunos: alunos
         };
 
-        fetch('salvar.php', { method: 'POST', body: JSON.stringify(payload) })
+        fetch('/salvar.php', { method: 'POST', body: JSON.stringify(payload) })
         .then(() => {
             const modal = document.getElementById('success-modal');
             modal.classList.remove('hidden');

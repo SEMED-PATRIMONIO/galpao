@@ -8,12 +8,48 @@
         :root { --success-green: #28a745; --gov-blue: #004587; }
         body { font-family: 'Segoe UI', sans-serif; background: #f4f7f6; margin: 0; padding: 15px; display: flex; justify-content: center; }
         .app-card { background: white; width: 100%; max-width: 400px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); overflow: hidden; }
-        .logo-area { padding: 20px; text-align: center; background: white; }
-        .logo-area img { width: 120px; height: auto; }
-        .content { padding: 20px; }
-        h3 { color: var(--gov-blue); margin-top: 0; }
+        .logo-area { 
+            padding: 35px 20px; 
+            text-align: center; 
+            background: var(--gov-blue); /* Tarja azul escura */
+            position: relative; /* Permite posicionar o brasão no topo */
+        }
+        .logo-main { 
+            width: 170px; 
+            height: auto; 
+            margin-top: 15px; 
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+        }
+
+        /* Logo Brasão: Menor e no topo à direita */
+        .logo-brass {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            width: 50px;
+            height: auto;
+        }
+
+        .content { padding: 25px 20px; }
+        .form-header-title {
+            font-family: 'Times New Roman', Times, serif;
+            font-weight: bold;
+            font-size: 1.15rem;
+            line-height: 1.2;
+            color: var(--text-dark);
+            margin-bottom: 5px;
+            text-transform: uppercase;
+        }
+        .form-header-subtitle {
+            font-weight: bold;
+            font-size: 1rem;
+            color: #444;
+            margin-bottom: 25px;
+        }
+
+        h3 { color: var(--gov-blue); margin-top: 0; border-bottom: 2px solid #eee; padding-bottom: 10px; }
         label { display: block; font-weight: bold; margin: 15px 0 5px; font-size: 0.9rem; text-align: left; }
-        input, select { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 10px; box-sizing: border-box; font-size: 1rem; }
+        input, select { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 10px; box-sizing: border-box; font-size: 1rem; background: #fff; }
         
         /* Email Suffix Style */
         .email-wrapper { position: relative; display: flex; align-items: center; }
@@ -36,10 +72,13 @@
 
 <div class="app-card">
     <div class="logo-area">
-        <img src="logomeq.png" alt="Logo">
+        <img src="logobrasao.png" class="logo-brass" alt="Brasão de Queimados">
+        <img src="logomeq.png" class="logo-main" alt="Logo OMEQ">
     </div>
 
     <div class="content">
+        <div class="form-header-title">OLIMPÍADA DE MATEMÁTICA ESTUDANTIL DE QUEIMADOS</div>
+        <div class="form-header-subtitle">Ficha de Inscrição de Turma</div>
         <div id="step-1">
             <h3>Identificação</h3>
             <label>Nome da Escola:</label>

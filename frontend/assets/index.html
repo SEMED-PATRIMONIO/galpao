@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ficha de Inscrição</title>
+    <style>
+        :root { --success-green: #28a745; --gov-blue: #004587; }
+        body { font-family: 'Segoe UI', sans-serif; background: #f4f7f6; margin: 0; padding: 15px; display: flex; justify-content: center; }
+        .app-card { background: white; width: 100%; max-width: 400px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); overflow: hidden; }
+        .logo-area { padding: 20px; text-align: center; background: white; }
+        .logo-area img { width: 120px; height: auto; }
+        .content { padding: 20px; }
+        h3 { color: var(--gov-blue); margin-top: 0; }
+        label { display: block; font-weight: bold; margin: 15px 0 5px; font-size: 0.9rem; text-align: left; }
+        input, select { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 10px; box-sizing: border-box; font-size: 1rem; }
+        
+        /* Email Suffix Style */
+        .email-wrapper { position: relative; display: flex; align-items: center; }
+        .email-wrapper input { padding-right: 180px; }
+        .email-suffix { position: absolute; right: 12px; color: #666; font-size: 0.9rem; pointer-events: none; }
+
+        .btn-main { background: var(--gov-blue); color: white; border: none; padding: 15px; width: 100%; border-radius: 10px; font-weight: bold; margin-top: 20px; cursor: pointer; }
+        .hidden { display: none !important; }
+        
+        /* Modal de Sucesso */
+        #success-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 20px; border-top: 10px solid var(--success-green); box-shadow: 0 0 50px rgba(0,0,0,0.3); z-index: 1000; text-align: center; width: 280px; }
+        .check-icon { font-size: 50px; color: var(--success-green); margin-bottom: 10px; }
+        .fade-out { opacity: 0; transition: opacity 1s ease-out; }
+
+        .student-row { display: flex; gap: 5px; margin-bottom: 8px; align-items: center; }
+        .student-num { width: 30px; font-weight: bold; color: var(--gov-blue); }
+    </style>
+</head>
+<body>
+
+<div class="app-card">
+    <div class="logo-area">
+        <img src="WhatsApp Image 2026-03-10 at 15.12.49.jpeg" alt="Logo">
+    </div>
+
+    <div class="content">
+        <div id="step-1">
+            <h3>Identificação</h3>
+            <label>Nome da Escola:</label>
+            <select id="escola" onchange="verificarExistente()">
+                <option value="">Selecione...</option>
+                <option>ESCOLA MUNICIPAL A</option>
+                <option>ESCOLA MUNICIPAL B</option>
+            </select>
+
+            <label>Ano de Escolaridade:</label>
+            <select id="ano" onchange="verificarExistente()">
+                <option value="">Selecione...</option>
+                <option>3º ano</option><option>4º ano</option><option>5º ano</option>
+                <option>6º ano</option><option>7º ano</option><option>8º ano</option>
+                <option>9º ano</option><option>EJA</option>
+            </select>
+            <div id="msg-status" style="margin-top:10px; font-size:0.8rem;"></div>
+            <button class="btn-main" onclick="proximo(2)">Avançar ➡️</button>
+        </div>
+
+        <div id="step-2" class="hidden">
+            <h3>Dados da Escola</h3>
+            <label>E-mail Institucional:</label>
+            <div class="email-wrapper">
+                <input type="text" id="email-user" placeholder="prefixo">
+                <span class="email-suffix">@queimados.rj.gov.br</span>
+            </div>
+
+            <label>Número da Turma:</label>
+            <input type="text" id="turma">
+
+            <label>Turno:</label>
+            <div style="display: flex; gap: 10px; margin-top: 5px;">
+                <label style="font-weight: normal;"><input type="radio" name="turno" value="MANHÃ"> Manhã</label>
+                <label style="font-weight: normal;"><input type="radio" name="turno" value="TARDE"> Tarde</label>
+                <label style="font-weight: normal;"><input type="radio" name="turno" value="NOITE"> Noite</label>
+            </div>
+            <button class="btn-main" onclick="proximo(3)">Próximo: Alunos ➡️</button>
+        </div>
+
+        <div id="step-3" class="hidden">
+            <h3>Lista de Alunos (Máx. 15)</h3>
+            <div id="lista-alunos">
+                </div>
+            <button class="btn-main" style="background: var(--success-green);" onclick="finalizar()">Enviar Formulário ✅</button>
+        </div>
+    </div>
+</div>
+
+<div id="success-modal" class="hidden">
+    <div class="check-icon">✔</div>
+    <h2 style="color: var(--success-green); margin:0;">Recebido!</h2>
+    <p>As informações foram salvas com sucesso.</p>
+</div>
+
+<script>
+    let dadosCarregados = null;
+
+    function proximo(n) {
+        if(n==2 && (!document.getElementById('escola').value || !document.getElementById('ano').value)) return alert("Preencha Escola e Ano!");
+        document.querySelectorAll('[id^="step-"]').forEach(s => s.classList.add('hidden'));
+        document.getElementById('step-'+n).classList.remove('hidden');
+        if(n==3) renderAlunos();
+    }
+
+    function renderAlunos() {
+        const container = document.getElementById('lista-alunos');
+        container.innerHTML = "";
+        for(let i=1; i<=15; i++) {
+            const val = (dadosCarregados && dadosCarregados['aluno'+i]) ? dadosCarregados['aluno'+i] : "";
+            container.innerHTML += `
+                <div class="student-row">
+                    <span class="student-num">${i}.</span>
+                    <input type="text" class="aluno-input" placeholder="Nome Completo" value="${val}">
+                </div>`;
+        }
+    }
+
+    function verificarExistente() {
+        const escola = document.getElementById('escola').value;
+        const ano = document.getElementById('ano').value;
+        if(escola && ano) {
+            fetch(`buscar.php?escola=${encodeURIComponent(escola)}&ano=${encodeURIComponent(ano)}`)
+            .then(r => r.json())
+            .then(data => {
+                if(data.encontrado) {
+                    dadosCarregados = data.dados;
+                    document.getElementById('msg-status').innerHTML = "🟢 Registro encontrado! Você poderá editar os dados.";
+                    document.getElementById('email-user').value = data.dados.email.split('@')[0];
+                    document.getElementById('turma').value = data.dados.turma;
+                    document.getElementsByName('turno').forEach(r => { if(r.value == data.dados.turno) r.checked = true; });
+                } else {
+                    dadosCarregados = null;
+                    document.getElementById('msg-status').innerHTML = "⚪ Novo registro para este ano escolar.";
+                }
+            });
+        }
+    }
+
+    function finalizar() {
+        const alunos = Array.from(document.querySelectorAll('.aluno-input')).map(i => i.value);
+        const payload = {
+            escola: document.getElementById('escola').value,
+            ano: document.getElementById('ano').value,
+            email: document.getElementById('email-user').value + "@queimados.rj.gov.br",
+            turma: document.getElementById('turma').value,
+            turno: document.querySelector('input[name="turno"]:checked')?.value || "",
+            alunos: alunos
+        };
+
+        fetch('salvar.php', { method: 'POST', body: JSON.stringify(payload) })
+        .then(() => {
+            const modal = document.getElementById('success-modal');
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modal.classList.add('fade-out');
+                setTimeout(() => location.reload(), 1000);
+            }, 4000);
+        });
+    }
+</script>
+</body>
+</html>

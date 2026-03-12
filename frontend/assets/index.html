@@ -50,7 +50,7 @@
                 display: block !important; 
                 width: 210mm; 
                 height: 297mm; 
-                padding: 15mm; 
+                padding: 12mm; 
                 margin: auto;
                 page-break-after: always;
             }
@@ -159,7 +159,7 @@
 
     <div id="print-area" class="print-page bg-white">
         <div class="ficha-header text-center">
-            <img src="logomeq.png" alt="Brasão" style="width: 120px; margin-bottom: 10px;">
+            <img src="logomeq.png" alt="Brasão" style="width: 120px; margin-bottom: 5px;">
             <h3 style="font-family: 'Times New Roman', serif; font-weight: bold; margin: 0;">OLIMPÍADA MUNICIPAL DE MATEMÁTICA DAS ESCOLAS DE QUEIMADOS</h3>
             <p style="margin: 0; font-size: 1.2rem;">Ficha Oficial de Inscrição de Turma</p>
         </div>
@@ -278,7 +278,7 @@
                 <div style="margin-bottom: 30px;">
                     <h4 style="border-bottom: 1px solid #ccc; padding-bottom: 5px;">DADOS DA UNIDADE</h4>
                     <p><b>Escola:</b> ${r.escola}</p>
-                    <div style="display: flex; gap: 40px;">
+                    <div style="display: flex; gap: 30px;">
                         <p><b>Ano:</b> ${r.ano}</p>
                         <p><b>Turma:</b> ${r.turma}</p>
                         <p><b>Turno:</b> ${r.turno}</p>
@@ -286,7 +286,7 @@
                     <p><b>E-mail Institucional:</b> ${r.email}</p>
                 </div>
                 <h4 style="border-bottom: 1px solid #ccc; padding-bottom: 5px;">RELAÇÃO DE ALUNOS INSCRITOS</h4>
-                <table class="table table-bordered w-100">
+                <table class="table table-bordered w-80">
                     <thead class="table-light"><tr><th class="text-center">Nº</th><th>Nome Completo</th></tr></thead>
                     <tbody>${alunosTabela}</tbody>
                 </table>

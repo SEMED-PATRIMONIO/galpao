@@ -16,39 +16,39 @@ echo "Iniciando processamento de $totalPages páginas...\n";
 for ($i = 1; $i <= $totalPages; $i++) {
     $prefix = $tempDir . "p_$i";
     
-    // 1. Converte página do PDF em imagem (Alta resolução)
-    shell_exec("pdftoppm -f $i -l $i -png -r 300 " . escapeshellarg($masterPdf) . " $prefix");
-    $imagePath = $prefix . "-1.png";
+    // Converte a página
+    shell_exec("pdftoppm -f $i -l $i -png -r 150 " . escapeshellarg($masterPdf) . " $prefix");
 
-    if (!file_exists($imagePath)) {
-        echo "Erro na página $i: Imagem não gerada.\n";
+    // Localiza o arquivo gerado (pode ser p_i-1.png ou p_i-i.png)
+    $files = glob($prefix . "-*.png");
+    $imagePath = $files[0] ?? null;
+
+    if (!$imagePath || !file_exists($imagePath)) {
+        echo "Página $i: Falha ao gerar imagem temporária.\n";
         continue;
     }
 
-    // 2. OCR na página inteira (Mais lento, porém infalível contra erros de posição)
+    // OCR na página inteira
     $text = shell_exec("tesseract " . escapeshellarg($imagePath) . " stdout -l por");
 
-    // 3. Busca o padrão de CPF (000.000.000-00 ou apenas números)
     if (preg_match('/(\d{3}\.?\d{3}\.?\d{3}-?\d{2})/', $text, $matches)) {
-        $cpfOriginal = $matches[0];
-        $cpfLimpo = preg_replace('/[^0-9]/', '', $cpfOriginal);
+        $cpfLimpo = preg_replace('/[^0-9]/', '', $matches[0]);
         $cpfLimpo = str_pad($cpfLimpo, 11, '0', STR_PAD_LEFT);
         $cpfHash = hash('sha256', $cpfLimpo);
         $novoNome = $cpfHash . ".pdf";
 
-        // 4. Extrai a página PDF original para o arquivo individual
+        // Extrai a página
         shell_exec("qpdf " . escapeshellarg($masterPdf) . " --pages . $i -- " . escapeshellarg($outputDir . $novoNome));
         
-        // 5. Indexa no banco de dados
         $stmt = $pdo->prepare("INSERT INTO ir_arquivos_split (cpf_hash, nome_arquivo) VALUES (?, ?) ON CONFLICT (cpf_hash) DO UPDATE SET nome_arquivo = EXCLUDED.nome_arquivo");
         $stmt->execute([$cpfHash, $novoNome]);
 
-        echo "Página $i: CPF $cpfOriginal indexado com sucesso.\n";
+        echo "Página $i: CPF " . $matches[0] . " processado.\n";
     } else {
-        echo "Página $i: CPF não detectado na imagem.\n";
+        echo "Página $i: CPF não encontrado.\n";
     }
 
-    // Limpa imagem temporária para não lotar o disco
-    @unlink($imagePath);
+    // LIMPEZA IMEDIATA: Apaga a imagem logo após usar para não travar o disco
+    if ($imagePath) @unlink($imagePath);
 }
 echo "Processamento finalizado!\n";

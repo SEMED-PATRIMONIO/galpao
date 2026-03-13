@@ -7,11 +7,17 @@ const XLSX = require('xlsx');
 // ALTERAR STATUS DO USUÁRIO (Ativar/Inativar)
 router.patch('/usuarios/:id/status', verificarToken, async (req, res) => {
     const { id } = req.params;
-    const { status } = req.body; // 'ATIVO' ou 'INATIVO'
+    const { status } = req.body; // Recebe 'ativo' ou 'inativo'
+    
+    // Converte para o padrão de caractere se preferir ('A' ou 'I')
+    const statusBanco = status === 'ativo' ? 'inativo' : 'ativo';
+
     try {
-        await db.query("UPDATE usuarios SET status = $1 WHERE id = $2", [status, id]);
-        res.json({ message: `Usuário ${status === 'ATIVO' ? 'ativado' : 'desativado'} com sucesso.` });
-    } catch (err) { res.status(500).json({ error: err.message }); }
+        await db.query("UPDATE usuarios SET status = $1 WHERE id = $2", [statusBanco, id]);
+        res.json({ success: true, novoStatus: statusBanco });
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao alterar status: " + err.message });
+    }
 });
 
 router.get('/locais/lista-simples', verificarToken, async (req, res) => {
@@ -515,15 +521,22 @@ router.put('/pedidos/itens/:itemId', verificarToken, async (req, res) => {
 router.post('/auth/login', async (req, res) => {
     const { usuario, senha } = req.body;
     try {
-        // A função UPPER() em ambos os lados garante a flexibilidade total
+        // 1. Adicionamos 'status' ao SELECT para podermos verificar abaixo
         const result = await db.query(
-            "SELECT id, nome, perfil, local_id FROM usuarios WHERE UPPER(nome) = UPPER($1) AND UPPER(senha) = UPPER($2)",
+            "SELECT id, nome, perfil, local_id, status FROM usuarios WHERE UPPER(nome) = UPPER($1) AND UPPER(senha) = UPPER($2)",
             [usuario, senha]
         );
 
         if (result.rows.length > 0) {
             const user = result.rows[0];
             
+            // 2. NOVA TRAVA DE SEGURANÇA: Verifica se o status é 'inativo'
+            // Se for inativo, retorna 403 (Proibido) e interrompe o login
+            if (user.status === 'inativo') {
+                return res.status(403).json({ message: "Acesso negado. Este utilizador está inativo." });
+            }
+
+            // 3. Se passou pela trava, gera o token normalmente como você já faz
             const token = jwt.sign(
                 { 
                     id: user.id, 
@@ -5488,6 +5501,29 @@ router.get('/patrimonio/verificar-pendencias', verificarToken, async (req, res) 
         res.json(result.rows);
     } catch (err) {
         res.status(500).json({ error: "Erro ao buscar pendências: " + err.message });
+    }
+});
+
+router.get('/admin/auditoria-acessos', verificarToken, async (req, res) => {
+    try {
+        // Query que traz os contadores e os últimos 100 registos
+        const query = `
+            SELECT 
+                (SELECT COUNT(*) FROM ir_auditoria_acessos WHERE resultado = 'VISITA') as visitas,
+                (SELECT COUNT(*) FROM ir_auditoria_acessos WHERE resultado = 'SUCESSO') as sucessos,
+                (SELECT COUNT(*) FROM ir_auditoria_acessos WHERE resultado = 'FALHA') as falhas,
+                (SELECT json_agg(t) FROM (
+                    SELECT id, cpf_tentativa, ip_origem, data_hora, user_agent, resultado 
+                    FROM ir_auditoria_acessos 
+                    ORDER BY data_hora DESC 
+                    LIMIT 100
+                ) t) as logs
+        `;
+        
+        const result = await db.query(query);
+        res.json(result.rows[0]);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao carregar auditoria: " + err.message });
     }
 });
 

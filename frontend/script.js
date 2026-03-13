@@ -281,7 +281,7 @@ async function carregarDashboard() {
     if (perfil === 'humanos') {
         html += `
             <button class="btn-grande btn-vidro" onclick="telaAuditoriaAcessos()">
-                <i>🛡️</i><span>AUDITORIA DE ACESSOS</span>
+                <i>🛡️</i><span>ACESSOS AO INFORME DE RENDIMENTOS</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="telaSolicitarServicoImpressora('recarga')">
                 <i>💧</i><span>RECARGA DE TONER</span>

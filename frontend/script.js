@@ -278,6 +278,23 @@ async function carregarDashboard() {
         `; // [cite: 13, 14, 15]
     }
 
+    if (perfil === 'humanos') {
+        html += `
+            <button class="btn-grande btn-vidro" onclick="telaAuditoriaAcessos()">
+                <i>🛡️</i><span>AUDITORIA DE ACESSOS</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="telaSolicitarServicoImpressora('recarga')">
+                <i>💧</i><span>RECARGA DE TONER</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="telaSolicitarManutencaoPC('')">
+                <i>💻</i><span>MANUTENÇÃO INFORMÁTICA</span>
+            </button>
+            <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
+                <i>🔑</i><span>ALTERAR MINHA SENHA</span>
+            </button>
+        `;
+    }
+
     // --- PERFIL: DTI --- [cite: 16]
     if (perfil === 'dti') {
         html += `
@@ -1699,33 +1716,35 @@ async function abrirModalCadastroUsuario() {
 
 // Envia os dados para o backend
 async function salvarNovoUsuario() {
-    // 1. Captura os valores dos campos do formulário
+    // 1. Captura e limpa os valores
     const nome = document.getElementById('novo_nome').value.trim();
     const senha = document.getElementById('nova_senha').value;
     const perfil = document.getElementById('novo_perfil').value;
     const local_id = document.getElementById('novo_local_id').value;
 
-    // 2. Validações básicas antes de enviar ao servidor
+    // 2. Validações básicas (Usando sua função notificar)
     if (!nome || !senha || !perfil) {
         return notificar("⚠️ Preencha Nome, Senha e Perfil obrigatoriamente.");
     }
 
-    // Se o perfil for 'escola', o local_id DEVE ser preenchido
+    // Validação de vínculo obrigatório para Escola
     if (perfil === 'escola' && !local_id) {
         return notificar("⚠️ Usuários do perfil ESCOLA precisam ser vinculados a uma unidade.");
     }
 
-    // 3. Monta o objeto de dados (o 'corpo' da requisição)
+    // 3. Montagem do Payload (Corpo da Requisição)
     const payload = {
         nome: nome,
         senha: senha,
-        perfil: perfil,
-        local_id: local_id ? parseInt(local_id) : null, // Converte para número ou envia nulo
-        status: 'ativo'
+        perfil: perfil, // Enviará 'humanos' se selecionado RH
+        local_id: local_id ? parseInt(local_id) : null,
+        status: 'ativo' // Garante que nasce ativo
     };
 
     try {
         const token = localStorage.getItem('token');
+        
+        // Mantendo o seu endpoint correto: /usuarios/criar
         const res = await fetch(`${API_URL}/usuarios/criar`, {
             method: 'POST',
             headers: { 
@@ -1740,14 +1759,20 @@ async function salvarNovoUsuario() {
         if (res.ok) {
             notificar("✨ Funcionário cadastrado com sucesso!");
             
-            // Limpa os campos para o próximo cadastro
+            // Limpa os campos conforme sua lógica original
             document.getElementById('novo_nome').value = '';
             document.getElementById('nova_senha').value = '';
             
-            // Recarrega a tela para atualizar a tabela de funcionários
+            // Se houver o select de local, reseta ele também
+            if(document.getElementById('novo_local_id')) {
+                document.getElementById('novo_local_id').value = '';
+            }
+
+            // Recarrega a tabela para mostrar o novo usuário (incluindo se for RH)
             telaGerenciarUsuarios();
         } else {
-            notificar("❌ Erro ao cadastrar: " + (data.error || data.message));
+            // Exibe o erro vindo do backend (ex: "Usuário já existe")
+            notificar("❌ Erro ao cadastrar: " + (data.error || data.message || "Erro desconhecido"));
         }
     } catch (err) {
         console.error("Erro na requisição:", err);
@@ -1805,19 +1830,14 @@ async function telaGerenciarUsuarios() {
 
     try {
         const token = localStorage.getItem('token');
-
-        // 1. Buscamos usuários e locais em paralelo
         const [resUsuarios, resLocais] = await Promise.all([
             fetch(`${API_URL}/usuarios/lista`, { headers: { 'Authorization': `Bearer ${token}` } }),
             fetch(`${API_URL}/locais/dropdown`, { headers: { 'Authorization': `Bearer ${token}` } })
         ]);
 
-        if (!resUsuarios.ok || !resLocais.ok) throw new Error("Falha ao buscar dados no servidor.");
-
         const usuarios = await resUsuarios.json();
         const locais = await resLocais.json();
 
-        // Mapeamento para exibição amigável na tabela
         const nomesPerfis = {
             'escola': 'Escola',
             'admin': 'Administração',
@@ -1825,91 +1845,87 @@ async function telaGerenciarUsuarios() {
             'logistica': 'Logística',
             'super': 'Supervisão',
             'dti': 'DTI - Admin',
-            'impres': 'Técnico Impressora'
+            'impres': 'Técnico Impressora',
+            'humanos': 'RH' // Mapeamento visual conforme solicitado
         };
 
         container.innerHTML = `
-            <div style="padding:20px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1px solid rgba(255,255,255,0.2); padding-bottom:15px;">
+            <div style="padding:20px;" class="animar-entrada">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:15px;">
                     <h2 style="color:white; margin:0;">👥 GERENCIAR USUÁRIOS E ACESSOS</h2>
-                    <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                    <button onclick="carregarDashboard()" class="btn-sair-vidro">⬅️ VOLTAR</button>
                 </div>
 
                 <div style="display: grid; grid-template-columns: 350px 1fr; gap: 25px; align-items: start;">
                     
-                    <div class="painel-vidro" style="border-top: 4px solid #10b981;">
+                    <div class="painel-vidro" style="border-top: 4px solid #10b981; padding:20px;">
                         <h3 style="margin-top:0; color:#10b981;">➕ Novo Usuário</h3>
+                        <label style="color:white; font-size:0.8rem;">LOGIN:</label>
+                        <input type="text" id="novo_nome" class="input-vidro" style="width:100%; margin-bottom:10px;">
                         
-                        <label style="display:block; margin-bottom:5px; font-weight:bold; color:white;">NOME/LOGIN:</label>
-                        <input type="text" id="novo_nome" class="input-vidro" placeholder="Ex: joao.silva" style="width:100%; margin-bottom:15px;">
+                        <label style="color:white; font-size:0.8rem;">SENHA:</label>
+                        <input type="password" id="nova_senha" class="input-vidro" style="width:100%; margin-bottom:10px;">
 
-                        <label style="display:block; margin-bottom:5px; font-weight:bold; color:white;">SENHA:</label>
-                        <input type="password" id="nova_senha" class="input-vidro" placeholder="****" style="width:100%; margin-bottom:15px;">
-
-                        <label style="display:block; margin-bottom:5px; font-weight:bold; color:white;">PERFIL DE ACESSO:</label>
-                        <select id="novo_perfil" class="input-vidro" style="width:100%; margin-bottom:15px;">
-                            <option value="escola">ESCOLA (Acesso Restrito)</option>
-                            <option value="admin">ADMIN (Gestão Geral)</option>
-                            <option value="estoque">ESTOQUE (Operacional)</option>
-                            <option value="logistica">LOGÍSTICA (Transporte)</option>
+                        <label style="color:white; font-size:0.8rem;">PERFIL:</label>
+                        <select id="novo_perfil" class="input-vidro" style="width:100%; margin-bottom:10px;">
+                            <option value="escola">ESCOLA</option>
+                            <option value="admin">ADMIN</option>
+                            <option value="estoque">ESTOQUE</option>
+                            <option value="humanos">RH (Recursos Humanos)</option>
                             <option value="dti">DTI - Admin</option>
                             <option value="impres">Técnico Impressora</option>
-                            <option value="super">SUPER (Total)</option>
+                            <option value="super">SUPER</option>
                         </select>
 
-                        <label style="display:block; margin-bottom:5px; font-weight:bold; color:white;">VINCULAR À UNIDADE:</label>
+                        <label style="color:white; font-size:0.8rem;">UNIDADE:</label>
                         <select id="novo_local_id" class="input-vidro" style="width:100%; margin-bottom:20px;">
-                            <option value="">-- SELECIONE A ESCOLA/SETOR --</option>
+                            <option value="">-- SELECIONE A UNIDADE --</option>
                             ${locais.map(l => `<option value="${l.id}">${l.nome}</option>`).join('')}
                         </select>
 
-                        <button onclick="salvarNovoUsuario()" style="width:100%; background:#10b981; color:white; border:none; padding:12px; border-radius:4px; font-weight:bold; cursor:pointer; font-size:16px;">
-                            💾 CADASTRAR FUNCIONÁRIO
+                        <button onclick="salvarNovoUsuario()" style="width:100%; background:#10b981; color:white; border:none; padding:12px; border-radius:8px; font-weight:bold; cursor:pointer;">
+                            CADASTRAR FUNCIONÁRIO
                         </button>
                     </div>
 
-                    <div class="painel-vidro">
-                        <h3 style="margin-top:0; color:white;">Funcionários Cadastrados</h3>
-                        <div style="overflow-x:auto;">
-                            <table style="width:100%; border-collapse:collapse; color:white;">
-                                <thead style="background:rgba(255,255,255,0.1);">
-                                    <tr>
-                                        <th style="padding:12px; text-align:left; border-bottom:2px solid rgba(255,255,255,0.2);">Nome</th>
-                                        <th style="padding:12px; text-align:left; border-bottom:2px solid rgba(255,255,255,0.2);">Perfil</th>
-                                        <th style="padding:12px; text-align:left; border-bottom:2px solid rgba(255,255,255,0.2);">Lotação/Local</th>
-                                        <th style="padding:12px; text-align:center; border-bottom:2px solid rgba(255,255,255,0.2);">Status</th>
+                    <div class="painel-vidro" style="padding:20px;">
+                        <table style="width:100%; border-collapse:collapse; color:white;">
+                            <thead>
+                                <tr style="text-align:left; border-bottom:2px solid rgba(255,255,255,0.1); font-size:0.85rem;">
+                                    <th style="padding:10px;">Nome</th>
+                                    <th style="padding:10px;">Perfil</th>
+                                    <th style="padding:10px;">Lotação</th>
+                                    <th style="padding:10px; text-align:center;">Ação</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${usuarios.map(u => {
+                                    const ativo = u.status === 'ativo';
+                                    return `
+                                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05); opacity: ${ativo ? '1' : '0.4'};">
+                                        <td style="padding:12px;">${u.nome.toUpperCase()}</td>
+                                        <td style="padding:12px;">
+                                            <span style="background:rgba(255,255,255,0.1); padding:3px 8px; border-radius:10px; font-size:0.7rem;">
+                                                ${nomesPerfis[u.perfil] || u.perfil}
+                                            </span>
+                                        </td>
+                                        <td style="padding:12px; font-size:0.8rem; color:#94a3b8;">${u.local_nome || 'GLOBAL'}</td>
+                                        <td style="padding:12px; text-align:center;">
+                                            <button onclick="alternarStatusUsuario(${u.id}, '${u.status}')" 
+                                                style="background:none; border:none; cursor:pointer; font-size:1.2rem; filter: grayscale(${ativo ? 0 : 1});"
+                                                title="${ativo ? 'Inativar' : 'Reativar'}">
+                                                ${ativo ? '🗑️' : '🔄'}
+                                            </button>
+                                        </td>
                                     </tr>
-                                </thead>
-                                <tbody>
-                                    ${usuarios.map(u => `
-                                        <tr style="border-bottom:1px solid rgba(255,255,255,0.1);">
-                                            <td style="padding:12px; font-weight:bold;">${u.nome}</td>
-                                            <td style="padding:12px;">
-                                                <span style="background:#e0f2fe; color:#0369a1; padding:2px 8px; border-radius:10px; font-size:12px; font-weight:bold;">
-                                                    ${nomesPerfis[u.perfil] || u.perfil.toUpperCase()}
-                                                </span>
-                                            </td>
-                                            <td style="padding:12px; color:#cbd5e1;">${u.local_nome || '<span style="color:#f87171;">Não Vinculado</span>'}</td>
-                                            <td style="padding:12px; text-align:center;">
-                                                <span style="color:${u.status === 'ativo' ? '#4ade80' : '#f87171'}; font-weight:bold;">
-                                                    ${u.status.toUpperCase()}
-                                                </span>
-                                            </td>
-                                        </tr>
-                                    `).join('')}
-                                </tbody>
-                            </table>
-                        </div>
+                                `}).join('')}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
         `;
-
-    } catch (err) {
-        console.error("Erro na tela de usuários:", err);
-        notificar("Erro ao carregar dados. Verifique o console.");
-        container.innerHTML = `<div style="padding:20px; color:red;">⚠️ Erro técnico: ${err.message}</div>`;
-    }
+    } catch (err) { console.error(err); }
 }
 
 async function salvarUsuario() {
@@ -1931,19 +1947,29 @@ async function salvarUsuario() {
 }
 
 async function alternarStatusUsuario(id, statusAtual) {
-    const novoStatus = statusAtual === 'ATIVO' ? 'INATIVO' : 'ATIVO';
-    if (!confirm(`Deseja alterar o status do usuário para ${novoStatus}?`)) return;
+    const novoStatus = statusAtual === 'ativo' ? 'inativo' : 'ativo';
+    const acao = novoStatus === 'ativo' ? 'REATIVAR' : 'INATIVAR';
+
+    if (!confirm(`Deseja realmente ${acao} este usuário?`)) return;
 
     try {
         const res = await fetch(`${API_URL}/usuarios/${id}/status`, {
             method: 'PATCH',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            headers: { 
+                'Content-Type': 'application/json', 
+                'Authorization': `Bearer ${localStorage.getItem('token')}` 
+            },
             body: JSON.stringify({ status: novoStatus })
         });
+
         if (res.ok) {
-            telaGerenciarUsuarios(); // Recarrega a lista
+            telaGerenciarUsuarios(); // Recarrega a listagem
+        } else {
+            alert("Erro ao alterar status no servidor.");
         }
-    } catch (err) { notificar("Erro ao atualizar status."); }
+    } catch (err) {
+        console.error("Erro status:", err);
+    }
 }
 
 async function telaPedidosAutorizados() {
@@ -14900,6 +14926,81 @@ async function enviarResposta(patrimonio_id, decisao) {
         alert("Processado com sucesso!");
         abrirModalPendenciasTransferencia(); // Recarrega a lista
         verificarAlertasPatrimonio(); // Atualiza a esfera no dashboard
+    }
+}
+
+async function telaAuditoriaAcessos() {
+    const mainArea = document.getElementById('app-content');
+    if (!mainArea) return;
+
+    try {
+        const res = await fetch(`${API_URL}/admin/auditoria-acessos`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const data = await res.json();
+
+        mainArea.innerHTML = `
+            <div class="animar-entrada" style="padding: 20px; color: white; height: 90vh; display: flex; flex-direction: column; gap: 20px;">
+                
+                <div style="display: flex; align-items: center; gap: 20px;">
+                    <button onclick="carregarDashboard()" class="btn-sair-vidro">⬅️ VOLTAR</button>
+                    <h1 style="margin:0; font-size: 1.6rem;">🛡️ Auditoria de Acessos</h1>
+                </div>
+
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;">
+                    <div class="painel-vidro" style="padding: 15px; text-align: center; border-left: 4px solid #60a5fa;">
+                        <small style="color: #60a5fa; font-weight: bold;">TOTAL DE VISITAS</small>
+                        <h2 style="margin: 5px 0 0 0; font-size: 1.8rem;">${data.visitas || 0}</h2>
+                    </div>
+                    <div class="painel-vidro" style="padding: 15px; text-align: center; border-left: 4px solid #4ade80;">
+                        <small style="color: #4ade80; font-weight: bold;">LOGIN COM SUCESSO</small>
+                        <h2 style="margin: 5px 0 0 0; font-size: 1.8rem;">${data.sucessos || 0}</h2>
+                    </div>
+                    <div class="painel-vidro" style="padding: 15px; text-align: center; border-left: 4px solid #ef4444;">
+                        <small style="color: #ef4444; font-weight: bold;">TENTATIVAS / FALHAS</small>
+                        <h2 style="margin: 5px 0 0 0; font-size: 1.8rem;">${data.falhas || 0}</h2>
+                    </div>
+                </div>
+
+                <div class="painel-vidro" style="flex: 1; display: flex; flex-direction: column; overflow: hidden; padding: 20px;">
+                    <h3 style="margin-top:0; color: rgba(255,255,255,0.7); font-size: 1rem;">Histórico Recente de Conexões</h3>
+                    
+                    <div style="flex: 1; overflow-y: auto; margin-top: 10px; border-radius: 8px; background: rgba(0,0,0,0.2);">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 0.8rem; color: white;">
+                            <thead>
+                                <tr style="text-align: left; background: rgba(255,255,255,0.05); position: sticky; top: 0; z-index: 1;">
+                                    <th style="padding: 12px;">DATA/HORA</th>
+                                    <th style="padding: 12px;">CPF TENTATIVA</th>
+                                    <th style="padding: 12px;">IP ORIGEM</th>
+                                    <th style="padding: 12px;">RESULTADO</th>
+                                    <th style="padding: 12px;">DISPOSITIVO / NAVEGADOR</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${(data.logs || []).map(log => {
+                                    const corResultado = log.resultado === 'SUCESSO' ? '#4ade80' : (log.resultado === 'FALHA' ? '#ef4444' : '#60a5fa');
+                                    return `
+                                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                                            <td style="padding: 10px;">${new Date(log.data_hora).toLocaleString('pt-BR')}</td>
+                                            <td style="padding: 10px; font-family: monospace; letter-spacing: 1px;">${log.cpf_tentativa || '---'}</td>
+                                            <td style="padding: 10px; color: #94a3b8;">${log.ip_origem}</td>
+                                            <td style="padding: 10px;">
+                                                <span style="color: ${corResultado}; font-weight: bold;">● ${log.resultado}</span>
+                                            </td>
+                                            <td style="padding: 10px; font-size: 0.7rem; opacity: 0.5; max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${log.user_agent}">
+                                                ${log.user_agent}
+                                            </td>
+                                        </tr>
+                                    `;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        `;
+    } catch (err) {
+        console.error("Erro na auditoria:", err);
     }
 }
 

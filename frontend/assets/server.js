@@ -73,46 +73,88 @@ appDash.get('/dados', async (req, res) => {
     }
 });
 
+const cssPdf = `
+    @page { size: A4; margin: 8mm; }
+    body { font-family: 'Times New Roman', serif; margin: 0; padding: 0; color: #000; }
+    .ficha { page-break-after: always; padding: 5mm; position: relative; height: 275mm; border: 1px solid #eee; }
+    .header { text-align: center; border-bottom: 2px solid #004587; padding-bottom: 5px; margin-bottom: 10px; }
+    .header h1 { font-size: 13pt; margin: 2px 0; text-transform: uppercase; }
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 10px; font-size: 8.5pt; }
+    .info-grid p { margin: 2px 0; }
+    table { width: 100%; border-collapse: collapse; margin-top: 5px; }
+    th, td { border: 1px solid #333; padding: 4px 6px; text-align: left; font-size: 8.5pt; height: 20px; }
+    th { background: #f2f2f2; text-align: center; font-weight: bold; }
+    .footer { position: absolute; bottom: 5px; width: 100%; font-size: 7pt; color: #666; text-align: right; }
+`;
+
+// ROTA: Gerar PDF Individual (Para o botão de compartilhar)
+appDash.get('/gerar-pdf-individual/:id', async (req, res) => {
+    try {
+        const { rows } = await pool.query('SELECT * FROM inscricoes_omeq WHERE id = $1', [req.params.id]);
+        if (rows.length === 0) return res.status(404).send("Não encontrado");
+        
+        const r = rows[0];
+        const lista = typeof r.alunos === 'string' ? JSON.parse(r.alunos) : r.alunos;
+        
+        const html = `<html><head><style>${cssPdf}</style></head><body>
+            <div class="ficha">
+                <div class="header">
+                    <h1>OLIMPÍADA DE MATEMÁTICA ESTUDANTIL DE QUEIMADOS</h1>
+                    <p style="margin:0; font-weight:bold;">Ficha Oficial de Inscrição de Turma</p>
+                </div>
+                <div class="info-grid">
+                    <p><b>Escola:</b> ${r.escola}</p><p><b>Turma:</b> ${r.turma}</p>
+                    <p><b>Ano:</b> ${r.ano}</p><p><b>Turno:</b> ${r.turno}</p>
+                    <p><b>E-mail:</b> ${r.email}</p><p><b>Auditado em:</b> ${new Date(r.data_hora_envio).toLocaleString('pt-BR')}</p>
+                </div>
+                <table>
+                    <thead><tr><th width="25">Nº</th><th width="230">Nome Completo do Aluno</th><th>Assinatura</th></tr></thead>
+                    <tbody>${Array.from({length: 15}).map((_, i) => `<tr><td align="center">${i+1}</td><td>${lista[i] || ''}</td><td></td></tr>`).join('')}</tbody>
+                </table>
+                <div class="footer">Protocolo: ${r.id} | IP: ${r.ip_endereco} | OMEQ 2026</div>
+            </div></body></html>`;
+
+        const browser = await puppeteer.launch({ headless: "new", args: ['--no-sandbox'] });
+        const page = await browser.newPage();
+        await page.setContent(html);
+        const pdf = await page.pdf({ format: 'A4', printBackground: true });
+        await browser.close();
+        res.contentType("application/pdf").send(pdf);
+    } catch (err) { res.status(500).send(err.message); }
+});
+
+// ROTA: Gerar PDF Geral (Todas as Fichas) - ATUALIZADA
 appDash.get('/gerar-pdf-geral', async (req, res) => {
     try {
         const { rows } = await pool.query('SELECT * FROM inscricoes_omeq ORDER BY escola, turma');
-        let htmlContent = `<html><head><style>
-            @page { size: A4; margin: 10mm; }
-            body { font-family: 'Times New Roman', serif; }
-            .ficha { page-break-after: always; padding: 20px; border: 1px solid #eee; position: relative; min-height: 270mm; }
-            .header { text-align: center; border-bottom: 2px solid #004587; padding-bottom: 10px; margin-bottom: 20px; }
-            table { width: 100%; border-collapse: collapse; }
-            th, td { border: 1px solid #333; padding: 6px; }
-            th { background: #f0f0f0; }
-        </style></head><body>`;
-
-        rows.forEach(r => {
+        let htmlPages = rows.map(r => {
             const lista = typeof r.alunos === 'string' ? JSON.parse(r.alunos) : r.alunos;
-            htmlContent += `
-                <div class="ficha">
-                    <div class="header">
-                        <h1>OMEQ - OLIMPÍADA DE MATEMÁTICA</h1>
-                        <p>Ficha Oficial de Inscrição</p>
-                    </div>
-                    <p><b>Escola:</b> ${r.escola} | <b>Turma:</b> ${r.turma}</p>
-                    <table>
-                        <thead><tr><th>Nº</th><th>Nome do Aluno</th></tr></thead>
-                        <tbody>${lista.map((n, i) => n ? `<tr><td align="center">${i+1}</td><td>${n}</td></tr>` : '').join('')}</tbody>
-                    </table>
-                </div>`;
-        });
+            return `
+            <div class="ficha">
+                <div class="header">
+                    <h1>OLIMPÍADA DE MATEMÁTICA ESTUDANTIL DE QUEIMADOS</h1>
+                    <p style="margin:0; font-weight:bold;">Ficha Oficial de Inscrição de Turma</p>
+                </div>
+                <div class="info-grid">
+                    <p><b>Escola:</b> ${r.escola}</p><p><b>Turma:</b> ${r.turma}</p>
+                    <p><b>Ano:</b> ${r.ano}</p><p><b>Turno:</b> ${r.turno}</p>
+                    <p><b>E-mail:</b> ${r.email}</p>
+                </div>
+                <table>
+                    <thead><tr><th width="25">Nº</th><th width="230">Nome Completo do Aluno</th><th>Assinatura</th></tr></thead>
+                    <tbody>${Array.from({length: 15}).map((_, i) => `<tr><td align="center">${i+1}</td><td>${lista[i] || ''}</td><td></td></tr>`).join('')}</tbody>
+                </table>
+                <div class="footer">Protocolo: ${r.id} | IP: ${r.ip_endereco}</div>
+            </div>`;
+        }).join('');
 
-        htmlContent += `</body></html>`;
         const browser = await puppeteer.launch({ headless: "new", args: ['--no-sandbox'] });
         const page = await browser.newPage();
-        await page.setContent(htmlContent);
-        const pdfBuffer = await page.pdf({ format: 'A4', printBackground: true });
+        await page.setContent(`<html><head><style>${cssPdf}</style></head><body>${htmlPages}</body></html>`);
+        const pdf = await page.pdf({ format: 'A4', printBackground: true });
         await browser.close();
-        res.contentType("application/pdf");
-        res.send(pdfBuffer);
-    } catch (err) {
-        res.status(500).send("Erro ao gerar PDF.");
-    }
+        res.contentType("application/pdf").send(pdf);
+    } catch (err) { res.status(500).send(err.message); }
 });
 
 // Inicialização dos dois servidores

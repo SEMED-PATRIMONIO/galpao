@@ -14968,28 +14968,28 @@ async function telaAuditoriaAcessos() {
                     <div style="flex: 1; overflow-y: auto; margin-top: 10px; border-radius: 8px; background: rgba(0,0,0,0.2);">
                         <table style="width: 100%; border-collapse: collapse; font-size: 0.8rem; color: white;">
                             <thead>
-                                <tr style="text-align: left; position: sticky; top: 0; z-index: 10;">
-                                    <th style="padding: 12px; background: #1a2233; color: #94a3b8;">DATA/HORA</th>
-                                    <th style="padding: 12px; background: #1a2233; color: #94a3b8;">CPF TENTATIVA</th>
-                                    <th style="padding: 12px; background: #1a2233; color: #94a3b8;">IP ORIGEM</th>
-                                    <th style="padding: 12px; background: #1a2233; color: #94a3b8;">RESULTADO</th>
-                                    <th style="padding: 12px; background: #1a2233; color: #94a3b8;">DISPOSITIVO / NAVEGADOR</th>
+                                <tr style="text-align: left; background: #1a2233; position: sticky; top: 0; z-index: 10;">
+                                    <th style="padding: 12px; border-bottom: 2px solid rgba(255,255,255,0.1);">DATA/HORA</th>
+                                    <th style="padding: 12px; border-bottom: 2px solid rgba(255,255,255,0.1);">CPF TENTATIVA</th>
+                                    <th style="padding: 12px; border-bottom: 20px solid rgba(255,255,255,0.1);">IP ORIGEM</th>
+                                    <th style="padding: 12px; border-bottom: 2px solid rgba(255,255,255,0.1);">RESULTADO</th>
+                                    <th style="padding: 12px; border-bottom: 2px solid rgba(255,255,255,0.1);">DISPOSITIVO / NAVEGADOR</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 ${(data.logs || []).map(log => {
                                     const corResultado = log.resultado === 'SUCESSO' ? '#4ade80' : (log.resultado === 'FALHA' ? '#ef4444' : '#60a5fa');
                                     
-                                    // AJUSTE 1: Anonimização do CPF (6 dígitos + asteriscos)
-                                    const cpfRaw = log.cpf_tentativa || '';
-                                    const cpfAnonimizado = cpfRaw.length > 6 
-                                        ? cpfRaw.substring(0, 6).padEnd(cpfRaw.length, '*') 
-                                        : cpfRaw;
+                                    // AJUSTE: Anonimização do CPF (Apenas 6 primeiros dígitos) [cite: 10]
+                                    const cpfOrigem = log.cpf_tentativa || '';
+                                    const cpfMascarado = cpfOrigem.length >= 6 
+                                        ? cpfOrigem.substring(0, 6) + '*****' 
+                                        : (cpfOrigem || '---');
 
                                     return `
                                         <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
-                                            <td style="padding: 10px;">${new Date(log.data_hora).toLocaleString('pt-BR')}</td>
-                                            <td style="padding: 10px; font-family: monospace; letter-spacing: 1px;">${cpfAnonimizado || '---'}</td>
+                                            <td style="padding: 10px;">${log.data_hora ? new Date(log.data_hora).toLocaleString('pt-BR') : '---'}</td>
+                                            <td style="padding: 10px; font-family: monospace; letter-spacing: 1px;">${cpfMascarado}</td>
                                             <td style="padding: 10px; color: #94a3b8;">${log.ip_origem}</td>
                                             <td style="padding: 10px;">
                                                 <span style="color: ${corResultado}; font-weight: bold;">● ${log.resultado}</span>

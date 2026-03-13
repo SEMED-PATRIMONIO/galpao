@@ -4,7 +4,9 @@
 // 1. SERVICE DE ENTREGA DO PDF (Corrigido para Android)
 if (isset($_GET['view'])) {
     require_once __DIR__ . '/../config/database.php';
-    
+    $ip = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? 'Desconhecido';
+    $ip = substr($ip, 0, 100); // Garante limite do banco
+    $ua = $_SERVER['HTTP_USER_AGENT'] ?? 'Desconhecido';    
     $fileHash = preg_replace('/[^a-f0-9]/', '', $_GET['view']);
     $path = __DIR__ . '/../storage/reports/' . $fileHash . '.pdf';
     
@@ -48,8 +50,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($res) {
         $pdfParaAbrir = $cpfHash;
+        $resultadoLog = 'SUCESSO'; // Marca para auditoria
     } else {
         $erro = "Os dados informados não conferem.";
+        $resultadoLog = 'FALHA'; // Marca para auditoria
+    }
+
+    // Tenta gravar o log da tentativa (Sucesso ou Falha)
+    try {
+        $stmtLog = $pdo->prepare("INSERT INTO ir_auditoria_acessos (cpf_tentativa, ip_origem, user_agent, resultado) VALUES (?, ?, ?, ?)");
+        // Usa $cpfLimpo (definido na linha 34 do seu código atual)
+        $stmtLog->execute([$cpfLimpo, $ip, $ua, $resultadoLog]);
+    } catch (Exception $e) { /* Silêncio se o log falhar */ }
+    else {
+        // Se não é POST, é uma visita à tela inicial
+        try {
+            $stmtLog = $pdo->prepare("INSERT INTO ir_auditoria_acessos (ip_origem, user_agent, resultado) VALUES (?, ?, 'VISITA')");
+            $stmtLog->execute([$ip, $ua]);
+        } catch (Exception $e) { /* Silêncio */ }
     }
 }
 ?>

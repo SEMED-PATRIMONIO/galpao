@@ -439,16 +439,16 @@ function abrirSubmenuVitrificado(titulo) {
         if (titulo === 'DEMAIS ITENS') {
             botoesExtra = `
             <button class="btn-grande btn-vidro onclick="telaCadastrosBase()">
-                <i>⚙️</i><span>CADASTROS BÁSICOS INICIAIS</span>
+                <i>⚙️</i><span>CADASTRAR NOVO</span>
             </button>            
             <button class="btn-grande btn-vidro" onclick="telaAbastecerEstoque()">
-                <i>📥</i><span>LANÇAR ENTRADA NO ESTOQUE (UNIFORMES/MATERIAIS)</span>
+                <i>📥</i><span>LANÇAR ENTRADA NO ESTOQUE</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="telaVisualizarEstoque()">
-                <i>👕</i><span>UNIFORMES</span>
+                <i>👕</i><span>ESTOQUE DE UNIFORMES</span>
             </button>
             <button class="btn-grande btn-vidro" style="background:rgba(16, 185, 129, 0.2);" onclick="telaEstoqueMateriaisEPatrimonios()">
-                <i>📦</i><span>OUTROS MATERIAIS</span>
+                <i>📦</i><span>ESTOQUE DOS DEMAIS ITENS</span>
             </button>
             `;
         } else if (titulo === 'PEDIDOS') {
@@ -478,13 +478,13 @@ function abrirSubmenuVitrificado(titulo) {
         if (titulo === 'DEMAIS ITENS') {
             botoesExtra = `
             <button class="btn-grande btn-vidro" onclick="telaCadastrosBase()">
-                <i>⚙️</i><span>CADASTROS BÁSICOS INICIAIS</span>
+                <i>⚙️</i><span>CADASTRAR NOVO</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="telaVisualizarEstoque()">
-                <i>👕</i><span>UNIFORMES</span>
+                <i>👕</i><span>ESTOQUE DE UNIFORMES</span>
             </button>
             <button class="btn-grande btn-vidro" style="background:rgba(16, 185, 129, 0.2);" onclick="telaEstoqueMateriaisEPatrimonios()">
-                <i>📦</i><span>OUTROS MATERIAIS</span>
+                <i>📦</i><span>ESTOQUE DOS DEMAIS ITENS</span>
             </button>
             `;
         } else if (titulo === 'PEDIDOS') {
@@ -506,20 +506,21 @@ function abrirSubmenuVitrificado(titulo) {
         }
     }
     overlay.innerHTML = `
-        <div style="width:100%; max-width:500px; display:flex; justify-content:space-between; align-items:center; margin-top: 20px; margin-bottom:40px;">
-            <h2 style="color:white; margin:0; font-family:sans-serif;">${titulo}</h2>
-            
-            <button onclick="document.getElementById('submenu-overlay').remove()" class="btn-sair-vidro" style="position:static; padding: 10px 20px;">
+        <div style="width:100%; max-width:500px; display:flex; justify-content:center; align-items:center; margin-top: 20px; margin-bottom:40px;">
+            <button onclick="document.getElementById('submenu-overlay').remove()" class="btn-sair-vidro" style="position:static; padding: 10px 40px; width: 100%;">
                 VOLTAR
             </button>
         </div>
-        <div class="grid-movel-celular" style="width:100%; max-width:500px;">
-                ${botoesExtra}
-            </div>
+        
+        <div style="width:100%; max-width:500px; display: flex; flex-direction: column; gap: 15px;">
+            ${botoesExtra}
+        </div>
     `;
 
     document.body.appendChild(overlay);
-    overlay.querySelector('.grid-movel-celular').addEventListener('click', (e) => {
+
+    // Mantém o fechamento automático ao clicar
+    overlay.addEventListener('click', (e) => {
         if (e.target.closest('button')) overlay.remove();
     });
 }
@@ -2382,20 +2383,6 @@ async function salvarPatrimonioLote() {
 
 // --- FUNÇÕES DE CADASTROS BÁSICOS ---
 
-function telaCadastroCategoria() {
-    const area = document.getElementById('area-formulario-cadastro');
-    area.innerHTML = `
-        <div class="card-login" style="max-width: 100%; text-align: left;">
-            <h3 style="color: white;">📁 NOVA CATEGORIA</h3>
-            <label style="color: #cbd5e1; font-size: 0.8rem;">NOME DA CATEGORIA:</label>
-            <input type="text" id="cad_cat_nome" placeholder="Ex: INFORMÁTICA, LIMPEZA..." class="input-vidro" style="width: 100%;">
-            <button onclick="salvarNovaCategoria()" class="btn-grande btn-vidro" style="background: #10b981; margin-top: 15px;">
-                CONFIRMAR CADASTRO
-            </button>
-        </div>
-    `;
-}
-
 async function salvarNovaCategoria() {
     const nome = document.getElementById('cad_cat_nome').value;
     if (!nome) return notificar("Digite o nome da categoria!");
@@ -2423,80 +2410,73 @@ async function salvarNovaCategoria() {
 async function telaCadastrosBase() {
     const app = document.getElementById('app-content');
     app.innerHTML = `
-        <div style="padding:20px;">
+        <div style="padding:20px; height: 100%; display: flex; flex-direction: column;">
             <div style="display:flex; align-items:center; gap:20px; margin-bottom:30px;">
                 <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
-                <h2 style="color:#1e3a8a; margin:0;">🛠️ CADASTROS DO SISTEMA</h2>
+                <h2 style="color:white; margin:0;">🛠️ CADASTROS DO SISTEMA</h2>
             </div>
 
-            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap:15px; margin-bottom:30px;">
-                <button onclick="telaCadastroCategoria()" class="btn-quadrado-cad">📁<br>CATEGORIA</button>
-                <button onclick="telaCadastroLocal()" class="btn-quadrado-cad">📍<br>LOCAL</button>
-                <button onclick="telaCadastroSetor()" class="btn-quadrado-cad">🏢<br>SETOR</button>
-                <button onclick="formProduto()" class="btn-quadrado-cad">📦<br>PRODUTO</button>
-            </div>
+            <div style="display: flex; gap: 20px; flex: 1; align-items: flex-start;">
+                
+                <div style="display: flex; flex-direction: column; gap: 15px; min-width: 220px;">
+                    <button onclick="telaCadastroCategoria()" class="btn-grande btn-vidro" style="text-align: left; padding: 20px;">
+                        📁 <span>CATEGORIA</span>
+                    </button>
+                    <button onclick="telaCadastroLocal()" class="btn-grande btn-vidro" style="text-align: left; padding: 20px;">
+                        📍 <span>LOCAL</span>
+                    </button>
+                    <button onclick="formProduto()" class="btn-grande btn-vidro" style="text-align: left; padding: 20px;">
+                        📦 <span>PRODUTO</span>
+                    </button>
+                </div>
 
-            <div id="area-formulario-cadastro"></div>
+                <div id="area-formulario-cadastro" style="flex: 1; min-height: 400px; padding: 10px;">
+                    <div class="painel-vidro" style="display: flex; align-items: center; justify-content: center; height: 200px; color: rgba(255,255,255,0.5);">
+                        ⬅️ Selecione uma opção ao lado para iniciar o cadastro
+                    </div>
+                </div>
+            </div>
         </div>
     `;
 }
 
-function telaCadastroSetor() {
+// --- AJUSTES NOS FORMULÁRIOS (ESTILO VITRIFICADO E CORES) ---
+
+function telaCadastroCategoria() {
     const area = document.getElementById('area-formulario-cadastro');
     area.innerHTML = `
-        <div class="card-login" style="max-width: 100%; text-align: left; animation: slideIn 0.3s ease-out;">
-            <h3 style="color: white; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;">
-                📂 NOVO SETOR (DETALHAMENTO)
-            </h3>
+        <div class="card-login" style="max-width: 500px; text-align: left; margin: 0;">
+            <h3 style="color: white; margin-top: 0;">📁 NOVA CATEGORIA</h3>
+            <label style="color: #cbd5e1; font-size: 0.8rem; display: block; margin-bottom: 5px;">NOME DA CATEGORIA:</label>
+            <input type="text" id="cad_cat_nome" placeholder="Ex: INFORMÁTICA, LIMPEZA..." 
+                   class="input-vidro" style="width: 100%; background: #0f172a; color: white;">
             
-            <p style="color: #94a3b8; font-size: 0.85rem; margin-bottom: 20px;">
-                Use para especificar locais internos (Ex: COZINHA, SALA DOS PROFESSORES, TI).
-            </p>
-
-            <div style="margin-top: 10px;">
-                <label style="color: #cbd5e1; font-size: 0.8rem; display: block; margin-bottom: 8px;">
-                    NOME DO SETOR:
-                </label>
-                <input type="text" id="cad_setor_nome" placeholder="Ex: SECRETARIA" 
-                       class="input-vidro" style="width: 100%; text-transform: uppercase;">
-            </div>
-
-            <button onclick="salvarNovoSetor()" class="btn-grande btn-vidro" 
-                    style="background: #10b981; margin-top: 25px; width: 100%;">
-                ✔️ CADASTRAR SETOR
+            <button onclick="salvarNovaCategoria()" class="btn-grande btn-vidro" style="background: #10b981; margin-top: 20px; width: 100%;">
+                CONFIRMAR CADASTRO
             </button>
         </div>
     `;
-    setTimeout(() => document.getElementById('cad_setor_nome').focus(), 300);
 }
 
-async function salvarNovoSetor() {
-    const nome = document.getElementById('cad_setor_nome').value;
-    const token = localStorage.getItem('token');
+function telaCadastroLocal() {
+    const area = document.getElementById('area-formulario-cadastro');
+    area.innerHTML = `
+        <div class="card-login" style="max-width: 500px; text-align: left; margin: 0;">
+            <h3 style="color: white; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; margin-top: 0;">
+                🏫 NOVO LOCAL / UNIDADE
+            </h3>
+            
+            <div style="margin-top: 20px;">
+                <label style="color: #cbd5e1; font-size: 0.8rem; display: block; margin-bottom: 8px;">NOME DA UNIDADE:</label>
+                <input type="text" id="cad_local_nome" placeholder="Digite o nome completo..." 
+                       class="input-vidro" style="width: 100%; text-transform: uppercase; background: #0f172a; color: white;">
+            </div>
 
-    if (!nome) return notificar("Por favor, informe o nome do setor.");
-
-    try {
-        const res = await fetch(`${API_URL}/setores`, {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({ nome })
-        });
-
-        const data = await res.json();
-
-        if (res.ok) {
-            notificar("✅ " + data.message);
-            document.getElementById('cad_setor_nome').value = '';
-        } else {
-            notificar("⚠️ " + data.error);
-        }
-    } catch (e) {
-        notificar("Erro ao conectar com o servidor.");
-    }
+            <button onclick="salvarNovoLocal()" class="btn-grande btn-vidro" style="background: #10b981; margin-top: 25px; width: 100%;">
+                💾 SALVAR UNIDADE
+            </button>
+        </div>
+    `;
 }
 
 async function formProduto() {
@@ -2510,36 +2490,36 @@ async function formProduto() {
         const categorias = await res.json();
 
         area.innerHTML = `
-            <div class="card-login" style="max-width: 100%; text-align: left;">
-                <h3 style="text-align: center; color: white;">CADASTRO DE NOVO ITEM</h3>
+            <div class="card-login" style="max-width: 500px; text-align: left; margin: 0;">
+                <h3 style="text-align: center; color: white; margin-top: 0;">CADASTRO DE ITEM</h3>
                 
-                <label style="color: white; display: block; margin-top: 10px;">NOME DO PRODUTO:</label>
-                <input type="text" id="prod_nome" placeholder="Ex: TENIS, CAMISA, PAPEL A4..." style="text-transform: uppercase;">
+                <label style="color: white; display: block; margin-top: 15px; font-size: 0.8rem;">NOME DO PRODUTO:</label>
+                <input type="text" id="prod_nome" class="input-vidro" placeholder="Ex: CAMISA, PAPEL A4..." 
+                       style="text-transform: uppercase; width: 100%; background: #0f172a; color: white;">
                 
-                <label style="color: white; display: block; margin-top: 10px;">TIPO:</label>
-                <select id="prod_tipo" class="input-grade" style="width: 100%; height: 50px;" onchange="ajustarExibicaonotificara()">
-                    <option value="MATERIAL">MATERIAL</option>
-                    <option value="UNIFORMES">UNIFORMES</option>
-                    <option value="PATRIMONIO">PATRIMÔNIO</option>
+                <label style="color: white; display: block; margin-top: 15px; font-size: 0.8rem;">TIPO:</label>
+                <select id="prod_tipo" class="input-vidro" style="width: 100%; height: 50px; background: #0f172a; color: white;" onchange="ajustarExibicaonotificara()">
+                    <option value="MATERIAL" style="background: #1e293b; color: white;">MATERIAL</option>
+                    <option value="UNIFORMES" style="background: #1e293b; color: white;">UNIFORMES</option>
                 </select>
 
-                <label style="color: white; display: block; margin-top: 10px;">CATEGORIA:</label>
-                <select id="prod_categoria" class="input-grade" style="width: 100%; height: 50px;">
-                    <option value="">-- SELECIONE --</option>
-                    ${categorias.map(c => `<option value="${c.id}">${c.nome}</option>`).join('')}
+                <label style="color: white; display: block; margin-top: 15px; font-size: 0.8rem;">CATEGORIA:</label>
+                <select id="prod_categoria" class="input-vidro" style="width: 100%; height: 50px; background: #0f172a; color: white;">
+                    <option value="" style="background: #1e293b; color: white;">-- SELECIONE --</option>
+                    ${categorias.map(c => `<option value="${c.id}" style="background: #1e293b; color: white;">${c.nome}</option>`).join('')}
                 </select>
 
                 <div id="div_notificara_minimo">
-                    <label style="color: white; display: block; margin-top: 10px;">notificarA DE ESTOQUE BAIXO:</label>
-                    <input type="number" id="prod_notificara" value="0">
+                    <label style="color: white; display: block; margin-top: 15px; font-size: 0.8rem;">ALERTA DE ESTOQUE BAIXO:</label>
+                    <input type="number" id="prod_notificara" class="input-vidro" value="0" style="width: 100%; background: #0f172a; color: white;">
                 </div>
 
-                <button onclick="salvarProdutoNovo()" style="background: var(--success); margin-top: 25px; width: 100%; font-weight: bold;">
-                    CADASTRAR E GERAR GRADE
+                <button onclick="salvarProdutoNovo()" style="background: #10b981; margin-top: 25px; width: 100%; color: white; border: none; padding: 15px; border-radius: 8px; font-weight: bold; cursor: pointer;">
+                    CADASTRAR PRODUTO
                 </button>
             </div>
         `;
-        ajustarExibicaonotificara();
+        if(typeof ajustarExibicaonotificara === "function") ajustarExibicaonotificara();
     } catch (err) {
         area.innerHTML = `<div class="painel-vidro" style="color:red;">Erro ao carregar categorias.</div>`;
     }
@@ -10181,32 +10161,6 @@ async function sincronizarDadosUsuario() {
     } catch (err) {
         console.error("Falha ao cercar informações do usuário:", err);
     }
-}
-
-function telaCadastroLocal() {
-    const area = document.getElementById('area-formulario-cadastro');
-    area.innerHTML = `
-        <div class="card-login" style="max-width: 100%; text-align: left; animation: fadeIn 0.3s ease;">
-            <h3 style="color: white; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;">
-                🏫 NOVO LOCAL / UNIDADE ESCOLAR
-            </h3>
-            
-            <div style="margin-top: 20px;">
-                <label style="color: #cbd5e1; font-size: 0.8rem; display: block; margin-bottom: 8px;">
-                    NOME DA UNIDADE (Ex: ESCOLA MUNICIPAL EXEMPLO):
-                </label>
-                <input type="text" id="cad_local_nome" placeholder="Digite o nome completo..." 
-                       class="input-vidro" style="width: 100%; text-transform: uppercase;">
-            </div>
-
-            <button onclick="salvarNovoLocal()" class="btn-grande btn-vidro" 
-                    style="background: #10b981; margin-top: 25px; width: 100%;">
-                💾 SALVAR UNIDADE NO SISTEMA
-            </button>
-        </div>
-    `;
-    // Foca automaticamente no campo de nome
-    setTimeout(() => document.getElementById('cad_local_nome').focus(), 300);
 }
 
 async function salvarNovoLocal() {

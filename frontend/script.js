@@ -398,7 +398,7 @@ async function carregarDashboard() {
                 <i>🏛️</i><span>PATRIMÔNIO</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('DEMAIS ITENS')">
-                <i>📦</i><span>ALMOXARIFADO CENTRAL</span>
+                <i>📦</i><span>ESTOQUE</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('PEDIDOS')">
                 <i>📝</i><span>PEDIDOS</span>
@@ -426,7 +426,7 @@ function abrirSubmenuVitrificado(titulo) {
     overlay.id = 'submenu-overlay';
     overlay.style.cssText = `
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(15px);
+        background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(15px);
         -webkit-backdrop-filter: blur(15px); z-index: 1000;
         display: flex; flex-direction: column; align-items: center; padding: 20px;
         overflow-y: auto;
@@ -438,7 +438,7 @@ function abrirSubmenuVitrificado(titulo) {
     if (perfil === 'estoque') {
         if (titulo === 'DEMAIS ITENS') {
             botoesExtra = `
-            <button class="btn-grande btn-vidro onclick="telaCadastrosBase()">
+            <button class="btn-grande btn-vidro" onclick="telaCadastrosBase()">
                 <i>⚙️</i><span>CADASTRAR NOVO</span>
             </button>            
             <button class="btn-grande btn-vidro" onclick="telaAbastecerEstoque()">

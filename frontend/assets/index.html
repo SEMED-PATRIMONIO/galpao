@@ -3,258 +3,342 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ficha de Inscrição</title>
+    <title>Dashboard OMEQ - Gestão de Inscrições</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
     <style>
-        :root { --success-green: #28a745; --gov-blue: #004587; --text-dark: #333; }
-        
-        /* --- AJUSTE 1: FUNDO COM IMAGEM ESTÁTICA --- */
+        :root { --gov-blue: #004587; --gov-gold: #ffcc00; }
         body { 
-            font-family: 'Segoe UI', sans-serif; 
-            /* Define a imagem de fundo, centralizada e fixa */
-            background: url('fundold4.png') no-repeat center center fixed; 
-            background-size: cover; /* Cobre toda a tela */
-            margin: 0; 
-            padding: 10px; 
-            display: flex; 
-            justify-content: center; 
-            min-height: 100vh; 
+            background: url('olimpiada.png') no-repeat center center fixed; 
+            background-size: cover;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
         }
+        /* Estilos do Painel */
+        .sidebar-title { color: var(--gov-blue); font-weight: 800; letter-spacing: -1px; }
         
-        /* O container principal do formulário */
-        .app-card { 
-            background: white; /* Mantém o fundo branco do cartão para leitura */
-            width: 100%; 
-            max-width: 420px; 
-            border-radius: 25px; 
-            box-shadow: 0 15px 35px rgba(0,0,0,0.2); /* Sombra um pouco mais marcada para destacar do fundo */
+        /* CORREÇÃO: 'border-none' e 'shadow' não existem no CSS. O correto é 'border: none' e 'box-shadow' */
+        .stat-card { 
+            background: white; 
+            border-radius: 15px; 
+            padding: 25px; 
+            border: none; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05); 
+            transition: 0.3s; 
+            position: relative; 
+        }
+        .stat-card:hover { transform: translateY(-5px); }
+        .stat-icon { font-size: 2rem; opacity: 0.3; position: absolute; right: 20px; top: 20px; }
+        .stat-value { font-size: 2.5rem; font-weight: bold; color: var(--gov-blue); margin: 10px 0; }
+        .stat-label { text-transform: uppercase; font-size: 0.75rem; font-weight: bold; color: #6c757d; }
+        
+        .table-container { 
+            background: white; 
+            border-radius: 15px; 
             overflow: hidden; 
-            z-index: 1;
-            margin: auto; /* Centraliza verticalmente se houver espaço */
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05); 
         }
-
-        /* --- AJUSTE 2: LOGOS EMPILHADAS E TARJA BRANCA --- */
-        .logo-area { 
-            padding: 25px 20px; /* Espaçamento interno */
-            text-align: center; 
-            background: white; /* Tarja branca conforme pedido anterior */
-            display: flex;
-            flex-direction: column; /* Volta a ser um em cima do outro */
-            align-items: center;
-            justify-content: center;
-            border-bottom: 1px solid #eee;
-        }
-
-        /* --- AJUSTE 3: TAMANHOS MENORES DAS LOGOS --- */
-        .logo-brass { 
-            height: 75px; /* Reduzido para caber melhor empilhado */
-            width: auto; 
-            margin-bottom: 15px; /* Espaço entre o brasão e a logo principal */
-            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
-        }
-        .logo-main { 
-            height: 65px; /* Reduzido proporcionalmente */
-            width: auto; 
-            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
+        .table thead { background: var(--gov-blue); color: white; }
+        
+        /* Formatação de Impressão A4 Retrato */
+        @media print {
+            .no-print { display: none !important; }
+            body { background: white; padding: 0; margin: 0; }
+            .print-page { 
+                display: block !important; 
+                width: 210mm; 
+                height: 297mm; 
+                padding: 12mm; 
+                margin: auto;
+                page-break-after: always;
+            }
+            .ficha-header { border-bottom: 2px solid var(--gov-blue); margin-bottom: 20px; padding-bottom:7px; }
         }
         
-        /* --- DEMAIS ESTILOS INALTERADOS --- */
-        .content { padding: 30px 25px; text-align: center; }
-        .form-header-title { font-family: 'Times New Roman', serif; font-weight: bold; font-size: 1.25rem; text-transform: uppercase; margin-bottom: 8px; color: var(--gov-blue); }
-        .form-header-subtitle { font-weight: bold; font-size: 1.1rem; color: #555; margin-bottom: 30px; display: block; }
-        h3 { color: var(--gov-blue); border-bottom: 2px solid #f0f0f0; padding-bottom: 12px; margin-top: 0; }
-        label { display: block; font-weight: bold; margin: 18px 0 6px; text-align: left; color: #444; }
-        input, select { width: 100%; padding: 14px; border: 1px solid #d1d1d1; border-radius: 12px; font-size: 1rem; transition: border 0.3s; background: #fff; }
-        input:focus, select:focus { border-color: var(--gov-blue); outline: none; box-shadow: 0 0 0 3px rgba(0,69,135,0.1); }
-        .email-wrapper { position: relative; display: flex; align-items: center; }
-        .email-wrapper input { padding-right: 175px; }
-        .email-suffix { position: absolute; right: 14px; color: #777; font-size: 0.85rem; font-weight: 600; pointer-events: none; }
-        .btn-main { background: var(--gov-blue); color: white; border: none; padding: 18px; width: 100%; border-radius: 12px; font-weight: bold; margin-top: 25px; cursor: pointer; font-size: 1.1rem; transition: transform 0.2s, opacity 0.2s; }
-        .btn-main:active { transform: scale(0.98); opacity: 0.9; }
-        .hidden { display: none !important; }
-        #success-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 40px; border-radius: 30px; border-top: 12px solid var(--success-green); box-shadow: 0 20px 60px rgba(0,0,0,0.4); z-index: 9999; text-align: center; width: 300px; }
-        .check-icon { font-size: 80px; color: var(--success-green); line-height: 1; margin-bottom: 15px; }
-        .student-row { display: flex; gap: 10px; margin-bottom: 12px; align-items: center; }
-        .student-num { width: 30px; font-weight: bold; color: var(--gov-blue); font-size: 1rem; text-align: right; }
+        .print-page { display: none; }
+        .badge-turno { font-size: 0.8rem; padding: 5px 10px; border-radius: 20px; font-weight: bold; }
+        .bg-manha { background: #e3f2fd; color: #0d47a1; }
+        .bg-tarde { background: #fff8e1; color: #ff8f00; }
+        .bg-noite { background: #ede7f6; color: #4527a0; }
     </style>
 </head>
 <body>
 
-    <div class="app-card">
-        <div class="logo-area">
-            <img src="logobrasao.png" class="logo-brass" alt="Brasão">
-            <img src="logomeq2.png" class="logo-main" alt="Logo OMEQ">
-        </div>    
-        <div class="content">
-            <div class="form-header-title">Olimpíada Municipal de Matemática das Escolas de Queimados</div>
-            <div class="form-header-subtitle">Ficha de Inscrição de Turma</div>
-            <div id="step-1">
-                <h3>Identificação</h3>
-                <label>Nome da Escola:</label>
-                <select id="escola" onchange="verificarExistente()">
-                    <option value="">Selecione...</option>
-                    <option>CEADQ</option>
-                    <option>E M ALBERTO PIRRO</option>
-                    <option>E M ALLAN KARDEC</option>
-                    <option>E M ANNA PEROBELLI</option>
-                    <option>E M CARLOS PEREIRA NETO</option>
-                    <option>E M CLEDON CAVALCANTE</option>
-                    <option>E M DIVA TEIXEIRA</option>
-                    <option>E M DR FRANCISCO M BRANDAO</option>
-                    <option>E M ELOI TEIXEIRA</option>
-                    <option>E M GILVANEI PEREIRA</option>
-                    <option>E M JOAQUIM DE FREITAS</option>
-                    <option>E M JOSE ANASTACIO</option>
-                    <option>E M JOSE BITTENCOURT</option>
-                    <option>E M JOSE DE ANCHIETA</option>
-                    <option>E M LEOPOLDO MACHADO</option>
-                    <option>E M LUIZ DE CAMOES</option>
-                    <option>E M MARIA C P XANCHAO</option>
-                    <option>E M METODISTA</option>
-                    <option>E M MONTEIRO LOBATO</option>
-                    <option>E M NELSON CARNEIRO</option>
-                    <option>E M OSCAR WEINSCHENCK</option>
-                    <option>E M PASTOR ARSENIO</option>
-                    <option>E M PAULO FREIRE</option>
-                    <option>E M SANTO EXPEDITO</option>
-                    <option>E M SAO JOSE</option>
-                    <option>E M SCINTILLA EXEL</option>
-                    <option>E M SEBASTIAO VERISSIMO</option>
-                    <option>E M TIRADENTES</option>
-                    <option>E M UBIRAJARA FERREIRA</option>
-                    <option>E M VALCIRA SANTANA</option>
-                    <option>E M WALDICK PEREIRA</option>
-                    <option>E M WASHINGTON MANOEL</option>
-                </select>
-
-                <label>Ano de Escolaridade:</label>
-                <select id="ano" onchange="verificarExistente()">
-                    <option value="">Selecione...</option>
-                    <option>3º ano</option><option>4º ano</option><option>5º ano</option>
-                    <option>6º ano</option><option>7º ano</option><option>8º ano</option>
-                    <option>9º ano</option><option>EJA</option>
-                </select>
-                <div id="msg-status" style="margin-top:10px; font-size:0.8rem;"></div>
-                <button class="btn-main" onclick="proximo(2)">Avançar ➡️</button>
-            </div>
-
-            <div id="step-2" class="hidden">
-                <h3>Dados da Escola</h3>
-                <label>E-mail Institucional:</label>
-                <div class="email-wrapper">
-                    <input type="text" id="email-user" placeholder="prefixo">
-                    <span class="email-suffix">@queimados.rj.gov.br</span>
-                </div>
-
-                <label>Número da Turma:</label>
-                <input type="text" id="turma">
-
-                <label>Turno:</label>
-                <div style="display: flex; gap: 10px; margin-top: 5px;">
-                    <label style="font-weight: normal;"><input type="radio" name="turno" value="MANHÃ"> Manhã</label>
-                    <label style="font-weight: normal;"><input type="radio" name="turno" value="TARDE"> Tarde</label>
-                    <label style="font-weight: normal;"><input type="radio" name="turno" value="NOITE"> Noite</label>
-                </div>
-                <button class="btn-main" onclick="proximo(3)">Próximo: Alunos ➡️</button>
-            </div>
-
-            <div id="step-3" class="hidden">
-                <h3>Lista de Alunos (Máx. 15)</h3>
-                <div id="lista-alunos">
+    <div class="container-fluid py-4 no-print">
+        <div class="container">
+            <div class="d-flex justify-content-between align-items-center mb-5">
+                <div class="d-flex align-items-center gap-4">
+                    <div class="d-flex align-items-center gap-3">
+                        <img src="logobrasao.png" alt="SEMED" style="height: 80px; width: auto; object-fit: contain;">
+                        <img src="logomeq.png" alt="OMEQ" style="height: 80px; width: auto; object-fit: contain;">
                     </div>
-                <button class="btn-main" style="background: var(--success-green);" onclick="finalizar()">Enviar Formulário ✅</button>
+                </div>    
+                <div class="border-start ps-4 ms-2">
+                    <p class="text-muted m-0">Gestão de Inscrições e Auditoria</p>
+                </div>
+                <div class="d-flex gap-2">
+                    <a href="/gerar-pdf-geral" target="_blank" class="btn btn-danger d-flex align-items-center gap-2">
+                        <i class="bi bi-file-earmark-pdf-fill"></i> Imprimir Todas
+                    </a>
+                    <button onclick="compartilharTudo()" class="btn btn-warning d-flex align-items-center gap-2">
+                        <i class="bi bi-share-fill"></i> Compartilhar Todas
+                    </button>
+                </div>
+            </div>
+
+            <div class="row g-4 mb-5">
+                <div class="col-md-3">
+                    <div class="stat-card">
+                        <i class="bi bi-people stat-icon"></i>
+                        <div class="stat-label">Total de Alunos</div>
+                        <div class="stat-value" id="count-alunos">0</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="stat-card">
+                        <i class="bi bi-door-open stat-icon"></i>
+                        <div class="stat-label">Turmas Inscritas</div>
+                        <div class="stat-value" id="count-turmas">0</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="stat-card">
+                        <i class="bi bi-building stat-icon"></i>
+                        <div class="stat-label">Escolas</div>
+                        <div class="stat-value" id="count-escolas">0</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="stat-card">
+                        <i class="bi bi-clock-history stat-icon"></i>
+                        <div class="stat-label">Último Envio</div>
+                        <div class="stat-value" id="last-update" style="font-size: 1.2rem; margin-top: 25px;">--:--</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-4">
+                <div class="col-md-4">
+                    <div class="stat-card">
+                        <h5 class="fw-bold mb-4">Distribuição por Turno</h5>
+                        <div style="height: 250px;">
+                            <canvas id="chartTurnos"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-8">
+                    <div class="stat-card">
+                        <h5 class="fw-bold mb-4">Inscrições por Unidade Escolar</h5>
+                        <div class="table-responsive" style="max-height: 250px;">
+                            <table class="table table-sm table-borderless align-middle">
+                                <tbody id="lista-escolas"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="table-container mt-5">
+                <table class="table table-hover align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th class="ps-4">Unidade Escolar</th>
+                            <th>Ano / Turma</th>
+                            <th>Turno</th>
+                            <th>Auditoria (IP / Data)</th>
+                            <th class="text-center pe-4">Ação</th>
+                        </tr>
+                    </thead>
+                    <tbody id="main-table-body"></tbody>
+                </table>
             </div>
         </div>
     </div>
 
-    <div id="success-modal" class="hidden">
-        <div class="check-icon">✔</div>
-        <h2 style="color: var(--success-green); margin:0; font-size: 2rem;">Recebido!</h2>
-        <p style="font-weight: 500; color: #666; margin-top: 10px;">Inscrição salva com sucesso.</p>
+    <div id="print-area" class="print-page bg-white">
+        <div class="ficha-header text-center">
+            <img src="logomeq.png" alt="Brasão" style="width: 120px; margin-bottom: 5px;">
+            <h3 style="font-family: 'Times New Roman', serif; font-weight: bold; margin: 0;">OLIMPÍADA MUNICIPAL DE MATEMÁTICA DAS ESCOLAS DE QUEIMADOS</h3>
+            <p style="margin: 0; font-size: 1.2rem;">Ficha Oficial de Inscrição de Turma</p>
+        </div>
+        <div id="print-content"></div>
     </div>
 
-<script>
-    let dadosCarregados = null;
+    <script>
+        let rawData = [];
+        let chartInstance = null;
 
-    function proximo(n) {
-        if(n==2 && (!document.getElementById('escola').value || !document.getElementById('ano').value)) {
-            return alert("Selecione a Escola e o Ano!");
-        }
-        if(n==3 && !document.getElementById('turma').value) {
-            return alert("Informe o número ou nome da turma!");
-        }
-        document.querySelectorAll('[id^="step-"]').forEach(s => s.classList.add('hidden'));
-        document.getElementById('step-'+n).classList.remove('hidden');
-        if(n==3) renderAlunos();
-    }
-
-    function renderAlunos() {
-        const container = document.getElementById('lista-alunos');
-        container.innerHTML = "";
-        for(let i=1; i<=15; i++) {
-            const val = (dadosCarregados && dadosCarregados.alunos && dadosCarregados.alunos[i-1]) ? dadosCarregados.alunos[i-1] : "";
-            container.innerHTML += `
-                <div class="student-row">
-                    <span class="student-num">${i}.</span>
-                    <input type="text" class="aluno-input" placeholder="Nome Completo" value="${val}">
-                </div>`;
-        }
-    }
-
-    async function verificarExistente() {
-        const escola = document.getElementById('escola').value;
-        const turma = document.getElementById('turma').value;
-        const msg = document.getElementById('msg-status');
-
-        if(escola && turma) {
+        async function fetchData() {
             try {
-                const res = await fetch(`/buscar?escola=${encodeURIComponent(escola)}&turma=${encodeURIComponent(turma)}`);
-                const data = await res.json();
-                
-                if(data.encontrado) {
-                    dadosCarregados = data.dados;
-                    msg.innerHTML = "<b style='color: var(--success-green)'>🟢 Turma encontrada!</b> Você pode editar os dados.";
-                    // Preenche campos automaticamente
-                    document.getElementById('email-user').value = data.dados.email.split('@')[0];
-                    document.getElementById('ano').value = data.dados.ano;
-                    document.getElementsByName('turno').forEach(r => { if(r.value == data.dados.turno) r.checked = true; });
-                } else {
-                    dadosCarregados = null;
-                    msg.innerHTML = "<b style='color: #888'>⚪ Nova turma para esta unidade.</b>";
-                }
-            } catch (e) { console.error("Erro na busca", e); }
+                const response = await fetch('/dados');
+                rawData = await response.json();
+                processData();
+            } catch (error) {
+                console.error("Erro ao buscar dados:", error);
+            }
         }
-    }
 
-    async function finalizar() {
-        const alunos = Array.from(document.querySelectorAll('.aluno-input')).map(i => i.value.trim());
-        const payload = {
-            escola: document.getElementById('escola').value,
-            ano: document.getElementById('ano').value,
-            email: document.getElementById('email-user').value.trim() + "@queimados.rj.gov.br",
-            turma: document.getElementById('turma').value.trim(),
-            turno: document.querySelector('input[name="turno"]:checked')?.value || "",
-            alunos: alunos
-        };
+        function processData() {
+            let totalAlunos = 0;
+            let escolasCount = {};
+            let turnosCount = { 'MANHÃ': 0, 'TARDE': 0, 'NOITE': 0 };
+            let ultimaData = null;
 
-        try {
-            const response = await fetch('/salvar', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+            const tableBody = document.getElementById('main-table-body');
+            const listEscolas = document.getElementById('lista-escolas');
+            tableBody.innerHTML = "";
+            listEscolas.innerHTML = "";
+
+            rawData.forEach((item, index) => {
+                // Processamento de Alunos (JSON)
+                const listaAlunos = typeof item.alunos === 'string' ? JSON.parse(item.alunos) : item.alunos;
+                const alunosValidos = Array.isArray(listaAlunos) ? listaAlunos.filter(n => n && n.trim() !== "").length : 0;
+                totalAlunos += alunosValidos;
+
+                // Escolas e Turnos
+                escolasCount[item.escola] = (escolasCount[item.escola] || 0) + 1;
+                
+                const turnoUpper = (item.turno || '').toUpperCase();
+                if (turnosCount[turnoUpper] !== undefined) turnosCount[turnoUpper]++;
+
+                // Auditoria de Data
+                const dataEnvio = new Date(item.data_hora_envio);
+                if (!isNaN(dataEnvio.getTime())) {
+                    if (!ultimaData || dataEnvio > ultimaData) ultimaData = dataEnvio;
+                }
+
+                // Renderizar Tabela Principal
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="ps-4 fw-bold">${item.escola}</td>
+                    <td>${item.ano} - <span class="badge bg-secondary">${item.turma}</span></td>
+                    <td><span class="badge-turno bg-${turnoUpper === 'MANHÃ' ? 'manha' : turnoUpper === 'TARDE' ? 'tarde' : 'noite'}">${item.turno}</span></td>
+                    <td>... auditoria ...</td>
+                    <td class="text-center pe-4">
+                        <div class="btn-group">
+                            <button onclick="gerarFichaIndividual(${index})" class="btn btn-sm btn-primary" title="Imprimir">
+                                <i class="bi bi-printer"></i>
+                            </button>
+                            <button onclick="compartilharIndividual(${item.id}, '${item.escola}', '${item.turma}')" class="btn btn-sm btn-info text-white" title="Compartilhar">
+                                <i class="bi bi-share-fill"></i>
+                            </button>
+                        </div>
+                    </td>
+                `;
+                tableBody.appendChild(tr);
             });
 
-            if(response.ok) {
-                const modal = document.getElementById('success-modal');
-                modal.classList.remove('hidden');
-                setTimeout(() => {
-                    modal.classList.add('fade-out');
-                    setTimeout(() => location.reload(), 1000);
-                }, 5000); // 5 segundos de exibição como solicitado
-            }
-        } catch (error) {
-            alert("Erro ao enviar dados. Verifique a conexão.");
+            // Atualizar Contadores
+            document.getElementById('count-alunos').innerText = totalAlunos;
+            document.getElementById('count-turmas').innerText = rawData.length;
+            document.getElementById('count-escolas').innerText = Object.keys(escolasCount).length;
+            document.getElementById('last-update').innerText = ultimaData ? ultimaData.toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'}) : '--:--';
+
+            // Lista Lateral de Escolas
+            Object.keys(escolasCount).sort().forEach(esc => {
+                const row = `<tr><td>${esc}</td><td class="text-end"><span class="badge rounded-pill bg-primary">${escolasCount[esc]} turmas</span></td></tr>`;
+                listEscolas.innerHTML += row;
+            });
+
+            renderChart(turnosCount);
         }
-    }
-</script>
+
+        function renderChart(data) {
+            const ctx = document.getElementById('chartTurnos').getContext('2d');
+            if (chartInstance) chartInstance.destroy();
+            chartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(data),
+                    datasets: [{
+                        data: Object.values(data),
+                        backgroundColor: ['#004587', '#ffcc00', '#2c3e50'],
+                        borderWidth: 0
+                    }]
+                },
+                options: { maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+            });
+        }
+
+        function compartilharTudo() {
+            const url = window.location.origin + "/gerar-pdf-geral";
+            if (navigator.share) {
+                navigator.share({
+                    title: 'OMEQ 2026 - Todas as Inscrições',
+                    text: 'Segue o relatório completo das inscrições da Olimpíada de Matemática.',
+                    url: url
+                }).catch(console.error);
+            } else {
+                alert("Link copiado: " + url);
+            }
+        }
+
+        function compartilharIndividual(id, escola, turma) {
+            // Usamos a nova rota que criamos no server.js
+            const url = window.location.origin + "/gerar-pdf-individual/" + id;
+            if (navigator.share) {
+                navigator.share({
+                    title: `Inscrição OMEQ - ${escola}`,
+                    text: `Ficha de Inscrição da Turma ${turma} - ${escola}`,
+                    url: url
+                }).catch(console.error);
+            } else {
+                alert("Link da Ficha: " + url);
+            }
+        }
+
+        function gerarFichaIndividual(idx) {
+            const r = rawData[idx];
+            const listaAlunos = typeof r.alunos === 'string' ? JSON.parse(r.alunos) : r.alunos;
+            
+            let alunosTabela = "";
+            for(let i=0; i<15; i++) {
+                const nome = listaAlunos[i] || "";
+                // Altura fixa na linha para garantir espaço de assinatura
+                alunosTabela += `
+                    <tr style="height: 22px;">
+                        <td width="30" align="center" style="font-size: 9pt;">${i+1}</td>
+                        <td width="250" style="font-size: 9pt;">${nome}</td>
+                        <td></td>
+                    </tr>`;
+            }
+
+            const dataFormatada = new Date(r.data_hora_envio);
+
+            document.getElementById('print-content').innerHTML = `
+                <div style="margin-bottom: 15px; font-size: 10pt;">
+                    <h5 style="border-bottom: 1px solid #ccc; padding-bottom: 3px; margin-bottom: 10px; font-weight: bold;">DADOS DA UNIDADE</h5>
+                    <p style="margin: 2px 0;"><b>Escola:</b> ${r.escola}</p>
+                    <div style="display: flex; gap: 30px;">
+                        <p style="margin: 2px 0;"><b>Ano:</b> ${r.ano}</p>
+                        <p style="margin: 2px 0;"><b>Turma:</b> ${r.turma}</p>
+                        <p style="margin: 2px 0;"><b>Turno:</b> ${r.turno}</p>
+                    </div>
+                    <p style="margin: 2px 0;"><b>E-mail Institucional:</b> ${r.email}</p>
+                </div>
+                <h5 style="border-bottom: 1px solid #ccc; padding-bottom: 3px; margin-bottom: 10px; font-weight: bold;">RELAÇÃO DE ALUNOS E ASSINATURAS</h5>
+                <table class="table table-bordered w-100" style="border: 1px solid #333;">
+                    <thead class="table-light">
+                        <tr style="font-size: 9pt;">
+                            <th class="text-center">Nº</th>
+                            <th>Nome Completo</th>
+                            <th width="200">Assinatura</th>
+                        </tr>
+                    </thead>
+                    <tbody>${alunosTabela}</tbody>
+                </table>
+                <div style="margin-top: 20px; font-size: 0.7rem; color: #666; text-align: right;">
+                    Documento Auditado via IP: ${r.ip_endereco} | Protocolo Digital: ${r.id}<br>
+                    Gerado em: ${!isNaN(dataFormatada.getTime()) ? dataFormatada.toLocaleString() : 'Sem data'}
+                </div>
+            `;
+            window.print();
+        }
+
+        // Inicialização
+        fetchData();
+    </script>
 </body>
 </html>

@@ -304,7 +304,6 @@
             let alunosTabela = "";
             for(let i=0; i<15; i++) {
                 const nome = listaAlunos[i] || "";
-                // Altura condensada para caber no A4 e espaço para assinatura
                 alunosTabela += `
                     <tr style="height: 20px;">
                         <td width="30" align="center" style="font-size: 8.5pt;">${i+1}</td>
@@ -313,21 +312,20 @@
                     </tr>`;
             }
 
-            const dataFormatada = new Date(r.data_hora_envio);
-
-            // Montagem do conteúdo de impressão
             document.getElementById('print-content').innerHTML = `
-                <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #004587; padding-bottom: 8px; margin-bottom: 12px; height: 60px;">
-                    <div style="width: 120px; text-align: left;">
-                        <img src="logobrasao.png" style="height: 45px; width: auto;">
+                <div style="display: flex; align-items: center; justify-content: space-between; height: 50px; margin-bottom: 5px;">
+                    <div style="width: 100px; text-align: left;">
+                        <img src="logobrasao.png" style="height: 35px; width: auto;">
                     </div>
                     <div style="flex-grow: 1; text-align: center;">
-                        <img src="logomeq2.png" style="height: 50px; width: auto;">
+                        <img src="logomeq2.png" style="height: 40px; width: auto;">
                     </div>
-                    <div style="width: 120px;"></div> </div>
+                    <div style="width: 100px;"></div>
+                </div>
                 
-                <div style="text-align: center; margin-top: -10px; margin-bottom: 15px;">
-                    <p style="margin:0; font-weight:bold; font-size: 10pt; font-family: 'Times New Roman', serif;">Ficha Oficial de Inscrição de Turma</p>
+                <div style="text-align: center; border-top: 1.5px solid #004587; border-bottom: 1.5px solid #004587; padding: 5px 0; margin-bottom: 15px;">
+                    <h1 style="margin:0; font-weight:bold; font-size: 11pt; text-transform: uppercase;">OLIMPÍADA DE MATEMÁTICA ESTUDANTIL DE QUEIMADOS</h1>
+                    <p style="margin:0; font-weight:bold; font-size: 10pt;">Ficha Oficial de Inscrição de Turma</p>
                 </div>
 
                 <div style="margin-bottom: 10px; font-size: 9pt;">
@@ -341,7 +339,7 @@
                     <p style="margin: 1px 0;"><b>E-mail:</b> ${r.email}</p>
                 </div>
 
-                <table class="table table-bordered w-100" style="border: 1px solid #333; margin-top: 5px;">
+                <table class="table table-bordered w-100" style="border: 1px solid #333;">
                     <thead class="table-light">
                         <tr style="font-size: 8.5pt; background-color: #f2f2f2;">
                             <th class="text-center" width="30">Nº</th>
@@ -353,12 +351,9 @@
                 </table>
 
                 <div style="margin-top: 15px; font-size: 7pt; color: #666; text-align: right;">
-                    Auditado via IP: ${r.ip_endereco} | Protocolo: ${r.id}<br>
-                    Gerado em: ${!isNaN(dataFormatada.getTime()) ? dataFormatada.toLocaleString() : '--'}
+                    Auditado via IP: ${r.ip_endereco} | Protocolo: ${r.id} | Gerado em: ${new Date().toLocaleString()}
                 </div>
             `;
-
-            // Comando de Impressão
             window.print();
         }
         // Inicialização

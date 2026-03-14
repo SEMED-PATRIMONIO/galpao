@@ -6,85 +6,78 @@
     <title>Ficha de Inscrição</title>
     <style>
         :root { --success-green: #28a745; --gov-blue: #004587; --text-dark: #333; }
-        /* Ajuste no body para garantir que o fundo animado apareça */
-        body { font-family: 'Segoe UI', sans-serif; background: #f4f7f6; margin: 0; padding: 10px; display: flex; justify-content: center; min-height: 100vh; position: relative; overflow-x: hidden; }
         
-        /* --- INÍCIO DAS MUDANÇAS VISUAIS SOLICITADAS --- */
-
-        /* 1. Fundo Matemático Animado (Sutil e Disfarçado) */
-        .math-bg-container {
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            z-index: -1; /* Fica atrás de tudo */
-            opacity: 0.06; /* Bem transparente (disfarçado) */
-            pointer-events: none; /* Não interfere no clique */
-            overflow: hidden;
-            color: var(--gov-blue); font-family: 'Times New Roman', serif; font-style: italic;
+        /* --- AJUSTE 1: FUNDO COM IMAGEM ESTÁTICA --- */
+        body { 
+            font-family: 'Segoe UI', sans-serif; 
+            /* Define a imagem de fundo, centralizada e fixa */
+            background: url('fundold4.png') no-repeat center center fixed; 
+            background-size: cover; /* Cobre toda a tela */
+            margin: 0; 
+            padding: 10px; 
+            display: flex; 
+            justify-content: center; 
+            min-height: 100vh; 
         }
-        .math-row { position: absolute; white-space: nowrap; font-size: 1.5rem; width: 200%; }
-        /* Animações lentas de vai-e-vem */
-        @keyframes floatLeft { from { transform: translateX(0); } to { transform: translateX(-25%); } }
-        @keyframes floatRight { from { transform: translateX(-25%); } to { transform: translateX(0); } }
-        .row-1 { top: 15%; animation: floatLeft 80s linear infinite alternate; }
-        .row-2 { top: 40%; animation: floatRight 95s linear infinite alternate; font-size: 1.2rem; }
-        .row-3 { top: 65%; animation: floatLeft 110s linear infinite alternate; }
-        .row-4 { top: 90%; animation: floatRight 120s linear infinite alternate; font-size: 1.8rem; }
+        
+        /* O container principal do formulário */
+        .app-card { 
+            background: white; /* Mantém o fundo branco do cartão para leitura */
+            width: 100%; 
+            max-width: 420px; 
+            border-radius: 25px; 
+            box-shadow: 0 15px 35px rgba(0,0,0,0.2); /* Sombra um pouco mais marcada para destacar do fundo */
+            overflow: hidden; 
+            z-index: 1;
+            margin: auto; /* Centraliza verticalmente se houver espaço */
+        }
 
-        /* 2. Área das Logos (Tarja Branca e Lado a Lado) */
+        /* --- AJUSTE 2: LOGOS EMPILHADAS E TARJA BRANCA --- */
         .logo-area { 
-            padding: 25px 20px 10px 20px;
+            padding: 25px 20px; /* Espaçamento interno */
             text-align: center; 
-            background: white; /* Tarja agora é BRANCA */
+            background: white; /* Tarja branca conforme pedido anterior */
             display: flex;
-            flex-direction: row; /* Lado a lado */
+            flex-direction: column; /* Volta a ser um em cima do outro */
             align-items: center;
             justify-content: center;
-            gap: 30px; /* Espaço entre as logos */
-            border-bottom: 1px solid #eee; /* Sutil separação */
+            border-bottom: 1px solid #eee;
         }
 
-        /* 3. Ajuste de tamanho para ficarem "igualmente grandes" */
+        /* --- AJUSTE 3: TAMANHOS MENORES DAS LOGOS --- */
         .logo-brass { 
-            height: 100px; /* Altura fixa para equilíbrio */
+            height: 75px; /* Reduzido para caber melhor empilhado */
             width: auto; 
+            margin-bottom: 15px; /* Espaço entre o brasão e a logo principal */
             filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
         }
         .logo-main { 
-            height: 85px; /* A logo OMEQ é mais larga, então um pouco menos alta equilibra */
+            height: 65px; /* Reduzido proporcionalmente */
             width: auto; 
             filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
         }
         
-        /* --- FIM DAS MUDANÇAS VISUAIS --- */
-
-        .app-card { background: white; width: 100%; max-width: 420px; border-radius: 25px; box-shadow: 0 15px 35px rgba(0,0,0,0.1); overflow: hidden; z-index: 1; }
+        /* --- DEMAIS ESTILOS INALTERADOS --- */
         .content { padding: 30px 25px; text-align: center; }
         .form-header-title { font-family: 'Times New Roman', serif; font-weight: bold; font-size: 1.25rem; text-transform: uppercase; margin-bottom: 8px; color: var(--gov-blue); }
         .form-header-subtitle { font-weight: bold; font-size: 1.1rem; color: #555; margin-bottom: 30px; display: block; }
-        h3 { color: var(--gov-blue); border-bottom: 2px solid #f0f0f0; padding-bottom: 12px; }
-        label { display: block; font-weight: bold; margin: 18px 0 6px; text-align: left; }
-        input, select { width: 100%; padding: 14px; border: 1px solid #d1d1d1; border-radius: 12px; font-size: 1rem; transition: border 0.3s; }
-        input:focus, select:focus { border-color: var(--gov-blue); outline: none; }
+        h3 { color: var(--gov-blue); border-bottom: 2px solid #f0f0f0; padding-bottom: 12px; margin-top: 0; }
+        label { display: block; font-weight: bold; margin: 18px 0 6px; text-align: left; color: #444; }
+        input, select { width: 100%; padding: 14px; border: 1px solid #d1d1d1; border-radius: 12px; font-size: 1rem; transition: border 0.3s; background: #fff; }
+        input:focus, select:focus { border-color: var(--gov-blue); outline: none; box-shadow: 0 0 0 3px rgba(0,69,135,0.1); }
         .email-wrapper { position: relative; display: flex; align-items: center; }
         .email-wrapper input { padding-right: 175px; }
         .email-suffix { position: absolute; right: 14px; color: #777; font-size: 0.85rem; font-weight: 600; pointer-events: none; }
-        .btn-main { background: var(--gov-blue); color: white; border: none; padding: 18px; width: 100%; border-radius: 12px; font-weight: bold; margin-top: 25px; cursor: pointer; font-size: 1.1rem; transition: transform 0.2s; }
-        .btn-main:active { transform: scale(0.98); }
+        .btn-main { background: var(--gov-blue); color: white; border: none; padding: 18px; width: 100%; border-radius: 12px; font-weight: bold; margin-top: 25px; cursor: pointer; font-size: 1.1rem; transition: transform 0.2s, opacity 0.2s; }
+        .btn-main:active { transform: scale(0.98); opacity: 0.9; }
         .hidden { display: none !important; }
         #success-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 40px; border-radius: 30px; border-top: 12px solid var(--success-green); box-shadow: 0 20px 60px rgba(0,0,0,0.4); z-index: 9999; text-align: center; width: 300px; }
-        .check-icon { font-size: 80px; color: var(--success-green); }
+        .check-icon { font-size: 80px; color: var(--success-green); line-height: 1; margin-bottom: 15px; }
         .student-row { display: flex; gap: 10px; margin-bottom: 12px; align-items: center; }
-        .student-num { width: 30px; font-weight: bold; color: var(--gov-blue); }
+        .student-num { width: 30px; font-weight: bold; color: var(--gov-blue); font-size: 1rem; text-align: right; }
     </style>
 </head>
 <body>
-
-<div class="math-bg-container">
-    <div class="math-row row-1">∫ f(x)dx = F(x)+C &nbsp; e^(iπ)+1=0 &nbsp; a²+b²=c² &nbsp; ∑(1/n²) = π²/6 &nbsp; √-1 = i</div>
-    <div class="math-row row-2">x = [-b ± √(b²-4ac)]/2a &nbsp; sin²θ+cos²θ=1 &nbsp; log(ab)=log a+log b &nbsp; A=πr²</div>
-    <div class="math-row row-3">V=(4/3)πr³ &nbsp; f'(x) = lim(h→0) [f(x+h)-f(x)]/h &nbsp; P(A|B) = P(A∩B)/P(B)</div>
-    <div class="math-row row-4">E=mc² &nbsp; F=ma &nbsp; (x+y)ⁿ = ∑ C(n,k)x^(n-k)y^k &nbsp; φ=(1+√5)/2</div>
-</div>
 
     <div class="app-card">
         <div class="logo-area">

@@ -44,17 +44,25 @@
         
         /* Formatação de Impressão A4 Retrato */
         @media print {
+            @page {
+                size: auto;
+                margin: 0mm; /* Define margem zero para o papel, removendo lixos do navegador */
+            }
             .no-print { display: none !important; }
-            body { background: white; padding: 0; margin: 0; }
+            body { 
+                background: white !important; 
+                padding: 0; 
+                margin: 0; 
+            }
             .print-page { 
                 display: block !important; 
                 width: 210mm; 
                 height: 297mm; 
-                padding: 12mm; 
-                margin: auto;
+                padding: 15mm; /* Criamos a margem interna para o conteúdo não bater na borda */
+                margin: 0;
                 page-break-after: always;
             }
-            .ficha-header { border-bottom: 2px solid var(--gov-blue); margin-bottom: 20px; padding-bottom:7px; }
+            .ficha-header { border-bottom: 2px solid var(--gov-blue); margin-bottom: 20px; padding-bottom: 10px; }
         }
         
         .print-page { display: none; }

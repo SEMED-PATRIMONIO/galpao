@@ -270,7 +270,7 @@ async function carregarDashboard() {
                 <i>👕</i><span>ESTOQUE UNIFORMES</span>
             </button>
             <button class="btn-grande btn-vidro" style="background:rgba(16, 185, 129, 0.2);" onclick="telaEstoqueMateriaisEPatrimonios()">
-                <i>📦</i><span>ESTOQUE OUTROS MATERIAIS</span>
+                <i>📦</i><span>ESTOQUE DEMAIS MATERIAIS</span>
             </button>
             <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
                 <i>🔑</i><span>ALTERAR MINHA SENHA</span>
@@ -398,7 +398,7 @@ async function carregarDashboard() {
                 <i>🏛️</i><span>PATRIMÔNIO</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('DEMAIS ITENS')">
-                <i>📦</i><span>ESTOQUE GALPÃO</span>
+                <i>📦</i><span>ALMOXARIFADO CENTRAL</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('PEDIDOS')">
                 <i>📝</i><span>PEDIDOS</span>
@@ -519,6 +519,9 @@ function abrirSubmenuVitrificado(titulo) {
     `;
 
     document.body.appendChild(overlay);
+    overlay.querySelector('.grid-movel-celular').addEventListener('click', (e) => {
+        if (e.target.closest('button')) overlay.remove();
+    });
 }
 
 async function telaVisualizarEstoque() {

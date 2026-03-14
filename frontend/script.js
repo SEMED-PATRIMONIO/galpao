@@ -10814,12 +10814,12 @@ function compartilharConsumoZap() {
 async function telaEstoqueMateriaisEPatrimonios() {
     const container = document.getElementById('app-content');
     
-    // 1. Estrutura da Tela (Independente da tela de Uniformes)
+    // 1. Estrutura da Tela
     container.innerHTML = `
         <div class="painel-vidro" style="max-width: 1000px; margin: auto;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
                 <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
-                <h2 style="color:white; margin:0; font-size:1.3rem;">📦 ESTOQUE: MATERIAIS E PATRIMÔNIOS</h2>
+                <h2 style="color:white; margin:0; font-size:1.3rem;">📦 ESTOQUE: DEMAIS MATERIAIS</h2>
                 <div style="width:100px;"></div>
             </div>
 
@@ -10828,13 +10828,12 @@ async function telaEstoqueMateriaisEPatrimonios() {
                     <thead style="background:rgba(255,255,255,0.1);">
                         <tr>
                             <th style="padding:15px; text-align:left;">DESCRIÇÃO DO ITEM</th>
-                            <th style="padding:15px; text-align:center;">TIPO</th>
                             <th style="padding:15px; text-align:center;">SALDO REAL</th>
                             <th style="padding:15px; text-align:center;">STATUS</th>
                         </tr>
                     </thead>
                     <tbody id="corpo-tabela-materiais">
-                        <tr><td colspan="4" style="padding:20px; text-align:center;">Carregando dados...</td></tr>
+                        <tr><td colspan="3" style="padding:20px; text-align:center;">Carregando dados...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -10845,15 +10844,31 @@ async function telaEstoqueMateriaisEPatrimonios() {
         const res = await fetch(`${API_URL}/estoque/materiais-e-patrimonios`, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         });
-        const produtos = await res.json();
+        
+        // Recebe TODOS os produtos da rota
+        const todosProdutos = await res.json();
+        
+        // --- FILTRO CIRÚRGICO AQUI ---
+        // Mantém apenas os itens onde o tipo é exatamente 'MATERIAL'
+        const produtosFiltrados = todosProdutos.filter(p => p.tipo === 'MATERIAL');
+        
         const corpo = document.getElementById('corpo-tabela-materiais');
 
-        corpo.innerHTML = produtos.map(p => {
+        if (produtosFiltrados.length === 0) {
+            corpo.innerHTML = '<tr><td colspan="3" style="padding:20px; text-align:center;">Nenhum material encontrado.</td></tr>';
+            return;
+        }
+
+        // Usamos a lista filtrada para gerar a tabela
+        corpo.innerHTML = produtosFiltrados.map(p => {
             const critico = Number(p.saldo) <= Number(p.minimo);
+            // A coluna do meio (TIPO) foi removida do HTML abaixo para simplificar, já que todos são MATERIAL
             return `
                 <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                    <td style="padding:12px 15px; font-weight:bold;">${p.nome}</td>
-                    <td style="padding:12px 15px; text-align:center; color:#94a3b8; font-size:0.75rem;">${p.tipo}</td>
+                    <td style="padding:12px 15px; font-weight:bold;">
+                        ${p.nome}<br>
+                        <span style="font-size:0.7rem; color:#94a3b8;">Categoria: ${p.categoria_nome || 'Geral'}</span>
+                    </td>
                     <td style="padding:12px 15px; text-align:center;">
                         <b style="font-size:1.1rem; color:${critico ? '#f87171' : '#4ade80'};">${p.saldo}</b>
                     </td>
@@ -10866,6 +10881,8 @@ async function telaEstoqueMateriaisEPatrimonios() {
 
     } catch (err) {
         console.error("Erro ao carregar materiais:", err);
+        document.getElementById('corpo-tabela-materiais').innerHTML = 
+            '<tr><td colspan="3" style="padding:20px; text-align:center; color:#f87171;">Erro ao carregar dados.</td></tr>';
     }
 }
 

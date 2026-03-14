@@ -315,18 +315,22 @@
 
             const dataFormatada = new Date(r.data_hora_envio);
 
-            document.getElementById('print-content').innerHTML = `
-                <div style="margin-bottom: 15px; font-size: 10pt;">
-                    <h5 style="border-bottom: 1px solid #ccc; padding-bottom: 3px; margin-bottom: 10px; font-weight: bold;">DADOS DA UNIDADE</h5>
-                    <p style="margin: 2px 0;"><b>Escola:</b> ${r.escola}</p>
-                    <div style="display: flex; gap: 30px;">
-                        <p style="margin: 2px 0;"><b>Ano:</b> ${r.ano}</p>
-                        <p style="margin: 2px 0;"><b>Turma:</b> ${r.turma}</p>
-                        <p style="margin: 2px 0;"><b>Turno:</b> ${r.turno}</p>
-                    </div>
-                    <p style="margin: 2px 0;"><b>E-mail Institucional:</b> ${r.email}</p>
-                </div>
-                <h5 style="border-bottom: 1px solid #ccc; padding-bottom: 3px; margin-bottom: 10px; font-weight: bold;">RELAÇÃO DE ALUNOS E ASSINATURAS</h5>
+document.getElementById('print-content').innerHTML = `
+        <div class="ficha-header" style="display: flex; align-items: center; justify-content: space-between; padding-bottom: 10px; border-bottom: 2px solid #004587; margin-bottom: 20px;">
+            <div style="width: 120px;">
+                <img src="logobrasao.png" style="height: 70px; width: auto;">
+            </div>
+            <div style="flex-grow: 1; text-align: center;">
+                <img src="logomeq2.png" style="height: 70px; width: auto;">
+            </div>
+            <div style="width: 120px;"></div>
+        </div>
+        <div style="text-align: center; margin-bottom: 20px; margin-top: -15px;">
+             <p style="margin:0; font-weight:bold; font-size: 11pt;">Ficha Oficial de Inscrição de Turma</p>
+        </div>
+        
+        <div style="margin-bottom: 15px; font-size: 10pt;">
+            <h5 style="border-bottom: 1px solid #ccc; padding-bottom: 3px; margin-bottom: 10px; font-weight: bold;">DADOS DA UNIDADE</h5>
                 <table class="table table-bordered w-100" style="border: 1px solid #333;">
                     <thead class="table-light">
                         <tr style="font-size: 9pt;">

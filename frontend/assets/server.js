@@ -22,9 +22,32 @@ appQuiz.use(express.json());
 appDash.use(cors());
 appDash.use(express.json());
 
+// --- ESTILO CSS COMPARTILHADO PARA OS PDFs ---
+const cssPdf = `
+    @page { size: A4; margin: 0mm; }
+    body { font-family: 'Times New Roman', serif; margin: 0; padding: 0; color: #000; }
+    .ficha { page-break-after: always; padding: 15mm; position: relative; height: 297mm; box-sizing: border-box; background: white; }
+    .header-container { 
+        display: flex; 
+        align-items: center; 
+        justify-content: space-between; 
+        border-bottom: 2px solid #004587; 
+        padding-bottom: 10px; 
+        margin-bottom: 15px; 
+    }
+    .header-logo-left { width: 150px; text-align: left; }
+    .header-logo-center { flex-grow: 1; text-align: center; }
+    .header-spacer { width: 150px; } /* Balanceador para manter o centro perfeito */
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 10px; font-size: 8.5pt; }
+    .info-grid p { margin: 2px 0; }
+    table { width: 100%; border-collapse: collapse; margin-top: 5px; }
+    th, td { border: 1px solid #333; padding: 4px 6px; text-align: left; font-size: 8.5pt; height: 20px; }
+    th { background: #f2f2f2; text-align: center; font-weight: bold; }
+    .footer { position: absolute; bottom: 10mm; right: 15mm; font-size: 7pt; color: #666; text-align: right; }
+`;
+
 // --- CONFIGURAÇÃO PORTA 3020 (OMEQ QUIZ) ---
 
-// Serve o Quiz na raiz da porta 3020
 appQuiz.use(express.static('public_quiz'));
 
 appQuiz.get('/buscar', async (req, res) => {
@@ -61,7 +84,6 @@ appQuiz.post('/salvar', async (req, res) => {
 
 // --- CONFIGURAÇÃO PORTA 3021 (DASHBOARD) ---
 
-// Serve o Dashboard na raiz da porta 3021 (não precisa mais de /admin no URL)
 appDash.use(express.static('public_dash'));
 
 appDash.get('/dados', async (req, res) => {
@@ -73,21 +95,7 @@ appDash.get('/dados', async (req, res) => {
     }
 });
 
-const cssPdf = `
-    @page { size: A4; margin: 8mm; }
-    body { font-family: 'Times New Roman', serif; margin: 0; padding: 0; color: #000; }
-    .ficha { page-break-after: always; padding: 5mm; position: relative; height: 275mm; border: 1px solid #eee; }
-    .header { text-align: center; border-bottom: 2px solid #004587; padding-bottom: 5px; margin-bottom: 10px; }
-    .header h1 { font-size: 13pt; margin: 2px 0; text-transform: uppercase; }
-    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 10px; font-size: 8.5pt; }
-    .info-grid p { margin: 2px 0; }
-    table { width: 100%; border-collapse: collapse; margin-top: 5px; }
-    th, td { border: 1px solid #333; padding: 4px 6px; text-align: left; font-size: 8.5pt; height: 20px; }
-    th { background: #f2f2f2; text-align: center; font-weight: bold; }
-    .footer { position: absolute; bottom: 5px; width: 100%; font-size: 7pt; color: #666; text-align: right; }
-`;
-
-// ROTA: Gerar PDF Individual (Para o botão de compartilhar)
+// ROTA: Gerar PDF Individual (Com cabeçalho Brasão-Esquerda / Logo-Centro)
 appDash.get('/gerar-pdf-individual/:id', async (req, res) => {
     try {
         const { rows } = await pool.query('SELECT * FROM inscricoes_omeq WHERE id = $1', [req.params.id]);
@@ -98,9 +106,17 @@ appDash.get('/gerar-pdf-individual/:id', async (req, res) => {
         
         const html = `<html><head><style>${cssPdf}</style></head><body>
             <div class="ficha">
-                <div class="header">
-                    <h1>OLIMPÍADA DE MATEMÁTICA ESTUDANTIL DE QUEIMADOS</h1>
-                    <p style="margin:0; font-weight:bold;">Ficha Oficial de Inscrição de Turma</p>
+                <div class="header-container">
+                    <div class="header-logo-left">
+                        <img src="http://localhost:3021/logobrasao.png" style="height: 70px; width: auto;">
+                    </div>
+                    <div class="header-logo-center">
+                        <img src="http://localhost:3021/logomeq2.png" style="height: 70px; width: auto;">
+                    </div>
+                    <div class="header-spacer"></div>
+                </div>
+                <div style="text-align: center; margin-top: -10px; margin-bottom: 15px;">
+                    <p style="margin:0; font-weight:bold; font-size: 11pt;">Ficha Oficial de Inscrição de Turma</p>
                 </div>
                 <div class="info-grid">
                     <p><b>Escola:</b> ${r.escola}</p><p><b>Turma:</b> ${r.turma}</p>
@@ -123,7 +139,7 @@ appDash.get('/gerar-pdf-individual/:id', async (req, res) => {
     } catch (err) { res.status(500).send(err.message); }
 });
 
-// ROTA: Gerar PDF Geral (Todas as Fichas) - ATUALIZADA
+// ROTA: Gerar PDF Geral (Com cabeçalho Brasão-Esquerda / Logo-Centro)
 appDash.get('/gerar-pdf-geral', async (req, res) => {
     try {
         const { rows } = await pool.query('SELECT * FROM inscricoes_omeq ORDER BY escola, turma');
@@ -131,9 +147,17 @@ appDash.get('/gerar-pdf-geral', async (req, res) => {
             const lista = typeof r.alunos === 'string' ? JSON.parse(r.alunos) : r.alunos;
             return `
             <div class="ficha">
-                <div class="header">
-                    <h1>OLIMPÍADA DE MATEMÁTICA ESTUDANTIL DE QUEIMADOS</h1>
-                    <p style="margin:0; font-weight:bold;">Ficha Oficial de Inscrição de Turma</p>
+                <div class="header-container">
+                    <div class="header-logo-left">
+                        <img src="http://localhost:3021/logobrasao.png" style="height: 70px; width: auto;">
+                    </div>
+                    <div class="header-logo-center">
+                        <img src="http://localhost:3021/logomeq2.png" style="height: 70px; width: auto;">
+                    </div>
+                    <div class="header-spacer"></div>
+                </div>
+                <div style="text-align: center; margin-top: -10px; margin-bottom: 15px;">
+                    <p style="margin:0; font-weight:bold; font-size: 11pt;">Ficha Oficial de Inscrição de Turma</p>
                 </div>
                 <div class="info-grid">
                     <p><b>Escola:</b> ${r.escola}</p><p><b>Turma:</b> ${r.turma}</p>

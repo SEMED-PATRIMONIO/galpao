@@ -2,6 +2,22 @@ const API_URL = 'https://patrimoniosemed.paiva.api.br';
 let TOKEN = localStorage.getItem('token');
 const tokenParaUso = localStorage.getItem('token');
 const styleAlerta = document.createElement('style');
+(function() {
+    const estiloBtnBranco = document.createElement('style');
+    estiloBtnBranco.innerHTML = `
+        /* Força a cor branca no texto do botão */
+        .btn-vidro, .btn-sair-vidro, .btn-voltar-vidro {
+            color: white !important; 
+        }
+        /* Garante que ícones (tags <i> ou <span>) dentro do botão herdem o branco */
+        .btn-vidro i, .btn-vidro span,
+        .btn-sair-vidro i, .btn-sair-vidro span,
+        .btn-voltar-vidro i, .btn-voltar-vidro span {
+            color: inherit !important;
+        }
+    `;
+    document.head.appendChild(estiloBtnBranco);
+})();
 styleAlerta.innerHTML = `
     @keyframes pulsoEsfera {
         0% { transform: scale(1); opacity: 1; }
@@ -2445,14 +2461,17 @@ async function telaCadastrosBase() {
 function telaCadastroCategoria() {
     const area = document.getElementById('area-formulario-cadastro');
     area.innerHTML = `
-        <div class="card-login" style="max-width: 500px; text-align: left; margin: 0;">
-            <h3 style="color: white; margin-top: 0;">📁 NOVA CATEGORIA</h3>
-            <label style="color: #cbd5e1; font-size: 0.8rem; display: block; margin-bottom: 5px;">NOME DA CATEGORIA:</label>
+        <div class="painel-vidro" style="max-width: 500px; text-align: left; margin: 0;">
+            <h3 style="color: white; margin-top: 0; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;">
+                📁 NOVA CATEGORIA
+            </h3>
+            
+            <label style="color: #cbd5e1; font-size: 0.85rem; display: block; margin-bottom: 5px;">NOME DA CATEGORIA:</label>
             <input type="text" id="cad_cat_nome" placeholder="Ex: INFORMÁTICA, LIMPEZA..." 
-                   class="input-vidro" style="width: 100%; background: #0f172a; color: white;">
+                   class="input-vidro" style="width: 100%; background: rgba(15, 23, 42, 0.8); color: white; border: 1px solid rgba(255,255,255,0.1);">
             
             <button onclick="salvarNovaCategoria()" class="btn-grande btn-vidro" style="background: #10b981; margin-top: 20px; width: 100%;">
-                CONFIRMAR CADASTRO
+                💾 CONFIRMAR CADASTRO
             </button>
         </div>
     `;
@@ -2461,15 +2480,15 @@ function telaCadastroCategoria() {
 function telaCadastroLocal() {
     const area = document.getElementById('area-formulario-cadastro');
     area.innerHTML = `
-        <div class="card-login" style="max-width: 500px; text-align: left; margin: 0;">
+        <div class="painel-vidro" style="max-width: 500px; text-align: left; margin: 0;">
             <h3 style="color: white; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; margin-top: 0;">
-                🏫 NOVO LOCAL / UNIDADE
+                📍 NOVO LOCAL / UNIDADE
             </h3>
             
             <div style="margin-top: 20px;">
-                <label style="color: #cbd5e1; font-size: 0.8rem; display: block; margin-bottom: 8px;">NOME DA UNIDADE:</label>
+                <label style="color: #cbd5e1; font-size: 0.85rem; display: block; margin-bottom: 8px;">NOME DA UNIDADE:</label>
                 <input type="text" id="cad_local_nome" placeholder="Digite o nome completo..." 
-                       class="input-vidro" style="width: 100%; text-transform: uppercase; background: #0f172a; color: white;">
+                       class="input-vidro" style="width: 100%; text-transform: uppercase; background: rgba(15, 23, 42, 0.8); color: white; border: 1px solid rgba(255,255,255,0.1);">
             </div>
 
             <button onclick="salvarNovoLocal()" class="btn-grande btn-vidro" style="background: #10b981; margin-top: 25px; width: 100%;">
@@ -2481,7 +2500,8 @@ function telaCadastroLocal() {
 
 async function formProduto() {
     const area = document.getElementById('area-formulario-cadastro');
-    area.innerHTML = `<div class="painel-vidro">🔍 Consultando categorias...</div>`;
+    // Mantém o loading no padrão correto
+    area.innerHTML = `<div class="painel-vidro" style="color:white;">🔍 Consultando categorias...</div>`;
 
     try {
         const res = await fetch(`${API_URL}/categorias`, {
@@ -2490,38 +2510,50 @@ async function formProduto() {
         const categorias = await res.json();
 
         area.innerHTML = `
-            <div class="card-login" style="max-width: 500px; text-align: left; margin: 0;">
-                <h3 style="text-align: center; color: white; margin-top: 0;">CADASTRO DE ITEM</h3>
+            <div class="painel-vidro" style="max-width: 500px; text-align: left; margin: 0; height: 100%; overflow-y: auto; padding: 25px;">
                 
-                <label style="color: white; display: block; margin-top: 15px; font-size: 0.8rem;">NOME DO PRODUTO:</label>
-                <input type="text" id="prod_nome" class="input-vidro" placeholder="Ex: CAMISA, PAPEL A4..." 
-                       style="text-transform: uppercase; width: 100%; background: #0f172a; color: white;">
+                <h3 style="color: white; margin-top: 0; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 15px;">
+                    📦 CADASTRO DE ITEM
+                </h3>
                 
-                <label style="color: white; display: block; margin-top: 15px; font-size: 0.8rem;">TIPO:</label>
-                <select id="prod_tipo" class="input-vidro" style="width: 100%; height: 50px; background: #0f172a; color: white;" onchange="ajustarExibicaonotificara()">
-                    <option value="MATERIAL" style="background: #1e293b; color: white;">MATERIAL</option>
-                    <option value="UNIFORMES" style="background: #1e293b; color: white;">UNIFORMES</option>
-                </select>
-
-                <label style="color: white; display: block; margin-top: 15px; font-size: 0.8rem;">CATEGORIA:</label>
-                <select id="prod_categoria" class="input-vidro" style="width: 100%; height: 50px; background: #0f172a; color: white;">
-                    <option value="" style="background: #1e293b; color: white;">-- SELECIONE --</option>
-                    ${categorias.map(c => `<option value="${c.id}" style="background: #1e293b; color: white;">${c.nome}</option>`).join('')}
-                </select>
-
-                <div id="div_notificara_minimo">
-                    <label style="color: white; display: block; margin-top: 15px; font-size: 0.8rem;">ALERTA DE ESTOQUE BAIXO:</label>
-                    <input type="number" id="prod_notificara" class="input-vidro" value="0" style="width: 100%; background: #0f172a; color: white;">
+                <div style="margin-top: 20px;">
+                    <label style="color: #cbd5e1; font-size: 0.85rem; display: block; margin-bottom: 8px;">NOME DO PRODUTO:</label>
+                    <input type="text" id="prod_nome" class="input-vidro" placeholder="Ex: CAMISA, PAPEL A4..." 
+                           style="text-transform: uppercase; width: 100%; background: rgba(15, 23, 42, 0.8); color: white; border: 1px solid rgba(255,255,255,0.1); padding: 10px;">
+                </div>
+                
+                <div style="margin-top: 20px;">
+                    <label style="color: #cbd5e1; font-size: 0.85rem; display: block; margin-bottom: 8px;">TIPO:</label>
+                    <select id="prod_tipo" class="input-vidro" style="width: 100%; height: 45px; background: rgba(15, 23, 42, 0.8); color: white; border: 1px solid rgba(255,255,255,0.1); padding-left: 10px;" onchange="ajustarExibicaonotificara()">
+                        <option value="MATERIAL" style="background: #1e293b; color: white;">MATERIAL</option>
+                        <option value="UNIFORMES" style="background: #1e293b; color: white;">UNIFORMES</option>
+                    </select>
                 </div>
 
-                <button onclick="salvarProdutoNovo()" style="background: #10b981; margin-top: 25px; width: 100%; color: white; border: none; padding: 15px; border-radius: 8px; font-weight: bold; cursor: pointer;">
-                    CADASTRAR PRODUTO
+                <div style="margin-top: 20px;">
+                    <label style="color: #cbd5e1; font-size: 0.85rem; display: block; margin-bottom: 8px;">CATEGORIA:</label>
+                    <select id="prod_categoria" class="input-vidro" style="width: 100%; height: 45px; background: rgba(15, 23, 42, 0.8); color: white; border: 1px solid rgba(255,255,255,0.1); padding-left: 10px;">
+                        <option value="" style="background: #1e293b; color: white;">-- SELECIONE --</option>
+                        ${categorias.map(c => `<option value="${c.id}" style="background: #1e293b; color: white;">${c.nome}</option>`).join('')}
+                    </select>
+                </div>
+
+                <div id="div_notificara_minimo" style="margin-top: 20px;">
+                    <label style="color: #cbd5e1; font-size: 0.85rem; display: block; margin-bottom: 8px;">ALERTA DE ESTOQUE BAIXO:</label>
+                    <input type="number" id="prod_notificara" class="input-vidro" value="0" 
+                           style="width: 100%; background: rgba(15, 23, 42, 0.8); color: white; border: 1px solid rgba(255,255,255,0.1); padding: 10px;">
+                </div>
+
+                <button onclick="salvarProdutoNovo()" class="btn-grande btn-vidro" style="background: #10b981; margin-top: 30px; width: 100%;">
+                    💾 CADASTRAR PRODUTO
                 </button>
             </div>
         `;
+        // Mantém a lógica original intacta
         if(typeof ajustarExibicaonotificara === "function") ajustarExibicaonotificara();
     } catch (err) {
-        area.innerHTML = `<div class="painel-vidro" style="color:red;">Erro ao carregar categorias.</div>`;
+        // Mantém o erro no padrão correto
+        area.innerHTML = `<div class="painel-vidro" style="color:#ef4444;">Erro ao carregar categorias.</div>`;
     }
 }
 
@@ -6637,37 +6669,65 @@ async function salvarRemessa(pedidoId) {
 }
 
 async function telaAbastecerEstoque() {
-    const container = document.getElementById('app-content');
-    container.style.background = "transparent";
+    const app = document.getElementById('app-content');
+    app.innerHTML = '<div style="padding:20px; color:white;">Carregando dados para entrada...</div>';
 
-    container.innerHTML = `
-        <div style="padding:20px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                <h2 style="color:white; margin:0;">📥 ENTRADA DE ESTOQUE</h2>
-                <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
-            </div>
+    try {
+        const token = localStorage.getItem('token');
+        const [resProdutos, resLocais] = await Promise.all([
+            fetch(`${API_URL}/produtos`, { headers: { 'Authorization': `Bearer ${token}` } }),
+            fetch(`${API_URL}/locais`, { headers: { 'Authorization': `Bearer ${token}` } })
+        ]);
 
-            <div class="painel-vidro" style="max-width:600px; margin-top:10px;">
-                <label style="color:white; display:block; margin-bottom:5px; font-weight:bold;">TIPO DE PRODUTO:</label>
-                <select id="tipo_entrada" onchange="carregarProdutosEntrada(this.value)" style="width:100%; padding:12px; margin-bottom:20px; border-radius:10px; background: rgba(255,255,255,0.1); color:white; border: 1px solid rgba(255,255,255,0.2); outline:none;">
-                    <option value="">Selecione...</option>
-                    <option value="MATERIAL">📦 MATERIAL / CONSUMO</option>
-                    <option value="UNIFORMES">👕 UNIFORMES / VESTUÁRIO</option>
-                </select>
+        if (!resProdutos.ok || !resLocais.ok) throw new Error('Falha ao buscar dados.');
 
-                <label style="color:white; display:block; margin-bottom:5px; font-weight:bold;">PRODUTO:</label>
-                <select id="produto_entrada" style="width:100%; padding:12px; margin-bottom:20px; border-radius:10px; background: rgba(255,255,255,0.1); color:white; border: 1px solid rgba(255,255,255,0.2); outline:none;">
-                    <option value="">Selecione o tipo primeiro...</option>
-                </select>
+        const produtos = await resProdutos.json();
+        const locais = await resLocais.json();
 
-                <div id="campos_dinamicos_entrada"></div>
+        app.innerHTML = `
+            <div class="painel-vidro" style="max-width: 600px; margin: 20px auto;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:15px;">
+                    <h2 style="color:white; margin:0;">📥 LANÇAR ENTRADA (ABASTECIMENTO)</h2>
+                    <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                </div>
 
-                <button onclick="salvarEntradaEstoque()" style="width:100%; padding:15px; background:#10b981; color:white; border:none; border-radius:12px; cursor:pointer; font-weight:bold; margin-top:15px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); transition: 0.3s;">
-                    CONFIRMAR ENTRADA
+                <div style="margin-bottom: 20px;">
+                    <label style="color: #cbd5e1; font-size: 0.85rem; display: block; margin-bottom: 5px;">ORIGEM DO MATERIAL (FORNECEDOR/LOCAL):</label>
+                    <select id="origem_entrada" class="input-vidro" style="width: 100%; background: rgba(15, 23, 42, 0.8); color: white;">
+                        <option value="" style="background: #1e293b; color: white;">-- SELECIONE A ORIGEM --</option>
+                        <option value="FORNECEDOR EXTERNO" style="background: #1e293b; color: white;">FORNECEDOR EXTERNO (COMPRA)</option>
+                        ${locais.map(l => `<option value="${l.id}" style="background: #1e293b; color: white;">${l.nome}</option>`).join('')}
+                    </select>
+                </div>
+
+                <div style="margin-bottom: 20px;">
+                    <label style="color: #cbd5e1; font-size: 0.85rem; display: block; margin-bottom: 5px;">PRODUTO A SER LANÇADO:</label>
+                    <select id="produto_entrada" class="input-vidro" style="width: 100%; background: rgba(15, 23, 42, 0.8); color: white;">
+                        <option value="" style="background: #1e293b; color: white;">-- SELECIONE O PRODUTO --</option>
+                        ${produtos.map(p => `<option value="${p.id}" style="background: #1e293b; color: white;">${p.nome} (${p.tipo})</option>`).join('')}
+                    </select>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                    <div>
+                        <label style="color: #cbd5e1; font-size: 0.85rem; display: block; margin-bottom: 5px;">QUANTIDADE:</label>
+                        <input type="number" id="qtd_entrada" min="1" class="input-vidro" style="width: 100%; background: rgba(15, 23, 42, 0.8); color: white;">
+                    </div>
+                    <div>
+                        <label style="color: #cbd5e1; font-size: 0.85rem; display: block; margin-bottom: 5px;">NÚMERO DA NOTA FISCAL / DOCUMENTO:</label>
+                        <input type="text" id="doc_entrada" class="input-vidro" style="width: 100%; background: rgba(15, 23, 42, 0.8); color: white;">
+                    </div>
+                </div>
+
+                <button onclick="processarEntradaEstoque()" class="btn-grande btn-vidro" style="background: #10b981; width: 100%; font-weight: bold;">
+                    ✅ CONFIRMAR ENTRADA NO ESTOQUE
                 </button>
             </div>
-        </div>
-    `;
+        `;
+    } catch (err) {
+        console.error(err);
+        app.innerHTML = `<div class="painel-vidro" style="color:red; max-width: 500px; margin: auto;">Erro ao carregar dados: ${err.message}</div>`;
+    }
 }
 
 async function enviarEntradaEstoque() {
@@ -10856,12 +10916,8 @@ function modalEscolhaTipoPedido() {
                 <button onclick="document.getElementById('modal-escolha-pedido').remove(); telaAdminPedidoMateriais();" 
                         class="btn-vidro" style="background: #10b981; padding: 20px;">📦 MATERIAIS</button>
                 
-                <button onclick="document.getElementById('modal-escolha-pedido').remove(); telaAdminPedidoPatrimonios();" 
-                        class="btn-vidro" style="background: #f59e0b; padding: 20px;">🪑 PATRIMÔNIO</button>
-            </div>
-
-            <button onclick="document.getElementById('modal-escolha-pedido').remove()" 
-                    class="btn-sair-vidro" style="margin-top: 25px; background: #475569; width: 100%;">CANCELAR</button>
+                <button onclick="document.getElementById('modal-escolha-pedido').remove()" 
+                        class="btn-vidro" style="margin-top: 25px; background: #475569; width: 100%;">CANCELAR</button>
         </div>
     `;
     document.body.appendChild(overlay);

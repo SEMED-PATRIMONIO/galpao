@@ -1919,26 +1919,28 @@ async function telaGerenciarUsuarios() {
                                 </tr>
                             </thead>
                             <tbody>
-                                ${usuarios.map(u => {
-                                    const ativo = u.status === 'ativo';
-                                    return `
-                                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05); opacity: ${ativo ? '1' : '0.4'};">
-                                        <td style="padding:12px;">${u.nome.toUpperCase()}</td>
-                                        <td style="padding:12px;">
-                                            <span style="background:rgba(255,255,255,0.1); padding:3px 8px; border-radius:10px; font-size:0.7rem;">
-                                                ${nomesPerfis[u.perfil] || u.perfil}
-                                            </span>
-                                        </td>
-                                        <td style="padding:12px; font-size:0.8rem; color:#94a3b8;">${u.local_nome || 'GLOBAL'}</td>
-                                        <td style="padding:12px; text-align:center;">
-                                            <button onclick="alternarStatusUsuario(${u.id}, '${u.status}')" 
-                                                style="background:none; border:none; cursor:pointer; font-size:1.2rem; filter: grayscale(${ativo ? 0 : 1});"
-                                                title="${ativo ? 'Inativar' : 'Reativar'}">
-                                                ${ativo ? '🗑️' : '🔄'}
-                                            </button>
-                                        </td>
-                                    </tr>
-                                `}).join('')}
+                                ${usuarios
+                                    .filter(u => u.status === 'ativo') // AJUSTE CIRÚRGICO: Filtra apenas ativos
+                                    .map(u => {
+                                        const ativo = u.status === 'ativo';
+                                        return `
+                                        <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                                            <td style="padding:12px;">${u.nome.toUpperCase()}</td>
+                                            <td style="padding:12px;">
+                                                <span style="background:rgba(255,255,255,0.1); padding:3px 8px; border-radius:10px; font-size:0.7rem;">
+                                                    ${nomesPerfis[u.perfil] || u.perfil}
+                                                </span>
+                                            </td>
+                                            <td style="padding:12px; font-size:0.8rem; color:#94a3b8;">${u.local_nome || 'GLOBAL'}</td>
+                                            <td style="padding:12px; text-align:center;">
+                                                <button onclick="alternarStatusUsuario(${u.id}, '${u.status}')" 
+                                                    style="background:none; border:none; cursor:pointer; font-size:1.2rem;"
+                                                    title="Inativar Usuário">
+                                                    🗑️
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    `}).join('')}
                             </tbody>
                         </table>
                     </div>
@@ -11040,34 +11042,80 @@ async function telaAdminPedidoUniformes() {
 
 async function telaAdminPedidoMateriais() {
     const container = document.getElementById('app-content');
-    carrinhoAdminDireto = [];
-    const [resP, resL] = await Promise.all([
-        fetch(`${API_URL}/estoque/produtos-por-tipo/MATERIAL`, { headers: { 'Authorization': `Bearer ${TOKEN}` } }),
-        fetch(`${API_URL}/locais/dropdown`, { headers: { 'Authorization': `Bearer ${TOKEN}` } })
-    ]);
-    const produtos = await resP.json();
-    const locais = await resL.json();
-
+    
+    // 1. Estrutura Base da Tela (Cabeçalho + Container da Tabela + Botão de Ação)
     container.innerHTML = `
-        <div class="painel-vidro" style="max-width: 1000px; margin: auto;">
-            <h2 style="color:white; text-align:center;">📦 PEDIDO DE MATERIAIS</h2>
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
-                <div>
-                    <label>DESTINO:</label>
-                    <select id="mat_local" class="input-vidro">${locais.map(l=>`<option value="${l.id}">${l.nome}</option>`).join('')}</select>
-                    <label>PRODUTO (Saldo em estoque):</label>
-                    <select id="mat_produto" class="input-vidro">
-                        ${produtos.filter(p=>p.saldo > 0).map(p=>`<option value="${p.id}" data-estoque="${p.saldo}">${p.nome} (Disp: ${p.saldo})</option>`).join('')}
-                    </select>
-                    <label>QUANTIDADE:</label>
-                    <input type="number" id="mat_qtd" value="1" min="1" class="input-vidro">
-                    <button onclick="addCarrinhoMateriais()" class="btn-vidro" style="background:#10b981; margin-top:15px; width:100%;">➕ ADICIONAR</button>
-                </div>
-                <div id="display-carrinho-admin" class="painel-interno-vidro">Aguardando...</div>
+        <div class="painel-vidro" style="max-width: 900px; margin: auto; display: flex; flex-direction: column; height: 85vh;">
+            
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-shrink: 0;">
+                <button onclick="abrirSubmenuVitrificado('PEDIDOS')" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                <h2 style="color:white; margin:0; font-size:1.3rem;">📝 NOVO PEDIDO: MATERIAIS</h2>
+                <div style="width:110px;"></div> </div>
+
+            <div style="flex: 1; overflow-y: auto; background:rgba(0,0,0,0.2); border-radius:8px;">
+                <table style="width:100%; border-collapse: collapse; color:white;">
+                    <thead style="position: sticky; top: 0; background: #1a2233; z-index: 10;">
+                        <tr>
+                            <th style="padding:15px; text-align:left;">PRODUTO / MATERIAL</th>
+                            <th style="padding:15px; text-align:center; width: 120px;">SALDO ATUAL</th>
+                            <th style="padding:15px; text-align:center; width: 150px;">QTD. SOLICITADA</th>
+                        </tr>
+                    </thead>
+                    <tbody id="lista-produtos-pedido">
+                        <tr><td colspan="3" style="padding:20px; text-align:center;">Carregando lista de materiais...</td></tr>
+                    </tbody>
+                </table>
             </div>
-            <button id="btnFinalizar" onclick="finalizarPedidoMateriaisDireto()" disabled class="btn-grande btn-vidro" style="margin-top:20px;">🚀 FINALIZAR MATERIAIS</button>
+
+            <div style="margin-top: 20px; flex-shrink: 0;">
+                <button onclick="finalizarPedidoAdmin('MATERIAL')" class="btn-grande btn-vidro" style="background:#10b981; width:100%; color:white;">
+                    ✅ FINALIZAR SOLICITAÇÃO
+                </button>
+            </div>
         </div>
     `;
+
+    // 2. Busca e Renderização dos Dados
+    try {
+        // Usando a mesma lógica de filtro que aplicamos anteriormente para garantir só MATERIAIS
+        const res = await fetch(`${API_URL}/estoque/materiais-e-patrimonios`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        const todosProdutos = await res.json();
+        // Filtra apenas MATERIAIS, removendo Patrimônio e Uniformes
+        const materiais = todosProdutos.filter(p => p.tipo === 'MATERIAL');
+
+        const tbody = document.getElementById('lista-produtos-pedido');
+
+        if (materiais.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" style="padding:20px; text-align:center;">Nenhum material cadastrado para pedido.</td></tr>';
+            return;
+        }
+
+        // AJUSTE 2: Layout de Tabela bem distribuído
+        tbody.innerHTML = materiais.map(p => `
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.05); vertical-align: middle;">
+                <td style="padding:12px 15px;">
+                    <strong style="font-size: 1rem;">${p.nome}</strong><br>
+                    <small style="color:#94a3b8;">Categoria: ${p.categoria_nome || 'Geral'}</small>
+                </td>
+                <td style="padding:12px; text-align:center;">
+                    <span style="font-weight:bold; color:${p.saldo <= p.minimo ? '#f87171' : '#4ade80'}">${p.saldo}</span>
+                </td>
+                <td style="padding:12px; text-align:center;">
+                    <input type="number" min="0" id="qtd_pedir_${p.id}" class="input-vidro item-pedido-input" 
+                           data-prod-id="${p.id}"
+                           placeholder="0"
+                           style="width: 100px; text-align:center; background: rgba(15, 23, 42, 0.8); color: white; padding: 8px; border: 1px solid rgba(255,255,255,0.1);">
+                </td>
+            </tr>
+        `).join('');
+
+    } catch (err) {
+        console.error("Erro ao carregar produtos para pedido:", err);
+        document.getElementById('lista-produtos-pedido').innerHTML = 
+            '<tr><td colspan="3" style="padding:20px; text-align:center; color:#f87171;">Erro ao carregar lista.</td></tr>';
+    }
 }
 
 async function buscarGradeUniformes(produtoId) {
@@ -12852,30 +12900,32 @@ function abrirMenuPatrimonioEscola() {
 
     mainArea.innerHTML = `
         <div class="animar-entrada" style="padding: 20px; color: white;">
+            
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 30px;">
-                <button onclick="carregarDashboard()" class="btn-sair-vidro" style="padding: 10px 20px; cursor: pointer;">
+                <button onclick="carregarDashboard()" class="btn-voltar-vidro" style="position: static; padding: 10px 20px;">
                     ⬅️ VOLTAR
                 </button>
-                <h1 style="margin: 0; font-size: 1.5rem;">Gestão de PatrimÔnio</h1>
-                <div style="width: 100px;"></div> 
-            </div>
+                <h1 style="margin: 0; font-size: 1.5rem; font-family: sans-serif;">Gestão de Patrimônio</h1>
+                <div style="width: 100px;"></div> </div>
 
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; max-width: 1000px; margin: 0 auto;">
-                <button class="btn-acao-topo" style="background:#ef4444; color:white; cursor:pointer;" onclick="abrirModalPendenciasTransferencia()">
-                    🔔 PENDÊNCIAS DE RECEBIMENTO DE BEM
+            <div class="grid-movel-celular" style="width: 100%; max-width: 1000px; margin: 0 auto;">
+                
+                <button class="btn-grande btn-vidro" onclick="abrirModalPendenciasTransferencia()">
+                    <i>🔔</i><span>PENDÊNCIAS DE RECEBIMENTO DE BEM</span>
                 </button>
-                <div onclick="telaGerenciarSetores()" class="painel-vidro card-interativo" style="cursor:pointer; padding: 20px; text-align: center;">
-                    <div style="font-size: 3rem; margin-bottom: 15px;">📍</div>
-                    <h3>1. CADASTRAR SETORES</h3>
-                </div>
-                <div onclick="telaPatrimonioEscolaCatalogo()" class="painel-vidro card-interativo" style="cursor:pointer; padding: 20px; text-align: center;">
-                    <div style="font-size: 3rem; margin-bottom: 15px;">📝</div>
-                    <h3>2. CATALOGAR BENS</h3>
-                </div>
-                <div onclick="telaPatrimonioConsultaEscola()" class="painel-vidro card-interativo" style="cursor:pointer; padding: 20px; text-align: center;">
-                    <div style="font-size: 3rem; margin-bottom: 15px;">📋</div>
-                    <h3>3. VISUALIZAR BENS</h3>
-                </div>
+
+                <button class="btn-grande btn-vidro" onclick="telaGerenciarSetores()">
+                    <i>📍</i><span>1. CADASTRAR SETORES</span>
+                </button>
+
+                <button class="btn-grande btn-vidro" onclick="telaPatrimonioEscolaCatalogo()">
+                    <i>📝</i><span>2. CATALOGAR BENS</span>
+                </button>
+
+                <button class="btn-grande btn-vidro" onclick="telaPatrimonioConsultaEscola()">
+                    <i>📋</i><span>3. VISUALIZAR BENS</span>
+                </button>
+            
             </div>
         </div>
     `;
@@ -12898,34 +12948,36 @@ function abrirMenuPatrimonioAlmoxarifado() {
 
     mainArea.innerHTML = `
         <div class="animar-entrada" style="padding: 20px; color: white;">
+            
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 30px;">
-                <button onclick="carregarDashboard()" class="btn-sair-vidro" style="padding: 10px 20px; cursor: pointer;">
+                <button onclick="carregarDashboard()" class="btn-voltar-vidro" style="position: static; padding: 10px 20px;">
                     ⬅️ VOLTAR
                 </button>
-                <h1 style="margin: 0; font-size: 1.5rem;">Gestão de PatrimÔnio</h1>
-                <div style="width: 100px;"></div> 
-            </div>
+                <h1 style="margin: 0; font-size: 1.5rem; font-family: sans-serif;">Gestão de Patrimônio</h1>
+                <div style="width: 100px;"></div> </div>
 
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; max-width: 1000px; margin: 0 auto;">
-                <button class="btn-acao-topo" style="background:#ef4444; color:white; cursor:pointer;" onclick="abrirModalPendenciasTransferencia()">
-                    🔔 PENDÊNCIAS DE RECEBIMENTO DE BEM
+            <div class="grid-movel-celular" style="width: 100%; max-width: 1000px; margin: 0 auto;">
+                
+                <button class="btn-grande btn-vidro" onclick="abrirModalPendenciasTransferencia()">
+                    <i>🔔</i><span>PENDÊNCIAS DE RECEBIMENTO DE BEM</span>
                 </button>
-                <div onclick="telaGerenciarSetores()" class="painel-vidro card-interativo" style="cursor:pointer; padding: 20px; text-align: center;">
-                    <div style="font-size: 3rem; margin-bottom: 15px;">📍</div>
-                    <h3>CADASTRAR SETORES</h3>
-                </div>
-                <div onclick="telaPatrimonioEscolaCatalogo()" class="painel-vidro card-interativo" style="cursor:pointer; padding: 20px; text-align: center;">
-                    <div style="font-size: 3rem; margin-bottom: 15px;">📝</div>
-                    <h3>CATALOGAR BENS</h3>
-                </div>
-                <div onclick="telaPatrimonioConsultaEscola()" class="painel-vidro card-interativo" style="cursor:pointer; padding: 20px; text-align: center;">
-                    <div style="font-size: 3rem; margin-bottom: 15px;">📋</div>
-                    <h3>VISUALIZAR BENS NO ALMOXARIFADO CENTRAL</h3>
-                </div>
-                <div onclick="telaGestaoGlobalPatrimonio()" class="painel-vidro card-interativo" style="cursor:pointer; padding: 20px; text-align: center;">
-                    <div style="font-size: 3rem; margin-bottom: 15px;">📋</div>
-                    <h3>VISUALIZAR BENS NAS DEMAIS UNIDADES</h3>
-                </div>                
+
+                <button class="btn-grande btn-vidro" onclick="telaGerenciarSetores()">
+                    <i>📍</i><span>CADASTRAR SETORES</span>
+                </button>
+
+                <button class="btn-grande btn-vidro" onclick="telaPatrimonioEscolaCatalogo()">
+                    <i>📝</i><span>CATALOGAR BENS</span>
+                </button>
+
+                <button class="btn-grande btn-vidro" onclick="telaPatrimonioConsultaEscola()">
+                    <i>📋</i><span>VISUALIZAR BENS NO ALMOXARIFADO CENTRAL</span>
+                </button>
+
+                <button class="btn-grande btn-vidro" onclick="telaGestaoGlobalPatrimonio()">
+                    <i>📋</i><span>VISUALIZAR BENS NAS DEMAIS UNIDADES</span>
+                </button>
+            
             </div>
         </div>
     `;
@@ -13165,7 +13217,7 @@ async function partilharInventario(nomeSetor) {
 function renderizarTabela(dados) {
     const container = document.getElementById('corpo-tabela-dinamica');
     
-    // Proteção para evitar erros caso o container não exista no DOM no momento da chamada
+    // Proteção para evitar erros caso o container não exista no DOM
     if (!container) return;
 
     if (dados.length === 0) {
@@ -13173,13 +13225,15 @@ function renderizarTabela(dados) {
         return;
     }
 
-    // Legenda compacta no topo
+    // AJUSTE CIRÚRGICO 1: Legenda simplificada com apenas 2 opções
     const legendaHtml = `
-        <div style="display: flex; gap: 15px; margin-bottom: 12px; padding: 8px; background: rgba(255, 255, 255, 0.03); border-radius: 8px; flex-wrap: wrap; border: 1px solid rgba(255,255,255,0.05);">
-            <div style="display:flex; align-items:center; gap:5px; font-size:0.65rem; color:#00e5ff;">● ANTERIOR A 2025 E PATRIMONIALIZADO</div>
-            <div style="display:flex; align-items:center; gap:5px; font-size:0.65rem; color:#fbbf24;">● NÃO PATRIMONIALIZADO (ANTIGO)</div>
-            <div style="display:flex; align-items:center; gap:5px; font-size:0.65rem; color:#f472b6;">● SOLICITAR PATRIMONIALIZAÇÃO (NOVO)</div>
-            <div style="display:flex; align-items:center; gap:5px; font-size:0.65rem; color:#4ade80;">● RECENTE E PATRIMONIALIZADO</div>
+        <div style="display: flex; gap: 20px; margin-bottom: 15px; padding: 10px; background: rgba(0, 0, 0, 0.2); border-radius: 8px; flex-wrap: wrap; border: 1px solid rgba(255,255,255,0.05);">
+            <div style="display:flex; align-items:center; gap:8px; font-size:0.75rem; color:#4ade80; font-weight:bold;">
+                <span style="font-size: 1.2rem;">●</span> PATRIMONIADO (Possui Nº Série)
+            </div>
+            <div style="display:flex; align-items:center; gap:8px; font-size:0.75rem; color:#fbbf24; font-weight:bold;">
+                <span style="font-size: 1.2rem;">●</span> NÃO-PATRIMONIADO (Ajustar Nº Série)
+            </div>
         </div>
     `;
 
@@ -13190,7 +13244,7 @@ function renderizarTabela(dados) {
                     <tr style="text-align:left; border-bottom: 2px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.02);">
                         <th style="padding:10px 12px; width: 50px;">ID</th>
                         <th style="padding:10px 12px;">DESCRIÇÃO DO BEM</th>
-                        <th style="padding:10px 12px;">Nº PATRIMÔNIO</th>
+                        <th style="padding:10px 12px;">Nº PATRIMÔNIO / SÉRIE</th>
                         <th style="padding:10px 12px;">CONSERVAÇÃO</th>
                         <th style="padding:10px 12px;">NF / CE</th>
                         <th style="padding:10px 12px;">CADASTRO</th>
@@ -13199,22 +13253,25 @@ function renderizarTabela(dados) {
                 </thead>
                 <tbody>
                     ${dados.map((i, index) => {
-                        // Verificações de segurança e lógica de bloqueio
+                        // Verificação de segurança existente (Mantida)
                         const temSerie = i.numero_serie && String(i.numero_serie).trim() !== '';
-                        const ehNovo = i.adquirido_pos_2025 === true;
-                        const emTransito = i.em_transito === true; // Campo de controle para o fluxo externo
+                        // ehNovo removido da lógica de cor, pois não é mais critério
+                        const emTransito = i.em_transito === true; 
 
-                        // LÓGICA DE CORES DA LINHA (LEGENDA)
-                        let corTexto = '#ffffff';
-                        if (!ehNovo && temSerie) corTexto = '#00e5ff';
-                        if (!ehNovo && !temSerie) corTexto = '#fbbf24';
-                        if (ehNovo && !temSerie) corTexto = '#f472b6';
-                        if (ehNovo && temSerie) corTexto = '#4ade80';
+                        // AJUSTE CIRÚRGICO 2: Nova Lógica de Cores da Linha (Baseada apenas no Nº Série)
+                        let corTexto = '#ffffff'; // Padrão Branco (Caso algo falhe)
+                        
+                        if (temSerie) {
+                            corTexto = '#4ade80'; // VERDE: PATRIMONIADO (Tem Série)
+                        } else {
+                            corTexto = '#fbbf24'; // AMARELO: NÃO-PATRIMONIADO (Sem Série)
+                        }
 
-                        // Cores do estado (ponto visual apenas)
+                        // Cores do estado (ponto visual apenas - Mantido)
                         const coresEstado = { 'BOM': '#4ade80', 'RUIM': '#fbbf24', 'PÉSSIMO': '#ef4444' };
                         const corPonto = coresEstado[i.estado] || '#ffffff';
 
+                        // O restante do retorno da linha (TR) permanece IDÊNTICO ao original
                         return `
                             <tr onclick="${emTransito ? '' : `selecionarItemParaTransferencia(this, ${i.id}, ${i.setor_id})`}" 
                                 style="border-bottom: 1px solid rgba(255,255,255,0.03); color: ${corTexto}; cursor: ${emTransito ? 'not-allowed' : 'pointer'}; transition: 0.2s; opacity: ${emTransito ? '0.4' : '1'};"
@@ -13258,7 +13315,7 @@ function renderizarTabela(dados) {
             </table>
         </div>
     `;
-} 
+}
 
 window.detalharPatrimonio = async function(id) {
     if (!id) return;
@@ -14190,7 +14247,7 @@ async function telaGestaoGlobalPatrimonio() {
         <div class="animar-entrada" style="height: 100vh; display: flex; flex-direction: column; padding: 20px; color: white;">
             
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <button onclick="carregarDashboard()" class="btn-sair-vidro">⬅️ VOLTAR</button>
+                <button onclick="abrirMenuPatrimonioAlmoxarifado()" class="btn-sair-vidro">⬅️ VOLTAR</button>
                 <div id="acoes-global" style="display: none; gap: 10px;">
                     <button onclick="exportarGlobalPDF()" class="btn-sair-vidro" style="background:#dc2626; border:none;">PDF 📄</button>
                     <button onclick="exportarGlobalExcel()" class="btn-sair-vidro" style="background:#16a34a; border:none;">EXCEL 📊</button>

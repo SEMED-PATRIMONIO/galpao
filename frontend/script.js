@@ -410,7 +410,7 @@ async function carregarDashboard() {
     // --- 5. PERFIL: ESTOQUE (NOVA INTERFACE) --- [cite: 37]
     if (perfil === 'estoque') {
         html += `
-            <button class="btn-grande btn-vidro" onclick="telaGestaoGlobalPatrimonio()">
+            <button class="btn-grande btn-vidro" onclick="abrirMenuPatrimonioAlmoxarifado()">
                 <i>🏛️</i><span>PATRIMÔNIO</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('DEMAIS ITENS')">
@@ -12876,6 +12876,56 @@ function abrirMenuPatrimonioEscola() {
                     <div style="font-size: 3rem; margin-bottom: 15px;">📋</div>
                     <h3>3. VISUALIZAR BENS</h3>
                 </div>
+            </div>
+        </div>
+    `;
+}
+
+function abrirMenuPatrimonioAlmoxarifado() {
+    const mainArea = document.getElementById('app-content');
+    
+    if (!mainArea) {
+        console.error("Contentor 'app-content' não encontrado.");
+        return;
+    }
+
+    // OBRIGATÓRIO: Tornar a div visível antes de injetar o HTML
+    mainArea.style.display = 'block'; 
+    
+    // Esconder o login caso ainda esteja visível
+    const loginContainer = document.getElementById('login-container');
+    if (loginContainer) loginContainer.style.display = 'none';
+
+    mainArea.innerHTML = `
+        <div class="animar-entrada" style="padding: 20px; color: white;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 30px;">
+                <button onclick="carregarDashboard()" class="btn-sair-vidro" style="padding: 10px 20px; cursor: pointer;">
+                    ⬅️ VOLTAR
+                </button>
+                <h1 style="margin: 0; font-size: 1.5rem;">Gestão de PatrimÔnio</h1>
+                <div style="width: 100px;"></div> 
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; max-width: 1000px; margin: 0 auto;">
+                <button class="btn-acao-topo" style="background:#ef4444; color:white; cursor:pointer;" onclick="abrirModalPendenciasTransferencia()">
+                    🔔 PENDÊNCIAS DE RECEBIMENTO DE BEM
+                </button>
+                <div onclick="telaGerenciarSetores()" class="painel-vidro card-interativo" style="cursor:pointer; padding: 20px; text-align: center;">
+                    <div style="font-size: 3rem; margin-bottom: 15px;">📍</div>
+                    <h3>CADASTRAR SETORES</h3>
+                </div>
+                <div onclick="telaPatrimonioEscolaCatalogo()" class="painel-vidro card-interativo" style="cursor:pointer; padding: 20px; text-align: center;">
+                    <div style="font-size: 3rem; margin-bottom: 15px;">📝</div>
+                    <h3>CATALOGAR BENS</h3>
+                </div>
+                <div onclick="telaPatrimonioConsultaEscola()" class="painel-vidro card-interativo" style="cursor:pointer; padding: 20px; text-align: center;">
+                    <div style="font-size: 3rem; margin-bottom: 15px;">📋</div>
+                    <h3>VISUALIZAR BENS NO ALMOXARIFADO CENTRAL</h3>
+                </div>
+                <div onclick="telaGestaoGlobalPatrimonio()" class="painel-vidro card-interativo" style="cursor:pointer; padding: 20px; text-align: center;">
+                    <div style="font-size: 3rem; margin-bottom: 15px;">📋</div>
+                    <h3>VISUALIZAR BENS NAS DEMAIS UNIDADES</h3>
+                </div>                
             </div>
         </div>
     `;

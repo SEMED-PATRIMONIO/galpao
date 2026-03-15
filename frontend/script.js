@@ -437,12 +437,13 @@ async function carregarDashboard() {
 function abrirSubmenuVitrificado(titulo) {
     const perfil = localStorage.getItem('perfil').toLowerCase();
     
-    // Cria o elemento da overlay
+    // 1. Cria o elemento da overlay com o padrão azul escuro vitrificado
     const overlay = document.createElement('div');
     overlay.id = 'submenu-overlay';
     overlay.style.cssText = `
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(15px);
+        background: rgba(15, 23, 42, 0.9); /* Azul escuro padrão */
+        backdrop-filter: blur(15px);
         -webkit-backdrop-filter: blur(15px); z-index: 1000;
         display: flex; flex-direction: column; align-items: center; padding: 20px;
         overflow-y: auto;
@@ -450,7 +451,7 @@ function abrirSubmenuVitrificado(titulo) {
 
     let botoesExtra = '';
 
-    // --- LÓGICA DE DISTRIBUIÇÃO MANUAL ---
+    // --- LÓGICA DE DISTRIBUIÇÃO (Mantendo Ícones e Spans para o padrão visual) ---
     if (perfil === 'estoque') {
         if (titulo === 'DEMAIS ITENS') {
             botoesExtra = `
@@ -521,10 +522,12 @@ function abrirSubmenuVitrificado(titulo) {
             `;
         }
     }
+
+    // 2. Montagem do HTML com o botão VOLTAR padronizado
     overlay.innerHTML = `
         <div style="width:100%; max-width:500px; display:flex; justify-content:center; align-items:center; margin-top: 20px; margin-bottom:40px;">
-            <button onclick="document.getElementById('submenu-overlay').remove()" class="btn-sair-vidro" style="position:static; padding: 10px 40px; width: 100%;">
-                VOLTAR
+            <button onclick="document.getElementById('submenu-overlay').remove()" class="btn-voltar-vidro" style="position:static; padding: 10px 40px; width: 100%; color: white !important;">
+                ⬅️ VOLTAR
             </button>
         </div>
         
@@ -535,9 +538,11 @@ function abrirSubmenuVitrificado(titulo) {
 
     document.body.appendChild(overlay);
 
-    // Mantém o fechamento automático ao clicar
+    // 3. Fechamento automático ao clicar em qualquer botão de ação
     overlay.addEventListener('click', (e) => {
-        if (e.target.closest('button')) overlay.remove();
+        if (e.target.closest('button') && !e.target.closest('.btn-voltar-vidro')) {
+            overlay.remove();
+        }
     });
 }
 
@@ -12672,6 +12677,88 @@ async function telaPatrimonioEscolaCatalogo() {
     carregarBensRecentesModal(); // Chama a lista assim que abrir
 }
 
+async function telaPatrimonioEscolaCatalogo2() {
+    const modal = document.createElement('div');
+    modal.id = 'modal-catalogo-entrada';
+    modal.className = 'alerta-vidro-overlay';
+
+    const resSetores = await fetch(`${API_URL}/patrimonio/setores/meus`, {
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+    const setores = await resSetores.json();
+
+    // Layout de duas colunas: Esquerda (Form) | Direita (Lista)
+    modal.innerHTML = `
+        <div class="painel-vidro" style="width: 1100px; height: 600px; display: flex; gap: 20px; padding: 25px; border: 1px solid rgba(255,255,255,0.2); overflow: hidden;">
+            
+            <div style="flex: 1; display: flex; flex-direction: column; gap: 15px;">
+                <h2 style="color:white; margin:0 0 10px 0;">📝 NOVO BEM</h2>
+                
+                <div style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 12px; border: 1px solid rgba(59, 130, 246, 0.3);">
+                    <label style="color:#60a5fa; font-weight:bold; display:flex; align-items:center; gap:10px; cursor:pointer; font-size: 0.85rem;">
+                        <input type="checkbox" id="check-2025" onchange="alternarLogica2025(this.checked)" style="transform: scale(1.3);">
+                        BEM ADQUIRIDO A PARTIR DE 01/01/2025?
+                    </label>
+                </div>
+
+                <div style="overflow-y: auto; flex: 1; padding-right: 10px;">
+                    <div style="margin-bottom: 12px;">
+                        <label style="color:white; font-size:0.8rem;">NOME DO BEM:</label>
+                        <input type="text" id="cat-nome" class="input-vidro" placeholder="Ex: PROJETOR EPSON">
+                    </div>
+
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom: 12px;">
+                        <div>
+                            <label style="color:white; font-size:0.8rem;">SETOR:</label>
+                            <select id="cat-setor" class="input-vidro">
+                                ${setores.map(s => `<option value="${s.id}" style="color:black;">${s.nome}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div>
+                            <label style="color:white; font-size:0.8rem;">QUANTIDADE:</label>
+                            <input type="number" id="cat-qtd" value="1" min="1" class="input-vidro">
+                        </div>
+                    </div>
+
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom: 12px;">
+                        <div>
+                            <label id="label-serie" style="color:white; font-size:0.8rem;">Nº PATRIMÔNIO:</label>
+                            <input type="text" id="cat-serie" class="input-vidro" placeholder="Opcional">
+                        </div>
+                        <div>
+                            <label id="label-nf" style="color:white; font-size:0.8rem;">Nº NF ou CE:</label>
+                            <input type="text" id="cat-nf" class="input-vidro">
+                        </div>
+                    </div>
+
+                    <div id="container-arquivo-nf" style="display:none; margin-bottom: 12px;">
+                        <label style="color:white; font-size:0.8rem;">ANEXAR NF ou CE (PDF):</label>
+                        <input type="file" id="cat-file" accept="application/pdf" class="input-vidro" style="padding: 5px;">
+                    </div>
+                </div>
+
+                <div style="display:flex; gap:10px; margin-top: auto;">
+                    <button onclick="document.getElementById('modal-catalogo-entrada').remove()" class="btn-sair-vidro" style="flex:1;">FECHAR</button>
+                    <button onclick="enviarCadastroComAnexo()" id="btn-salvar" style="flex:2; background:#3b82f6; color:white; border:none; border-radius:10px; font-weight:bold; cursor:pointer;">
+                        SALVAR REGISTRO
+                    </button>
+                </div>
+            </div>
+
+            <div style="flex: 1.2; display: flex; flex-direction: column; background: rgba(0,0,0,0.2); border-radius: 15px; padding: 15px; border: 1px solid rgba(255,255,255,0.05);">
+                <h3 style="color:#aaa; font-size:0.9rem; margin:0 0 10px 0; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 5px;">
+                    BENS CADASTRADOS RECENTEMENTE
+                </h3>
+                <div id="lista-bens-recentes" style="flex: 1; overflow-y: auto;">
+                    <p style="color:gray; text-align:center; margin-top:50px;">Carregando bens...</p>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    carregarBensRecentesModal(); // Chama a lista assim que abrir
+}
+
 async function carregarBensRecentesModal() {
     const container = document.getElementById('lista-bens-recentes');
     if (!container) return; // Proteção caso o modal seja fechado rápido demais
@@ -12958,19 +13045,19 @@ function abrirMenuPatrimonioAlmoxarifado() {
 
             <div class="grid-movel-celular" style="width: 100%; max-width: 1000px; margin: 0 auto;">
                 
-                <button class="btn-grande btn-vidro" onclick="abrirModalPendenciasTransferencia()">
+                <button class="btn-grande btn-vidro" onclick="abrirModalPendenciasTransferencia2()">
                     <i>🔔</i><span>PENDÊNCIAS DE RECEBIMENTO DE BEM</span>
                 </button>
 
-                <button class="btn-grande btn-vidro" onclick="telaGerenciarSetores()">
+                <button class="btn-grande btn-vidro" onclick="telaGerenciarSetores2()">
                     <i>📍</i><span>CADASTRAR SETORES</span>
                 </button>
 
-                <button class="btn-grande btn-vidro" onclick="telaPatrimonioEscolaCatalogo()">
+                <button class="btn-grande btn-vidro" onclick="telaPatrimonioEscolaCatalogo2()">
                     <i>📝</i><span>CATALOGAR BENS</span>
                 </button>
 
-                <button class="btn-grande btn-vidro" onclick="telaPatrimonioConsultaEscola()">
+                <button class="btn-grande btn-vidro" onclick="telaPatrimonioConsultaEscola2()">
                     <i>📋</i><span>VISUALIZAR BENS NO ALMOXARIFADO CENTRAL</span>
                 </button>
 
@@ -13028,6 +13115,108 @@ async function carregarDashboardPatrimonio() {
 }
 
 async function telaPatrimonioConsultaEscola() {
+    const mainArea = document.getElementById('app-content');
+    if (!mainArea) return;
+
+    mainArea.innerHTML = `
+        <div class="animar-entrada" style="padding: 20px; color: white; height: 95vh; display: flex; flex-direction: column;">
+            
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <button onclick="abrirMenuPatrimonioEscola()" class="btn-sair-vidro">⬅️ VOLTAR</button>
+                    <h1 style="margin:0; font-size: 1.5rem;">📦 Inventário de Bens</h1>
+                </div>
+                <div style="text-align: right; opacity: 0.7; font-size: 0.75rem;">
+                    Unidade: ${localStorage.getItem('nome') || 'Escola Logada'}<br>
+                    Data: ${new Date().toLocaleDateString('pt-BR')}
+                </div>
+            </div>
+
+            <div id="barra-acoes-patrimonio" style="display: flex; gap: 10px; margin-bottom: 15px; padding-left: 5px;">
+                <button id="btn-transferir-interno" disabled class="btn-acao-topo" onclick="abrirModalTransferenciaInterna()">
+                    🔄 TRANSFERIR INTERNAMENTE
+                </button>
+                <button id="btn-transferir-externo" disabled class="btn-acao-topo" onclick="abrirModalTransferenciaExterna()">
+                    🚚 TRANSFERIR P/ OUTRO LOCAL
+                </button>
+                <button class="btn-acao-topo" style="background:#8b5cf6; color:white; opacity:1; cursor:pointer;" onclick="abrirModalImportarExcel()">
+                    📊 IMPORTAR DO EXCEL
+                </button>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 300px 1fr; gap: 15px; flex: 1; overflow: hidden;">
+                
+                <div class="painel-vidro" style="padding: 15px; display: flex; flex-direction: column; overflow: hidden;">
+                    <h3 style="margin-top:0; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; font-size: 1rem;">📍 Setores</h3>
+                    <div id="lista-setores-inventario" style="flex: 1; overflow-y: auto; margin-top: 10px;">
+                        <p style="color:gray; font-size: 0.8rem;">Carregando...</p>
+                    </div>
+                </div>
+
+                <div class="painel-vidro" style="padding: 20px; display: flex; flex-direction: column; overflow: hidden;">
+                    <div id="cabecalho-itens" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; visibility: hidden;">
+                        <h3 id="nome-setor-titulo" style="margin:0; color: #60a5fa; font-size: 1.1rem;"></h3>
+                        <div style="display: flex; gap: 8px;">
+                            <button id="btn-editar-estado" onclick="prepararEdicaoItem()" class="btn-sair-vidro" 
+                                style="background: #f59e0b; border: none; color: white; display: none; padding: 5px 12px; font-size: 0.75rem;">
+                                ✏️ EDITAR
+                            </button> 
+                            <button id="btn-gerar-pdf" class="btn-sair-vidro" style="background: #ef4444; border: none; color: white; padding: 5px 12px; font-size: 0.75rem;">
+                                📄 PDF 
+                            </button>
+                        </div>
+                    </div>
+                    <div id="area-tabela-itens" style="flex: 1; overflow-y: auto;">
+                        <div style="text-align: center; margin-top: 80px; color: rgba(255,255,255,0.3);">
+                            <p>Selecione um setor à esquerda.</p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    `;
+
+    // 4. ESTILO DOS NOVOS BOTÕES
+    if (!document.getElementById('style-botoes-topo')) {
+        const style = document.createElement('style');
+        style.id = 'style-botoes-topo';
+        style.innerHTML = `
+            .btn-acao-topo {
+                background: rgba(255, 255, 255, 0.05);
+                color: rgba(255, 255, 255, 0.3);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 8px;
+                padding: 8px 15px;
+                font-size: 0.7rem;
+                font-weight: bold;
+                cursor: not-allowed;
+                transition: all 0.2s ease;
+                text-transform: uppercase;
+            }
+            .btn-acao-topo.ativo {
+                background: #3b82f6;
+                color: white;
+                cursor: pointer;
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+            }
+            .btn-acao-topo.ativo:hover {
+                background: #2563eb;
+                transform: translateY(-1px);
+            }
+            .linha-selecionada {
+                background: rgba(59, 130, 246, 0.25) !important;
+                outline: 1px solid #3b82f6;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
+    carregarSetoresParaConsulta();
+}
+
+async function telaPatrimonioConsultaEscola2() {
     const mainArea = document.getElementById('app-content');
     if (!mainArea) return;
 
@@ -13542,6 +13731,57 @@ async function telaPatrimonioRegistarItem() {
 }
 
 async function telaGerenciarSetores() {
+    const modal = document.createElement('div');
+    modal.id = 'modal-setores';
+    modal.className = 'alerta-vidro-overlay';
+    
+    modal.innerHTML = `
+        <div class="painel-vidro" style="width: 800px; height: 500px; display: flex; gap: 20px; padding: 25px;">
+            <div style="flex: 1; border-right: 1px solid rgba(255,255,255,0.1); padding-right: 20px;">
+                <h3 style="color:white; margin-top:0;">📂 NOVO SETOR</h3>
+                <input type="text" id="nome-setor" placeholder="Ex: SALA DE AULA 01" 
+                    style="width:100%; padding:12px; border-radius:10px; background:rgba(255,255,255,0.1); color:white; border:1px solid rgba(255,255,255,0.2);">
+                <button onclick="salvarSetor()" style="width:100%; margin-top:15px; padding:12px; background:#10b981; color:white; border:none; border-radius:10px; cursor:pointer; font-weight:bold;">
+                    SALVAR SETOR
+                </button>
+                <button onclick="document.getElementById('modal-setores').remove()" style="width:100%; margin-top:10px; background:transparent; color:white; border:1px solid rgba(255,255,255,0.3); padding:8px; border-radius:10px; cursor:pointer;">
+                    CANCELAR
+                </button>
+            </div>
+
+            <div style="flex: 1; display:flex; flex-direction:column;">
+                <h3 style="color:white; margin-top:0;">📋 SETORES CADASTRADOS</h3>
+                <div id="lista-setores-escola" style="flex:1; overflow-y:auto; max-height:300px; background:rgba(0,0,0,0.2); border-radius:10px; padding:10px;">
+                    </div>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+    await atualizarListaSetores();
+
+    window.salvarSetor = async () => {
+        const nome = document.getElementById('nome-setor').value;
+        if (!nome) return alert("Digite o nome do setor.");
+
+        const res = await fetch(`${API_URL}/patrimonio/setores`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ nome })
+        });
+
+        if (res.ok) {
+            document.getElementById('nome-setor').value = '';
+            // Chama a função de atualização para refletir a mudança no modal
+            await atualizarListaSetores(); 
+        } else {
+            const erro = await res.json();
+            alert(erro.error);
+        }
+    };
+}
+
+async function telaGerenciarSetores2() {
     const modal = document.createElement('div');
     modal.id = 'modal-setores';
     modal.className = 'alerta-vidro-overlay';
@@ -15019,6 +15259,46 @@ async function abrirModalPendenciasTransferencia() {
     `;
     document.body.appendChild(modal);
 }
+
+async function abrirModalPendenciasTransferencia2() {
+    const res = await fetch(`${API_URL}/patrimonio/verificar-pendencias`, {
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+    const pendencias = await res.json();
+
+    const modal = document.createElement('div');
+    modal.className = 'alerta-vidro-overlay';
+    modal.id = 'modal-pendencias-geral';
+    modal.innerHTML = `
+        <div class="painel-vidro" style="width: 600px; padding: 25px; max-height: 80vh; overflow-y: auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <h3 style="color:white; margin:0;">📦 TRANSFERÊNCIAS RECEBIDAS</h3>
+                <button onclick="document.getElementById('modal-pendencias-geral').remove()" class="btn-sair-vidro">VOLTAR</button>
+            </div>
+            
+            <div id="lista-itens-pendentes">
+                ${pendencias.length === 0 ? '<p style="color:gray; text-align:center;">Nenhuma pendência encontrada.</p>' : 
+                pendencias.map(p => `
+                    <div style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:15px; margin-bottom:15px;">
+                        <div style="display:flex; justify-content:space-between;">
+                            <div>
+                                <strong style="color:#60a5fa; font-size:1.1rem;">${p.produto_nome}</strong><br>
+                                <small style="color:gray;">Vindo de: ${p.local_origem}</small>
+                            </div>
+                            <div style="display:flex; gap:10px;">
+                                <button onclick="prepararAceite(${p.id}, '${p.produto_nome}')" style="background:#10b981; color:white; border:none; padding:8px 15px; border-radius:8px; cursor:pointer; font-weight:bold;">ACEITAR</button>
+                                <button onclick="prepararRecusa(${p.id}, '${p.produto_nome}')" style="background:#ef4444; color:white; border:none; padding:8px 15px; border-radius:8px; cursor:pointer; font-weight:bold;">RECUSAR</button>
+                            </div>
+                        </div>
+                        <div id="form-decisao-${p.id}" style="margin-top:15px; display:none; border-top:1px solid rgba(255,255,255,0.1); padding-top:15px;"></div>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
 
 async function prepararAceite(id, nome) {
     const res = await fetch(`${API_URL}/patrimonio/setores/meus`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });

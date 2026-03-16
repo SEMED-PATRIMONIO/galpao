@@ -12757,7 +12757,7 @@ async function telaPatrimonioEscolaCatalogo() {
 
                     <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom: 12px;">
                         <div>
-                            <label id="label-serie" style="color:white; font-size:0.8rem;">Nº PATRIMÔNIO:</label>
+                            <label id="label-serie" style="color:white; font-size:0.8rem;">NUMERO_SERIE:</label>
                             <input type="text" id="cat-serie" class="input-vidro" placeholder="Opcional">
                         </div>
                         <div>

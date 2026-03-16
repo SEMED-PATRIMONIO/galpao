@@ -489,7 +489,11 @@ function abrirSubmenuVitrificado(titulo) {
             </button>            
             `;
         } else if (titulo === 'RELATÓRIOS') {
-            botoesExtra = `<div class="painel-vidro" style="padding:20px; color:rgba(255,255,255,0.5);">Sem relatórios no momento.</div>`;
+            botoesExtra = `
+            <button class="btn-grande btn-vidro" onclick="renderizarTelaRelatorios()">
+                <i>🚚</i><span>SAÍDA DE PEDIDOS</span>
+            </button>
+            `;
         }
     }
 
@@ -520,7 +524,9 @@ function abrirSubmenuVitrificado(titulo) {
             `;
         } else if (titulo === 'RELATÓRIOS') {
             botoesExtra = `
-                <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()"><i>📈</i><span>PAINEL DE PEDIDOS</span></button>
+            <button class="btn-grande btn-vidro" onclick="renderizarTelaRelatorios()">
+                <i>🚚</i><span>SAÍDA DE PEDIDOS</span>
+            </button>
             `;
         }
     }
@@ -528,12 +534,9 @@ function abrirSubmenuVitrificado(titulo) {
     // 2. Injeção do HTML (Cabeçalho e Grid seguindo o padrão Dashboard)
     overlay.innerHTML = `
         <div class="painel-usuario-vidro" style="position: sticky; top: 0; z-index: 10001; background: rgba(255,255,255,0.05);">
-            <span class="nome-usuario-painel" style="color: #60a5fa; font-weight: bold;">${titulo.toUpperCase()}</span>
             <button onclick="document.getElementById('submenu-overlay').remove()" class="btn-sair-vidro">VOLTAR</button>
         </div>
-
         <div style="margin-top: 40px;"></div>
-        
         <div class="grid-movel-celular" style="padding: 10px 20px 100px 20px;">
             ${botoesExtra}
         </div>
@@ -561,8 +564,7 @@ async function telaVisualizarEstoque() {
 
         container.innerHTML = `
             <div style="padding:20px;">
-                <div class="painel-usuario-vidro" style="position:relative; width:100%; top:0; right:0; margin-bottom:25px; display:flex; justify-content:space-between; align-items:center;">
-                    <h2 style="color:white; margin:0; font-size:1.2rem;">📊 GESTÃO DE ESTOQUE REAL</h2>
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
                     <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
                 </div>
 
@@ -839,8 +841,7 @@ async function telaAdminGerenciarSolicitacoes() {
         app.innerHTML = `
             <div style="padding:20px; min-height:100vh;" class="animar-entrada">
                 
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:30px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:15px;">
-                    <h2 style="color:white; margin:0; font-size:1.5rem;">🔓 AUTORIZAR SOLICITAÇÕES</h2>
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
                     <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
                 </div>
 
@@ -1331,9 +1332,9 @@ async function telaDevolucaoUniforme() {
         container.innerHTML = `
             <div style="padding:30px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
-                    <h2 style="color:#1e3a8a; margin:0;">🔄 SOLICITAR DEVOLUÇÃO</h2>
                     <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
                 </div>
+
 
                 <div style="background: #fff9eb; border-left: 4px solid #f59e0b; padding: 15px; border-radius: 8px; margin-bottom: 25px;">
                     <p style="color:#92400e; margin:0; font-size:0.95rem;">
@@ -1517,8 +1518,10 @@ async function listarSolicitacoesPendentes() {
 
         let html = `
             <div style="padding:20px;">
-                <button onclick="listarSolicitacoesPendentes()" style="margin-bottom:20px;">⬅ VOLTAR</button>
-                <h2 style="color: #1e3a8a; margin-bottom: 20px;">SOLICITAÇÕES AGUARDANDO AUTORIZAÇÃO</h2>
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
+                    <button onclick="listarSolicitacoesPendentes()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                </div>
+
                 <table style="width:100%; border-collapse: collapse; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
                     <thead>
                         <tr style="background: #f1f5f9; text-align: left;">
@@ -1732,8 +1735,7 @@ async function abrirModalCadastroUsuario() {
         document.getElementById('selecionarTabela').style.display = 'none'; // Esconde o select de tabelas se existir
         
         formContainer.innerHTML = `
-            <h3 style="margin-top:0; color:#1e3a8a;">🆕 REGISTAR NOVO UTILIZADOR</h3>
-            
+            <h3 style="margin-top:0; color:#1e3a8a;">🆕 NOVO ACESSO</h3>            
             <label>NOME COMPLETO:</label>
             <input type="text" id="user_nome" placeholder="Ex: JOÃO SILVA" style="width:100%; padding:10px; margin-bottom:10px;">
 
@@ -1907,9 +1909,8 @@ async function telaGerenciarUsuarios() {
 
         container.innerHTML = `
             <div style="padding:20px;" class="animar-entrada">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:15px;">
-                    <h2 style="color:white; margin:0;">👥 GERENCIAR USUÁRIOS E ACESSOS</h2>
-                    <button onclick="carregarDashboard()" class="btn-sair-vidro">⬅️ VOLTAR</button>
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
+                    <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
                 </div>
 
                 <div style="display: grid; grid-template-columns: 350px 1fr; gap: 25px; align-items: start;">
@@ -2038,8 +2039,10 @@ async function telaPedidosAutorizados() {
     const pedidos = await res.json();
 
     let html = `
-        <button onclick="carregarDashboard()" style="width: auto; background: #64748b; margin-bottom: 20px;">⬅ VOLTAR</button>
-        <div class="secao-titulo">PEDIDOS PARA SEPARAÇÃO</div>
+        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
+            <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+        </div>
+
     `;
 
     html += pedidos.map(p => `
@@ -2119,8 +2122,10 @@ async function telaSolicitarMaterial() {
     const materiais = produtos.filter(p => p.tipo === 'MATERIAL' || p.tipo === 'PATRIMONIO');
 
     let html = `
-        <button onclick="carregarDashboard()" style="width: auto; background: #64748b; margin-bottom: 20px;">⬅ VOLTAR</button>
-        <h2 style="color: white; text-align: center;">SOLICITAR MATERIAIS / PATRIMÓNIO</h2>
+        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
+             <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                </div>
+
         <div id="lista-materiais" style="display: flex; flex-direction: column; gap: 15px;">
     `;
 
@@ -2180,9 +2185,10 @@ async function enviarPedidoMateriais() {
 function telaAlterarSenha() {
     const container = document.getElementById('app-content');
     container.innerHTML = `
-        <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
+            <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+        </div>
         <div class="input-vidro" style="max-width: 100%;">
-            <h2>ALTERAR MINHA SENHA</h2>
             <input type="password" id="nova_senha_input" placeholder="DIGITE A NOVA SENHA">
             <input type="password" id="confirma_senha_input" placeholder="CONFIRME A NOVA SENHA">
             <button onclick="executarTrocaSenha()">ATUALIZAR SENHA</button>
@@ -2216,8 +2222,9 @@ async function telaVerSolicitacoes() {
     const pedidos = await res.json();
 
     let html = `
-        <button onclick="carregarDashboard()" style="width: auto; background: #64748b; margin-bottom: 20px;">⬅ VOLTAR</button>
-        <div class="secao-titulo">PEDIDOS AGUARDANDO APROVAÇÃO</div>
+        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
+            <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+        </div>
     `;
 
     if (pedidos.length === 0) {
@@ -2337,7 +2344,9 @@ async function renderizarFormPatrimonio() {
 
     conteudo.innerHTML = `
         <div class="card-form">
-            <h2>CADASTRAR PATRIMÔNIO (ENTRADA)</h2>
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
+                <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+            </div>
             
             <label>PRODUTO:</label>
             <select id="pat_prod_id" class="input-field">
@@ -2465,9 +2474,8 @@ async function telaCadastrosBase() {
     const app = document.getElementById('app-content');
     app.innerHTML = `
         <div style="padding:20px; height: 100%; display: flex; flex-direction: column;">
-            <div style="display:flex; align-items:center; gap:20px; margin-bottom:30px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
                 <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
-                <h2 style="color:white; margin:0;">🛠️ CADASTROS DO SISTEMA</h2>
             </div>
 
             <div style="display: flex; gap: 20px; flex: 1; align-items: flex-start;">
@@ -2549,10 +2557,9 @@ async function formProduto() {
 
         area.innerHTML = `
             <div class="painel-vidro" style="max-width: 500px; text-align: left; margin: 0; height: 100%; overflow-y: auto; padding: 25px;">
-                
-                <h3 style="color: white; margin-top: 0; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 15px;">
-                    📦 CADASTRO DE ITEM
-                </h3>
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
+                    <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                </div>
                 
                 <div style="margin-top: 20px;">
                     <label style="color: #cbd5e1; font-size: 0.85rem; display: block; margin-bottom: 8px;">NOME DO PRODUTO:</label>
@@ -2709,8 +2716,9 @@ async function telaEntradaPatrimonioLote() {
 
     area.innerHTML = `
         <div class="painel-vidro" style="max-width: 800px; margin: auto;">
-            <h2 style="color:white; text-align:center;">📥 ENTRADA DE PATRIMÔNIO (LOTE)</h2>
-            <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
+                <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+            </div>
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:20px;">
                 <input type="text" id="nf_chave" placeholder="CHAVE DA NFe (44 dígitos)" class="input-vidro" maxlength="44">
                 <input type="text" id="nf_numero" placeholder="NÚMERO DA NF" class="input-vidro">
@@ -2953,7 +2961,9 @@ async function telaEntradaManual() {
 
         appContent.innerHTML = `
             <div class="container-entrada">
-                <h2>📦 ENTRADA MANUAL DE ESTOQUE</h2>
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
+                    <button onclick="renderizarMenu()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                </div>
                 <div class="card" style="padding:20px; background:#f9f9f9; border-radius:8px;">
                     <div style="margin-bottom:15px;">
                         <label>Observações/Motivo:</label>
@@ -2974,7 +2984,6 @@ async function telaEntradaManual() {
                     <button onclick="adicionarLinhaEntrada()" style="background:#666; color:white; padding:5px 10px; margin-bottom:20px;">+ ADICIONAR OUTRO ITEM</button>
                     
                     <div style="text-align:right;">
-                        <button onclick="renderizarMenu()" style="background:#ccc; padding:10px 20px;">VOLTAR</button>
                         <button onclick="processarEntradaEstoque()" style="background:green; color:white; padding:10px 30px; font-weight:bold;">FINALIZAR ENTRADA</button>
                     </div>
                 </div>
@@ -7264,8 +7273,7 @@ async function abrirPainelSeparacao() {
         // Montagem do HTML - O Cabeçalho com VOLTAR sempre aparece primeiro
         let html = `
             <div style="padding:20px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1px solid #ddd; padding-bottom:10px;">
-                    <h2 style="color:#1e3a8a; margin:0;">${tituloTela}</h2>
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
                     <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
                 </div>
         `;
@@ -7327,11 +7335,9 @@ async function telaGerarRemessa(pedidoId) {
 
     container.innerHTML = `
         <div style="padding:20px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                <h2>🚚 GERAR REMESSA - PEDIDO #${pedidoId}</h2>
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
                 <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
             </div>
-
             <div style="background:white; padding:20px; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.1);">
                 <label>Informação do Veículo / Motorista:</label>
                 <input type="text" id="veiculo_info" placeholder="Ex: Caminhão Placa ABC-1234" style="width:100%; padding:10px; margin-bottom:20px;">
@@ -7524,10 +7530,8 @@ async function listarColetasLogistica() {
         // Se chegar aqui, o 'container' existe e o 'innerHTML' vai funcionar
         container.innerHTML = `
             <div class="painel-vidro" style="max-width: 900px; margin: auto;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
                     <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
-                    <h2 style="color:white; margin:0;">🚚 COLETAS DE DEVOLUÇÃO</h2>
-                    <div style="width:100px;"></div>
                 </div>
                 
                 <table style="width:100%; color:white; border-collapse:collapse;">
@@ -7612,8 +7616,7 @@ async function listarPedidosEmCaminho() {
 
         let html = `
             <div style="padding:20px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1px solid #ddd; padding-bottom:10px;">
-                    <h2 style="color: #1e3a8a; margin:0;">${tituloTela}</h2>
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
                     <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
                 </div>
                 
@@ -7727,8 +7730,7 @@ async function telaSolicitarPatrimonio() {
 
         container.innerHTML = `
             <div style="padding:20px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1px solid #ddd; padding-bottom:10px;">
-                    <h2 style="color:#1e3a8a; margin:0;">🏷️ SOLICITAR MOVIMENTAÇÃO DE PATRIMÔNIO</h2>
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
                     <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
                 </div>
 
@@ -7822,7 +7824,8 @@ async function enviarSolicitacaoPatrimonioLog() {
 // Função para abrir o histórico de remessas de um pedido
 async function telaRelatorioRemessas(pedidoId) {
     const container = document.getElementById('app-content');
-    container.innerHTML = '<div style="padding:20px;">A carregar histórico de transporte...</div>';
+    // Loading padronizado
+    container.innerHTML = `<div class="painel-vidro" style="margin:20px; color:white;">🔍 Carregando histórico de transporte...</div>`;
 
     try {
         const res = await fetch(`${API_URL}/pedidos/${pedidoId}/remessas`, {
@@ -7830,49 +7833,55 @@ async function telaRelatorioRemessas(pedidoId) {
         });
         const remessas = await res.json();
 
+        // --- CABEÇALHO PADRONIZADO VITRIFICADO ---
+        // AJUSTE: A crase agora fecha antes do IF para permitir a lógica JS
         let html = `
-            <div style="padding:20px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                    <h2 style="color:#1e3a8a;">📜 HISTÓRICO DE REMESSAS - PEDIDO #${pedidoId}</h2>
+            <div style="padding:20px;" class="animar-entrada">
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
                     <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
-                </div>`;
+                </div>
+        `;
 
         if (remessas.length === 0) {
-            html += `<p>Nenhuma remessa (viagem) registada para este pedido até ao momento.</p>`;
+            html += `
+                <div class="painel-vidro" style="padding:30px; text-align:center; color:rgba(255,255,255,0.5);">
+                    Nenhuma remessa (viagem) registrada para este pedido até ao momento.
+                </div>`;
         } else {
             for (const r of remessas) {
-                // Para cada remessa, buscamos os itens dela
+                // Busca os itens de cada remessa
                 const resItens = await fetch(`${API_URL}/remessas/${r.id}/itens`, {
                     headers: { 'Authorization': `Bearer ${TOKEN}` }
                 });
                 const itens = await resItens.json();
 
+                // CARD DE REMESSA: Padrão Vitrificado com borda de destaque azul
                 html += `
-                    <div style="background:white; padding:20px; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.1); margin-bottom:20px; border-top:4px solid #3b82f6;">
-                        <div style="display:flex; justify-content:space-between; margin-bottom:15px;">
-                            <div>
-                                <strong>DATA DE SAÍDA:</strong> ${new Date(r.data_saida).toLocaleString()}<br>
-                                <strong>VEÍCULO:</strong> ${r.veiculo_info || 'Não informado'}
+                    <div class="painel-vidro" style="padding:20px; margin-bottom:20px; border-top:4px solid #3b82f6;">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:15px; color: white;">
+                            <div style="text-align:left;">
+                                <strong style="color:#60a5fa;">DATA DE SAÍDA:</strong> ${new Date(r.data_saida).toLocaleString()}<br>
+                                <strong style="color:#60a5fa;">VEÍCULO:</strong> ${r.veiculo_info || 'Não informado'}
                             </div>
-                            <div style="text-align:right;">
+                            <div style="text-align:right; opacity:0.6;">
                                 <small>Despachado por: ${r.usuario_nome}</small>
                             </div>
                         </div>
 
-                        <table style="width:100%; border-collapse:collapse; background:#f8fafc;">
+                        <table style="width:100%; border-collapse:collapse; color:white; font-size:0.85rem;">
                             <thead>
-                                <tr style="text-align:left; font-size:0.85rem; border-bottom:1px solid #ddd;">
-                                    <th style="padding:8px;">PRODUTO</th>
-                                    <th style="padding:8px; text-align:center;">TAMANHO</th>
-                                    <th style="padding:8px; text-align:center;">QTD ENVIADA</th>
+                                <tr style="text-align:left; border-bottom:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.05);">
+                                    <th style="padding:10px;">PRODUTO</th>
+                                    <th style="padding:10px; text-align:center;">TAMANHO</th>
+                                    <th style="padding:10px; text-align:center;">QTD ENVIADA</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 ${itens.map(item => `
-                                    <tr>
-                                        <td style="padding:8px;">${item.produto_nome}</td>
-                                        <td style="padding:8px; text-align:center;">${item.tamanho}</td>
-                                        <td style="padding:8px; text-align:center; font-weight:bold;">${item.quantidade_enviada}</td>
+                                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                                        <td style="padding:10px;">${item.produto_nome}</td>
+                                        <td style="padding:10px; text-align:center;">${item.tamanho}</td>
+                                        <td style="padding:10px; text-align:center; font-weight:bold; color:#4ade80;">${item.quantidade_enviada}</td>
                                     </tr>
                                 `).join('')}
                             </tbody>
@@ -7885,7 +7894,8 @@ async function telaRelatorioRemessas(pedidoId) {
         html += `</div>`;
         container.innerHTML = html;
     } catch (err) {
-        notificar("Erro ao carregar o relatório.");
+        console.error(err);
+        notificar("Erro ao carregar o relatório.", "erro");
     }
 }
 
@@ -7901,8 +7911,7 @@ async function telaReceberDevolucoes() {
 
         let html = `
             <div style="padding:20px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1px solid #ddd; padding-bottom:10px;">
-                    <h2 style="color:#1e3a8a; margin:0;">🔄 RECEBER DEVOLUÇÕES (CONFERÊNCIA)</h2>
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
                     <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
                 </div>
         `;
@@ -7985,11 +7994,9 @@ async function telaAcompanhamentoGeral() {
 
         container.innerHTML = `
             <div style="padding:20px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                    <h2 style="color:#1e3a8a; margin:0;">📋 ACOMPANHAMENTO DE PEDIDOS E REMESSAS</h2>
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
                     <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
                 </div>
-
                 <div style="background:white; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.1); overflow:hidden;">
                     <table style="width:100%; border-collapse:collapse;">
                         <thead>
@@ -8035,8 +8042,9 @@ async function telaGerenciarPatrimonio() {
     const area = document.getElementById('app-content');
     area.innerHTML = `
         <div class="painel-vidro" style="max-width: 600px; margin: auto;">
-            <h2 style="color:white; text-align:center;">🔍 CONSULTA E TRANSFERÊNCIA</h2>
-            <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
+                    <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                </div>
             <div style="display:flex; gap:10px; margin-bottom:20px;">
                 <input type="text" id="busca_serie" placeholder="BIPE OU DIGITE A PLAQUETA..." class="input-vidro" style="flex:1;">
                 <button onclick="buscarDadosPatrimonio()" class="btn-vidro" style="background:#3b82f6;">PESQUISAR</button>
@@ -8115,8 +8123,7 @@ function abrirModalCadastro(tipoCadastro) {
 
     container.innerHTML = `
         <div style="padding:20px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1px solid #ddd; padding-bottom:10px;">
-                <h2 style="color:#1e3a8a; margin:0;">${tituloTela}</h2>
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
                 <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
             </div>
 
@@ -8166,7 +8173,9 @@ async function telaAdminCriarUsuario() {
 
     container.innerHTML = `
         <div style="padding:20px;">
-            <h2>👤 CADASTRAR NOVO FUNCIONÁRIO</h2>
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
+                <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+            </div>
             <form id="form-criar-usuario" style="max-width:400px; background:white; padding:20px; border-radius:8px;">
                 <label>NOME COMPLETO:</label>
                 <input type="text" id="novo_nome" required style="width:100%; margin-bottom:15px; padding:10px;">
@@ -8263,9 +8272,9 @@ async function telaAdminVerPedidos() {
 
         app.innerHTML = `
             <div style="padding:20px;">
-                <button onclick="carregarDashboard()" class="btn-voltar">⬅ VOLTAR</button>
-                <h2 style="color:#1e3a8a; margin-bottom:20px;">📋 GESTÃO DE PEDIDOS (ADMIN)</h2>
-                
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
+                    <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                </div>
                 <table style="width:100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
                     <thead>
                         <tr style="background: #1e40af; color: white; text-align: left;">
@@ -8316,10 +8325,8 @@ async function telaEstoquePedidosPendentes() {
         app.innerHTML = `
             <div style="padding:30px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
-                    <h2 style="color:#1e3a8a; margin:0;">📦 PEDIDOS PARA SEPARAÇÃO</h2>
                     <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
                 </div>
-
                 <div style="display:grid; gap:15px;">
                     ${pedidos.length === 0 ? 
                         '<p style="color:#64748b; text-align:center; padding:20px;">Nenhum pedido aguardando separação no momento.</p>' : 
@@ -8456,12 +8463,9 @@ async function telaAdminDashboard() {
 
         container.innerHTML = `
             <div class="painel-vidro" style="max-width: 1000px; margin: auto;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
                     <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
-                    <h2 style="color:white; margin:0; font-size:1.3rem;">🔄 CICLO DE ATENDIMENTO SEMED</h2>
-                    <div style="width:100px;"></div>
                 </div>
-
                 <div style="background:rgba(0,0,0,0.2); border-radius:10px; padding: 25px;">
                     <div class="fluxo-container" style="display: flex; justify-content: space-around; gap: 10px; flex-wrap: wrap;">
                         ${renderCirculo('SOLICITADO', s.qtd_solicitado || 0, '📩', '#ef4444')}
@@ -8563,11 +8567,9 @@ async function telaLogisticaEntregas() {
 
         container.innerHTML = `
             <div style="padding:20px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                    <h2 style="color:#1e3a8a;">🚛 COLETA DE REMESSAS (SAÍDA)</h2>
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
                     <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
                 </div>
-
                 <div style="display:grid; gap:15px;">
                     ${remessas.length === 0 ? `
                         <div style="background:#f1f5f9; padding:40px; text-align:center; border-radius:10px; color:#64748b;">
@@ -8674,7 +8676,9 @@ async function telaLogisticaColeta() {
 
         container.innerHTML = `
             <div style="padding:20px;">
-                <h2 style="color:#1e3a8a;">🚛 PEDIDOS LIBERADOS PARA COLETA</h2>
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
+                    <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                </div>
                 <div style="display:grid; gap:15px;">
                     ${pedidos.length === 0 ? '<p>Nenhum pedido aguardando coleta no momento.</p>' : 
                         pedidos.map(p => `
@@ -8746,9 +8750,9 @@ async function telaEscolaConfirmarRecebimento() {
 
         container.innerHTML = `
             <div style="padding:20px;">
-                <h2 style="color:white; margin-bottom:20px;">🚚 RECEBIMENTO DE MERCADORIA</h2>
-                <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
-                <div style="display:grid; gap:15px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
+                    <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                </div>
                     ${dados.length === 0 ? `
                         <div style="background:#f8fafc; padding:40px; text-align:center; border-radius:10px; color:#64748b; border:1px dashed #cbd5e1;">
                             Nenhuma remessa vindo para sua unidade no momento.
@@ -9122,8 +9126,9 @@ async function telaSolicitarServicoImpressora(tipoServico) {
 
     container.innerHTML = `
         <div class="painel-vidro">
-            <h2 style="color: white; margin-bottom: 20px;">${titulo}</h2>
-            <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
+                <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+            </div>
             <div id="lista-imp" class="grid-menu-principal">
                 <div style="color: white; grid-column: 1/-1;">🔍 Localizando impressoras para sua unidade...</div>
             </div>
@@ -9185,9 +9190,8 @@ function telaDashboardImpressoras() {
 
     area.innerHTML = `
         <div class="painel-vidro" style="max-width: 1300px; margin: auto;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
                 <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
-                <h2 style="color:white; margin:0; font-size:1.3rem;">📊 GESTÃO TÉCNICA DE ATENDIMENTOS</h2>
                 <button onclick="telaComparativoLocais()" class="btn-vidro btn-breve" style="background:#0ea5e9; font-size:0.75rem; padding:0 15px; height:38px; margin:0;">⚖️ COMPARATIVO</button>
             </div>
             
@@ -9285,7 +9289,9 @@ async function compartilharStatusImpressoras() {
     // Monta o layout do PDF
     areaOculta.innerHTML = `
         <div style="text-align:center; border-bottom:2px solid #1e40af; padding-bottom:10px; margin-bottom:20px;">
-            <h2 style="margin:0; color:#1e40af;">SEMED - GESTÃO DE IMPRESSORAS</h2>
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
+                <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+            </div>
             <p style="margin:5px 0; font-weight:bold;">Relatório de Desempenho Técnico</p>
             <p style="font-size:0.8rem; color:#666;">Período: ${inicio.split('-').reverse().join('/')} até ${fim.split('-').reverse().join('/')}</p>
         </div>
@@ -9342,10 +9348,9 @@ async function abrirChamadoFinal(impressoraId, tipoServico) {
 
     container.innerHTML = `
         <div class="painel-vidro" style="max-width: 500px; margin: 0 auto; text-align: left;">
-            <h2 style="color: white; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 10px;">
-                🛠️ DETALHES DA MANUTENÇÃO
-            </h2>
-            
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
+                <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+            </div>
             <div style="margin-top: 20px;">
                 <label style="color: white; display: block; margin-bottom: 8px;">O que está acontecendo?</label>
                 <select id="motivo-manutencao" class="input-vidro" style="width: 100%;" onchange="verificarMotivoOutros(this.value)">
@@ -9435,8 +9440,9 @@ async function telaListarChamadosAbertos() {
 
         container.innerHTML = `
             <div style="padding:20px;">
-                <h2 style="color: white; margin-bottom: 25px; text-align: center;">📋 CHAMADOS AGUARDANDO ATENDIMENTO</h2>
-                <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
+                    <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                </div>
                 <div class="grid-menu-principal" style="grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));">
                     ${chamados.length === 0 ? 
                         `<p style="color:white; text-align:center; grid-column: 1/-1;">Não há chamados abertos no momento.</p>` : 
@@ -9545,10 +9551,9 @@ async function telaCadastroImpressoras() {
         // 3. Se chegou aqui, deu certo. Monta a tela:
         container.innerHTML = `
             <div class="painel-vidro" style="max-width: 500px; margin: 0 auto; text-align: left;">
-                <h2 style="color: white; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 10px; text-align:center;">
-                    🖨️ CADASTRAR IMPRESSORA
-                </h2>
-                
+                 <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
+                    <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                </div>
                 <div style="margin-top: 25px;">
                     <label style="color: white; display: block; margin-bottom: 8px;">Unidade Escolar / Local:</label>
                     <select id="reg-imp-local" class="input-vidro" style="width: 100%;">
@@ -11991,19 +11996,95 @@ async function finalizarProcessoDevolucao(pedidoId) {
 }
 
 function notificar(mensagem, tipo = 'sucesso') {
-    // Cria o overlay
+    // 1. Injeta o estilo de animação se ele ainda não existir
+    if (!document.getElementById('notificar-estilo')) {
+        const estilo = document.createElement('style');
+        estilo.id = 'notificar-estilo';
+        estilo.innerHTML = `
+            @keyframes popIn {
+                0% { transform: scale(0.8); opacity: 0; }
+                100% { transform: scale(1); opacity: 1; }
+            }
+            .notificara-container {
+                animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            }
+        `;
+        document.head.appendChild(estilo);
+    }
+
+    // 2. Cria o elemento da overlay (Fundo escurecido com blur)
     const overlay = document.createElement('div');
-    overlay.className = 'notificara-vidro-overlay';
-    
-    // Define a cor do ícone/detalhe baseado no tipo (opcional)
-    const corDestaque = tipo === 'erro' ? '#ff4b2b' : '#10b981';
+    overlay.id = 'notificara-overlay';
+    overlay.style.cssText = `
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(7, 11, 22, 0.8);
+        backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+        z-index: 10000; display: flex; align-items: center; justify-content: center;
+        padding: 20px;
+    `;
+
+    // 3. Configurações de Ícone e Cores (Gamificadas)
+    // Amarelo vibrante para alertas/erros e Verde Neon para sucesso
+    const corNeon = tipo === 'erro' ? '#fbbf24' : '#4ade80';
+    const icone = tipo === 'erro' ? '⚠️' : '✅';
+    const titulo = tipo === 'erro' ? 'ATENÇÃO!' : 'SUCESSO!';
 
     overlay.innerHTML = `
-        <div class="notificara-vidro-caixa">
-            <div style="font-size: 3rem; margin-bottom: 10px;">${tipo === 'erro' ? '⚠️' : '✅'}</div>
-            <p style="font-size: 1.1rem; margin-bottom: 20px; font-weight: 500;">${mensagem}</p>
-            <button onclick="this.parentElement.parentElement.remove()" 
-                style="background: ${corDestaque}; color: white; border: none; padding: 10px 30px; border-radius: 10px; cursor: pointer; font-weight: bold; width: 100%;">
+        <div class="notificara-container" style="
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(20px);
+            border: 2px solid ${corNeon}44;
+            box-shadow: 0 0 30px ${corNeon}22, inset 0 0 15px ${corNeon}11;
+            padding: 40px;
+            border-radius: 24px;
+            max-width: 400px;
+            width: 100%;
+            text-align: center;
+            color: white;
+            font-family: sans-serif;
+        ">
+            <div style="
+                font-size: 4.5rem; 
+                margin-bottom: 20px; 
+                filter: drop-shadow(0 0 15px ${corNeon});
+            ">
+                ${icone}
+            </div>
+
+            <h2 style="margin: 0 0 10px 0; color: ${corNeon}; letter-spacing: 2px; font-size: 1.5rem;">
+                ${titulo}
+            </h2>
+
+            <p style="
+                font-size: 1.1rem; 
+                line-height: 1.5; 
+                margin-bottom: 30px; 
+                color: #cbd5e1;
+                font-weight: 500;
+            ">
+                ${mensagem}
+            </p>
+
+            <button onclick="document.getElementById('notificara-overlay').remove()" 
+                class="btn-grande" 
+                style="
+                    background: ${corNeon}; 
+                    color: #0f172a; 
+                    border: none; 
+                    padding: 15px; 
+                    border-radius: 12px; 
+                    cursor: pointer; 
+                    font-weight: 800; 
+                    width: 100%;
+                    font-size: 1rem;
+                    text-transform: uppercase;
+                    letter-spacing: 1px;
+                    box-shadow: 0 4px 15px ${corNeon}66;
+                    transition: all 0.2s;
+                "
+                onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px ${corNeon}88'"
+                onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px ${corNeon}66'"
+            >
                 ENTENDIDO
             </button>
         </div>

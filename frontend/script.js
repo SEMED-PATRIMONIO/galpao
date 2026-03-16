@@ -437,21 +437,23 @@ async function carregarDashboard() {
 function abrirSubmenuVitrificado(titulo) {
     const perfil = localStorage.getItem('perfil').toLowerCase();
     
-    // 1. Cria o elemento da overlay com o padrão azul escuro vitrificado
+    // 1. Criação da Overlay (Efeito Vidro Profundo)
     const overlay = document.createElement('div');
     overlay.id = 'submenu-overlay';
     overlay.style.cssText = `
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(15, 23, 42, 0.9); /* Azul escuro padrão */
-        backdrop-filter: blur(15px);
-        -webkit-backdrop-filter: blur(15px); z-index: 1000;
-        display: flex; flex-direction: column; align-items: center; padding: 20px;
+        background: rgba(10, 15, 28, 0.85); /* Azul Marinho Profundo (padrão do seu app) */
+        backdrop-filter: blur(25px); /* Desfoque intenso para efeito vitrificado */
+        -webkit-backdrop-filter: blur(25px);
+        z-index: 2000;
+        display: flex; flex-direction: column; align-items: center; padding: 40px 20px;
         overflow-y: auto;
+        transition: all 0.3s ease;
     `;
 
     let botoesExtra = '';
 
-    // --- LÓGICA DE DISTRIBUIÇÃO (Mantendo Ícones e Spans para o padrão visual) ---
+    // --- LÓGICA DE DISTRIBUIÇÃO (Mantendo sua estrutura original intacta) ---
     if (perfil === 'estoque') {
         if (titulo === 'DEMAIS ITENS') {
             botoesExtra = `
@@ -487,7 +489,7 @@ function abrirSubmenuVitrificado(titulo) {
             </button>            
             `;
         } else if (titulo === 'RELATÓRIOS') {
-            botoesExtra = `<p style="color:white">Sem relatórios no momento.</p>`;
+            botoesExtra = `<p style="color:white; font-family: sans-serif; opacity: 0.6;">Sem relatórios no momento.</p>`;
         }
     }
 
@@ -523,22 +525,31 @@ function abrirSubmenuVitrificado(titulo) {
         }
     }
 
-    // 2. Montagem do HTML com o botão VOLTAR padronizado
+    // 2. Montagem do HTML Interno (Centralizado e Vitrificado)
     overlay.innerHTML = `
-        <div style="width:100%; max-width:500px; display:flex; justify-content:center; align-items:center; margin-top: 20px; margin-bottom:40px;">
-            <button onclick="document.getElementById('submenu-overlay').remove()" class="btn-voltar-vidro" style="position:static; padding: 10px 40px; width: 100%; color: white !important;">
-                ⬅️ VOLTAR
-            </button>
-        </div>
-        
-        <div style="width:100%; max-width:500px; display: flex; flex-direction: column; gap: 15px;">
-            ${botoesExtra}
+        <div class="animar-entrada" style="width:100%; max-width:500px; display:flex; flex-direction: column; align-items: center;">
+            
+            <div style="width: 100%; margin-bottom: 40px; display: flex; justify-content: center;">
+                <button onclick="document.getElementById('submenu-overlay').remove()" 
+                        class="btn-voltar-vidro" 
+                        style="position:static; padding: 12px 60px; width: 100%; font-weight: bold; color: white !important;">
+                    ⬅️ VOLTAR
+                </button>
+            </div>
+            
+            <h2 style="color: rgba(255,255,255,0.4); font-size: 0.9rem; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 20px; font-family: sans-serif;">
+                ${titulo}
+            </h2>
+
+            <div style="width:100%; display: flex; flex-direction: column; gap: 15px;">
+                ${botoesExtra}
+            </div>
         </div>
     `;
 
     document.body.appendChild(overlay);
 
-    // 3. Fechamento automático ao clicar em qualquer botão de ação
+    // 3. Fechamento automático ao selecionar uma opção
     overlay.addEventListener('click', (e) => {
         if (e.target.closest('button') && !e.target.closest('.btn-voltar-vidro')) {
             overlay.remove();

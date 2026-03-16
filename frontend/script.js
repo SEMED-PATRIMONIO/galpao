@@ -437,22 +437,23 @@ async function carregarDashboard() {
 function abrirSubmenuVitrificado(titulo) {
     const perfil = localStorage.getItem('perfil').toLowerCase();
     
-    // 1. Cria o elemento da overlay com o efeito de transparência do sistema
+    // 1. Overlay puramente vitrificada (sem fundo sólido, apenas blur e leve tinta)
     const overlay = document.createElement('div');
     overlay.id = 'submenu-overlay';
     overlay.style.cssText = `
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(15, 23, 42, 0.85); /* Azul marinho translúcido */
-        backdrop-filter: blur(15px);
-        -webkit-backdrop-filter: blur(15px); 
+        background: rgba(15, 23, 42, 0.7); /* Reduzida a opacidade para não parecer sólido */
+        backdrop-filter: blur(20px); /* Aumento do blur para o efeito de vidro jateado */
+        -webkit-backdrop-filter: blur(20px); 
         z-index: 9999;
         display: flex; flex-direction: column;
-        overflow-y: auto; /* Permite a rolagem vertical */
+        overflow-y: auto;
+        animation: fadeIn 0.3s ease;
     `;
 
     let botoesExtra = '';
 
-    // --- LÓGICA DE DISTRIBUIÇÃO (Preservada conforme seu código) ---
+    // --- LÓGICA DE DISTRIBUIÇÃO (Botões Padronizados com Ícone + Span) ---
     if (perfil === 'estoque') {
         if (titulo === 'DEMAIS ITENS') {
             botoesExtra = `
@@ -488,7 +489,7 @@ function abrirSubmenuVitrificado(titulo) {
             </button>            
             `;
         } else if (titulo === 'RELATÓRIOS') {
-            botoesExtra = `<p style="color:white; padding: 20px;">Sem relatórios no momento.</p>`;
+            botoesExtra = `<div class="painel-vidro" style="padding:20px; color:rgba(255,255,255,0.5);">Sem relatórios no momento.</div>`;
         }
     }
 
@@ -524,23 +525,23 @@ function abrirSubmenuVitrificado(titulo) {
         }
     }
 
-    // 2. Injeção do HTML utilizando as classes padrão do carregarDashboard()
+    // 2. Injeção do HTML (Cabeçalho e Grid seguindo o padrão Dashboard)
     overlay.innerHTML = `
-        <div class="painel-usuario-vidro" style="position: sticky; top: 0; z-index: 10001;">
-            <span class="nome-usuario-painel">${titulo.toUpperCase()}</span>
+        <div class="painel-usuario-vidro" style="position: sticky; top: 0; z-index: 10001; background: rgba(255,255,255,0.05);">
+            <span class="nome-usuario-painel" style="color: #60a5fa; font-weight: bold;">${titulo.toUpperCase()}</span>
             <button onclick="document.getElementById('submenu-overlay').remove()" class="btn-sair-vidro">VOLTAR</button>
         </div>
 
-        <div style="margin-top: 20px;"></div>
+        <div style="margin-top: 40px;"></div>
         
-        <div class="grid-movel-celular" style="padding: 10px 20px 80px 20px;">
+        <div class="grid-movel-celular" style="padding: 10px 20px 100px 20px;">
             ${botoesExtra}
         </div>
     `;
 
     document.body.appendChild(overlay);
 
-    // 3. Mantém o fechamento automático ao clicar em qualquer botão de ação
+    // 3. Fechamento automático ao selecionar opção
     overlay.addEventListener('click', (e) => {
         if (e.target.closest('button') && !e.target.closest('.btn-sair-vidro')) {
             overlay.remove();
@@ -6712,7 +6713,6 @@ async function telaAbastecerEstoque() {
     try {
         const token = localStorage.getItem('token');
         
-        // AJUSTE CIRÚRGICO: Alteração dos endpoints para as rotas que já sabemos que funcionam
         const [resProdutos, resLocais] = await Promise.all([
             fetch(`${API_URL}/estoque/materiais-e-patrimonios`, { headers: { 'Authorization': `Bearer ${token}` } }),
             fetch(`${API_URL}/locais/dropdown`, { headers: { 'Authorization': `Bearer ${token}` } })
@@ -6743,7 +6743,11 @@ async function telaAbastecerEstoque() {
                     <label style="color: #cbd5e1; font-size: 0.85rem; display: block; margin-bottom: 5px;">PRODUTO A SER LANÇADO:</label>
                     <select id="produto_entrada" class="input-vidro" style="width: 100%; background: rgba(15, 23, 42, 0.8); color: white;">
                         <option value="" style="background: #1e293b; color: white;">-- SELECIONE O PRODUTO --</option>
-                        ${produtos.map(p => `<option value="${p.id}" style="background: #1e293b; color: white;">${p.nome} (${p.tipo})</option>`).join('')}
+                        ${produtos
+                            .filter(p => p.tipo !== 'PATRIMONIO')
+                            .map(p => `<option value="${p.id}" style="background: #1e293b; color: white;">${p.nome} (${p.tipo})</option>`)
+                            .join('')
+                        }
                     </select>
                 </div>
 

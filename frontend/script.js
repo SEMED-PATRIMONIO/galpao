@@ -437,25 +437,22 @@ async function carregarDashboard() {
 function abrirSubmenuVitrificado(titulo) {
     const perfil = localStorage.getItem('perfil').toLowerCase();
     
-    // 1. Cria o elemento da overlay com o azul marinho profundo do seu dashboard
+    // 1. Cria o elemento da overlay com o efeito de transparência do sistema
     const overlay = document.createElement('div');
     overlay.id = 'submenu-overlay';
     overlay.style.cssText = `
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        /* CORRIGIDO: Azul marinho profundo com transparência (igual ao seu print 2) */
-        background: rgba(7, 11, 22, 0.9); 
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px); 
+        background: rgba(15, 23, 42, 0.85); /* Azul marinho translúcido */
+        backdrop-filter: blur(15px);
+        -webkit-backdrop-filter: blur(15px); 
         z-index: 9999;
-        display: flex; flex-direction: column; align-items: center; 
-        padding: 40px 20px;
-        overflow-y: auto; /* Permite rolar */
+        display: flex; flex-direction: column;
+        overflow-y: auto; /* Permite a rolagem vertical */
     `;
 
     let botoesExtra = '';
 
-    // --- LÓGICA DE DISTRIBUIÇÃO (Mantendo sua lógica funcional) ---
-    // Nota: Certifique-se que o CSS .btn-vidro já tenha o efeito de borda clara
+    // --- LÓGICA DE DISTRIBUIÇÃO (Preservada conforme seu código) ---
     if (perfil === 'estoque') {
         if (titulo === 'DEMAIS ITENS') {
             botoesExtra = `
@@ -490,6 +487,8 @@ function abrirSubmenuVitrificado(titulo) {
                 <i>🧮</i><span>CALCULADORA</span>
             </button>            
             `;
+        } else if (titulo === 'RELATÓRIOS') {
+            botoesExtra = `<p style="color:white; padding: 20px;">Sem relatórios no momento.</p>`;
         }
     }
 
@@ -525,31 +524,25 @@ function abrirSubmenuVitrificado(titulo) {
         }
     }
 
-    // 2. Montagem do HTML
+    // 2. Injeção do HTML utilizando as classes padrão do carregarDashboard()
     overlay.innerHTML = `
-        <div style="width:100%; max-width:500px; display:flex; flex-direction: column; align-items: center; padding-bottom: 60px;">
-            
-            <div style="width: 100%; margin-bottom: 40px;">
-                <button onclick="document.getElementById('submenu-overlay').remove()" class="btn-voltar-vidro" style="position:static; padding: 12px 40px; width: 100%; color: white !important; font-weight: bold;">
-                    ⬅️ VOLTAR
-                </button>
-            </div>
+        <div class="painel-usuario-vidro" style="position: sticky; top: 0; z-index: 10001;">
+            <span class="nome-usuario-painel">${titulo.toUpperCase()}</span>
+            <button onclick="document.getElementById('submenu-overlay').remove()" class="btn-sair-vidro">VOLTAR</button>
+        </div>
 
-            <h3 style="color: rgba(255,255,255,0.4); font-size: 0.8rem; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 20px;">
-                OPÇÕES: ${titulo}
-            </h3>
-            
-            <div style="width:100%; display: flex; flex-direction: column; gap: 15px;">
-                ${botoesExtra}
-            </div>
+        <div style="margin-top: 20px;"></div>
+        
+        <div class="grid-movel-celular" style="padding: 10px 20px 80px 20px;">
+            ${botoesExtra}
         </div>
     `;
 
     document.body.appendChild(overlay);
 
-    // 3. Fechamento automático ao selecionar opção
+    // 3. Mantém o fechamento automático ao clicar em qualquer botão de ação
     overlay.addEventListener('click', (e) => {
-        if (e.target.closest('button') && !e.target.closest('.btn-voltar-vidro')) {
+        if (e.target.closest('button') && !e.target.closest('.btn-sair-vidro')) {
             overlay.remove();
         }
     });

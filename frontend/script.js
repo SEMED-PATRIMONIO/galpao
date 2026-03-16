@@ -825,31 +825,59 @@ function gerarCamposProduto() {
 
 async function telaAdminGerenciarSolicitacoes() {
     const app = document.getElementById('app-content');
-    const res = await fetch(`${API_URL}/pedidos/admin/pendentes`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
-    const pedidos = await res.json();
+    
+    // Mostra um loading rápido no padrão do sistema
+    app.innerHTML = `<div class="painel-vidro" style="margin:20px; color:white;">🔍 Buscando solicitações pendentes...</div>`;
 
-    app.innerHTML = `
-        <div style="padding:20px; background:#f8fafc; min-height:100vh;">
-            <div style="display:flex; justify-content:space-between; margin-bottom:25px;">
-                <h2 style="color:#1e3a8a; margin:0; font-size:1.8rem;">🔓 AUTORIZAR SOLICITAÇÕES</h2>
-                <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
-            </div>
+    try {
+        const res = await fetch(`${API_URL}/pedidos/admin/pendentes`, { 
+            headers: { 'Authorization': `Bearer ${TOKEN}` } 
+        });
+        const pedidos = await res.json();
 
-            <div style="display:grid; gap:15px;">
-                ${pedidos.map(p => `
-                    <div style="background:white; padding:25px; border-radius:12px; border-left: 8px solid #1e40af; display:flex; justify-content:space-between; align-items:center; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
-                        <div style="text-align:left;">
-                            <div style="font-weight:bold; color:#1e40af; font-size:1.3rem; margin-bottom:5px;">📍 ${p.escola_nome}</div>
-                            <div style="color:#475569; font-size:1rem;">Solicitado por: <b>${p.solicitante}</b></div>
-                            <div style="color:#94a3b8; font-size:0.8rem;">Data: ${new Date(p.data_criacao).toLocaleDateString('pt-BR')}</div>
+        app.innerHTML = `
+            <div style="padding:20px; min-height:100vh;" class="animar-entrada">
+                
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:30px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:15px;">
+                    <h2 style="color:white; margin:0; font-size:1.5rem;">🔓 AUTORIZAR SOLICITAÇÕES</h2>
+                    <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                </div>
+
+                <div style="display:grid; gap:20px; max-width: 1000px; margin: 0 auto;">
+                    ${pedidos.length === 0 ? 
+                        `<div class="painel-vidro" style="padding:40px; text-align:center; color:rgba(255,255,255,0.5);">Nenhuma solicitação aguardando autorização no momento.</div>` :
+                        pedidos.map(p => `
+                        <div class="painel-vidro" style="padding:25px; display:flex; justify-content:space-between; align-items:center; border-left: 5px solid #3b82f6; transition: transform 0.2s;">
+                            
+                            <div style="text-align:left;">
+                                <div style="font-weight:bold; color:#60a5fa; font-size:1.2rem; margin-bottom:8px; display:flex; align-items:center; gap:8px;">
+                                    <span>📍</span> ${p.escola_nome.toUpperCase()}
+                                </div>
+                                
+                                <div style="color:#cbd5e1; font-size:0.95rem; margin-bottom:4px;">
+                                    Solicitado por: <b style="color:white;">${p.solicitante}</b>
+                                </div>
+                                
+                                <div style="color:rgba(255,255,255,0.5); font-size:0.8rem;">
+                                    📅 Enviado em: ${new Date(p.data_criacao).toLocaleDateString('pt-BR')}
+                                </div>
+                            </div>
+
+                            <button onclick="analisarPedidoEstoque(${p.id})" 
+                                    class="btn-vidro" 
+                                    style="background:rgba(59, 130, 246, 0.2); padding:12px 25px; font-size:0.9rem; border:1px solid rgba(96, 165, 250, 0.3);">
+                                ANALISAR ITENS
+                            </button>
                         </div>
-                        <button onclick="analisarPedidoEstoque(${p.id})" style="background:#2563eb; color:white; border:none; padding:15px 30px; border-radius:10px; font-weight:bold; cursor:pointer; font-size:1rem;">ANALISAR ITENS</button>
-                    </div>
-                `).join('')}
+                    `).join('')}
+                </div>
             </div>
-        </div>
-        <div id="modal-analise" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15, 23, 42, 0.9); z-index:1000; justify-content:center; align-items:center;"></div>
-    `;
+
+            <div id="modal-analise" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(7, 11, 22, 0.95); backdrop-filter:blur(10px); z-index:1000; justify-content:center; align-items:center;"></div>
+        `;
+    } catch (err) {
+        app.innerHTML = `<div class="painel-vidro" style="color:#f87171; margin:20px;">⚠️ Erro ao conectar com o servidor para buscar pedidos.</div>`;
+    }
 }
 
 async function analisarPedidoEstoque(pedidoId) {
@@ -6683,9 +6711,11 @@ async function telaAbastecerEstoque() {
 
     try {
         const token = localStorage.getItem('token');
+        
+        // AJUSTE CIRÚRGICO: Alteração dos endpoints para as rotas que já sabemos que funcionam
         const [resProdutos, resLocais] = await Promise.all([
-            fetch(`${API_URL}/produtos`, { headers: { 'Authorization': `Bearer ${token}` } }),
-            fetch(`${API_URL}/locais`, { headers: { 'Authorization': `Bearer ${token}` } })
+            fetch(`${API_URL}/estoque/materiais-e-patrimonios`, { headers: { 'Authorization': `Bearer ${token}` } }),
+            fetch(`${API_URL}/locais/dropdown`, { headers: { 'Authorization': `Bearer ${token}` } })
         ]);
 
         if (!resProdutos.ok || !resLocais.ok) throw new Error('Falha ao buscar dados.');
@@ -6696,7 +6726,7 @@ async function telaAbastecerEstoque() {
         app.innerHTML = `
             <div class="painel-vidro" style="max-width: 600px; margin: 20px auto;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:15px;">
-                    <h2 style="color:white; margin:0;">📥 LANÇAR ENTRADA (ABASTECIMENTO)</h2>
+                    <h2 style="color:white; margin:0; font-size: 1.2rem;">📥 LANÇAR ENTRADA (ABASTECIMENTO)</h2>
                     <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
                 </div>
 
@@ -6723,19 +6753,19 @@ async function telaAbastecerEstoque() {
                         <input type="number" id="qtd_entrada" min="1" class="input-vidro" style="width: 100%; background: rgba(15, 23, 42, 0.8); color: white;">
                     </div>
                     <div>
-                        <label style="color: #cbd5e1; font-size: 0.85rem; display: block; margin-bottom: 5px;">NÚMERO DA NOTA FISCAL / DOCUMENTO:</label>
+                        <label style="color: #cbd5e1; font-size: 0.85rem; display: block; margin-bottom: 5px;">NF / DOCUMENTO:</label>
                         <input type="text" id="doc_entrada" class="input-vidro" style="width: 100%; background: rgba(15, 23, 42, 0.8); color: white;">
                     </div>
                 </div>
 
-                <button onclick="processarEntradaEstoque()" class="btn-grande btn-vidro" style="background: #10b981; width: 100%; font-weight: bold;">
+                <button onclick="processarEntradaEstoque()" class="btn-grande btn-vidro" style="background: #10b981; width: 100%; font-weight: bold; color: white !important;">
                     ✅ CONFIRMAR ENTRADA NO ESTOQUE
                 </button>
             </div>
         `;
     } catch (err) {
         console.error(err);
-        app.innerHTML = `<div class="painel-vidro" style="color:red; max-width: 500px; margin: auto;">Erro ao carregar dados: ${err.message}</div>`;
+        app.innerHTML = `<div class="painel-vidro" style="color:#ef4444; max-width: 500px; margin: auto;">⚠️ Erro ao carregar dados. Verifique a conexão com o servidor.</div>`;
     }
 }
 

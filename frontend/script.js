@@ -13239,44 +13239,48 @@ window.alternarLogica2025 = (marcado) => {
 
 async function enviarCadastroComAnexo() {
     const formData = new FormData();
-    const is2025 = document.getElementById('check-2025').checked;
+    
+    // Captura dos elementos do DOM
     const nome = document.getElementById('cat-nome').value;
-    const setor_id = document.getElementById('cat-setor').value;
-    const quantidade = document.getElementById('cat-qtd').value;
-    const serie = document.getElementById('cat-serie').value;
+    const qtd = document.getElementById('cat-qtd').value;
+    const serieBase = document.getElementById('cat-serie').value; // Aqui está o segredo
+    const setorId = document.getElementById('cat-setor').value;
     const nf = document.getElementById('cat-nf').value;
-    const arquivo = document.getElementById('cat-file').files[0];
+    const fileInput = document.getElementById('cat-file');
 
-    if (!nome || !setor_id) return alert("Nome e Setor são obrigatórios!");
+    if (!nome || !serieBase) {
+        return notificar("Preencha o nome e gere o número de série!", "erro");
+    }
 
     formData.append('nome', nome);
-    formData.append('setor_id', setor_id);
-    formData.append('quantidade', quantidade);
-    formData.append('numero_serie', serie);
+    formData.append('quantidade', qtd);
+    formData.append('serie_base', serieBase); // Nome da chave que o backend vai ler
+    formData.append('setor_id', setorId);
     formData.append('nota_fiscal', nf);
-    formData.append('adquirido_pos_2025', is2025);
-    if (arquivo) formData.append('arquivo_nf', arquivo);
+    formData.append('local_id', localStorage.getItem('local_id'));
 
-    const res = await fetch(`${API_URL}/patrimonio/escola/registrar`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${TOKEN}` },
-        body: formData
-    });
+    if (fileInput.files[0]) {
+        formData.append('arquivo', fileInput.files[0]);
+    }
 
-    if (res.ok) {
-        // DISPARA O ALERTA INDEPENDENTE
-        alertaSucessoPatrimonio();
+    try {
+        const res = await fetch(`${API_URL}/patrimonio/cadastrar`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${TOKEN}` },
+            body: formData // Enviando como FormData por causa do arquivo
+        });
 
-        // LIMPA OS CAMPOS PARA O PRÓXIMO REGISTRO
-        document.getElementById('cat-nome').value = '';
-        document.getElementById('cat-serie').value = '';
-        document.getElementById('cat-nome').focus(); // Mantém o foco para rapidez
-        
-        // Atualiza a tabela ao fundo se necessário
-        if (typeof carregarTabelaInventario === 'function') carregarTabelaInventario();
-    } else {
-        const error = await res.json();
-        alert(error.error || "Erro ao salvar");
+        if (res.ok) {
+            notificar("Bens cadastrados com sucesso!");
+            document.getElementById('modal-catalogo-entrada').remove();
+            if (typeof carregarBensSetor === 'function') carregarBensSetor();
+        } else {
+            const erro = await res.json();
+            notificar("Erro: " + erro.error, "erro");
+        }
+    } catch (err) {
+        console.error(err);
+        notificar("Erro ao conectar com o servidor", "erro");
     }
 }
 

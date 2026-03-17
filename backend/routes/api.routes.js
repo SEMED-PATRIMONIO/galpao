@@ -5527,4 +5527,31 @@ router.get('/admin/auditoria-acessos', verificarToken, async (req, res) => {
     }
 });
 
+router.get('/patrimonio/proximo-numero/:prefixo', verificarToken, async (req, res) => {
+    const { prefixo } = req.params;
+
+    try {
+        // Busca o maior número de série que comece com o prefixo da unidade
+        const result = await db.query(
+            "SELECT numero_serie FROM patrimonios WHERE numero_serie LIKE $1 ORDER BY id DESC LIMIT 1",
+            [`${prefixo}-%`]
+        );
+
+        let proximoNumero = 1;
+
+        if (result.rows.length > 0) {
+            const ultimoSerie = result.rows[0].numero_serie;
+            const partes = ultimoSerie.split('-');
+            if (partes.length > 1) {
+                proximoNumero = parseInt(partes[1]) + 1;
+            }
+        }
+
+        res.json({ proximo: proximoNumero });
+    } catch (err) {
+        console.error("Erro ao calcular próximo número:", err.message);
+        res.status(500).json({ error: "Erro interno ao gerar numeração." });
+    }
+});
+
 module.exports = router;

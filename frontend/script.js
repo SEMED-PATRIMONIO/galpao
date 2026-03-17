@@ -12764,11 +12764,11 @@ async function telaPatrimonioEscolaCatalogo() {
 
                     <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:12px; margin-bottom: 12px;">
                         <div>
-                            <label id="label-serie" style="color:white; font-size:0.8rem;">Nº SÉRIE:</label>
+                            <label id="label-serie" style="color:white; font-size:0.8rem;">Nº PATRIMÔNIO:</label>
                             <input type="text" id="cat-serie" class="input-vidro" placeholder="Auto-gerado" readonly style="background: rgba(255,255,255,0.05); cursor: not-allowed;">
                         </div>
                         <div>
-                            <label style="color:white; font-size:0.8rem;">PATRIMÔNIO:</label>
+                            <label style="color:white; font-size:0.8rem;">Nº RGP:</label>
                             <input type="text" id="cat-patrimonio" class="input-vidro" placeholder="Pendente" readonly style="background: rgba(255,255,255,0.05); cursor: not-allowed; opacity: 0.6;">
                         </div>
                         <div>
@@ -12874,11 +12874,11 @@ async function telaPatrimonioEscolaCatalogo2() {
 
                     <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:12px; margin-bottom: 12px;">
                         <div>
-                            <label id="label-serie" style="color:white; font-size:0.8rem;">Nº SÉRIE:</label>
+                            <label id="label-serie" style="color:white; font-size:0.8rem;">Nº PATRIMÔNIO VIRTUAL:</label>
                             <input type="text" id="cat-serie" class="input-vidro" placeholder="Auto-gerado" readonly style="background: rgba(255,255,255,0.05); cursor: not-allowed;">
                         </div>
                         <div>
-                            <label style="color:white; font-size:0.8rem;">PATRIMÔNIO:</label>
+                            <label style="color:white; font-size:0.8rem;">Nº PATRIMÔNIO OFICIAL:</label>
                             <input type="text" id="cat-patrimonio" class="input-vidro" placeholder="Pendente" readonly style="background: rgba(255,255,255,0.05); cursor: not-allowed; opacity: 0.6;">
                         </div>
                         <div>
@@ -13280,7 +13280,7 @@ async function telaPatrimonioConsultaEscola() {
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
                 <div style="display: flex; align-items: center; gap: 15px;">
                     <button onclick="abrirMenuPatrimonioEscola()" class="btn-sair-vidro">⬅️ VOLTAR</button>
-                    <h1 style="margin:0; font-size: 1.5rem;">📦 Inventário de Bens</h1>
+
                 </div>
                 <div style="text-align: right; opacity: 0.7; font-size: 0.75rem;">
                     Unidade: ${localStorage.getItem('nome') || 'Escola Logada'}<br>
@@ -14731,19 +14731,16 @@ window.selecionarLocalGlobal = async function(id, nome) {
 };
 
 window.selecionarSetorGlobal = async function(setor_id, nome_setor) {
-    // 1. Reset visual dos setores (Mantido)
+    // Reset visual dos setores
     document.querySelectorAll('.item-setor-global').forEach(el => el.style.background = 'rgba(255,255,255,0.05)');
-    if (event && event.currentTarget) {
-        event.currentTarget.style.background = 'rgba(52, 211, 153, 0.3)';
-    }
+    if (event && event.currentTarget) event.currentTarget.style.background = 'rgba(52, 211, 153, 0.3)';
 
-    // 2. Preparação dos containers
     document.getElementById('container-bens').style.display = 'flex';
     document.getElementById('txt-setor-selecionado').innerText = `📋 ITENS EM: ${nome_setor}`;
     const colBens = document.getElementById('col-bens');
     colBens.innerHTML = '<div class="spinner"></div>';
 
-    // 3. Reset do botão de auditoria (para não ficar ativo de um setor para outro)
+    // Desativa o botão de auditoria até uma nova seleção
     const btnAuditoria = document.getElementById('btn-editar-auditoria');
     if (btnAuditoria) {
         btnAuditoria.disabled = true;
@@ -14757,54 +14754,42 @@ window.selecionarSetorGlobal = async function(setor_id, nome_setor) {
         });
         const bens = await res.json();
         
-        // Guardamos a lista atual para a lógica de "saltar para o próximo"
+        // GUARDA A LISTA NA MEMÓRIA (Evita erros de aspas/caracteres no HTML)
         window.listaBensAtual = bens;
 
-        colBens.innerHTML = bens.map((b, index) => {
-            // Tooltip informativo (Mantido seu Hover)
-            const infoHover = `
-                PRODUTO: ${b.nome_produto}
-                SÉRIE: ${b.numero_serie || 'N/A'}
-                PATRIMÔNIO: ${b.patrimonio || 'N/A'}
-                NF: ${b.nota_fiscal || 'N/A'}
-                ESTADO: ${b.estado}
-                CADASTRO: ${new Date(b.data_atualizacao).toLocaleDateString()}
-            `.trim();
-
-            return `
-                <div class="linha-patrimonio item-bem-auditoria" 
-                     id="bem-row-${index}"
-                     title="${infoHover}"
-                     onclick='selecionarBemParaAuditoria(${index}, ${JSON.stringify(b).replace(/'/g, "&apos;")})'
-                     style="padding:12px; border-bottom:1px solid rgba(255,255,255,0.05); cursor:pointer; display:flex; justify-content:space-between; transition: 0.2s;">
-                    
-                    <div style="text-align:left;">
-                        <strong style="display:block; color:white;">${b.nome_produto}</strong>
-                        <span style="opacity:0.5; font-size:0.75rem;">SÉRIE: ${b.numero_serie || 'S/N'}</span>
-                    </div>
-
-                    <div style="text-align:right; display:flex; flex-direction:column; align-items:flex-end;">
-                        <span style="background:rgba(96, 165, 250, 0.1); color:#60a5fa; padding:2px 8px; border-radius:5px; font-size:0.7rem; font-weight:bold; border:1px solid rgba(96, 165, 250, 0.2);">
-                            ${b.patrimonio || 'S/ ETIQUETA'}
-                        </span>
-                        <small style="opacity:0.3; font-size:0.6rem; margin-top:4px;">ID: #${b.id}</small>
-                    </div>
+        colBens.innerHTML = bens.map((b, index) => `
+            <div class="linha-patrimonio item-bem-auditoria" 
+                 id="bem-row-${index}"
+                 onclick="selecionarBemParaAuditoria(${index})" 
+                 style="padding:15px; border-bottom:1px solid rgba(255,255,255,0.05); cursor:pointer; display:flex; justify-content:space-between; transition: 0.2s; align-items:center;">
+                
+                <div style="text-align:left;">
+                    <strong style="display:block; color:white; font-size:0.95rem;">${b.nome_produto}</strong>
+                    <span style="opacity:0.5; font-size:0.75rem;">SÉRIE: ${b.numero_serie || 'S/N'}</span>
                 </div>
-            `;
-        }).join('') || '<p style="color:gray; font-size:0.8rem; text-align:center; margin-top:20px;">Este setor está vazio.</p>';
+
+                <div style="text-align:right; display:flex; flex-direction:column; align-items:flex-end;">
+                    <span id="label-patrimonio-${index}" style="background:rgba(96, 165, 250, 0.1); color:#60a5fa; padding:4px 10px; border-radius:6px; font-size:0.75rem; font-weight:bold; border:1px solid rgba(96, 165, 250, 0.2);">
+                        ${b.patrimonio || 'S/ ETIQUETA'}
+                    </span>
+                    <small style="opacity:0.3; font-size:0.6rem; margin-top:5px;">ID: #${b.id}</small>
+                </div>
+            </div>
+        `).join('') || '<p style="color:gray; text-align:center; margin-top:20px;">Setor vazio.</p>';
 
     } catch (err) {
-        console.error("Erro ao carregar bens do setor:", err);
-        colBens.innerHTML = '<p style="color:#ef4444; font-size:0.8rem;">Erro ao carregar dados.</p>';
+        console.error(err);
+        colBens.innerHTML = '<p style="color:#ef4444; padding:20px;">Erro ao carregar bens.</p>';
     }
 };
 
-window.selecionarBemParaAuditoria = function(index, dadosBem) {
-    // 1. Armazena o estado global da seleção
+window.selecionarBemParaAuditoria = function(index) {
+    // Busca os dados direto da memória pelo índice
+    const dadosBem = window.listaBensAtual[index];
     window.bemSelecionadoIndex = index;
     window.bemSelecionadoDados = dadosBem;
 
-    // 2. Gerenciamento Visual: Remove destaque de todas as linhas e aplica na selecionada
+    // Destaque visual da linha selecionada
     document.querySelectorAll('.item-bem-auditoria').forEach(el => {
         el.style.background = 'transparent';
         el.style.borderLeft = 'none';
@@ -14812,23 +14797,18 @@ window.selecionarBemParaAuditoria = function(index, dadosBem) {
 
     const row = document.getElementById(`bem-row-${index}`);
     if (row) {
-        // Aplica um fundo azul translúcido e uma borda lateral para dar foco
         row.style.background = 'rgba(59, 130, 246, 0.2)';
         row.style.borderLeft = '4px solid #60a5fa';
     }
 
-    // 3. Ativação do Botão de Identificação (O "Gatilho" da Auditoria)
+    // Ativa o botão azul "IDENTIFICAR PATRIMÔNIO"
     const btn = document.getElementById('btn-editar-auditoria');
     if (btn) {
         btn.disabled = false;
         btn.style.opacity = '1';
         btn.style.cursor = 'pointer';
-        btn.style.background = '#3b82f6'; // Azul vibrante quando ativo
+        btn.style.background = '#3b82f6'; 
         btn.style.boxShadow = '0 0 15px rgba(59, 130, 246, 0.4)';
-        
-        // Pequena animação de "pulso" para mostrar que está pronto
-        btn.classList.add('animar-entrada');
-        setTimeout(() => btn.classList.remove('animar-entrada'), 500);
     }
 };
 
@@ -15657,19 +15637,18 @@ function abrirModalAuditoriaPatrimonio() {
     const b = window.bemSelecionadoDados;
     const overlay = document.createElement('div');
     overlay.id = 'modal-auditoria-overlay';
-    overlay.className = 'alerta-vidro-overlay'; // Usa seu padrão de fundo/blur
+    overlay.className = 'alerta-vidro-overlay'; 
 
     overlay.innerHTML = `
         <div class="painel-vidro animar-entrada" style="width: 450px; padding: 30px; border: 1px solid #60a5fa44;">
             <h3 style="color:#60a5fa; margin-top:0;">🏷️ VINCULAR PATRIMÔNIO</h3>
             
-            <div style="text-align:left; background:rgba(0,0,0,0.2); padding:15px; border-radius:10px; margin-bottom:20px; font-size:0.85rem;">
+            <div style="text-align:left; background:rgba(0,0,0,0.2); padding:15px; border-radius:10px; margin-bottom:20px; font-size:0.85rem; color:white;">
                 <p><strong>BEM:</strong> ${b.nome_produto}</p>
-                <p><strong>Nº SÉRIE:</strong> ${b.numero_serie || '---'}</p>
-                <p><strong>ESTADO:</strong> ${b.estado}</p>
+                <p><strong>SÉRIE:</strong> ${b.numero_serie || '---'}</p>
             </div>
 
-            <label style="display:block; margin-bottom:10px; color:white; font-size:0.9rem;">DIGITE O NÚMERO DO PATRIMÔNIO (ETIQUETA):</label>
+            <label style="display:block; margin-bottom:10px; color:white;">NÚMERO DA ETIQUETA:</label>
             <input type="text" id="input-novo-patrimonio" class="input-vidro" 
                    value="${b.patrimonio || ''}" 
                    style="width:100%; font-size:1.5rem; text-align:center; letter-spacing:2px; margin-bottom:25px;" 
@@ -15682,7 +15661,7 @@ function abrirModalAuditoriaPatrimonio() {
         </div>
     `;
     document.body.appendChild(overlay);
-    setTimeout(() => document.getElementById('input-novo-patrimonio').focus(), 100);
+    setTimeout(() => document.getElementById('input-novo-patrimonio').focus(), 150);
 }
 
 // Salva e executa a lógica de salto
@@ -15699,37 +15678,29 @@ async function confirmarAuditoriaPatrimonio() {
             body: JSON.stringify({ id: bemId, patrimonio: novoPatrimonio })
         });
 
-        if (!res.ok) {
-            const erro = await res.json();
-            throw new Error(erro.error);
-        }
+        if (!res.ok) throw new Error("Erro ao salvar ou patrimônio duplicado.");
 
-        // 1. Fecha o modal de edição
         document.getElementById('modal-auditoria-overlay').remove();
-
-        // 2. Exibe Alerta Gamificado de 4 segundos
         exibirAlertaSucessoGamer();
 
-        // 3. Atualiza a lista visualmente (sem recarregar tudo)
-        const rowIndex = window.bemSelecionadoIndex;
-        document.getElementById(`bem-row-${rowIndex}`).querySelector('span').innerText = novoPatrimonio;
-        document.getElementById(`bem-row-${rowIndex}`).style.background = 'rgba(16, 185, 129, 0.1)';
+        // Atualiza o texto na lista imediatamente
+        const indexAtual = window.bemSelecionadoIndex;
+        document.getElementById(`label-patrimonio-${indexAtual}`).innerText = novoPatrimonio;
+        document.getElementById(`bem-row-${indexAtual}`).style.background = 'rgba(16, 185, 129, 0.1)';
 
-        // 4. Lógica de Salto para o Próximo
-        const proximoIndex = rowIndex + 1;
+        // LOGICA DE SALTO: Prepara o próximo item
+        const proximoIndex = indexAtual + 1;
         const proximaLinha = document.getElementById(`bem-row-${proximoIndex}`);
 
-        // Reseta seleção e desativa botão
+        // Reseta o botão para obrigar uma nova seleção
         const btn = document.getElementById('btn-editar-auditoria');
         btn.disabled = true;
         btn.style.opacity = '0.3';
-        btn.style.cursor = 'not-allowed';
 
         if (proximaLinha) {
             proximaLinha.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            // Dá um leve brilho na próxima linha para indicar onde o usuário parou
-            proximaLinha.style.border = '1px solid #60a5fa88';
-            setTimeout(() => proximaLinha.style.border = 'none', 2000);
+            proximaLinha.style.border = '2px solid #60a5fa88';
+            setTimeout(() => proximaLinha.style.border = 'none', 3000);
         }
 
     } catch (err) {
@@ -15741,18 +15712,22 @@ function exibirAlertaSucessoGamer() {
     const alerta = document.createElement('div');
     alerta.style.cssText = `
         position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-        background: rgba(16, 185, 129, 0.9); backdrop-filter: blur(15px);
-        padding: 40px; border-radius: 20px; z-index: 11000; text-align: center;
-        border: 2px solid #4ade80; box-shadow: 0 0 50px rgba(74, 222, 128, 0.5);
-        animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        background: rgba(16, 185, 129, 0.95); backdrop-filter: blur(15px);
+        padding: 40px; border-radius: 25px; z-index: 12000; text-align: center;
+        border: 2px solid #4ade80; box-shadow: 0 0 60px rgba(74, 222, 128, 0.6);
+        animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); color: white;
     `;
     alerta.innerHTML = `
-        <div style="font-size: 5rem; margin-bottom: 10px;">✅</div>
-        <h2 style="color:white; margin:0; letter-spacing:3px;">SALVO COM SUCESSO!</h2>
-        <p style="color:white; opacity:0.8;">Posicionando próximo item...</p>
+        <div style="font-size: 5rem; margin-bottom: 15px; filter: drop-shadow(0 0 10px white);">✅</div>
+        <h2 style="margin:0; letter-spacing:4px; font-weight: 900;">SUCESSO!</h2>
+        <p style="margin-top:10px; opacity:0.9; font-weight: 500;">DADOS SALVOS COM SEGURANÇA</p>
     `;
     document.body.appendChild(alerta);
-    setTimeout(() => { alerta.style.opacity = '0'; setTimeout(() => alerta.remove(), 500); }, 4000);
+    setTimeout(() => { 
+        alerta.style.opacity = '0'; 
+        alerta.style.transition = '0.5s';
+        setTimeout(() => alerta.remove(), 500); 
+    }, 4000);
 }
 
 // Isso garante que o onclick="funcao()" funcione sempre

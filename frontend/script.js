@@ -13054,13 +13054,12 @@ async function telaPatrimonioEscolaCatalogo() {
 async function gerarNumeroSerieAutomatico() {
     const nomeInput = document.getElementById('cat-nome').value;
     const serieInput = document.getElementById('cat-serie');
-    const qtdInput = document.getElementById('cat-qtd').value || 1;
-    const qtd = parseInt(qtdInput);
-
-    // Só gera se houver nome digitado
+    const qtd = parseInt(document.getElementById('cat-qtd').value) || 1;
+    
+    // Agora a condição é apenas ter nome. Se mudar a qtd, ele gera de novo.
     if (nomeInput.trim().length > 0) {
         const localId = localStorage.getItem('local_id');
-        const prefixo = PREFIXOS_LOCAIS[localId] || "XX";
+        const prefixo = PREFIXOS_LOCAIS[localId] || "XX"; 
         const anoAtual = new Date().getFullYear().toString().slice(-2);
 
         try {
@@ -13069,27 +13068,24 @@ async function gerarNumeroSerieAutomatico() {
             });
             const data = await res.json();
             const inicio = data.proximo;
-
+            
             if (qtd <= 1) {
-                // Formato normal para um único bem
+                // Formato Único: CL-26-0001
                 serieInput.value = `${prefixo}-${anoAtual}-${String(inicio).padStart(4, '0')}`;
             } else {
-                // Formato de intervalo para múltiplos bens
+                // Formato Lote: CL-26-0001 a 0005
                 const fim = inicio + (qtd - 1);
-                const prefixoComAno = `${prefixo}-${anoAtual}`;
-                serieInput.value = `${prefixoComAno}-${String(inicio).padStart(4, '0')} a ${String(fim).padStart(4, '0')}`;
+                serieInput.value = `${prefixo}-${anoAtual}-${String(inicio).padStart(4, '0')} a ${String(fim).padStart(4, '0')}`;
             }
         } catch (err) {
-            console.error("Erro ao gerar série automática:", err);
-            serieInput.value = "Erro ao gerar";
+            console.error("Erro ao gerar série:", err);
         }
     } else {
-        // Limpa o campo se o nome for apagado
-        serieInput.value = "";
+        serieInput.value = ""; // Limpa se apagar o nome
     }
 }
 
-async function telaPatrimonioEscolaCatalogo() {
+async function telaPatrimonioEscolaCatalogo2() {
     const modal = document.createElement('div');
     modal.id = 'modal-catalogo-entrada';
     modal.className = 'alerta-vidro-overlay';

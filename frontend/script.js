@@ -13563,7 +13563,6 @@ async function partilharInventario(nomeSetor) {
 function renderizarTabela(dados) {
     const container = document.getElementById('corpo-tabela-dinamica');
     
-    // Proteção para evitar erros caso o container não exista no DOM
     if (!container) return;
 
     if (dados.length === 0) {
@@ -13571,14 +13570,14 @@ function renderizarTabela(dados) {
         return;
     }
 
-    // AJUSTE CIRÚRGICO 1: Legenda simplificada com apenas 2 opções
+    // LEGENDA ATUALIZADA: Agora reflete a distinção pelo campo PATRIMÔNIO (RGP)
     const legendaHtml = `
         <div style="display: flex; gap: 20px; margin-bottom: 15px; padding: 10px; background: rgba(0, 0, 0, 0.2); border-radius: 8px; flex-wrap: wrap; border: 1px solid rgba(255,255,255,0.05);">
             <div style="display:flex; align-items:center; gap:8px; font-size:0.75rem; color:#4ade80; font-weight:bold;">
-                <span style="font-size: 1.2rem;">●</span> PATRIMONIADO
+                <span style="font-size: 1.2rem;">●</span> COM Nº PATRIMÔNIO (RGP)
             </div>
             <div style="display:flex; align-items:center; gap:8px; font-size:0.75rem; color:#fbbf24; font-weight:bold;">
-                <span style="font-size: 1.2rem;">●</span> PENDENTE DE PATRIMONIALIZAÇÃO
+                <span style="font-size: 1.2rem;">●</span> PENDENTE DE ETIQUETA (RGP)
             </div>
         </div>
     `;
@@ -13592,7 +13591,7 @@ function renderizarTabela(dados) {
                         <th style="padding:10px 12px;">DESCRIÇÃO DO BEM</th>
                         <th style="padding:10px 12px;">Nº PATRIMÔNIO</th>
                         <th style="padding:10px 12px; color: #60a5fa;">Nº RGP</th>
-                        <th style="padding:10px 12px;">CONSERVAÇÃO</th>
+                        <th style="padding:10px 12px;">ESTADO</th>
                         <th style="padding:10px 12px;">NF / CE</th>
                         <th style="padding:10px 12px;">CADASTRO</th>
                         <th style="padding:10px 12px; text-align:center;">VER</th>
@@ -13600,25 +13599,20 @@ function renderizarTabela(dados) {
                 </thead>
                 <tbody>
                     ${dados.map((i, index) => {
-                        // Verificação de segurança existente (Mantida)
-                        const temSerie = i.numero_serie && String(i.numero_serie).trim() !== '';
-                        // ehNovo removido da lógica de cor, pois não é mais critério
+                        // --- ALTERAÇÃO SOLICITADA: Verificação baseada no campo 'patrimonio' ---
+                        const temPatrimonio = i.patrimonio && String(i.patrimonio).trim() !== '';
                         const emTransito = i.em_transito === true; 
 
-                        // AJUSTE CIRÚRGICO 2: Nova Lógica de Cores da Linha (Baseada apenas no Nº Série)
-                        let corTexto = '#ffffff'; // Padrão Branco (Caso algo falhe)
+                        // Lógica de Cores da Linha
+                        let corTexto = '#fbbf24'; // AMARELO: Padrão (Sem Patrimônio)
                         
-                        if (temSerie) {
-                            corTexto = '#4ade80'; // VERDE: PATRIMONIADO (Tem Série)
-                        } else {
-                            corTexto = '#fbbf24'; // AMARELO: NÃO-PATRIMONIADO (Sem Série)
+                        if (temPatrimonio) {
+                            corTexto = '#4ade80'; // VERDE: Se tiver o campo patrimônio preenchido
                         }
 
-                        // Cores do estado (ponto visual apenas - Mantido)
                         const coresEstado = { 'BOM': '#4ade80', 'RUIM': '#fbbf24', 'PÉSSIMO': '#ef4444' };
                         const corPonto = coresEstado[i.estado] || '#ffffff';
 
-                        // O restante do retorno da linha (TR) permanece IDÊNTICO ao original
                         return `
                             <tr onclick="${emTransito ? '' : `selecionarItemParaTransferencia(this, ${i.id}, ${i.setor_id})`}" 
                                 style="border-bottom: 1px solid rgba(255,255,255,0.03); color: ${corTexto}; cursor: ${emTransito ? 'not-allowed' : 'pointer'}; transition: 0.2s; opacity: ${emTransito ? '0.4' : '1'};"
@@ -13633,12 +13627,14 @@ function renderizarTabela(dados) {
                                     ${emTransito ? '<br><span style="font-size:0.6rem; color:#fbbf24; font-weight:bold;">[ EM TRÂNSITO ]</span>' : ''}
                                 </td>
                                 
-                                <td style="padding:6px 12px; font-family: 'Courier New', monospace; letter-spacing: 1px;">
-                                    ${temSerie ? i.numero_serie : '<span style="opacity:0.2;">---------</span>'}
+                                <td style="padding:6px 12px; font-family: 'Courier New', monospace; opacity: 0.8;">
+                                    ${i.numero_serie || '<span style="opacity:0.2;">---------</span>'}
                                 </td>
-                                <td style="padding:6px 12px; font-weight: bold; color: #60a5fa;">
-                                    ${i.patrimonio || '<span style="opacity:0.2;">---</span>'}
+
+                                <td style="padding:6px 12px; font-weight: bold; color: ${corTexto};">
+                                    ${i.patrimonio || '<span style="opacity:0.3;">AGUARDANDO...</span>'}
                                 </td>
+                                
                                 <td style="padding:6px 12px;">
                                     <span style="display:inline-flex; align-items:center; gap:5px; background:rgba(0,0,0,0.3); padding:2px 8px; border-radius:12px; font-size:0.7rem; color:${corPonto}; border: 1px solid ${corPonto}44;">
                                         ● ${i.estado}
@@ -14849,11 +14845,21 @@ async function exportarGlobalExcel() {
     });
     const dados = await res.json();
 
-    const ws = XLSX.utils.json_to_sheet(dados);
+    // Mapeamento para garantir a inclusão do patrimônio e definir a ordem das colunas
+    const dadosFormatados = dados.map(d => ({
+        'SETOR': d.setor,
+        'PRODUTO': d.produto,
+        'Nº PATRIMÔNIO': d.numero_serie || '---',
+        'Nº RGP': d.patrimonio || '---',
+        'ESTADO': d.estado,
+        'NF / CE': d.nota_fiscal || '---',
+        'DATA CADASTRO': d.data_atualizacao ? new Date(d.data_atualizacao).toLocaleDateString('pt-BR') : '---'
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(dadosFormatados);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Patrimonio");
 
-    // Aciona a caixa de diálogo de salvamento do navegador
     XLSX.writeFile(wb, `Relatorio_Patrimonio_${nomeLocal.replace(/ /g, '_')}.xlsx`);
 }
 
@@ -14867,17 +14873,29 @@ async function exportarGlobalPDF() {
     const dados = await res.json();
 
     const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
+    // 'l' para landscape (paisagem) ajuda a acomodar a nova coluna em telas ou impressões A4
+    const doc = new jsPDF('l', 'mm', 'a4'); 
 
     doc.setFontSize(16);
-    doc.text(`RELATÓRIO DE INVENTÁRIO - ${nomeLocal}`, 105, 15, { align: "center" });
+    doc.text(`RELATÓRIO DE INVENTÁRIO - ${nomeLocal}`, 148, 15, { align: "center" });
 
     doc.autoTable({
-        head: [['SETOR', 'PRODUTO', 'SÉRIE', 'ESTADO', 'NF']],
-        body: dados.map(d => [d.setor, d.produto, d.numero_serie, d.estado, d.nota_fiscal]),
+        head: [['SETOR', 'PRODUTO', 'PATRIMÔNIO', 'RGP', 'ESTADO', 'NF / CE']],
+        body: dados.map(d => [
+            d.setor, 
+            d.produto, 
+            d.numero_serie || '---', 
+            d.patrimonio || '---', 
+            d.estado, 
+            d.nota_fiscal || '---'
+        ]),
         startY: 25,
         theme: 'grid',
-        headStyles: { fillColor: [31, 58, 138] }
+        headStyles: { fillColor: [31, 58, 138] },
+        styles: { fontSize: 9 }, // Tamanho de fonte ajustado para a nova estrutura
+        columnStyles: {
+            3: { fontStyle: 'bold', textColor: [31, 58, 138] } // Destaca a coluna do Patrimônio
+        }
     });
 
     doc.save(`Inventario_${nomeLocal}.pdf`);

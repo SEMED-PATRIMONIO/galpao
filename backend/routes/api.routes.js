@@ -5608,18 +5608,28 @@ router.get('/patrimonio/proximo-numero/:prefixo/:ano', verificarToken, async (re
 });
 
 router.post('/patrimonio/cadastrar', verificarToken, async (req, res) => {
-    // Extraímos os campos necessários. O objeto 'outros' contém campos como estado, nota_fiscal, etc.
-    const { nome, quantidade, setor_id, local_id, serie_base, estado, nota_fiscal, adquirido_pos_2025, url_nota_fiscal } = req.body;
+    // Pegamos os dados vindos do FormData
+    const { nome, quantidade, setor_id, local_id, serie_base, nota_fiscal } = req.body;
+    const qtd = parseInt(quantidade, 10) || 1;
 
     try {
-        // 1. Extraímos o prefixo, ano e número inicial da string (ex: "CL-25-0001 a 0005")
-        const partes = serie_base.split(' ')[0].split('-');
-        const prefixo = partes[0];
-        const ano = partes[1];
-        let numeroSequencial = parseInt(partes[2], 10);
+        // 1. Tratamento da String de Série
+        // Se serie_base for "CL-26-0001 a 0005", pegamos apenas "CL-26-0001"
+        const parteInicial = serie_base.split(' ')[0]; 
+        const segmentos = parteInicial.split('-'); // ["CL", "26", "0001"]
+        
+        if (segmentos.length !== 3) {
+            throw new Error("Formato de série inválido: " + serie_base);
+        }
 
-        // 2. Loop para gravar cada bem individualmente com sua numeração única
-        for (let i = 0; i < quantidade; i++) {
+        const prefixo = segmentos[0];
+        const ano = segmentos[1];
+        let numeroSequencial = parseInt(segmentos[2], 10);
+
+        // 2. Loop de Inserção Individual
+        for (let i = 0; i < qtd; i++) {
+            // Monta o número de série único para este item do lote
+            // Ex: i=0 -> 0001, i=1 -> 0002...
             const serieUnica = `${prefixo}-${ano}-${String(numeroSequencial).padStart(4, '0')}`;
             
             await db.query(
@@ -5628,30 +5638,28 @@ router.post('/patrimonio/cadastrar', verificarToken, async (req, res) => {
                     numero_serie, 
                     setor_id, 
                     local_id, 
-                    estado, 
-                    nota_fiscal, 
-                    adquirido_pos_2025, 
-                    url_nota_fiscal
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+                    nota_fiscal,
+                    estado,
+                    data_atualizacao
+                ) VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
                 [
                     nome, 
                     serieUnica, 
                     setor_id, 
                     local_id, 
-                    estado || 'BOM', 
-                    nota_fiscal || null, 
-                    adquirido_pos_2025 || false, 
-                    url_nota_fiscal || null
+                    nota_fiscal || null,
+                    'BOM' // Estado padrão inicial
                 ]
             );
 
-            numeroSequencial++; 
+            numeroSequencial++; // Incrementa o número para o próximo registro
         }
 
-        res.json({ success: true, message: `${quantidade} bens cadastrados com sucesso.` });
+        res.json({ success: true, message: `${qtd} bens registrados.` });
+
     } catch (err) {
-        console.error("Erro ao gravar lote:", err.message);
-        res.status(500).json({ error: "Erro ao gravar lote: " + err.message });
+        console.error("Erro no cadastro em lote:", err.message);
+        res.status(500).json({ error: "Falha ao gravar registros: " + err.message });
     }
 });
 

@@ -5582,10 +5582,9 @@ router.get('/patrimonio/proximo-numero/:prefixo/:ano', verificarToken, async (re
     const { prefixo, ano } = req.params;
 
     try {
-        // Busca o maior número de série que comece com o prefixo E o ano atual
-        // Exemplo de busca: 'CL-25-%'
+        // Ordenar pelo numero_serie garante que pegamos o maior valor alfanumérico disponível
         const result = await db.query(
-            "SELECT numero_serie FROM patrimonios WHERE numero_serie LIKE $1 ORDER BY id DESC LIMIT 1",
+            "SELECT numero_serie FROM patrimonios WHERE numero_serie LIKE $1 ORDER BY numero_serie DESC LIMIT 1",
             [`${prefixo}-${ano}-%`]
         );
 
@@ -5595,17 +5594,64 @@ router.get('/patrimonio/proximo-numero/:prefixo/:ano', verificarToken, async (re
             const ultimoSerie = result.rows[0].numero_serie;
             const partes = ultimoSerie.split('-'); 
             
-            // Partes: [0]Prefixo, [1]Ano, [2]Sequência
+            // Se o formato for PREFIXO-ANO-SEQUENCIA, partes[2] contém o número
             if (partes.length === 3) {
-                proximoNumero = parseInt(partes[2]) + 1;
+                proximoNumero = parseInt(partes[2], 10) + 1;
             }
         }
 
-        // Se result.rows for 0 (porque o ano mudou), proximoNumero continuará sendo 1
         res.json({ proximo: proximoNumero });
     } catch (err) {
         console.error("Erro ao gerar sequência:", err.message);
         res.status(500).json({ error: "Erro interno no servidor." });
+    }
+});
+
+router.post('/patrimonio/cadastrar', verificarToken, async (req, res) => {
+    // Extraímos os campos necessários. O objeto 'outros' contém campos como estado, nota_fiscal, etc.
+    const { nome, quantidade, setor_id, local_id, serie_base, estado, nota_fiscal, adquirido_pos_2025, url_nota_fiscal } = req.body;
+
+    try {
+        // 1. Extraímos o prefixo, ano e número inicial da string (ex: "CL-25-0001 a 0005")
+        const partes = serie_base.split(' ')[0].split('-');
+        const prefixo = partes[0];
+        const ano = partes[1];
+        let numeroSequencial = parseInt(partes[2], 10);
+
+        // 2. Loop para gravar cada bem individualmente com sua numeração única
+        for (let i = 0; i < quantidade; i++) {
+            const serieUnica = `${prefixo}-${ano}-${String(numeroSequencial).padStart(4, '0')}`;
+            
+            await db.query(
+                `INSERT INTO patrimonios (
+                    nome_produto, 
+                    numero_serie, 
+                    setor_id, 
+                    local_id, 
+                    estado, 
+                    nota_fiscal, 
+                    adquirido_pos_2025, 
+                    url_nota_fiscal
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+                [
+                    nome, 
+                    serieUnica, 
+                    setor_id, 
+                    local_id, 
+                    estado || 'BOM', 
+                    nota_fiscal || null, 
+                    adquirido_pos_2025 || false, 
+                    url_nota_fiscal || null
+                ]
+            );
+
+            numeroSequencial++; 
+        }
+
+        res.json({ success: true, message: `${quantidade} bens cadastrados com sucesso.` });
+    } catch (err) {
+        console.error("Erro ao gravar lote:", err.message);
+        res.status(500).json({ error: "Erro ao gravar lote: " + err.message });
     }
 });
 

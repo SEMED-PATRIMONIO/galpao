@@ -5554,4 +5554,28 @@ router.get('/patrimonio/proximo-numero/:prefixo', verificarToken, async (req, re
     }
 });
 
+router.put('/patrimonio/auditoria/vincular-etiqueta', verificarToken, async (req, res) => {
+    const { id, patrimonio } = req.body;
+
+    try {
+        // Verifica se o número de patrimônio já existe em outro registro (Unicidade)
+        const check = await db.query("SELECT id FROM patrimonios WHERE patrimonio = $1 AND id <> $2", [patrimonio, id]);
+        if (check.rows.length > 0) {
+            return res.status(400).json({ error: "Este número de patrimônio já está vinculado a outro bem." });
+        }
+
+        const result = await db.query(
+            "UPDATE patrimonios SET patrimonio = $1, data_atualizacao = NOW() WHERE id = $2 RETURNING *",
+            [patrimonio, id]
+        );
+
+        if (result.rowCount === 0) return res.status(404).json({ error: "Bem não encontrado." });
+
+        res.json({ message: "Patrimônio vinculado com sucesso!", bem: result.rows[0] });
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).json({ error: "Erro ao salvar patrimônio." });
+    }
+});
+
 module.exports = router;

@@ -12735,9 +12735,6 @@ async function telaPatrimonioEscolaCatalogo() {
             
             <div style="flex: 1; display: flex; flex-direction: column; gap: 15px;">
                 <h2 style="color:white; margin:0 0 10px 0;">📝 NOVO BEM</h2>
-                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
-                    <button onclick="abrirMenuPatrimonioEscola()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
-                </div>                
                 
                 <div style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 12px; border: 1px solid rgba(59, 130, 246, 0.3);">
                     <label style="color:#60a5fa; font-weight:bold; display:flex; align-items:center; gap:10px; cursor:pointer; font-size: 0.85rem;">
@@ -12848,9 +12845,6 @@ async function telaPatrimonioEscolaCatalogo2() {
             
             <div style="flex: 1; display: flex; flex-direction: column; gap: 15px;">
                 <h2 style="color:white; margin:0 0 10px 0;">📝 NOVO BEM</h2>
-                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
-                    <button onclick="abrirMenuPatrimonioAlmoxarifado()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
-                </div>                
                 
                 <div style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 12px; border: 1px solid rgba(59, 130, 246, 0.3);">
                     <label style="color:#60a5fa; font-weight:bold; display:flex; align-items:center; gap:10px; cursor:pointer; font-size: 0.85rem;">

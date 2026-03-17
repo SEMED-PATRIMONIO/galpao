@@ -13056,10 +13056,9 @@ async function gerarNumeroSerieAutomatico() {
     const serieInput = document.getElementById('cat-serie');
     const qtd = parseInt(document.getElementById('cat-qtd').value) || 1;
     
-    // Agora a condição é apenas ter nome. Se mudar a qtd, ele gera de novo.
     if (nomeInput.trim().length > 0) {
         const localId = localStorage.getItem('local_id');
-        const prefixo = PREFIXOS_LOCAIS[localId] || "XX"; 
+        const prefixo = PREFIXOS_LOCAIS[localId] || "XX";
         const anoAtual = new Date().getFullYear().toString().slice(-2);
 
         try {
@@ -13068,12 +13067,10 @@ async function gerarNumeroSerieAutomatico() {
             });
             const data = await res.json();
             const inicio = data.proximo;
-            
+
             if (qtd <= 1) {
-                // Formato Único: CL-26-0001
                 serieInput.value = `${prefixo}-${anoAtual}-${String(inicio).padStart(4, '0')}`;
             } else {
-                // Formato Lote: CL-26-0001 a 0005
                 const fim = inicio + (qtd - 1);
                 serieInput.value = `${prefixo}-${anoAtual}-${String(inicio).padStart(4, '0')} a ${String(fim).padStart(4, '0')}`;
             }
@@ -13081,7 +13078,7 @@ async function gerarNumeroSerieAutomatico() {
             console.error("Erro ao gerar série:", err);
         }
     } else {
-        serieInput.value = ""; // Limpa se apagar o nome
+        serieInput.value = "";
     }
 }
 
@@ -13171,38 +13168,40 @@ async function telaPatrimonioEscolaCatalogo2() {
 
 async function carregarBensRecentesModal() {
     const container = document.getElementById('lista-bens-recentes');
-    if (!container) return; // Proteção caso o modal seja fechado rápido demais
+    if (!container) return;
+
+    // Mostra um mini-spinner ou texto de carregando
+    container.innerHTML = '<p style="color:gray; text-align:center; margin-top:20px; font-size:0.8rem;">Atualizando lista...</p>';
 
     try {
-        const res = await fetch(`${API_URL}/patrimonio/meu-inventario`, {
+        const localId = localStorage.getItem('local_id');
+        // Rota que busca os últimos itens do local logado
+        const res = await fetch(`${API_URL}/patrimonio/recentes/${localId}`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
-        let itens = await res.json();
+        
+        const bens = await res.json();
 
-        // ORDENAÇÃO MANUAL: Garante que o ID maior (mais recente) fique no topo da lista
-        itens.sort((a, b) => b.id - a.id);
+        if (bens.length === 0) {
+            container.innerHTML = '<p style="color:gray; text-align:center; margin-top:50px;">Nenhum bem cadastrado ainda.</p>';
+            return;
+        }
 
-        // Pegamos apenas os 15 últimos para a lista não ficar infinita
-        const recentes = itens.slice(0, 15);
-
-        container.innerHTML = recentes.map(i => `
-            <div style="padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 0.8rem; color: white; display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.02); margin-bottom: 5px; border-radius: 5px;">
-                <div>
-                    <strong style="color: #60a5fa;">${i.produto_nome}</strong><br>
-                    <span style="opacity: 0.7; font-size: 0.75rem;">Setor: ${i.setor_nome}</span>
+        container.innerHTML = bens.map(b => `
+            <div style="background: rgba(255,255,255,0.03); padding: 10px; border-radius: 8px; margin-bottom: 8px; border: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; align-items: center;">
+                <div style="text-align: left;">
+                    <strong style="color: white; font-size: 0.85rem; display: block;">${b.nome_produto}</strong>
+                    <small style="color: #60a5fa; font-family: monospace;">${b.numero_serie}</small>
                 </div>
                 <div style="text-align: right;">
-                    <span style="font-family: monospace; background: rgba(0,0,0,0.3); padding: 2px 5px; border-radius: 3px;">
-                        ${i.numero_serie || 'S/N'}
-                    </span><br>
-                    <span style="font-size:0.65rem; color:#4ade80;">${i.estado}</span>
+                    <span style="font-size: 0.7rem; color: #aaa;">${new Date(b.data_atualizacao).toLocaleDateString()}</span>
                 </div>
             </div>
-        `).join('') || '<p style="color:gray; text-align:center; margin-top: 20px;">Nenhum bem cadastrado ainda.</p>';
+        `).join('');
 
     } catch (err) {
-        console.error("Erro ao carregar lista lateral:", err);
-        container.innerHTML = '<p style="color:red; text-align:center;">Erro ao atualizar lista.</p>';
+        console.error("Erro ao carregar recentes:", err);
+        container.innerHTML = '<p style="color:#ef4444; text-align:center;">Erro ao carregar lista.</p>';
     }
 }
 
@@ -13238,49 +13237,61 @@ window.alternarLogica2025 = (marcado) => {
 };
 
 async function enviarCadastroComAnexo() {
-    const formData = new FormData();
-    
-    // Captura dos elementos do DOM
+    const btn = document.getElementById('btn-salvar');
     const nome = document.getElementById('cat-nome').value;
     const qtd = document.getElementById('cat-qtd').value;
-    const serieBase = document.getElementById('cat-serie').value; // Aqui está o segredo
-    const setorId = document.getElementById('cat-setor').value;
+    const serie = document.getElementById('cat-serie').value;
+    const setor = document.getElementById('cat-setor').value;
     const nf = document.getElementById('cat-nf').value;
-    const fileInput = document.getElementById('cat-file');
+    const check2025 = document.getElementById('check-2025').checked;
+    const arquivo = document.getElementById('cat-file').files[0];
 
-    if (!nome || !serieBase) {
-        return notificar("Preencha o nome e gere o número de série!", "erro");
-    }
+    if (!nome || !serie) return notificar("Nome e Série são obrigatórios!", "erro");
 
-    formData.append('nome', nome);
+    // Bloqueia o botão para evitar cliques duplos
+    btn.disabled = true;
+    btn.innerHTML = "💾 SALVANDO...";
+
+    const formData = new FormData();
+    formData.append('nome_produto', nome);
     formData.append('quantidade', qtd);
-    formData.append('serie_base', serieBase); // Nome da chave que o backend vai ler
-    formData.append('setor_id', setorId);
-    formData.append('nota_fiscal', nf);
+    formData.append('serie_base', serie);
+    formData.append('setor_id', setor);
     formData.append('local_id', localStorage.getItem('local_id'));
-
-    if (fileInput.files[0]) {
-        formData.append('arquivo', fileInput.files[0]);
-    }
+    formData.append('nota_fiscal', nf);
+    formData.append('adquirido_pos_2025', check2025);
+    if (arquivo) formData.append('arquivo', arquivo);
 
     try {
         const res = await fetch(`${API_URL}/patrimonio/cadastrar`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${TOKEN}` },
-            body: formData // Enviando como FormData por causa do arquivo
+            body: formData
         });
 
         if (res.ok) {
-            notificar("Bens cadastrados com sucesso!");
-            document.getElementById('modal-catalogo-entrada').remove();
+            notificar("✅ Itens cadastrados com sucesso!");
+            
+            // 1. Limpa os campos para o próximo cadastro (opcional, se não quiser fechar o modal)
+            document.getElementById('cat-nome').value = '';
+            document.getElementById('cat-serie').value = '';
+            document.getElementById('cat-qtd').value = '1';
+            
+            // 2. ATUALIZA A LISTA IMEDIATAMENTE NO LADO DIREITO
+            carregarBensRecentesModal();
+            
+            // 3. Opcional: Recarregar a tabela de fundo se ela existir
             if (typeof carregarBensSetor === 'function') carregarBensSetor();
+
         } else {
             const erro = await res.json();
-            notificar("Erro: " + erro.error, "erro");
+            notificar(erro.error || "Erro ao salvar", "erro");
         }
     } catch (err) {
-        console.error(err);
-        notificar("Erro ao conectar com o servidor", "erro");
+        notificar("Erro de conexão com o servidor", "erro");
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = "SALVAR REGISTRO";
     }
 }
 

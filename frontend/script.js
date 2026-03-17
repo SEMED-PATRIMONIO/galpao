@@ -14645,6 +14645,10 @@ async function telaGestaoGlobalPatrimonio() {
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                 <button onclick="abrirMenuPatrimonioAlmoxarifado()" class="btn-sair-vidro">⬅️ VOLTAR</button>
                 <div id="acoes-global" style="display: none; gap: 10px;">
+                    <button id="btn-editar-auditoria" disabled onclick="abrirModalAuditoriaPatrimonio()" 
+                            class="btn-sair-vidro" style="background:#3b82f6; opacity: 0.3; cursor: not-allowed;">
+                        INSERIR Nº PATRIMÔNIO OFICIAL🏷️
+                    </button>                
                     <button onclick="exportarGlobalPDF()" class="btn-sair-vidro" style="background:#dc2626; border:none;">PDF 📄</button>
                     <button onclick="exportarGlobalExcel()" class="btn-sair-vidro" style="background:#16a34a; border:none;">EXCEL 📊</button>
                 </div>
@@ -14727,40 +14731,104 @@ window.selecionarLocalGlobal = async function(id, nome) {
 };
 
 window.selecionarSetorGlobal = async function(setor_id, nome_setor) {
+    // 1. Reset visual dos setores (Mantido)
     document.querySelectorAll('.item-setor-global').forEach(el => el.style.background = 'rgba(255,255,255,0.05)');
-    event.currentTarget.style.background = 'rgba(52, 211, 153, 0.3)';
+    if (event && event.currentTarget) {
+        event.currentTarget.style.background = 'rgba(52, 211, 153, 0.3)';
+    }
 
+    // 2. Preparação dos containers
     document.getElementById('container-bens').style.display = 'flex';
     document.getElementById('txt-setor-selecionado').innerText = `📋 ITENS EM: ${nome_setor}`;
-    document.getElementById('col-bens').innerHTML = '<div class="spinner"></div>';
+    const colBens = document.getElementById('col-bens');
+    colBens.innerHTML = '<div class="spinner"></div>';
+
+    // 3. Reset do botão de auditoria (para não ficar ativo de um setor para outro)
+    const btnAuditoria = document.getElementById('btn-editar-auditoria');
+    if (btnAuditoria) {
+        btnAuditoria.disabled = true;
+        btnAuditoria.style.opacity = '0.3';
+        btnAuditoria.style.cursor = 'not-allowed';
+    }
 
     try {
         const res = await fetch(`${API_URL}/patrimonio/global/bens/${setor_id}`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
         const bens = await res.json();
+        
+        // Guardamos a lista atual para a lógica de "saltar para o próximo"
+        window.listaBensAtual = bens;
 
-        document.getElementById('col-bens').innerHTML = bens.map(b => {
-            // Tooltip com todos os campos (Hover)
+        colBens.innerHTML = bens.map((b, index) => {
+            // Tooltip informativo (Mantido seu Hover)
             const infoHover = `
                 PRODUTO: ${b.nome_produto}
                 SÉRIE: ${b.numero_serie || 'N/A'}
-                PLAQUETA: ${b.documento_id || 'N/A'}
+                PATRIMÔNIO: ${b.patrimonio || 'N/A'}
                 NF: ${b.nota_fiscal || 'N/A'}
                 ESTADO: ${b.estado}
                 CADASTRO: ${new Date(b.data_atualizacao).toLocaleDateString()}
             `.trim();
 
             return `
-                <div class="linha-patrimonio" title="${infoHover}" 
-                     style="padding:12px; border-bottom:1px solid rgba(255,255,255,0.05); cursor:help; display:flex; justify-content:space-between;">
-                    <strong>${b.nome_produto}</strong>
-                    <span style="opacity:0.5; font-size:0.8rem;">${b.numero_serie || 'S/N'}</span>
+                <div class="linha-patrimonio item-bem-auditoria" 
+                     id="bem-row-${index}"
+                     title="${infoHover}"
+                     onclick='selecionarBemParaAuditoria(${index}, ${JSON.stringify(b).replace(/'/g, "&apos;")})'
+                     style="padding:12px; border-bottom:1px solid rgba(255,255,255,0.05); cursor:pointer; display:flex; justify-content:space-between; transition: 0.2s;">
+                    
+                    <div style="text-align:left;">
+                        <strong style="display:block; color:white;">${b.nome_produto}</strong>
+                        <span style="opacity:0.5; font-size:0.75rem;">SÉRIE: ${b.numero_serie || 'S/N'}</span>
+                    </div>
+
+                    <div style="text-align:right; display:flex; flex-direction:column; align-items:flex-end;">
+                        <span style="background:rgba(96, 165, 250, 0.1); color:#60a5fa; padding:2px 8px; border-radius:5px; font-size:0.7rem; font-weight:bold; border:1px solid rgba(96, 165, 250, 0.2);">
+                            ${b.patrimonio || 'S/ ETIQUETA'}
+                        </span>
+                        <small style="opacity:0.3; font-size:0.6rem; margin-top:4px;">ID: #${b.id}</small>
+                    </div>
                 </div>
             `;
-        }).join('') || '<p style="color:gray; font-size:0.8rem;">Setor vazio.</p>';
+        }).join('') || '<p style="color:gray; font-size:0.8rem; text-align:center; margin-top:20px;">Este setor está vazio.</p>';
+
     } catch (err) {
-        console.error(err);
+        console.error("Erro ao carregar bens do setor:", err);
+        colBens.innerHTML = '<p style="color:#ef4444; font-size:0.8rem;">Erro ao carregar dados.</p>';
+    }
+};
+
+window.selecionarBemParaAuditoria = function(index, dadosBem) {
+    // 1. Armazena o estado global da seleção
+    window.bemSelecionadoIndex = index;
+    window.bemSelecionadoDados = dadosBem;
+
+    // 2. Gerenciamento Visual: Remove destaque de todas as linhas e aplica na selecionada
+    document.querySelectorAll('.item-bem-auditoria').forEach(el => {
+        el.style.background = 'transparent';
+        el.style.borderLeft = 'none';
+    });
+
+    const row = document.getElementById(`bem-row-${index}`);
+    if (row) {
+        // Aplica um fundo azul translúcido e uma borda lateral para dar foco
+        row.style.background = 'rgba(59, 130, 246, 0.2)';
+        row.style.borderLeft = '4px solid #60a5fa';
+    }
+
+    // 3. Ativação do Botão de Identificação (O "Gatilho" da Auditoria)
+    const btn = document.getElementById('btn-editar-auditoria');
+    if (btn) {
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        btn.style.cursor = 'pointer';
+        btn.style.background = '#3b82f6'; // Azul vibrante quando ativo
+        btn.style.boxShadow = '0 0 15px rgba(59, 130, 246, 0.4)';
+        
+        // Pequena animação de "pulso" para mostrar que está pronto
+        btn.classList.add('animar-entrada');
+        setTimeout(() => btn.classList.remove('animar-entrada'), 500);
     }
 };
 
@@ -15582,6 +15650,109 @@ async function telaAuditoriaAcessos() {
     } catch (err) {
         console.error("Erro na auditoria:", err);
     }
+}
+
+// Abre o Diálogo Vitrificado de Edição
+function abrirModalAuditoriaPatrimonio() {
+    const b = window.bemSelecionadoDados;
+    const overlay = document.createElement('div');
+    overlay.id = 'modal-auditoria-overlay';
+    overlay.className = 'alerta-vidro-overlay'; // Usa seu padrão de fundo/blur
+
+    overlay.innerHTML = `
+        <div class="painel-vidro animar-entrada" style="width: 450px; padding: 30px; border: 1px solid #60a5fa44;">
+            <h3 style="color:#60a5fa; margin-top:0;">🏷️ VINCULAR PATRIMÔNIO</h3>
+            
+            <div style="text-align:left; background:rgba(0,0,0,0.2); padding:15px; border-radius:10px; margin-bottom:20px; font-size:0.85rem;">
+                <p><strong>BEM:</strong> ${b.nome_produto}</p>
+                <p><strong>Nº SÉRIE:</strong> ${b.numero_serie || '---'}</p>
+                <p><strong>ESTADO:</strong> ${b.estado}</p>
+            </div>
+
+            <label style="display:block; margin-bottom:10px; color:white; font-size:0.9rem;">DIGITE O NÚMERO DO PATRIMÔNIO (ETIQUETA):</label>
+            <input type="text" id="input-novo-patrimonio" class="input-vidro" 
+                   value="${b.patrimonio || ''}" 
+                   style="width:100%; font-size:1.5rem; text-align:center; letter-spacing:2px; margin-bottom:25px;" 
+                   placeholder="000000" autofocus>
+
+            <div style="display:flex; gap:10px;">
+                <button onclick="document.getElementById('modal-auditoria-overlay').remove()" class="btn-sair-vidro" style="flex:1;">CANCELAR</button>
+                <button onclick="confirmarAuditoriaPatrimonio()" style="flex:1; background:#10b981; color:white; border:none; border-radius:10px; font-weight:bold; cursor:pointer;">CONFIRMAR</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+    setTimeout(() => document.getElementById('input-novo-patrimonio').focus(), 100);
+}
+
+// Salva e executa a lógica de salto
+async function confirmarAuditoriaPatrimonio() {
+    const novoPatrimonio = document.getElementById('input-novo-patrimonio').value;
+    const bemId = window.bemSelecionadoDados.id;
+
+    if (!novoPatrimonio) return notificar("Digite o número do patrimônio", "erro");
+
+    try {
+        const res = await fetch(`${API_URL}/patrimonio/auditoria/vincular-etiqueta`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ id: bemId, patrimonio: novoPatrimonio })
+        });
+
+        if (!res.ok) {
+            const erro = await res.json();
+            throw new Error(erro.error);
+        }
+
+        // 1. Fecha o modal de edição
+        document.getElementById('modal-auditoria-overlay').remove();
+
+        // 2. Exibe Alerta Gamificado de 4 segundos
+        exibirAlertaSucessoGamer();
+
+        // 3. Atualiza a lista visualmente (sem recarregar tudo)
+        const rowIndex = window.bemSelecionadoIndex;
+        document.getElementById(`bem-row-${rowIndex}`).querySelector('span').innerText = novoPatrimonio;
+        document.getElementById(`bem-row-${rowIndex}`).style.background = 'rgba(16, 185, 129, 0.1)';
+
+        // 4. Lógica de Salto para o Próximo
+        const proximoIndex = rowIndex + 1;
+        const proximaLinha = document.getElementById(`bem-row-${proximoIndex}`);
+
+        // Reseta seleção e desativa botão
+        const btn = document.getElementById('btn-editar-auditoria');
+        btn.disabled = true;
+        btn.style.opacity = '0.3';
+        btn.style.cursor = 'not-allowed';
+
+        if (proximaLinha) {
+            proximaLinha.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            // Dá um leve brilho na próxima linha para indicar onde o usuário parou
+            proximaLinha.style.border = '1px solid #60a5fa88';
+            setTimeout(() => proximaLinha.style.border = 'none', 2000);
+        }
+
+    } catch (err) {
+        notificar(err.message, "erro");
+    }
+}
+
+function exibirAlertaSucessoGamer() {
+    const alerta = document.createElement('div');
+    alerta.style.cssText = `
+        position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+        background: rgba(16, 185, 129, 0.9); backdrop-filter: blur(15px);
+        padding: 40px; border-radius: 20px; z-index: 11000; text-align: center;
+        border: 2px solid #4ade80; box-shadow: 0 0 50px rgba(74, 222, 128, 0.5);
+        animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    `;
+    alerta.innerHTML = `
+        <div style="font-size: 5rem; margin-bottom: 10px;">✅</div>
+        <h2 style="color:white; margin:0; letter-spacing:3px;">SALVO COM SUCESSO!</h2>
+        <p style="color:white; opacity:0.8;">Posicionando próximo item...</p>
+    `;
+    document.body.appendChild(alerta);
+    setTimeout(() => { alerta.style.opacity = '0'; setTimeout(() => alerta.remove(), 500); }, 4000);
 }
 
 // Isso garante que o onclick="funcao()" funcione sempre

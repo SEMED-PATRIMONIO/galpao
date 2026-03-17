@@ -5578,4 +5578,35 @@ router.put('/patrimonio/auditoria/vincular-etiqueta', verificarToken, async (req
     }
 });
 
+router.get('/patrimonio/proximo-numero/:prefixo/:ano', verificarToken, async (req, res) => {
+    const { prefixo, ano } = req.params;
+
+    try {
+        // Busca o maior número de série que comece com o prefixo E o ano atual
+        // Exemplo de busca: 'CL-25-%'
+        const result = await db.query(
+            "SELECT numero_serie FROM patrimonios WHERE numero_serie LIKE $1 ORDER BY id DESC LIMIT 1",
+            [`${prefixo}-${ano}-%`]
+        );
+
+        let proximoNumero = 1;
+
+        if (result.rows.length > 0) {
+            const ultimoSerie = result.rows[0].numero_serie;
+            const partes = ultimoSerie.split('-'); 
+            
+            // Partes: [0]Prefixo, [1]Ano, [2]Sequência
+            if (partes.length === 3) {
+                proximoNumero = parseInt(partes[2]) + 1;
+            }
+        }
+
+        // Se result.rows for 0 (porque o ano mudou), proximoNumero continuará sendo 1
+        res.json({ proximo: proximoNumero });
+    } catch (err) {
+        console.error("Erro ao gerar sequência:", err.message);
+        res.status(500).json({ error: "Erro interno no servidor." });
+    }
+});
+
 module.exports = router;

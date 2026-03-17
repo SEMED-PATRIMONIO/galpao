@@ -5580,26 +5580,22 @@ router.put('/patrimonio/auditoria/vincular-etiqueta', verificarToken, async (req
 
 router.get('/patrimonio/proximo-numero/:prefixo/:ano', verificarToken, async (req, res) => {
     const { prefixo, ano } = req.params;
-
     try {
-        // Ordenar pelo numero_serie garante que pegamos o maior valor alfanumérico disponível
+        // Buscamos o último número de série gerado para este local e ano
         const result = await db.query(
             "SELECT numero_serie FROM patrimonios WHERE numero_serie LIKE $1 ORDER BY numero_serie DESC LIMIT 1",
             [`${prefixo}-${ano}-%`]
         );
 
         let proximoNumero = 1;
-
         if (result.rows.length > 0) {
             const ultimoSerie = result.rows[0].numero_serie;
             const partes = ultimoSerie.split('-'); 
-            
-            // Se o formato for PREFIXO-ANO-SEQUENCIA, partes[2] contém o número
             if (partes.length === 3) {
+                // Pega a parte numérica e soma 1
                 proximoNumero = parseInt(partes[2], 10) + 1;
             }
         }
-
         res.json({ proximo: proximoNumero });
     } catch (err) {
         console.error("Erro ao gerar sequência:", err.message);
@@ -5607,30 +5603,39 @@ router.get('/patrimonio/proximo-numero/:prefixo/:ano', verificarToken, async (re
     }
 });
 
-router.post('/patrimonio/cadastrar', verificarToken, async (req, res) => {
-    // Pegamos os dados vindos do FormData
-    const { nome, quantidade, setor_id, local_id, serie_base, nota_fiscal } = req.body;
+// Rota no seu arquivo de patrimônio (Backend)
+// Supondo que você usa multer com: upload.single('arquivo')
+// Rota de Cadastro Completa (Sem reticências, com todas as colunas)
+router.post('/patrimonio/cadastrar', verificarToken, upload.single('arquivo'), async (req, res) => {
+    const { 
+        nome_produto, 
+        quantidade, 
+        serie_base, 
+        setor_id, 
+        local_id, 
+        nota_fiscal, 
+        adquirido_pos_2025 
+    } = req.body;
+
+    const url_nota_fiscal = req.file ? req.file.filename : null;
     const qtd = parseInt(quantidade, 10) || 1;
 
     try {
-        // 1. Tratamento da String de Série
-        // Se serie_base for "CL-26-0001 a 0005", pegamos apenas "CL-26-0001"
-        const parteInicial = serie_base.split(' ')[0]; 
-        const segmentos = parteInicial.split('-'); // ["CL", "26", "0001"]
+        // 1. Extrair a base do número de série (ex: CL-25-0001)
+        const parteSérie = serie_base.split(' ')[0]; 
+        const segmentos = parteSérie.split('-'); 
         
         if (segmentos.length !== 3) {
-            throw new Error("Formato de série inválido: " + serie_base);
+            return res.status(400).json({ error: "Formato de série inválido." });
         }
 
         const prefixo = segmentos[0];
         const ano = segmentos[1];
-        let numeroSequencial = parseInt(segmentos[2], 10);
+        let numSequencial = parseInt(segmentos[2], 10);
 
-        // 2. Loop de Inserção Individual
+        // 2. Loop de Inserção Individual (O segredo do Lote)
         for (let i = 0; i < qtd; i++) {
-            // Monta o número de série único para este item do lote
-            // Ex: i=0 -> 0001, i=1 -> 0002...
-            const serieUnica = `${prefixo}-${ano}-${String(numeroSequencial).padStart(4, '0')}`;
+            const serieUnica = `${prefixo}-${ano}-${String(numSequencial).padStart(4, '0')}`;
             
             await db.query(
                 `INSERT INTO patrimonios (
@@ -5638,28 +5643,47 @@ router.post('/patrimonio/cadastrar', verificarToken, async (req, res) => {
                     numero_serie, 
                     setor_id, 
                     local_id, 
-                    nota_fiscal,
-                    estado,
+                    nota_fiscal, 
+                    url_nota_fiscal, 
+                    estado, 
+                    adquirido_pos_2025,
                     data_atualizacao
-                ) VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())`,
                 [
-                    nome, 
+                    nome_produto, 
                     serieUnica, 
                     setor_id, 
                     local_id, 
-                    nota_fiscal || null,
-                    'BOM' // Estado padrão inicial
+                    nota_fiscal || null, 
+                    url_nota_fiscal, 
+                    'BOM', 
+                    adquirido_pos_2025 === 'true'
                 ]
             );
-
-            numeroSequencial++; // Incrementa o número para o próximo registro
+            numSequencial++; 
         }
 
-        res.json({ success: true, message: `${qtd} bens registrados.` });
+        res.json({ success: true, message: `${qtd} item(ns) cadastrado(s) com sucesso!` });
 
     } catch (err) {
-        console.error("Erro no cadastro em lote:", err.message);
-        res.status(500).json({ error: "Falha ao gravar registros: " + err.message });
+        console.error("Erro no cadastro:", err);
+        res.status(500).json({ error: "Falha ao gravar registro(s): " + err.message });
+    }
+});
+
+router.get('/patrimonio/recentes/:local_id', verificarToken, async (req, res) => {
+    const { local_id } = req.params;
+    try {
+        const result = await db.query(
+            `SELECT nome_produto, numero_serie, data_atualizacao 
+             FROM patrimonios 
+             WHERE local_id = $1 
+             ORDER BY id DESC LIMIT 15`, 
+            [local_id]
+        );
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
     }
 });
 

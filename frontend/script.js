@@ -12810,20 +12810,22 @@ async function gerarNumeroSerieAutomatico() {
     const nomeInput = document.getElementById('cat-nome').value;
     const serieInput = document.getElementById('cat-serie');
     
-    // Só gera se houver digitação e se o campo ainda estiver vazio ou for auto-gerado
     if (nomeInput.trim().length > 0 && !serieInput.value.includes('-')) {
         const localId = localStorage.getItem('local_id');
         const prefixo = PREFIXOS_LOCAIS[localId] || "XX";
+        
+        // Obtém os 2 últimos dígitos do ano atual (ex: 2025 -> 25)
+        const anoAtual = new Date().getFullYear().toString().slice(-2);
 
         try {
-            // Busca o próximo número sequencial para este prefixo na API
-            const res = await fetch(`${API_URL}/patrimonio/proximo-numero/${prefixo}`, {
+            // Enviamos o prefixo e o ano para a API
+            const res = await fetch(`${API_URL}/patrimonio/proximo-numero/${prefixo}/${anoAtual}`, {
                 headers: { 'Authorization': `Bearer ${TOKEN}` }
             });
             const data = await res.json();
             
-            // Ex: CL-000001
-            serieInput.value = `${prefixo}-${String(data.proximo).padStart(6, '0')}`;
+            // Formato final: PREFIXO-ANO-SEQUENCIA (Ex: CL-25-0001)
+            serieInput.value = `${prefixo}-${anoAtual}-${String(data.proximo).padStart(4, '0')}`;
         } catch (err) {
             console.error("Erro ao gerar série automática:", err);
         }
@@ -13382,7 +13384,6 @@ async function telaPatrimonioConsultaEscola2() {
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
                 <div style="display: flex; align-items: center; gap: 15px;">
                     <button onclick="abrirMenuPatrimonioAlmoxarifado()" class="btn-sair-vidro">⬅️ VOLTAR</button>
-                    <h1 style="margin:0; font-size: 1.5rem;">📦 Inventário de Bens</h1>
                 </div>
                 <div style="text-align: right; opacity: 0.7; font-size: 0.75rem;">
                     Unidade: ${localStorage.getItem('nome') || 'Escola Logada'}<br>
@@ -13574,10 +13575,10 @@ function renderizarTabela(dados) {
     const legendaHtml = `
         <div style="display: flex; gap: 20px; margin-bottom: 15px; padding: 10px; background: rgba(0, 0, 0, 0.2); border-radius: 8px; flex-wrap: wrap; border: 1px solid rgba(255,255,255,0.05);">
             <div style="display:flex; align-items:center; gap:8px; font-size:0.75rem; color:#4ade80; font-weight:bold;">
-                <span style="font-size: 1.2rem;">●</span> PATRIMONIADO (Possui Nº Série)
+                <span style="font-size: 1.2rem;">●</span> PATRIMONIADO
             </div>
             <div style="display:flex; align-items:center; gap:8px; font-size:0.75rem; color:#fbbf24; font-weight:bold;">
-                <span style="font-size: 1.2rem;">●</span> NÃO-PATRIMONIADO (Ajustar Nº Série)
+                <span style="font-size: 1.2rem;">●</span> PENDENTE DE PATRIMONIALIZAÇÃO
             </div>
         </div>
     `;
@@ -13589,7 +13590,8 @@ function renderizarTabela(dados) {
                     <tr style="text-align:left; border-bottom: 2px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.02);">
                         <th style="padding:10px 12px; width: 50px;">ID</th>
                         <th style="padding:10px 12px;">DESCRIÇÃO DO BEM</th>
-                        <th style="padding:10px 12px;">Nº PATRIMÔNIO / SÉRIE</th>
+                        <th style="padding:10px 12px;">Nº PATRIMÔNIO</th>
+                        <th style="padding:10px 12px; color: #60a5fa;">Nº RGP</th>
                         <th style="padding:10px 12px;">CONSERVAÇÃO</th>
                         <th style="padding:10px 12px;">NF / CE</th>
                         <th style="padding:10px 12px;">CADASTRO</th>
@@ -13634,7 +13636,9 @@ function renderizarTabela(dados) {
                                 <td style="padding:6px 12px; font-family: 'Courier New', monospace; letter-spacing: 1px;">
                                     ${temSerie ? i.numero_serie : '<span style="opacity:0.2;">---------</span>'}
                                 </td>
-                                
+                                <td style="padding:6px 12px; font-weight: bold; color: #60a5fa;">
+                                    ${i.patrimonio || '<span style="opacity:0.2;">---</span>'}
+                                </td>
                                 <td style="padding:6px 12px;">
                                     <span style="display:inline-flex; align-items:center; gap:5px; background:rgba(0,0,0,0.3); padding:2px 8px; border-radius:12px; font-size:0.7rem; color:${corPonto}; border: 1px solid ${corPonto}44;">
                                         ● ${i.estado}
@@ -13695,7 +13699,8 @@ window.detalharPatrimonio = async function(id) {
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; color: white;">
                     <div>
                         <p><small style="color:#60a5fa;">SETOR:</small><br><strong>${item.nome_setor}</strong></p>
-                        <p><small style="color:#60a5fa;">SÉRIE / PLAQUETA:</small><br><strong>${item.numero_serie || '---'}</strong></p>
+                        <p><small style="color:#60a5fa;">Nº PATRIMÔNIO:</small><br><strong>${item.numero_serie || '---'}</strong></p>
+                        <p><small style="color:#60a5fa;">Nº RGP:</small><br><strong>${item.patrimonio || '---'}</strong></p>
                         <p><small style="color:#60a5fa;">NOTA FISCAL:</small><br><strong>${item.nota_fiscal || '---'}</strong></p>
                         <p><small style="color:#60a5fa;">ESTADO:</small><br><strong style="color:${item.estado === 'BOM' ? '#4ade80' : '#f87171'}">${item.estado}</strong></p>
                     </div>
@@ -13736,7 +13741,7 @@ function gerarRelatorioPDF(nomeSetor) {
         headStyles: { fillColor: [30, 58, 138] },
         columns: [
             { header: 'DESCRIÇÃO', dataKey: '0' },
-            { header: 'Nº SÉRIE', dataKey: '1' },
+            { header: 'PATRIMÔNIO', dataKey: '1' },
             { header: 'ESTADO', dataKey: '2' }
         ]
     });
@@ -13771,7 +13776,7 @@ function gerarPDFInventario(nomeSetor) {
         headStyles: { fillColor: [30, 58, 138] }, // Cor azul marinho
         columns: [
             { header: 'PRODUTO', dataKey: 'produto' },
-            { header: 'Nº SÉRIE', dataKey: 'serie' },
+            { header: 'PATRIMÔNIO', dataKey: 'serie' },
             { header: 'ESTADO', dataKey: 'estado' },
             { header: 'NOTA FISCAL', dataKey: 'nf' }
         ]

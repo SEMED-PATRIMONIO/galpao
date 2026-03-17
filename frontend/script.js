@@ -8709,36 +8709,282 @@ async function telaLogisticaColeta() {
 }
 
 window.iniciarTransporteRemessa = async function(remessaId) {
-    console.log("Botão clicado para remessa:", remessaId);
-
-    if (!confirm(`Deseja iniciar o transporte da remessa #${remessaId}?`)) return;
+    console.log("Iniciando processo de romaneio para remessa:", remessaId);
 
     try {
-        const res = await fetch(`${API_URL}/pedidos/remessa/${remessaId}/status`, {
-            method: 'PATCH',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${TOKEN}`
-            },
-            body: JSON.stringify({ novoStatus: 'EM_TRANSPORTE' })
+        // Busca os dados consolidados para o documento
+        const res = await fetch(`${API_URL}/pedidos/remessa/${remessaId}/detalhes-romaneio`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
+        if (!res.ok) throw new Error("Erro ao carregar dados do romaneio.");
+        const dados = await res.json();
 
-        if (res.ok) {
-            notificar("🚚 Transporte iniciado!");
-            // IMPORTANTE: Chama a função que desenha a tela de logística novamente
-            // Isso fará a remessa sumir da lista (pois o status mudou)
-            if (typeof telaLogisticaEntrega === 'function') {
-                telaLogisticaEntrega(); 
-            }
-        } else {
-            const erro = await res.json();
-            notificar("Erro: " + erro.error);
-        }
+        // Abre o Modal com o Documento A4 Paisagem
+        gerarModalRomaneioA4(remessaId, dados);
+
     } catch (err) {
         console.error(err);
-        notificar("Falha ao conectar com o servidor.");
+        notificar("Falha ao preparar documento.", "erro");
     }
 };
+
+function gerarModalRomaneioA4(remessaId, dados) {
+    const overlay = document.createElement('div');
+    overlay.id = 'modal-romaneio-logistica';
+    overlay.className = 'alerta-vidro-overlay';
+    
+    // Agrupamento de itens por Produto para criar a grade visual
+    const itensAgrupados = {};
+    dados.itens.forEach(item => {
+        if (!itensAgrupados[item.produto]) {
+            itensAgrupados[item.produto] = { categoria: item.categoria, tamanhos: {} };
+        }
+        itensAgrupados[item.produto].tamanhos[item.tamanho] = item.quantidade_enviada;
+    });
+
+    overlay.innerHTML = `
+        <div class="painel-vidro" style="width: 98vw; height: 98vh; display: flex; flex-direction: column; padding: 15px; overflow: hidden;">
+            
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 8px;">
+                <div style="color:white; font-weight:bold;">📄 PRÉ-VISUALIZAÇÃO DO ROMANEIO (A4 PAISAGEM)</div>
+                <div style="display: flex; gap: 8px;">
+                    <button onclick="exportarRomaneioPDF()" class="btn-sair-vidro" style="background:#ef4444; border:none;">PDF 📄</button>
+                    <button onclick="exportarRomaneioExcel()" class="btn-sair-vidro" style="background:#16a34a; border:none;">EXCEL 📊</button>
+                    <button onclick="compartilharRomaneio(${remessaId})" class="btn-sair-vidro" style="background:#3b82f6; border:none;">WHATSAPP 🟢</button>
+                    <button onclick="efetivarSaidaTransporte(${remessaId})" style="background:#10b981; color:white; border:none; padding:8px 20px; border-radius:8px; font-weight:bold; cursor:pointer;">CONFIRMAR CARREGAMENTO ✅</button>
+                    <button onclick="document.getElementById('modal-romaneio-logistica').remove()" class="btn-sair-vidro">FECHAR</button>
+                </div>
+            </div>
+
+            <div id="scroll-documento" style="flex: 1; overflow: auto; background: #333; padding: 20px; display: flex; justify-content: center;">
+                
+                <div id="documento-a4-print" style="width: 297mm; min-height: 210mm; background: white; padding: 10mm; color: black; font-family: 'Segoe UI', Arial; box-shadow: 0 0 30px rgba(0,0,0,0.5); position: relative;">
+                    
+                    <div style="display: flex; justify-content: space-between; border-bottom: 2px solid black; padding-bottom: 10px;">
+                        <img src="braque.png" style="height: 50px;">
+                        <div style="text-align: right;">
+                            <h2 style="margin:0; font-size: 14pt;">ROMANEIO DE CARGA / GUIA DE REMESSA</h2>
+                            <p style="margin:0; font-size: 10pt;">Remessa: <strong>#${remessaId}</strong> | Pedido: #${dados.pedido_id}</p>
+                            <p style="margin:0; font-size: 9pt;">Emissão: ${new Date().toLocaleString()}</p>
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin: 15px 0; font-size: 9pt; background: #f0f0f0; padding: 10px; border: 1px solid #ccc;">
+                        <div><strong>DESTINO:</strong><br>${dados.destino}</div>
+                        <div><strong>MOTORISTA:</strong><br>${dados.motorista_nome || 'NÃO INFORMADO'}</div>
+                        <div><strong>PLACA / VEÍCULO:</strong><br>${dados.veiculo_placa || '---'}</div>
+                    </div>
+
+                    <table style="width: 100%; border-collapse: collapse; font-size: 8.5pt;">
+                        <thead>
+                            <tr style="background: #333; color: white;">
+                                <th style="border: 1px solid #000; padding: 6px; text-align: left;">PRODUTO / DESCRIÇÃO</th>
+                                <th style="border: 1px solid #000; padding: 6px; text-align: center;">CATEGORIA</th>
+                                <th style="border: 1px solid #000; padding: 6px; text-align: center;">GRADE DE TAMANHOS / QUANTIDADES</th>
+                                <th style="border: 1px solid #000; padding: 6px; text-align: center; width: 60px;">TOTAL</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${Object.keys(itensAgrupados).map(nome => {
+                                const item = itensAgrupados[nome];
+                                let totalLinha = 0;
+                                // Monta a string da grade (Ex: P:2, M:4)
+                                const gradeTexto = Object.entries(item.tamanhos).map(([tam, qtd]) => {
+                                    totalLinha += qtd;
+                                    return `<span style="border: 1px solid #ddd; padding: 2px 5px; margin: 0 2px;">${tam}: <strong>${qtd}</strong></span>`;
+                                }).join(' ');
+
+                                return `
+                                    <tr>
+                                        <td style="border: 1px solid #000; padding: 6px; font-weight:bold;">${nome}</td>
+                                        <td style="border: 1px solid #000; padding: 6px; text-align: center;">${item.categoria || '---'}</td>
+                                        <td style="border: 1px solid #000; padding: 6px; text-align: center;">${gradeTexto}</td>
+                                        <td style="border: 1px solid #000; padding: 6px; text-align: center; background: #f9f9f9;"><strong>${totalLinha}</strong></td>
+                                    </tr>
+                                `;
+                            }).join('')}
+                        </tbody>
+                    </table>
+
+                    <div style="margin-top: 15px; font-size: 9pt;">
+                        <strong>Total de Volumes:</strong> ${dados.volumes || '---'}
+                    </div>
+
+                    <div style="position: absolute; bottom: 10mm; left: 10mm; right: 10mm; display: flex; gap: 50px;">
+                        <div style="flex: 1; border-top: 1px solid black; text-align: center; padding-top: 5px;">
+                            <p style="font-size: 8pt; margin:0;">Data de Recebimento</p>
+                            <p style="font-size: 10pt; margin: 5px 0;">____/____/________</p>
+                        </div>
+                        <div style="flex: 2; border-top: 1px solid black; text-align: center; padding-top: 5px;">
+                            <p style="font-size: 8pt; margin:0;">Assinatura do Responsável pelo Recebimento (Nome Legível / Carimbo)</p>
+                            <div style="height: 30px;"></div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+}
+
+async function efetivarSaidaTransporte(remessaId) {
+    if (!confirm("Confirmar a saída dos itens e atualização do estoque em trânsito?")) return;
+
+    const res = await fetch(`${API_URL}/pedidos/remessa/${remessaId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+        body: JSON.stringify({ novoStatus: 'EM_TRANSPORTE' })
+    });
+
+    if (res.ok) {
+        notificar("🚚 Sucesso! Transporte iniciado.");
+        document.getElementById('modal-romaneio-logistica').remove();
+        if (typeof telaLogisticaEntrega === 'function') telaLogisticaEntrega();
+    }
+}
+
+function abrirModalRomaneioA4(remessaId, dados) {
+    const overlay = document.createElement('div');
+    overlay.id = 'modal-romaneio-overlay';
+    overlay.className = 'alerta-vidro-overlay';
+    overlay.style.zIndex = '10000';
+
+    overlay.innerHTML = `
+        <div class="painel-vidro animar-entrada" style="width: 95vw; height: 95vh; display: flex; flex-direction: column; padding: 20px;">
+            
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 10px;">
+                <div style="color: white; font-weight: bold;">📋 ROMANEIO DE CARGA - REMESSA #${remessaId}</div>
+                <div style="display: flex; gap: 10px;">
+                    <button onclick="exportarRomaneioPDF(${remessaId})" class="btn-sair-vidro" style="background:#ef4444; border:none;">PDF 📄</button>
+                    <button onclick="exportarRomaneioExcel(${remessaId})" class="btn-sair-vidro" style="background:#16a34a; border:none;">EXCEL 📊</button>
+                    <button onclick="compartilharRomaneio(${remessaId})" class="btn-sair-vidro" style="background:#3b82f6; border:none;">COMPARTILHAR 🔗</button>
+                    <button id="btn-confirmar-logistica" onclick="confirmarEFinalizarTransporte(${remessaId})" class="btn-sair-vidro" style="background:#10b981; border:none; font-weight:bold;">CONFIRMAR E SAIR ✅</button>
+                </div>
+            </div>
+
+            <div id="container-a4-landscape" style="flex: 1; overflow: auto; display: flex; justify-content: center; background: #525659; padding: 20px; border-radius: 8px;">
+                
+                <div id="romaneio-documento" style="width: 297mm; min-height: 210mm; background: white; padding: 10mm; box-shadow: 0 0 20px rgba(0,0,0,0.5); color: black; font-family: Arial, sans-serif; position: relative;">
+                    
+                    <div style="display: flex; justify-content: space-between; align-items: start; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 10px;">
+                        <img src="braque.png" style="height: 60px;">
+                        <div style="text-align: right;">
+                            <h1 style="margin: 0; font-size: 18pt;">GUIA DE REMESSA / ROMANEIO</h1>
+                            <p style="margin: 0; font-size: 10pt;">Remessa: <strong>#${remessaId}</strong> | Data: ${new Date().toLocaleDateString()}</p>
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 15px; font-size: 10pt; background: #f3f4f6; padding: 10px; border-radius: 5px;">
+                        <div>
+                            <strong>ORIGEM:</strong> ${dados.origem_nome || 'ALMOXARIFADO CENTRAL'}<br>
+                            <strong>DESTINO:</strong> ${dados.destino_nome || 'UNIDADE ESCOLAR'}
+                        </div>
+                        <div>
+                            <strong>RESPONSÁVEL:</strong> ${dados.usuario_envio || 'SISTEMA'}<br>
+                            <strong>TOTAL DE ITENS:</strong> ${dados.total_itens || 0}
+                        </div>
+                    </div>
+
+                    <table style="width: 100%; border-collapse: collapse; font-size: 9pt;">
+                        <thead>
+                            <tr style="background: #e5e7eb;">
+                                <th style="border: 1px solid #000; padding: 5px; text-align: left;">DESCRIÇÃO DO PRODUTO</th>
+                                <th style="border: 1px solid #000; padding: 5px; text-align: center;">GRADE/TAMANHO</th>
+                                <th style="border: 1px solid #000; padding: 5px; text-align: center;">QTD</th>
+                                <th style="border: 1px solid #000; padding: 5px; text-align: center;">SÉRIE / PATRIMÔNIO</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${dados.itens.map(item => `
+                                <tr>
+                                    <td style="border: 1px solid #000; padding: 5px;">${item.produto_nome}</td>
+                                    <td style="border: 1px solid #000; padding: 5px; text-align: center;">${item.grade || '---'}</td>
+                                    <td style="border: 1px solid #000; padding: 5px; text-align: center;"><strong>${item.quantidade}</strong></td>
+                                    <td style="border: 1px solid #000; padding: 5px; font-size: 8pt;">${item.numeros_serie || '---'}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+
+                    <div style="position: absolute; bottom: 10mm; left: 10mm; right: 10mm; display: grid; grid-template-columns: 1fr 2fr; gap: 40px; border-top: 1px solid #ccc; padding-top: 15px;">
+                        <div>
+                            <p style="font-size: 9pt; margin-bottom: 20px;">Data de Recebimento:</p>
+                            <div style="border-bottom: 1px solid #000; width: 100%; height: 20px;"></div>
+                        </div>
+                        <div>
+                            <p style="font-size: 9pt; margin-bottom: 20px;">Assinatura do Responsável pelo Recebimento:</p>
+                            <div style="border-bottom: 1px solid #000; width: 100%; height: 20px;"></div>
+                            <p style="font-size: 7pt; text-align: center; margin-top: 5px; opacity: 0.6;">(Uso obrigatório de carimbo ou nome legível)</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+}
+
+async function compartilharRomaneio(remessaId) {
+    if (navigator.share) {
+        try {
+            await navigator.share({
+                title: 'Romaneio de Carga - Braque Logistics',
+                text: `Segue romaneio da Remessa #${remessaId} para conferência.`,
+                url: window.location.href // Ou o link do PDF se estiver em nuvem
+            });
+        } catch (err) {
+            console.log("Erro ao compartilhar:", err);
+        }
+    } else {
+        notificar("Seu navegador não suporta compartilhamento direto.", "erro");
+    }
+}
+
+async function confirmarEFinalizarTransporte(remessaId) {
+    if (confirm("Confirmar o carregamento e saída desta remessa?")) {
+        const sucesso = await efetivarInicioTransporte(remessaId);
+        if (sucesso) {
+            document.getElementById('modal-romaneio-overlay').remove();
+        }
+    }
+}
+
+function exportarRomaneioPDF() {
+    const element = document.getElementById('documento-a4-print');
+    const opt = {
+        margin: 0,
+        filename: 'Romaneio_Carga.pdf',
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2 },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
+    };
+    html2pdf().set(opt).from(element).save();
+}
+
+// Compartilhamento (WhatsApp exemplo)
+function compartilharRomaneio(id) {
+    const texto = `Olá, segue aviso de transporte da Remessa #${id}. O documento oficial de romaneio foi gerado e está disponível no sistema.`;
+    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(texto)}`, '_blank');
+}
+
+async function efetivarInicioTransporte(remessaId) {
+    const res = await fetch(`${API_URL}/pedidos/remessa/${remessaId}/status`, {
+        method: 'PATCH',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${TOKEN}`
+        },
+        body: JSON.stringify({ novoStatus: 'EM_TRANSPORTE' })
+    });
+
+    if (res.ok) {
+        notificar("🚚 Transporte iniciado e status atualizado!");
+        if (typeof telaLogisticaEntrega === 'function') telaLogisticaEntrega();
+        return true;
+    }
+    return false;
+}
 
 async function telaEscolaConfirmarRecebimento() {
     const container = document.getElementById('app-content');
@@ -12732,7 +12978,6 @@ async function telaPatrimonioEscolaCatalogo() {
 
     modal.innerHTML = `
         <div class="painel-vidro" style="width: 1150px; height: 620px; display: flex; gap: 20px; padding: 25px; border: 1px solid rgba(255,255,255,0.2); overflow: hidden;">
-            
             <div style="flex: 1; display: flex; flex-direction: column; gap: 15px;">
                 <h2 style="color:white; margin:0 0 10px 0;">📝 NOVO BEM</h2>
                 
@@ -12758,7 +13003,7 @@ async function telaPatrimonioEscolaCatalogo() {
                         </div>
                         <div>
                             <label style="color:white; font-size:0.8rem;">QUANTIDADE:</label>
-                            <input type="number" id="cat-qtd" value="1" min="1" class="input-vidro">
+                            <input type="number" id="cat-qtd" value="1" min="1" class="input-vidro" oninput="gerarNumeroSerieAutomatico()">
                         </div>
                     </div>
 
@@ -12809,30 +13054,42 @@ async function telaPatrimonioEscolaCatalogo() {
 async function gerarNumeroSerieAutomatico() {
     const nomeInput = document.getElementById('cat-nome').value;
     const serieInput = document.getElementById('cat-serie');
-    
-    if (nomeInput.trim().length > 0 && !serieInput.value.includes('-')) {
+    const qtdInput = document.getElementById('cat-qtd').value || 1;
+    const qtd = parseInt(qtdInput);
+
+    // Só gera se houver nome digitado
+    if (nomeInput.trim().length > 0) {
         const localId = localStorage.getItem('local_id');
         const prefixo = PREFIXOS_LOCAIS[localId] || "XX";
-        
-        // Obtém os 2 últimos dígitos do ano atual (ex: 2025 -> 25)
         const anoAtual = new Date().getFullYear().toString().slice(-2);
 
         try {
-            // Enviamos o prefixo e o ano para a API
             const res = await fetch(`${API_URL}/patrimonio/proximo-numero/${prefixo}/${anoAtual}`, {
                 headers: { 'Authorization': `Bearer ${TOKEN}` }
             });
             const data = await res.json();
-            
-            // Formato final: PREFIXO-ANO-SEQUENCIA (Ex: CL-25-0001)
-            serieInput.value = `${prefixo}-${anoAtual}-${String(data.proximo).padStart(4, '0')}`;
+            const inicio = data.proximo;
+
+            if (qtd <= 1) {
+                // Formato normal para um único bem
+                serieInput.value = `${prefixo}-${anoAtual}-${String(inicio).padStart(4, '0')}`;
+            } else {
+                // Formato de intervalo para múltiplos bens
+                const fim = inicio + (qtd - 1);
+                const prefixoComAno = `${prefixo}-${anoAtual}`;
+                serieInput.value = `${prefixoComAno}-${String(inicio).padStart(4, '0')} a ${String(fim).padStart(4, '0')}`;
+            }
         } catch (err) {
             console.error("Erro ao gerar série automática:", err);
+            serieInput.value = "Erro ao gerar";
         }
+    } else {
+        // Limpa o campo se o nome for apagado
+        serieInput.value = "";
     }
 }
 
-async function telaPatrimonioEscolaCatalogo2() {
+async function telaPatrimonioEscolaCatalogo() {
     const modal = document.createElement('div');
     modal.id = 'modal-catalogo-entrada';
     modal.className = 'alerta-vidro-overlay';
@@ -12844,7 +13101,6 @@ async function telaPatrimonioEscolaCatalogo2() {
 
     modal.innerHTML = `
         <div class="painel-vidro" style="width: 1150px; height: 620px; display: flex; gap: 20px; padding: 25px; border: 1px solid rgba(255,255,255,0.2); overflow: hidden;">
-            
             <div style="flex: 1; display: flex; flex-direction: column; gap: 15px;">
                 <h2 style="color:white; margin:0 0 10px 0;">📝 NOVO BEM</h2>
                 
@@ -12870,17 +13126,17 @@ async function telaPatrimonioEscolaCatalogo2() {
                         </div>
                         <div>
                             <label style="color:white; font-size:0.8rem;">QUANTIDADE:</label>
-                            <input type="number" id="cat-qtd" value="1" min="1" class="input-vidro">
+                            <input type="number" id="cat-qtd" value="1" min="1" class="input-vidro" oninput="gerarNumeroSerieAutomatico()">
                         </div>
                     </div>
 
                     <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:12px; margin-bottom: 12px;">
                         <div>
-                            <label id="label-serie" style="color:white; font-size:0.8rem;">Nº PATRIMÔNIO VIRTUAL:</label>
+                            <label id="label-serie" style="color:white; font-size:0.8rem;">PATRIMÔNIO VIRTUAL:</label>
                             <input type="text" id="cat-serie" class="input-vidro" placeholder="Auto-gerado" readonly style="background: rgba(255,255,255,0.05); cursor: not-allowed;">
                         </div>
                         <div>
-                            <label style="color:white; font-size:0.8rem;">Nº PATRIMÔNIO OFICIAL:</label>
+                            <label style="color:white; font-size:0.8rem;">PATRIMÔNIO OFICIAL:</label>
                             <input type="text" id="cat-patrimonio" class="input-vidro" placeholder="Pendente" readonly style="background: rgba(255,255,255,0.05); cursor: not-allowed; opacity: 0.6;">
                         </div>
                         <div>

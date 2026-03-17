@@ -1,6 +1,14 @@
 const API_URL = 'https://patrimoniosemed.paiva.api.br';
 let TOKEN = localStorage.getItem('token');
 const tokenParaUso = localStorage.getItem('token');
+// Mapeamento extraído do PDF de Nomenclatura 
+const PREFIXOS_LOCAIS = {
+    1:"CL", 2:"IG", 3:"VF", 4:"GO", 5:"AK", 6:"CN", 7:"CC", 8:"FB", 9:"ET", 10:"JR",
+    11:"JO", 12:"JA", 13:"LC", 14:"MQ", 15:"ML", 16:"OW", 17:"PF", 18:"AG", 19:"AP", 20:"GF",
+    21:"JF", 22:"LM", 23:"SS", 24:"UF", 25:"WS", 26:"MP", 27:"DM", 28:"MX", 29:"SX", 30:"VC",
+    31:"SE", 32:"SJ", 33:"NC", 34:"TI", 35:"WP", 36:"AD", 37:"AC", 38:"IN", 39:"CA", 40:"CE",
+    41:"DE", 42:"MA", 43:"CO", 44:"RH", 45:"FI", 46:"TR", 47:"IT", 48:"PR"
+};
 const styleAlerta = document.createElement('style');
 (function() {
     const estiloBtnBranco = document.createElement('style');
@@ -12722,12 +12730,14 @@ async function telaPatrimonioEscolaCatalogo() {
     });
     const setores = await resSetores.json();
 
-    // Layout de duas colunas: Esquerda (Form) | Direita (Lista)
     modal.innerHTML = `
-        <div class="painel-vidro" style="width: 1100px; height: 600px; display: flex; gap: 20px; padding: 25px; border: 1px solid rgba(255,255,255,0.2); overflow: hidden;">
+        <div class="painel-vidro" style="width: 1150px; height: 620px; display: flex; gap: 20px; padding: 25px; border: 1px solid rgba(255,255,255,0.2); overflow: hidden;">
             
             <div style="flex: 1; display: flex; flex-direction: column; gap: 15px;">
                 <h2 style="color:white; margin:0 0 10px 0;">📝 NOVO BEM</h2>
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
+                    <button onclick="abrirMenuPatrimonioEscola()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                </div>                
                 
                 <div style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 12px; border: 1px solid rgba(59, 130, 246, 0.3);">
                     <label style="color:#60a5fa; font-weight:bold; display:flex; align-items:center; gap:10px; cursor:pointer; font-size: 0.85rem;">
@@ -12739,7 +12749,7 @@ async function telaPatrimonioEscolaCatalogo() {
                 <div style="overflow-y: auto; flex: 1; padding-right: 10px;">
                     <div style="margin-bottom: 12px;">
                         <label style="color:white; font-size:0.8rem;">NOME DO BEM:</label>
-                        <input type="text" id="cat-nome" class="input-vidro" placeholder="Ex: PROJETOR EPSON">
+                        <input type="text" id="cat-nome" class="input-vidro" placeholder="Ex: PROJETOR EPSON" oninput="gerarNumeroSerieAutomatico()">
                     </div>
 
                     <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom: 12px;">
@@ -12755,10 +12765,14 @@ async function telaPatrimonioEscolaCatalogo() {
                         </div>
                     </div>
 
-                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom: 12px;">
+                    <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:12px; margin-bottom: 12px;">
                         <div>
-                            <label id="label-serie" style="color:white; font-size:0.8rem;">NUMERO_SERIE:</label>
-                            <input type="text" id="cat-serie" class="input-vidro" placeholder="Opcional">
+                            <label id="label-serie" style="color:white; font-size:0.8rem;">Nº SÉRIE:</label>
+                            <input type="text" id="cat-serie" class="input-vidro" placeholder="Auto-gerado" readonly style="background: rgba(255,255,255,0.05); cursor: not-allowed;">
+                        </div>
+                        <div>
+                            <label style="color:white; font-size:0.8rem;">PATRIMÔNIO:</label>
+                            <input type="text" id="cat-patrimonio" class="input-vidro" placeholder="Pendente" readonly style="background: rgba(255,255,255,0.05); cursor: not-allowed; opacity: 0.6;">
                         </div>
                         <div>
                             <label id="label-nf" style="color:white; font-size:0.8rem;">Nº NF ou CE:</label>
@@ -12791,7 +12805,32 @@ async function telaPatrimonioEscolaCatalogo() {
         </div>
     `;
     document.body.appendChild(modal);
-    carregarBensRecentesModal(); // Chama a lista assim que abrir
+    carregarBensRecentesModal();
+}
+
+// Lógica de Autopreenchimento do Número de Série
+async function gerarNumeroSerieAutomatico() {
+    const nomeInput = document.getElementById('cat-nome').value;
+    const serieInput = document.getElementById('cat-serie');
+    
+    // Só gera se houver digitação e se o campo ainda estiver vazio ou for auto-gerado
+    if (nomeInput.trim().length > 0 && !serieInput.value.includes('-')) {
+        const localId = localStorage.getItem('local_id');
+        const prefixo = PREFIXOS_LOCAIS[localId] || "XX";
+
+        try {
+            // Busca o próximo número sequencial para este prefixo na API
+            const res = await fetch(`${API_URL}/patrimonio/proximo-numero/${prefixo}`, {
+                headers: { 'Authorization': `Bearer ${TOKEN}` }
+            });
+            const data = await res.json();
+            
+            // Ex: CL-000001
+            serieInput.value = `${prefixo}-${String(data.proximo).padStart(6, '0')}`;
+        } catch (err) {
+            console.error("Erro ao gerar série automática:", err);
+        }
+    }
 }
 
 async function telaPatrimonioEscolaCatalogo2() {
@@ -12804,12 +12843,14 @@ async function telaPatrimonioEscolaCatalogo2() {
     });
     const setores = await resSetores.json();
 
-    // Layout de duas colunas: Esquerda (Form) | Direita (Lista)
     modal.innerHTML = `
-        <div class="painel-vidro" style="width: 1100px; height: 600px; display: flex; gap: 20px; padding: 25px; border: 1px solid rgba(255,255,255,0.2); overflow: hidden;">
+        <div class="painel-vidro" style="width: 1150px; height: 620px; display: flex; gap: 20px; padding: 25px; border: 1px solid rgba(255,255,255,0.2); overflow: hidden;">
             
             <div style="flex: 1; display: flex; flex-direction: column; gap: 15px;">
                 <h2 style="color:white; margin:0 0 10px 0;">📝 NOVO BEM</h2>
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
+                    <button onclick="abrirMenuPatrimonioAlmoxarifado()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                </div>                
                 
                 <div style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 12px; border: 1px solid rgba(59, 130, 246, 0.3);">
                     <label style="color:#60a5fa; font-weight:bold; display:flex; align-items:center; gap:10px; cursor:pointer; font-size: 0.85rem;">
@@ -12821,7 +12862,7 @@ async function telaPatrimonioEscolaCatalogo2() {
                 <div style="overflow-y: auto; flex: 1; padding-right: 10px;">
                     <div style="margin-bottom: 12px;">
                         <label style="color:white; font-size:0.8rem;">NOME DO BEM:</label>
-                        <input type="text" id="cat-nome" class="input-vidro" placeholder="Ex: PROJETOR EPSON">
+                        <input type="text" id="cat-nome" class="input-vidro" placeholder="Ex: PROJETOR EPSON" oninput="gerarNumeroSerieAutomatico()">
                     </div>
 
                     <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom: 12px;">
@@ -12837,10 +12878,14 @@ async function telaPatrimonioEscolaCatalogo2() {
                         </div>
                     </div>
 
-                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom: 12px;">
+                    <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:12px; margin-bottom: 12px;">
                         <div>
-                            <label id="label-serie" style="color:white; font-size:0.8rem;">Nº PATRIMÔNIO:</label>
-                            <input type="text" id="cat-serie" class="input-vidro" placeholder="Opcional">
+                            <label id="label-serie" style="color:white; font-size:0.8rem;">Nº SÉRIE:</label>
+                            <input type="text" id="cat-serie" class="input-vidro" placeholder="Auto-gerado" readonly style="background: rgba(255,255,255,0.05); cursor: not-allowed;">
+                        </div>
+                        <div>
+                            <label style="color:white; font-size:0.8rem;">PATRIMÔNIO:</label>
+                            <input type="text" id="cat-patrimonio" class="input-vidro" placeholder="Pendente" readonly style="background: rgba(255,255,255,0.05); cursor: not-allowed; opacity: 0.6;">
                         </div>
                         <div>
                             <label id="label-nf" style="color:white; font-size:0.8rem;">Nº NF ou CE:</label>
@@ -12873,7 +12918,7 @@ async function telaPatrimonioEscolaCatalogo2() {
         </div>
     `;
     document.body.appendChild(modal);
-    carregarBensRecentesModal(); // Chama a lista assim que abrir
+    carregarBensRecentesModal();
 }
 
 async function carregarBensRecentesModal() {

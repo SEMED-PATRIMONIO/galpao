@@ -13238,7 +13238,7 @@ window.alternarLogica2025 = (marcado) => {
 
 async function enviarCadastroComAnexo() {
     const btn = document.getElementById('btn-salvar');
-    const nome = document.getElementById('cat-nome').value;
+    const nome = document.getElementById('cat-nome').value.trim();
     const qtd = document.getElementById('cat-qtd').value;
     const serie = document.getElementById('cat-serie').value;
     const setor = document.getElementById('cat-setor').value;
@@ -13248,7 +13248,6 @@ async function enviarCadastroComAnexo() {
 
     if (!nome || !serie) return notificar("Nome e Série são obrigatórios!", "erro");
 
-    // Bloqueia o botão para evitar cliques duplos
     btn.disabled = true;
     btn.innerHTML = "💾 SALVANDO...";
 
@@ -13270,25 +13269,19 @@ async function enviarCadastroComAnexo() {
         });
 
         if (res.ok) {
-            notificar("✅ Itens cadastrados com sucesso!");
-            
-            // 1. Limpa os campos para o próximo cadastro (opcional, se não quiser fechar o modal)
+            notificar("✅ Cadastro concluído!");
+            // Limpa para o próximo item
             document.getElementById('cat-nome').value = '';
             document.getElementById('cat-serie').value = '';
-            document.getElementById('cat-qtd').value = '1';
             
-            // 2. ATUALIZA A LISTA IMEDIATAMENTE NO LADO DIREITO
+            // Atualiza a lista lateral no modal imediatamente
             carregarBensRecentesModal();
-            
-            // 3. Opcional: Recarregar a tabela de fundo se ela existir
-            if (typeof carregarBensSetor === 'function') carregarBensSetor();
-
         } else {
             const erro = await res.json();
-            notificar(erro.error || "Erro ao salvar", "erro");
+            notificar("Erro: " + erro.error, "erro");
         }
     } catch (err) {
-        notificar("Erro de conexão com o servidor", "erro");
+        notificar("Erro de conexão", "erro");
     } finally {
         btn.disabled = false;
         btn.innerHTML = "SALVAR REGISTRO";

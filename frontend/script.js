@@ -302,6 +302,17 @@ async function carregarDashboard() {
         `; // [cite: 13, 14, 15]
     }
 
+    if (perfil === 'logistica') {
+        html += `
+            <button class="btn-grande btn-vidro" onclick="telaSaidaTransferencia37()">
+                <i>🏛️</i><span>SOLICITAR AO PATRIMÔNIO</span>
+            </button>
+            <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
+                <i>🔑</i><span>ALTERAR MINHA SENHA</span>
+            </button>
+        `;
+    }
+
     if (perfil === 'humanos') {
         html += `
             <button class="btn-grande btn-vidro" onclick="telaAuditoriaAcessos()">
@@ -417,23 +428,46 @@ async function carregarDashboard() {
 
     // --- 5. PERFIL: ESTOQUE (NOVA INTERFACE) --- [cite: 37]
     if (perfil === 'estoque') {
-        html += `
+        const containerBotoes = document.getElementById('grid-botoes-dashboard');
+        
+        // Usamos backticks (`) para envolver todo o bloco HTML
+        containerBotoes.innerHTML = `
+            <button class="btn-grande btn-vidro" style="position: relative;" onclick="telaPendentesInfra()">
+                <div id="badge-infra-count" style="display: none; position: absolute; top: -10px; right: -10px; 
+                    background: #ef4444; color: white; min-width: 26px; height: 26px; border-radius: 50%; 
+                    display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 900; 
+                    box-shadow: 0 0 15px rgba(239, 68, 68, 0.6); border: 2px solid rgba(255,255,255,0.2); 
+                    animation: pulse-vermelho 2s infinite; z-index: 10;">
+                    0
+                </div>
+                <i>🚚</i><span>SOLICITADO PELA INFRA</span>
+            </button>
+
             <button class="btn-grande btn-vidro" onclick="abrirMenuPatrimonioAlmoxarifado()">
                 <i>🏛️</i><span>PATRIMÔNIO</span>
             </button>
+
             <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('DEMAIS ITENS')">
                 <i>📦</i><span>ESTOQUE</span>
             </button>
+
             <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('PEDIDOS')">
                 <i>📝</i><span>PEDIDOS</span>
             </button>
+
             <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('RELATÓRIOS')">
                 <i>📊</i><span>RELATÓRIOS</span>
             </button>
+
             <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
                 <i>🔑</i><span>ALTERAR MINHA SENHA</span>
-            </button>            
-        `; // Note: Você moverá os botões de [cite: 38, 39, 40, 41] para dentro da função abaixo.
+            </button>
+        `;
+
+        // CRÍTICO: Chama a função para atualizar o número no badge assim que cria os botões
+        if (typeof atualizarBadgeInfra === 'function') {
+            atualizarBadgeInfra();
+        }
     }
 
     html += `</div>`;
@@ -1907,12 +1941,12 @@ async function telaGerenciarUsuarios() {
         const nomesPerfis = {
             'escola': 'Escola',
             'admin': 'Administração',
-            'estoque': 'Estoque',
-            'logistica': 'Logística',
+            'estoque': 'Patrimônio',
+            'logistica': 'Infra',
             'super': 'Supervisão',
-            'dti': 'DTI - Admin',
+            'dti': 'Informática',
             'impres': 'Técnico Impressora',
-            'humanos': 'RH' // Mapeamento visual conforme solicitado
+            'humanos': 'RH'
         };
 
         container.innerHTML = `
@@ -1933,13 +1967,15 @@ async function telaGerenciarUsuarios() {
 
                         <label style="color:white; font-size:0.8rem;">PERFIL:</label>
                         <select id="novo_perfil" class="input-vidro" style="width:100%; margin-bottom:10px;">
+                            <option value="">-- SELECIONE O PERFIL --</option>
                             <option value="escola">ESCOLA</option>
-                            <option value="admin">ADMIN</option>
-                            <option value="estoque">ESTOQUE</option>
-                            <option value="humanos">RH (Recursos Humanos)</option>
-                            <option value="dti">DTI - Admin</option>
-                            <option value="impres">Técnico Impressora</option>
-                            <option value="super">SUPER</option>
+                            <option value="admin">ADMINISTRAÇÃO</option>
+                            <option value="estoque">PATRIMÔNIO</option>
+                            <option value="logistica">INFRA</option> <option value="humanos">RH (Recursos Humanos)</option>
+                            <option value="dti">INFORMÁTICA</option>
+                            <option value="impres">TÉCNICO IMPRESSORA</option>
+                            <option value="super">SUPERVISÃO</option>
+                            <option value="humanos">RH</option>
                         </select>
 
                         <label style="color:white; font-size:0.8rem;">UNIDADE:</label>
@@ -1965,10 +2001,8 @@ async function telaGerenciarUsuarios() {
                             </thead>
                             <tbody>
                                 ${usuarios
-                                    .filter(u => u.status === 'ativo') // AJUSTE CIRÚRGICO: Filtra apenas ativos
-                                    .map(u => {
-                                        const ativo = u.status === 'ativo';
-                                        return `
+                                    .filter(u => u.status === 'ativo')
+                                    .map(u => `
                                         <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
                                             <td style="padding:12px;">${u.nome.toUpperCase()}</td>
                                             <td style="padding:12px;">
@@ -1985,7 +2019,7 @@ async function telaGerenciarUsuarios() {
                                                 </button>
                                             </td>
                                         </tr>
-                                    `}).join('')}
+                                    `).join('')}
                             </tbody>
                         </table>
                     </div>
@@ -16012,6 +16046,375 @@ function exibirAlertaSucessoGamer() {
         setTimeout(() => alerta.remove(), 500); 
     }, 4000);
 }
+
+window.telaTransferenciaPatrimonio = async function() {
+    const app = document.getElementById('app'); // Ou o seu container principal
+    app.innerHTML = `
+        <div class="painel-vidro animar-entrada" style="width: 100%; height: 100vh; padding: 40px; display: flex; flex-direction: column;">
+            
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+                <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background: rgba(255,255,255,0.1); padding: 10px 25px;">⬅ VOLTAR</button>
+                <h2 style="color: white; margin: 0; letter-spacing: 2px;">📦 TRANSFERÊNCIA DE PATRIMÔNIO (LOCAL 37)</h2>
+            </div>
+
+            <div id="lista-produtos-transferencia" style="flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px;">
+                </div>
+        </div>
+    `;
+
+    // Carrega os dados
+    try {
+        const res = await fetch(`${API_URL}/transferencia/disponivel`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const produtos = await res.json();
+        const container = document.getElementById('lista-produtos-transferencia');
+
+        container.innerHTML = produtos.map(p => `
+            <div class="item-setor-global" onclick="abrirDialogoTransferencia(${p.id}, '${p.nome}', ${p.quantidade_estoque})" 
+                 style="padding: 20px; cursor: pointer; border: 1px solid rgba(255,255,255,0.1); transition: 0.3s;">
+                <strong style="color: white; font-size: 1.1rem; display: block; margin-bottom: 10px;">${p.nome}</strong>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="color: #60a5fa; font-weight: bold;">DISPONÍVEL:</span>
+                    <span style="background: #60a5fa; color: white; padding: 2px 10px; border-radius: 20px; font-size: 0.9rem;">${p.quantidade_estoque} UN</span>
+                </div>
+            </div>
+        `).join('');
+    } catch (err) {
+        notificar("Erro ao carregar lista.", "erro");
+    }
+};
+
+window.abrirDialogoTransferencia = async function(produtoId, nome, qtdMax) {
+    // Busca os locais de destino (exceto o 37)
+    const resLocais = await fetch(`${API_URL}/locais`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+    const locais = await resLocais.json();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'overlay-dialog-transferencia';
+    overlay.className = 'alerta-vidro-overlay';
+    overlay.innerHTML = `
+        <div class="painel-vidro animar-entrada" style="width: 450px; padding: 30px; text-align: center;">
+            <h3 style="color: #60a5fa; margin-top: 0;">INICIAR TRANSFERÊNCIA</h3>
+            <p style="color: white; font-size: 0.9rem;"><strong>Item:</strong> ${nome}</p>
+
+            <div style="margin: 20px 0; text-align: left;">
+                <label style="color: white; font-size: 0.8rem;">LOCAL DE DESTINO:</label>
+                <select id="transf-local" class="input-vidro" style="width: 100%; margin-bottom: 15px;">
+                    ${locais.filter(l => l.id != 37 && l.nome != 'TRANSFERÊNCIA').map(l => `<option value="${l.id}">${l.nome}</option>`).join('')}
+                </select>
+
+                <label style="color: white; font-size: 0.8rem;">QUANTIDADE (MÁX: ${qtdMax}):</label>
+                <input type="number" id="transf-qtd" class="input-vidro" value="1" min="1" max="${qtdMax}" style="width: 100%; text-align: center; font-size: 1.2rem;">
+            </div>
+
+            <div style="display: flex; gap: 10px;">
+                <button onclick="document.getElementById('overlay-dialog-transferencia').remove()" class="btn-sair-vidro" style="flex: 1;">CANCELAR</button>
+                <button onclick="confirmarEnvioTransferencia(${produtoId}, ${qtdMax})" style="flex: 1; background: #3b82f6; color: white; border: none; border-radius: 10px; font-weight: bold; cursor: pointer;">ENVIAR 📤</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+};
+
+window.confirmarEnvioTransferencia = async function(produtoId, qtdMax) {
+    const localDestino = document.getElementById('transf-local').value;
+    const qtd = parseInt(document.getElementById('transf-qtd').value);
+
+    if (qtd <= 0 || qtd > qtdMax) return notificar("Quantidade inválida!", "erro");
+
+    try {
+        const res = await fetch(`${API_URL}/transferencia/iniciar`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ produto_id: produtoId, quantidade: qtd, local_destino_id: localDestino })
+        });
+
+        if (res.ok) {
+            notificar("Transferência enviada para o local virtual!");
+            document.getElementById('overlay-dialog-transferencia').remove();
+            telaTransferenciaPatrimonio(); // Atualiza a lista
+        }
+    } catch (err) {
+        notificar("Erro ao processar transferência.", "erro");
+    }
+};
+
+window.telaSaidaTransferencia37 = async function() {
+    const app = document.getElementById('app');
+    
+    app.innerHTML = `
+        <div class="painel-vidro animar-entrada" style="width: 100%; min-height: 100vh; padding: 30px; display: flex; flex-direction: column;">
+            
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+                <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);">⬅ VOLTAR</button>
+                <h2 style="color: white; margin: 0; text-shadow: 0 0 10px rgba(0,0,0,0.5);">📦 ENVIO DE PATRIMÔNIO</h2>
+                <div style="width: 100px;"></div> </div>
+
+            <div id="grid-produtos-transferencia" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; flex: 1; align-content: start;">
+                </div>
+        </div>
+    `;
+
+    try {
+        const res = await fetch(`${API_URL}/transferencia/estoque-fonte`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const produtos = await res.json();
+        const grid = document.getElementById('grid-produtos-transferencia');
+
+        grid.innerHTML = produtos.map(p => `
+            <div class="item-setor-global" onclick="abrirModalDestinoTransferencia(${p.id}, '${p.nome}', ${p.quantidade_estoque})" 
+                 style="padding: 20px; cursor: pointer; border: 1px solid rgba(255,255,255,0.05); text-align: left; transition: 0.3s;">
+                <span style="color: #aaa; font-size: 0.7rem; display: block; margin-bottom: 5px;">PRODUTO</span>
+                <strong style="color: white; font-size: 1rem; display: block; margin-bottom: 15px; text-transform: uppercase;">${p.nome}</strong>
+                
+                <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.2); padding: 8px 12px; border-radius: 8px;">
+                    <span style="color: #60a5fa; font-size: 0.75rem; font-weight: bold;">EM ESTOQUE:</span>
+                    <span style="color: white; font-weight: 900;">${p.quantidade_estoque}</span>
+                </div>
+            </div>
+        `).join('');
+
+    } catch (err) {
+        console.error(err);
+    }
+};
+
+window.abrirModalDestinoTransferencia = async function(produtoId, nome, maxQtd) {
+    // Busca todos os locais (exceto o próprio 37 e o virtual de transferência)
+    const resL = await fetch(`${API_URL}/locais`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+    const locais = await resL.json();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'modal-destino-transferencia';
+    overlay.className = 'alerta-vidro-overlay';
+    
+    overlay.innerHTML = `
+        <div class="painel-vidro animar-entrada" style="width: 450px; padding: 30px; border: 1px solid rgba(96, 165, 250, 0.3);">
+            <h3 style="color: #60a5fa; margin-top: 0;">DESTINO DA TRANSFERÊNCIA</h3>
+            <p style="color: white; font-size: 0.9rem; margin-bottom: 25px;">Item: <strong>${nome}</strong></p>
+
+            <div style="text-align: left; margin-bottom: 20px;">
+                <label style="color: white; font-size: 0.8rem; display: block; margin-bottom: 8px;">SELECIONE O LOCAL DESTINO:</label>
+                <select id="select-destino-local" class="input-vidro" style="width: 100%;">
+                    ${locais.filter(l => l.id != 37 && l.nome != 'TRANSFERÊNCIA').map(l => `<option value="${l.id}">${l.nome}</option>`).join('')}
+                </select>
+            </div>
+
+            <div style="text-align: left; margin-bottom: 30px;">
+                <label style="color: white; font-size: 0.8rem; display: block; margin-bottom: 8px;">QUANTIDADE A ENVIAR (MÁX: ${maxQtd}):</label>
+                <input type="number" id="input-qtd-transferir" class="input-vidro" value="1" min="1" max="${maxQtd}" style="width: 100%; text-align: center; font-size: 1.2rem; font-weight: bold;">
+            </div>
+
+            <div style="display: flex; gap: 10px;">
+                <button onclick="document.getElementById('modal-destino-transferencia').remove()" class="btn-sair-vidro" style="flex: 1;">CANCELAR</button>
+                <button onclick="processarEnvioTransferencia(${produtoId}, ${maxQtd})" style="flex: 1; background: #3b82f6; color: white; border: none; border-radius: 10px; font-weight: bold; cursor: pointer;">INICIAR ENVIO 📤</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+};
+
+window.processarEnvioTransferencia = async function(produtoId, maxQtd) {
+    const localDestino = document.getElementById('select-destino-local').value;
+    const qtd = parseInt(document.getElementById('input-qtd-transferir').value);
+
+    if (qtd <= 0 || qtd > maxQtd) {
+        return notificar("Quantidade inválida ou superior ao estoque!", "erro");
+    }
+
+    try {
+        const res = await fetch(`${API_URL}/transferencia/enviar-itens`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ produto_id: produtoId, quantidade: qtd, local_destino_id: localDestino })
+        });
+
+        if (res.ok) {
+            notificar("Itens enviados para o local de TRANSFERÊNCIA!");
+            document.getElementById('modal-destino-transferencia').remove();
+            telaSaidaTransferencia37(); // Recarrega a lista
+        } else {
+            const erro = await res.json();
+            notificar(erro.error, "erro");
+        }
+    } catch (err) {
+        notificar("Erro ao processar envio.", "erro");
+    }
+};
+
+window.telaPendentesInfra = async function() {
+    const app = document.getElementById('app');
+    app.innerHTML = `
+        <div class="painel-vidro animar-entrada" style="width: 100%; min-height: 100vh; padding: 30px;">
+            <div style="display: flex; align-items: center; margin-bottom: 30px;">
+                <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background: rgba(255,255,255,0.1);">⬅ VOLTAR</button>
+                <h2 style="color: white; margin-left: 20px;">🏗️ SOLICITADO PELA INFRA</h2>
+            </div>
+            
+            <div id="lista-infra-pendente" style="display: grid; gap: 15px;">
+                </div>
+        </div>
+    `;
+
+    const res = await fetch(`${API_URL}/transferencia/pendentes-infra`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+    const pendencias = await res.json();
+    const lista = document.getElementById('lista-infra-pendente');
+
+    lista.innerHTML = pendencias.map(p => `
+        <div class="item-setor-global" onclick="abrirAcaoInfra(${p.produto_id}, ${p.destino_id}, '${p.produto_nome}', '${p.destino_nome}', ${p.quantidade})" 
+             style="display: flex; justify-content: space-between; align-items: center; padding: 20px; border: 1px solid rgba(255,255,255,0.05);">
+            <div>
+                <strong style="color: white; font-size: 1.1rem;">${p.produto_nome}</strong>
+                <p style="color: #aaa; margin: 5px 0 0 0; font-size: 0.8rem;">DESTINO: ${p.destino_nome}</p>
+            </div>
+            <div style="text-align: right;">
+                <span style="background: #3b82f6; color: white; padding: 5px 15px; border-radius: 20px; font-weight: bold;">${p.quantidade} UN</span>
+                <small style="display: block; color: #666; margin-top: 5px;">Solicitado em: ${new Date(p.data_solicitacao).toLocaleDateString()}</small>
+            </div>
+        </div>
+    `).join('') || '<p style="color:gray; text-align:center;">Nenhuma solicitação pendente.</p>';
+};
+
+window.abrirAcaoInfra = function(prodId, destId, nome, destino, qtd) {
+    const modal = document.createElement('div');
+    modal.id = 'modal-decisao-infra';
+    modal.className = 'alerta-vidro-overlay';
+    modal.innerHTML = `
+        <div class="painel-vidro animar-entrada" style="width: 450px; padding: 30px; text-align: center;">
+            <button onclick="this.closest('.alerta-vidro-overlay').remove()" style="position: absolute; top: 15px; left: 15px;" class="btn-sair-vidro">⬅ VOLTAR</button>
+            <h3 style="color: white; margin-top: 40px;">GESTÃO DE REMESSA</h3>
+            <p style="color: #ccc;">Deseja processar o envio de <strong>${qtd} ${nome}</strong> para <strong>${destino}</strong>?</p>
+            
+            <div style="display: flex; gap: 15px; margin-top: 30px;">
+                <button onclick="rejeitarTransferencia(${prodId}, ${destId})" style="flex:1; background: #ef4444; color:white; border:none; padding:12px; border-radius:8px; font-weight:bold; cursor:pointer;">RECUSAR</button>
+                <button onclick="telaSelecaoPatrimonios(${prodId}, ${destId}, '${nome}', ${qtd})" style="flex:1; background: #22c55e; color:white; border:none; padding:12px; border-radius:8px; font-weight:bold; cursor:pointer;">ACEITAR</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+};
+
+window.telaSelecaoPatrimonios = async function(prodId, destId, nome, qtdNecessaria) {
+    // Busca os itens individuais no local "TRANSFERÊNCIA"
+    const res = await fetch(`${API_URL}/patrimonio/global/bens/${prodId}`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+    const todosBens = await res.json();
+    // Filtra apenas os que estão em trânsito para este destino específico
+    const bensDisponiveis = todosBens.filter(b => b.em_transito && b.local_destino_id == destId);
+
+    const tela = document.createElement('div');
+    tela.className = 'alerta-vidro-overlay';
+    tela.style.zIndex = '11000';
+    tela.innerHTML = `
+        <div class="painel-vidro animar-entrada" style="width: 700px; height: 80vh; padding: 30px; display: flex; flex-direction: column;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <button onclick="this.closest('.alerta-vidro-overlay').remove()" class="btn-sair-vidro">⬅ VOLTAR</button>
+                <h3 style="color: white; margin: 0;">SELECIONE OS ITENS (${qtdNecessaria} un)</h3>
+            </div>
+            
+            <p style="color: #60a5fa; font-size: 0.9rem;">Produto: ${nome}</p>
+
+            <div id="lista-selecao-individual" style="flex: 1; overflow-y: auto; margin: 20px 0; background: rgba(0,0,0,0.2); border-radius: 10px; padding: 10px;">
+                ${bensDisponiveis.map(b => `
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                        <div>
+                            <span style="color: white; font-weight: bold;">SÉRIE: ${b.numero_serie}</span>
+                            <small style="display:block; color: #777;">RGP: ${b.patrimonio || 'S/N'}</small>
+                        </div>
+                        <input type="checkbox" class="check-patrimonio" value="${b.id}" onchange="validarQuantidadeSelecao(${qtdNecessaria})" style="width: 20px; height: 20px; cursor: pointer;">
+                    </div>
+                `).join('')}
+            </div>
+
+            <button id="btn-concluir-infra" disabled onclick="finalizarSelecaoInfra(${destId})" 
+                    style="width: 100%; padding: 15px; border: none; border-radius: 10px; font-weight: bold; background: #555; color: #888; cursor: not-allowed;">
+                CONCLUIR TRANSFERÊNCIA
+            </button>
+        </div>
+    `;
+    document.body.appendChild(tela);
+};
+
+window.validarQuantidadeSelecao = function(qtdNecessaria) {
+    const selecionados = document.querySelectorAll('.check-patrimonio:checked').length;
+    const btn = document.getElementById('btn-concluir-infra');
+    
+    if (selecionados === qtdNecessaria) {
+        btn.disabled = false;
+        btn.style.background = '#22c55e';
+        btn.style.color = 'white';
+        btn.style.cursor = 'pointer';
+    } else {
+        btn.disabled = true;
+        btn.style.background = '#555';
+        btn.style.color = '#888';
+        btn.style.cursor = 'not-allowed';
+    }
+};
+
+window.finalizarSelecaoInfra = async function(destinoId) {
+    const ids = Array.from(document.querySelectorAll('.check-patrimonio:checked')).map(el => el.value);
+    
+    const res = await fetch(`${API_URL}/transferencia/finalizar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+        body: JSON.stringify({ patrimonio_ids: ids, destino_id: destinoId })
+    });
+
+    if (res.ok) {
+        exibirMensagemSucesso4s();
+        // Remove os modais abertos e volta para a lista
+        document.querySelectorAll('.alerta-vidro-overlay').forEach(el => el.remove());
+        telaPendentesInfra();
+    }
+};
+
+function exibirMensagemSucesso4s() {
+    const msg = document.createElement('div');
+    msg.className = 'alerta-sucesso-infra';
+    msg.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <span style="font-size: 1.5rem;">✅</span>
+            <div>
+                <p style="margin:0; font-size: 1rem;">TRANSFERÊNCIA CONCLUÍDA!</p>
+                <small style="opacity: 0.8;">Os itens foram alocados no destino com sucesso.</small>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(msg);
+    
+    // Remove após 4 segundos com um efeito de fade
+    setTimeout(() => {
+        msg.style.opacity = '0';
+        msg.style.transition = '0.5s';
+        setTimeout(() => msg.remove(), 500);
+    }, 4000);
+}
+
+async function atualizarBadgeInfra() {
+    const badge = document.getElementById('badge-infra-count');
+    if (!badge) return;
+
+    try {
+        const res = await fetch(`${API_URL}/transferencia/contagem-infra`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const data = await res.json();
+
+        if (data.total > 0) {
+            badge.innerText = data.total;
+            badge.style.display = 'flex'; // Torna visível se houver pendências
+        } else {
+            badge.style.display = 'none'; // Esconde se estiver zerado
+        }
+    } catch (err) {
+        console.error("Erro ao atualizar badge:", err);
+    }
+}
+
+// Chame isso logo após carregar o Dashboard
+// atualizarBadgeInfra();
 
 // Isso garante que o onclick="funcao()" funcione sempre
 window.telaVisualizarEstoque = telaVisualizarEstoque;

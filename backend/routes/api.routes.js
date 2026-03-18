@@ -5608,7 +5608,7 @@ router.get('/patrimonio/proximo-numero/:prefixo/:ano', verificarToken, async (re
 // Rota de Cadastro Completa (Sem reticências, com todas as colunas)
 router.post('/patrimonio/cadastrar', verificarToken, upload.single('arquivo'), async (req, res) => {
     const { 
-        nome_produto, 
+        nome_produto, // Nome vindo do campo "cat-nome"
         quantidade, 
         serie_base, 
         setor_id, 
@@ -5621,25 +5621,37 @@ router.post('/patrimonio/cadastrar', verificarToken, upload.single('arquivo'), a
     const qtd = parseInt(quantidade, 10) || 1;
 
     try {
-        // 1. Extrair a base do número de série (ex: CL-25-0001)
-        const parteSérie = serie_base.split(' ')[0]; 
-        const segmentos = parteSérie.split('-'); 
-        
-        if (segmentos.length !== 3) {
-            return res.status(400).json({ error: "Formato de série inválido." });
+        await db.query('BEGIN'); // Inicia transação para segurança total
+
+        // 1. RESOLVER O PRODUTO (Busca pelo nome ou cria um novo)
+        let resProd = await db.query("SELECT id FROM produtos WHERE nome = $1 LIMIT 1", [nome_produto.toUpperCase()]);
+        let produtoId;
+
+        if (resProd.rows.length > 0) {
+            produtoId = resProd.rows[0].id;
+        } else {
+            // Se o produto não existe, criamos um registro básico na tabela produtos
+            const novoProd = await db.query(
+                "INSERT INTO produtos (nome, local_id, tipo) VALUES ($1, $2, 'MATERIAL') RETURNING id",
+                [nome_produto.toUpperCase(), local_id]
+            );
+            produtoId = novoProd.rows[0].id;
         }
 
+        // 2. TRATAR A SÉRIE (Ex: "CL-25-0001 a 0005")
+        const parteInicial = serie_base.split(' ')[0]; 
+        const segmentos = parteInicial.split('-'); 
         const prefixo = segmentos[0];
         const ano = segmentos[1];
         let numSequencial = parseInt(segmentos[2], 10);
 
-        // 2. Loop de Inserção Individual (O segredo do Lote)
+        // 3. LOOP DE INSERÇÃO NA TABELA PATRIMONIOS
         for (let i = 0; i < qtd; i++) {
             const serieUnica = `${prefixo}-${ano}-${String(numSequencial).padStart(4, '0')}`;
             
             await db.query(
                 `INSERT INTO patrimonios (
-                    nome_produto, 
+                    produto_id, 
                     numero_serie, 
                     setor_id, 
                     local_id, 
@@ -5647,10 +5659,11 @@ router.post('/patrimonio/cadastrar', verificarToken, upload.single('arquivo'), a
                     url_nota_fiscal, 
                     estado, 
                     adquirido_pos_2025,
-                    data_atualizacao
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())`,
+                    data_atualizacao,
+                    status
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), 'ESTOQUE')`,
                 [
-                    nome_produto, 
+                    produtoId, 
                     serieUnica, 
                     setor_id, 
                     local_id, 
@@ -5663,11 +5676,13 @@ router.post('/patrimonio/cadastrar', verificarToken, upload.single('arquivo'), a
             numSequencial++; 
         }
 
-        res.json({ success: true, message: `${qtd} item(ns) cadastrado(s) com sucesso!` });
+        await db.query('COMMIT');
+        res.json({ success: true, message: `${qtd} item(ns) registrado(s) com sucesso!` });
 
     } catch (err) {
+        await db.query('ROLLBACK');
         console.error("Erro no cadastro:", err);
-        res.status(500).json({ error: "Falha ao gravar registro(s): " + err.message });
+        res.status(500).json({ error: "Falha ao gravar: " + err.message });
     }
 });
 
@@ -5675,10 +5690,11 @@ router.get('/patrimonio/recentes/:local_id', verificarToken, async (req, res) =>
     const { local_id } = req.params;
     try {
         const result = await db.query(
-            `SELECT nome_produto, numero_serie, data_atualizacao 
-             FROM patrimonios 
-             WHERE local_id = $1 
-             ORDER BY id DESC LIMIT 15`, 
+            `SELECT p.nome AS nome_produto, pa.numero_serie, pa.data_atualizacao 
+             FROM patrimonios pa
+             JOIN produtos p ON pa.produto_id = p.id
+             WHERE pa.local_id = $1 
+             ORDER BY pa.id DESC LIMIT 15`, 
             [local_id]
         );
         res.json(result.rows);

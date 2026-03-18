@@ -5703,4 +5703,221 @@ router.get('/patrimonio/recentes/:local_id', verificarToken, async (req, res) =>
     }
 });
 
+// Rota para listar estoque disponível para transferência no local 37
+router.get('/transferencia/disponivel', verificarToken, async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                p.id, 
+                p.nome, 
+                COUNT(pa.id) AS quantidade_estoque
+            FROM produtos p
+            JOIN patrimonios pa ON p.id = pa.produto_id
+            WHERE pa.local_id = 37 
+              AND p.tipo = 'PATRIMONIO'
+              AND pa.em_transito = false
+            GROUP BY p.id, p.nome
+            HAVING COUNT(pa.id) > 0
+            ORDER BY p.nome ASC
+        `;
+        const result = await db.query(query);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao buscar estoque: " + err.message });
+    }
+});
+
+router.post('/transferencia/iniciar', verificarToken, async (req, res) => {
+    const { produto_id, quantidade, local_destino_id } = req.body;
+    const qtd = parseInt(quantidade);
+
+    try {
+        await db.query('BEGIN');
+
+        // 1. Busca o ID do local virtual "TRANSFERÊNCIA"
+        const resLocal = await db.query("SELECT id FROM locais WHERE nome = 'TRANSFERÊNCIA' LIMIT 1");
+        if (resLocal.rows.length === 0) throw new Error("Local 'TRANSFERÊNCIA' não encontrado no sistema.");
+        const idVirtual = resLocal.rows[0].id;
+
+        // 2. Seleciona os IDs específicos dos patrimônios que serão movidos
+        const resItens = await db.query(
+            "SELECT id FROM patrimonios WHERE produto_id = $1 AND local_id = 37 AND em_transito = false LIMIT $2",
+            [produto_id, qtd]
+        );
+
+        if (resItens.rows.length < qtd) throw new Error("Quantidade insuficiente em estoque.");
+
+        // 3. Move cada item para o local virtual e marca como em trânsito
+        for (let item of resItens.rows) {
+            await db.query(
+                `UPDATE patrimonios SET 
+                    local_id = $1, 
+                    local_destino_id = $2, 
+                    em_transito = true,
+                    data_atualizacao = NOW()
+                 WHERE id = $3`,
+                [idVirtual, local_destino_id, item.id]
+            );
+        }
+
+        await db.query('COMMIT');
+        res.json({ success: true, message: "Transferência iniciada com sucesso!" });
+
+    } catch (err) {
+        await db.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Rota para listar produtos do tipo PATRIMONIO no Local 37
+router.get('/transferencia/estoque-fonte', verificarToken, async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                p.id, 
+                p.nome, 
+                COUNT(pa.id)::int AS quantidade_estoque
+            FROM produtos p
+            JOIN patrimonios pa ON p.id = pa.produto_id
+            WHERE pa.local_id = 37 
+              AND p.tipo = 'PATRIMONIO'
+              AND pa.em_transito = false
+            GROUP BY p.id, p.nome
+            HAVING COUNT(pa.id) > 0
+            ORDER BY p.nome ASC
+        `;
+        const result = await db.query(query);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao buscar estoque: " + err.message });
+    }
+});
+
+// Rota para iniciar a transferência (Move para local virtual 'TRANSFERÊNCIA')
+router.post('/transferencia/enviar-itens', verificarToken, async (req, res) => {
+    const { produto_id, quantidade, local_destino_id } = req.body;
+
+    try {
+        await db.query('BEGIN');
+
+        // 1. Localiza o ID do local virtual "TRANSFERÊNCIA"
+        const resLocal = await db.query("SELECT id FROM locais WHERE nome = 'TRANSFERÊNCIA' LIMIT 1");
+        if (resLocal.rows.length === 0) throw new Error("Local 'TRANSFERÊNCIA' não cadastrado.");
+        const idTransferencia = resLocal.rows[0].id;
+
+        // 2. Seleciona os itens específicos que serão transferidos
+        const itensParaMover = await db.query(
+            `SELECT id FROM patrimonios 
+             WHERE produto_id = $1 AND local_id = 37 AND em_transito = false 
+             LIMIT $2`,
+            [produto_id, quantidade]
+        );
+
+        if (itensParaMover.rows.length < quantidade) {
+            throw new Error("Quantidade insuficiente em estoque no momento.");
+        }
+
+        // 3. Atualiza os itens: mudam para o local virtual e ficam em trânsito
+        const ids = itensParaMover.rows.map(i => i.id);
+        await db.query(
+            `UPDATE patrimonios SET 
+                local_id = $1, 
+                local_destino_id = $2, 
+                em_transito = true,
+                data_atualizacao = NOW()
+             WHERE id = ANY($3)`,
+            [idTransferencia, local_destino_id, ids]
+        );
+
+        await db.query('COMMIT');
+        res.json({ success: true, message: "Itens enviados para transferência!" });
+
+    } catch (err) {
+        await db.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// A. Listar solicitações pendentes (agrupadas por produto e destino)
+router.get('/transferencia/pendentes-infra', verificarToken, async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                p.id AS produto_id,
+                p.nome AS produto_nome,
+                l.id AS destino_id,
+                l.nome AS destino_nome,
+                COUNT(pa.id)::int AS quantidade,
+                MIN(pa.data_atualizacao) as data_solicitacao
+            FROM patrimonios pa
+            JOIN produtos p ON pa.produto_id = p.id
+            JOIN locais l ON pa.local_destino_id = l.id
+            WHERE pa.em_transito = true 
+              AND pa.local_id = (SELECT id FROM locais WHERE nome = 'TRANSFERÊNCIA' LIMIT 1)
+            GROUP BY p.id, p.nome, l.id, l.nome
+            ORDER BY p.nome ASC
+        `;
+        const result = await db.query(query);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// B. Rejeitar Transferência (Devolve para o local 37)
+router.post('/transferencia/rejeitar', verificarToken, async (req, res) => {
+    const { produto_id, destino_id } = req.body;
+    try {
+        await db.query(
+            `UPDATE patrimonios SET 
+                local_id = 37, 
+                local_destino_id = NULL, 
+                em_transito = false 
+             WHERE produto_id = $1 AND local_destino_id = $2 AND em_transito = true`,
+            [produto_id, destino_id]
+        );
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// C. Finalizar Transferência (Move itens selecionados para o destino final)
+router.post('/transferencia/finalizar', verificarToken, async (req, res) => {
+    const { patrimonio_ids, destino_id } = req.body;
+    try {
+        await db.query(
+            `UPDATE patrimonios SET 
+                local_id = $1, 
+                local_destino_id = NULL, 
+                em_transito = false,
+                data_atualizacao = NOW()
+             WHERE id = ANY($2)`,
+            [destino_id, patrimonio_ids]
+        );
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.get('/transferencia/contagem-infra', verificarToken, async (req, res) => {
+    try {
+        const query = `
+            SELECT COUNT(*) as total
+            FROM (
+                SELECT produto_id, local_destino_id
+                FROM patrimonios
+                WHERE em_transito = true 
+                AND local_id = (SELECT id FROM locais WHERE nome = 'TRANSFERÊNCIA' LIMIT 1)
+                GROUP BY produto_id, local_destino_id
+            ) AS pendencias
+        `;
+        const result = await db.query(query);
+        res.json({ total: parseInt(result.rows[0].total) });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;

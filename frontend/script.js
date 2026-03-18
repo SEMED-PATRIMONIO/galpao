@@ -16254,36 +16254,55 @@ window.processarEnvioTransferencia = async function(produtoId, maxQtd) {
 };
 
 window.telaPendentesInfra = async function() {
-    const app = document.getElementById('app');
-    app.innerHTML = `
-        <div class="painel-vidro animar-entrada" style="width: 100%; min-height: 100vh; padding: 30px;">
+    // Tenta pegar o 'app-content', se não existir, tenta o 'app'
+    const container = document.getElementById('app-content') || document.getElementById('app');
+    
+    if (!container) {
+        console.error("ERRO CRÍTICO: Nenhum container (app-content ou app) foi encontrado no HTML!");
+        return alert("Erro interno: Container de tela não encontrado.");
+    }
+
+    // Agora que garantimos que o container existe, limpamos e desenhamos a tela
+    container.innerHTML = `
+        <div class="painel-vidro animar-entrada" style="width: 100%; min-height: 80vh; padding: 30px; display: flex; flex-direction: column;">
             <div style="display: flex; align-items: center; margin-bottom: 30px;">
-                <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background: rgba(255,255,255,0.1);">⬅ VOLTAR</button>
-                <h2 style="color: white; margin-left: 20px;">🏗️ SOLICITADO PELA INFRA</h2>
+                <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);">⬅ VOLTAR</button>
+                <h2 style="color: white; margin-left: 20px; text-shadow: 0 0 10px rgba(0,0,0,0.5);">🏗️ SOLICITAÇÕES DA INFRAESTRUTURA</h2>
             </div>
             
-            <div id="lista-infra-pendente" style="display: grid; gap: 15px;">
-                </div>
+            <div id="lista-infra-pendente" style="display: grid; gap: 15px; flex: 1; align-content: start;">
+                <p style="color: white; text-align: center;">🔍 Buscando solicitações pendentes...</p>
+            </div>
         </div>
     `;
 
-    const res = await fetch(`${API_URL}/transferencia/pendentes-infra`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
-    const pendencias = await res.json();
-    const lista = document.getElementById('lista-infra-pendente');
+    try {
+        const res = await fetch(`${API_URL}/transferencia/pendentes-infra`, { 
+            headers: { 'Authorization': `Bearer ${TOKEN}` } 
+        });
+        const pendencias = await res.json();
+        const lista = document.getElementById('lista-infra-pendente');
 
-    lista.innerHTML = pendencias.map(p => `
-        <div class="item-setor-global" onclick="abrirAcaoInfra(${p.produto_id}, ${p.destino_id}, '${p.produto_nome}', '${p.destino_nome}', ${p.quantidade})" 
-             style="display: flex; justify-content: space-between; align-items: center; padding: 20px; border: 1px solid rgba(255,255,255,0.05);">
-            <div>
-                <strong style="color: white; font-size: 1.1rem;">${p.produto_nome}</strong>
-                <p style="color: #aaa; margin: 5px 0 0 0; font-size: 0.8rem;">DESTINO: ${p.destino_nome}</p>
+        if (!pendencias || pendencias.length === 0) {
+            lista.innerHTML = '<p style="color:gray; text-align:center; margin-top: 50px;">Nenhuma solicitação pendente no momento.</p>';
+            return;
+        }
+
+        lista.innerHTML = pendencias.map(p => `
+            <div class="item-setor-global" onclick="abrirAcaoInfra(${p.produto_id}, ${p.destino_id}, '${p.produto_nome}', '${p.destino_nome}', ${p.quantidade})" 
+                 style="display: flex; justify-content: space-between; align-items: center; padding: 20px; cursor: pointer; background: rgba(255,255,255,0.02); border-radius: 12px; border: 1px solid rgba(255,255,255,0.05);">
+                <div>
+                    <strong style="color: white; font-size: 1.1rem; text-transform: uppercase;">${p.produto_nome}</strong>
+                    <p style="color: #60a5fa; margin: 5px 0 0 0; font-size: 0.85rem; font-weight: bold;">📍 DESTINO: ${p.destino_nome}</p>
+                </div>
+                <div style="text-align: right;">
+                    <span style="background: #3b82f6; color: white; padding: 6px 15px; border-radius: 20px; font-weight: 900; font-size: 0.9rem;">${p.quantidade} UN</span>
+                </div>
             </div>
-            <div style="text-align: right;">
-                <span style="background: #3b82f6; color: white; padding: 5px 15px; border-radius: 20px; font-weight: bold;">${p.quantidade} UN</span>
-                <small style="display: block; color: #666; margin-top: 5px;">Solicitado em: ${new Date(p.data_solicitacao).toLocaleDateString()}</small>
-            </div>
-        </div>
-    `).join('') || '<p style="color:gray; text-align:center;">Nenhuma solicitação pendente.</p>';
+        `).join('');
+    } catch (err) {
+        console.error("Erro na rota pendentes-infra:", err);
+    }
 };
 
 window.abrirAcaoInfra = function(prodId, destId, nome, destino, qtd) {

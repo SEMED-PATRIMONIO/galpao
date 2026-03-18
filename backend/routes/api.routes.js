@@ -2912,12 +2912,13 @@ router.get('/estoque/materiais-e-patrimonios', verificarToken, async (req, res) 
                 COALESCE(quantidade_estoque, 0) as saldo, 
                 COALESCE(alerta_minimo, 0) as minimo
             FROM produtos 
-            WHERE tipo IN ('MATERIAL', 'PATRIMONIO')
+            WHERE tipo IN ('MATERIAL', 'PATRIMONIO', 'UNIFORME')
             ORDER BY tipo DESC, nome ASC
         `;
         const { rows } = await db.query(query);
         res.json(rows);
     } catch (err) {
+        console.error("Erro na rota de materiais:", err.message);
         res.status(500).json({ error: "Erro ao carregar materiais: " + err.message });
     }
 });

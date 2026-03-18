@@ -271,15 +271,15 @@ async function carregarDashboard() {
 
     // Cabeçalho Padrão [cite: 11]
     let html = `
-        <div class="painel-usuario-vidro">
-            <span class="nome-usuario-painel">${nome.toUpperCase()}</span>
-            <button onclick="logout()" class="btn-sair-vidro">SAIR</button>
-        </div>
+            <div class="painel-usuario-vidro">
+                <span class="nome-usuario-painel">${nome.toUpperCase()}</span>
+                <button onclick="logout()" class="btn-sair-vidro">SAIR</button>
+            </div>
 
-        <div id="area-notificaras" style="margin-top: 80px; margin-bottom: 20px;"></div>
-        
-        <div class="${classeGrelha}">
-    `;
+            <div id="area-notificaras" style="margin-top: 80px; margin-bottom: 20px;"></div>
+            
+            <div class="grid-movel-celular">
+        `;
 
     // --- 2. PERFIL: SUPER (Gestão de Usuários) --- [cite: 12]
     if (perfil === 'super') {
@@ -427,11 +427,8 @@ async function carregarDashboard() {
     }
 
     // --- 5. PERFIL: ESTOQUE (NOVA INTERFACE) --- [cite: 37]
-    if (perfil === 'estoque') {
-        const containerBotoes = document.getElementById('grid-botoes-dashboard');
-        
-        // Usamos backticks (`) para envolver todo o bloco HTML
-        containerBotoes.innerHTML = `
+if (perfil === 'estoque') {
+        html += `
             <button class="btn-grande btn-vidro" style="position: relative;" onclick="telaPendentesInfra()">
                 <div id="badge-infra-count" style="display: none; position: absolute; top: -10px; right: -10px; 
                     background: #ef4444; color: white; min-width: 26px; height: 26px; border-radius: 50%; 
@@ -463,11 +460,6 @@ async function carregarDashboard() {
                 <i>🔑</i><span>ALTERAR MINHA SENHA</span>
             </button>
         `;
-
-        // CRÍTICO: Chama a função para atualizar o número no badge assim que cria os botões
-        if (typeof atualizarBadgeInfra === 'function') {
-            atualizarBadgeInfra();
-        }
     }
 
     html += `</div>`;

@@ -16141,18 +16141,27 @@ window.confirmarEnvioTransferencia = async function(produtoId, qtdMax) {
 };
 
 window.telaSaidaTransferencia37 = async function() {
-    const app = document.getElementById('app');
+    // CORREÇÃO: Alterado de 'app' para 'app-content'
+    const container = document.getElementById('app-content');
     
-    app.innerHTML = `
-        <div class="painel-vidro animar-entrada" style="width: 100%; min-height: 100vh; padding: 30px; display: flex; flex-direction: column;">
+    // Trava de segurança: se não achar o container, tenta o 'app' ou avisa o erro
+    if (!container) {
+        console.error("Erro: Container de conteúdo não encontrado!");
+        return;
+    }
+
+    container.innerHTML = `
+        <div class="painel-vidro animar-entrada" style="width: 100%; min-height: 80vh; padding: 30px; display: flex; flex-direction: column;">
             
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
                 <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);">⬅ VOLTAR</button>
                 <h2 style="color: white; margin: 0; text-shadow: 0 0 10px rgba(0,0,0,0.5);">📦 ENVIO DE PATRIMÔNIO</h2>
-                <div style="width: 100px;"></div> </div>
+                <div style="width: 100px;"></div> 
+            </div>
 
             <div id="grid-produtos-transferencia" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; flex: 1; align-content: start;">
-                </div>
+                <p style="color: white; text-align: center; grid-column: 1/-1;">🔍 Buscando produtos no local 37...</p>
+            </div>
         </div>
     `;
 
@@ -16160,12 +16169,18 @@ window.telaSaidaTransferencia37 = async function() {
         const res = await fetch(`${API_URL}/transferencia/estoque-fonte`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
+        
         const produtos = await res.json();
         const grid = document.getElementById('grid-produtos-transferencia');
 
+        if (!produtos || produtos.length === 0) {
+            grid.innerHTML = '<p style="color: gray; text-align: center; grid-column: 1/-1;">Nenhum patrimônio disponível para transferência no Local 37.</p>';
+            return;
+        }
+
         grid.innerHTML = produtos.map(p => `
             <div class="item-setor-global" onclick="abrirModalDestinoTransferencia(${p.id}, '${p.nome}', ${p.quantidade_estoque})" 
-                 style="padding: 20px; cursor: pointer; border: 1px solid rgba(255,255,255,0.05); text-align: left; transition: 0.3s;">
+                 style="padding: 20px; cursor: pointer; border: 1px solid rgba(255,255,255,0.05); text-align: left; transition: 0.3s; background: rgba(255,255,255,0.02); border-radius: 15px;">
                 <span style="color: #aaa; font-size: 0.7rem; display: block; margin-bottom: 5px;">PRODUTO</span>
                 <strong style="color: white; font-size: 1rem; display: block; margin-bottom: 15px; text-transform: uppercase;">${p.nome}</strong>
                 
@@ -16177,7 +16192,9 @@ window.telaSaidaTransferencia37 = async function() {
         `).join('');
 
     } catch (err) {
-        console.error(err);
+        console.error("Erro ao carregar estoque para transferência:", err);
+        const grid = document.getElementById('grid-produtos-transferencia');
+        if(grid) grid.innerHTML = '<p style="color: #ef4444; text-align: center; grid-column: 1/-1;">Erro ao conectar com o servidor.</p>';
     }
 };
 

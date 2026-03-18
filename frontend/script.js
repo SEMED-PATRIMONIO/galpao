@@ -6751,68 +6751,75 @@ async function salvarRemessa(pedidoId) {
 
 async function telaAbastecerEstoque() {
     const app = document.getElementById('app-content');
-    app.innerHTML = '<div style="padding:20px; color:white;">Carregando dados para entrada...</div>';
+    app.innerHTML = '<div style="padding:20px; color:white;">🔍 Carregando produtos e unidades...</div>';
 
     try {
         const token = localStorage.getItem('token');
-        
         const [resProdutos, resLocais] = await Promise.all([
             fetch(`${API_URL}/estoque/materiais-e-patrimonios`, { headers: { 'Authorization': `Bearer ${token}` } }),
             fetch(`${API_URL}/locais/dropdown`, { headers: { 'Authorization': `Bearer ${token}` } })
         ]);
 
-        if (!resProdutos.ok || !resLocais.ok) throw new Error('Falha ao buscar dados.');
+        if (!resProdutos.ok || !resLocais.ok) throw new Error('Servidor não respondeu corretamente.');
 
-        const produtos = await resProdutos.json();
+        const todosProdutos = await resProdutos.json();
         const locais = await resLocais.json();
 
         app.innerHTML = `
-            <div class="painel-vidro" style="max-width: 600px; margin: 20px auto;">
+            <div class="painel-vidro" style="max-width: 600px; margin: 20px auto; border: 1px solid rgba(255,255,255,0.1);">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:15px;">
-                    <h2 style="color:white; margin:0; font-size: 1.2rem;">📥 LANÇAR ENTRADA (ABASTECIMENTO)</h2>
+                    <h2 style="color:white; margin:0; font-size: 1.2rem;">📥 ENTRADA DE ESTOQUE</h2>
                     <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
                 </div>
 
-                <div style="margin-bottom: 20px;">
-                    <label style="color: #cbd5e1; font-size: 0.85rem; display: block; margin-bottom: 5px;">ORIGEM DO MATERIAL (FORNECEDOR/LOCAL):</label>
-                    <select id="origem_entrada" class="input-vidro" style="width: 100%; background: rgba(15, 23, 42, 0.8); color: white;">
-                        <option value="" style="background: #1e293b; color: white;">-- SELECIONE A ORIGEM --</option>
-                        <option value="FORNECEDOR EXTERNO" style="background: #1e293b; color: white;">FORNECEDOR EXTERNO (COMPRA)</option>
-                        ${locais.map(l => `<option value="${l.id}" style="background: #1e293b; color: white;">${l.nome}</option>`).join('')}
+                <div style="margin-bottom: 15px;">
+                    <label style="color: #60a5fa; font-size: 0.8rem; font-weight: bold;">ORIGEM DO MATERIAL:</label>
+                    <select id="origem_entrada" class="input-vidro" style="width: 100%;">
+                        <option value="FORNECEDOR EXTERNO">FORNECEDOR EXTERNO (COMPRA)</option>
+                        ${locais.map(l => `<option value="${l.id}">${l.nome}</option>`).join('')}
                     </select>
                 </div>
 
-                <div style="margin-bottom: 20px;">
-                    <label style="color: #cbd5e1; font-size: 0.85rem; display: block; margin-bottom: 5px;">PRODUTO A SER LANÇADO:</label>
-                    <select id="produto_entrada" class="input-vidro" style="width: 100%; background: rgba(15, 23, 42, 0.8); color: white;">
-                        <option value="" style="background: #1e293b; color: white;">-- SELECIONE O PRODUTO --</option>
-                        ${produtos
-                            .filter(p => p.tipo !== 'PATRIMONIO')
-                            .map(p => `<option value="${p.id}" style="background: #1e293b; color: white;">${p.nome} (${p.tipo})</option>`)
-                            .join('')
-                        }
+                <div style="margin-bottom: 15px;">
+                    <label style="color: #60a5fa; font-size: 0.8rem; font-weight: bold;">TIPO DE ENTRADA:</label>
+                    <select id="filtro_tipo" class="input-vidro" style="width: 100%; border: 1px solid #60a5fa;" onchange="filtrarProdutosPorTipo(this.value)">
+                        <option value="">-- SELECIONE O TIPO --</option>
+                        <option value="MATERIAL">📦 MATERIAL / CONSUMO</option>
+                        <option value="UNIFORME">👕 UNIFORMES</option>
                     </select>
                 </div>
 
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
-                    <div>
-                        <label style="color: #cbd5e1; font-size: 0.85rem; display: block; margin-bottom: 5px;">QUANTIDADE:</label>
-                        <input type="number" id="qtd_entrada" min="1" class="input-vidro" style="width: 100%; background: rgba(15, 23, 42, 0.8); color: white;">
-                    </div>
-                    <div>
-                        <label style="color: #cbd5e1; font-size: 0.85rem; display: block; margin-bottom: 5px;">NF / DOCUMENTO:</label>
-                        <input type="text" id="doc_entrada" class="input-vidro" style="width: 100%; background: rgba(15, 23, 42, 0.8); color: white;">
-                    </div>
+                <div style="margin-bottom: 15px;">
+                    <label style="color: #60a5fa; font-size: 0.8rem; font-weight: bold;">PRODUTO:</label>
+                    <select id="produto_entrada" class="input-vidro" style="width: 100%;" onchange="alternarCamposEntrada(this)">
+                        <option value="">-- SELECIONE O TIPO PRIMEIRO --</option>
+                    </select>
                 </div>
 
-                <button onclick="processarEntradaEstoque()" class="btn-grande btn-vidro" style="background: #10b981; width: 100%; font-weight: bold; color: white !important;">
-                    ✅ CONFIRMAR ENTRADA NO ESTOQUE
+                <div id="area-campos-dinamicos" style="margin-top: 20px; padding: 15px; background: rgba(0,0,0,0.2); border-radius: 10px;">
+                    <p style="color: gray; text-align: center; font-size: 0.8rem;">Selecione um produto para continuar.</p>
+                </div>
+
+                <div style="margin-top: 20px;">
+                    <label style="color: #60a5fa; font-size: 0.8rem; font-weight: bold;">NF / DOCUMENTO:</label>
+                    <input type="text" id="doc_entrada" class="input-vidro" style="width: 100%;" placeholder="Nº da Nota ou Ofício">
+                </div>
+
+                <button onclick="processarEntradaEstoque()" class="btn-grande btn-vidro" style="background: #10b981; width: 100%; margin-top: 25px; color: white !important;">
+                    ✅ CONFIRMAR ENTRADA
                 </button>
             </div>
         `;
+
+        // Cache dos produtos para o filtro não precisar de novo fetch
+        window.produtosEntradaCache = todosProdutos;
+
     } catch (err) {
         console.error(err);
-        app.innerHTML = `<div class="painel-vidro" style="color:#ef4444; max-width: 500px; margin: auto;">⚠️ Erro ao carregar dados. Verifique a conexão com o servidor.</div>`;
+        app.innerHTML = `<div class="painel-vidro" style="color:#ef4444; max-width: 500px; margin: auto; text-align:center;">
+            ⚠️ Erro de Conexão: O servidor não respondeu. <br><br>
+            <button onclick="telaAbastecerEstoque()" class="btn-voltar-vidro">TENTAR NOVAMENTE</button>
+        </div>`;
     }
 }
 

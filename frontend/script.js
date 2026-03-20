@@ -16560,11 +16560,15 @@ function adicionarMaterial(id, nome) {
 }
 
 async function carregarConsultaEstoque() {
-    const app = document.getElementById('app-content'); // ID CORRETO EXTRAÍDO DO SEU SCRIPT
+    const app = document.getElementById('app-content');
     
-    if (!app) return;
+    if (!app) {
+        console.error("Erro: Elemento 'app-content' não encontrado.");
+        return;
+    }
 
-    // Limpa e prepara a tela vitrificada
+    // 1. Prepara a estrutura da tela (Header + Abas + Conteúdo)
+    // Os onclicks foram alterados para 'alternarVisualizacaoConsulta' para evitar conflitos
     app.innerHTML = `
         <div class="header-consulta animate__animated animate__fadeIn">
             <button class="btn-voltar-vidro" onclick="carregarDashboard()" style="margin-bottom: 20px;">
@@ -16574,13 +16578,17 @@ async function carregarConsultaEstoque() {
         </div>
         
         <div class="abas-consulta" style="display: flex; gap: 15px; margin-bottom: 20px;">
-            <button class="aba-item active" onclick="mudarAba('estoque')" style="background: rgba(255,255,255,0.1); color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer;">ESTOQUE ATUAL</button>
-            <button class="aba-item" onclick="mudarAba('historico')" style="background: rgba(255,255,255,0.1); color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer;">HISTÓRICO DE ENTRADAS</button>
+            <button class="aba-item active" onclick="alternarVisualizacaoConsulta('estoque')" style="background: rgba(255,255,255,0.1); color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer;">
+                ESTOQUE ATUAL
+            </button>
+            <button class="aba-item" onclick="alternarVisualizacaoConsulta('historico')" style="background: rgba(255,255,255,0.1); color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer;">
+                HISTÓRICO DE ENTRADAS
+            </button>
         </div>
 
         <div id="secao-estoque" class="aba-content">
             <div id="lista-estoque-unificada" class="lista-container">
-                <p style="color: white;">Carregando produtos...</p>
+                <p style="color: white; padding: 20px;">Sincronizando estoque...</p>
             </div>
         </div>
 
@@ -16590,42 +16598,53 @@ async function carregarConsultaEstoque() {
     `;
 
     try {
-        // Usa o seu API_URL e o seu TOKEN que já estão definidos no topo do seu script
+        // 2. Busca os dados no servidor usando suas constantes globais
         const res = await fetch(`${API_URL}/estoque/consulta-geral`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
-        const produtos = await res.json();
 
+        if (!res.ok) throw new Error(`Erro HTTP: ${res.status}`);
+        
+        const produtos = await res.json();
         const listaHtml = document.getElementById('lista-estoque-unificada');
+        
+        if (!listaHtml) return;
         listaHtml.innerHTML = ''; 
 
+        // 3. Renderiza os cards vitrificados
         produtos.forEach(p => {
             const isUniforme = p.tipo === 'UNIFORMES';
             
             listaHtml.innerHTML += `
                 <div class="card-consulta glass-panel ${isUniforme ? 'card-uniforme' : 'card-material'}" 
-                     style="background: rgba(255,255,255,0.1); margin-bottom: 10px; padding: 15px; border-radius: 12px; color: white; cursor: pointer;"
+                     style="background: rgba(255,255,255,0.1); margin-bottom: 12px; padding: 18px; border-radius: 15px; color: white; cursor: ${isUniforme ? 'pointer' : 'default'}; border: 1px solid rgba(255,255,255,0.1);"
                      id="card-${p.id}" 
                      ${isUniforme ? `onclick="toggleGrade(${p.id})"` : ''}>
                     
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                         <div>
-                            <span style="font-size: 0.7rem; background: rgba(0,212,255,0.2); padding: 2px 6px; border-radius: 4px; color: #00d4ff;">${p.tipo}</span>
-                            <p style="margin: 5px 0 0 0; font-weight: bold;">${p.nome}</p>
+                            <span style="font-size: 0.7rem; background: rgba(0,212,255,0.2); padding: 3px 8px; border-radius: 5px; color: #00d4ff; font-weight: bold;">
+                                ${p.tipo}
+                            </span>
+                            <p style="margin: 8px 0 0 0; font-size: 1.1rem; font-weight: bold; letter-spacing: 0.5px;">
+                                ${p.nome}
+                            </p>
                         </div>
                         <div style="text-align: right;">
-                            <small style="display: block; font-size: 0.7rem; opacity: 0.7;">TOTAL</small>
-                            <span style="font-size: 1.2rem; font-weight: bold; color: #00d4ff;">${p.quantidade_estoque}</span>
+                            <small style="display: block; font-size: 0.65rem; opacity: 0.6; text-transform: uppercase;">Saldo Total</small>
+                            <span style="font-size: 1.4rem; font-weight: 900; color: #00d4ff; text-shadow: 0 0 10px rgba(0, 212, 255, 0.3);">
+                                ${p.quantidade_estoque}
+                            </span>
                         </div>
                     </div>
 
                     ${isUniforme ? `
-                        <div id="grade-${p.id}" class="grade-expansivel" style="display:none; margin-top: 15px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1);">
-                            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(50px, 1fr)); gap: 8px;">
+                        <div id="grade-${p.id}" class="grade-expansivel" style="display:none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);">
+                            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(55px, 1fr)); gap: 10px;">
                                 ${p.grade.map(g => `
-                                    <div style="background: rgba(0,0,0,0.2); padding: 5px; border-radius: 6px; text-align: center;">
-                                        <small style="display: block; font-size: 0.6rem; color: #aaa;">${g.tamanho}</small>
-                                        <strong style="font-size: 0.8rem;">${g.quantidade}</strong>
+                                    <div style="background: rgba(0,0,0,0.25); padding: 6px; border-radius: 8px; text-align: center; border: 1px solid rgba(255,255,255,0.05);">
+                                        <small style="display: block; font-size: 0.6rem; color: #00d4ff; margin-bottom: 2px;">${g.tamanho}</small>
+                                        <strong style="font-size: 0.9rem;">${g.quantidade}</strong>
                                     </div>
                                 `).join('')}
                             </div>
@@ -16636,6 +16655,10 @@ async function carregarConsultaEstoque() {
         });
     } catch (err) {
         console.error("Erro na consulta:", err);
+        const listaHtml = document.getElementById('lista-estoque-unificada');
+        if (listaHtml) {
+            listaHtml.innerHTML = `<p style="color: #ff4d4d; padding: 20px;">❌ Erro ao sincronizar estoque: ${err.message}</p>`;
+        }
     }
 }
 
@@ -16784,6 +16807,26 @@ async function compartilharRelatorio() {
         // Fallback para PC caso não tenha suporte: copia para o clipboard
         navigator.clipboard.writeText(textoShare);
         alert("Resumo copiado para a área de transferência!");
+    }
+}
+
+function alternarVisualizacaoConsulta(sessao) {
+    const secaoEstoque = document.getElementById('secao-estoque');
+    const secaoHistorico = document.getElementById('secao-historico');
+    const botoes = document.querySelectorAll('.aba-item');
+
+    // Remove classe ativa e esconde as seções
+    botoes.forEach(btn => btn.classList.remove('active'));
+    if (secaoEstoque) secaoEstoque.style.display = 'none';
+    if (secaoHistorico) secaoHistorico.style.display = 'none';
+
+    if (sessao === 'estoque') {
+        if (secaoEstoque) secaoEstoque.style.display = 'block';
+        botoes[0].classList.add('active');
+    } else {
+        if (secaoHistorico) secaoHistorico.style.display = 'block';
+        botoes[1].classList.add('active');
+        carregarHistoricoEntradas(); // Chama a busca de dados do histórico
     }
 }
 

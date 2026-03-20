@@ -1,6 +1,8 @@
 const API_URL = 'https://patrimoniosemed.paiva.api.br';
 let TOKEN = localStorage.getItem('token');
 const tokenParaUso = localStorage.getItem('token');
+const GRADE_VESTUARIO = ['2', '4', '6', '8', '10', '12', '14', '16', 'PP', 'P', 'M', 'G', 'GG', 'EGG'];
+const GRADE_TENIS = Array.from({length: 22}, (_, i) => (i + 22).toString()); // 22 a 43
 // Mapeamento extraído do PDF de Nomenclatura 
 const PREFIXOS_LOCAIS = {
     1:"CL", 2:"IG", 3:"VF", 4:"GO", 5:"AK", 6:"CN", 7:"CC", 8:"FB", 9:"ET", 10:"JR",
@@ -242,6 +244,7 @@ async function carregarDashboard() {
     let dadosEstoqueCache = [];
     let categoriaAtual = 'UNIFORMES';
     let carrinhoAdmin = [];
+    let carrinhoEntrada = [];
     let chartTecnicos = null; // Variável global para controle do gráfico [cite: 4, 5]
     
     await inicializarSessaoUsuario();
@@ -290,16 +293,10 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaAdminDashboard()">
                 <i>📈</i><span>PAINEL DE PEDIDOS</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="telaVisualizarEstoque()">
-                <i>👕</i><span>ESTOQUE UNIFORMES</span>
-            </button>
-            <button class="btn-grande btn-vidro" style="background:rgba(16, 185, 129, 0.2);" onclick="telaEstoqueMateriaisEPatrimonios()">
-                <i>📦</i><span>ESTOQUE DEMAIS MATERIAIS</span>
-            </button>
             <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
                 <i>🔑</i><span>ALTERAR MINHA SENHA</span>
             </button>            
-        `; // [cite: 13, 14, 15]
+        `; 
     }
 
     if (perfil === 'logistica') {
@@ -319,10 +316,10 @@ async function carregarDashboard() {
                 <i>🛡️</i><span>ACESSOS AO INFORME DE RENDIMENTOS</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="telaSolicitarServicoImpressora('recarga')">
-                <i>💧</i><span>RECARGA DE TONER</span>
+                <i>💧</i><span>SOLICITAR RECARGA DE TONER</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="telaSolicitarManutencaoPC('')">
-                <i>💻</i><span>MANUTENÇÃO INFORMÁTICA</span>
+                <i>💻</i><span>SOLICITAR MANUTENÇÃO INFORMÁTICA</span>
             </button>
             <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
                 <i>🔑</i><span>ALTERAR MINHA SENHA</span>
@@ -411,11 +408,14 @@ async function carregarDashboard() {
     // --- 4. PERFIL: ADMIN (NOVA INTERFACE) --- [cite: 32]
     if (perfil === 'admin') {
         html += `
-            <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('DEMAIS ITENS')">
-                <i>📦</i><span>ESTOQUE</span>
-            </button>
             <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('PEDIDOS')">
                 <i>📝</i><span>PEDIDOS</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="telaCadastrosBase()">
+                <i>⚙️</i><span>CADASTRAR NOVO LOCAL/CATEGORIA/PRODUTO</span>
+            </button>            
+            <button class="btn-grande btn-vidro" onclick="carregarConsultaEstoque()">
+                <i>👕</i><span>CONSULTA ESTOQUE</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('RELATÓRIOS')">
                 <i>📊</i><span>RELATÓRIOS</span>
@@ -444,8 +444,14 @@ if (perfil === 'estoque') {
                 <i>🏛️</i><span>PATRIMÔNIO</span>
             </button>
 
-            <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('DEMAIS ITENS')">
-                <i>📦</i><span>ESTOQUE</span>
+            <button class="btn-grande btn-vidro" onclick="telaCadastrosBase()">
+                <i>⚙️</i><span>CADASTRAR NOVO LOCAL/CATEGORIA/PRODUTO</span>
+            </button>            
+            <button class="btn-grande btn-vidro" onclick="abrirTelaEntrada()">
+                <i>📥</i><span>LANÇAR ENTRADA NO ESTOQUE</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="carregarConsultaEstoque()">
+                <i>👕</i><span>CONSULTA ESTOQUE</span>
             </button>
 
             <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('PEDIDOS')">
@@ -489,22 +495,7 @@ function abrirSubmenuVitrificado(titulo) {
 
     // --- LÓGICA DE DISTRIBUIÇÃO (Botões Padronizados com Ícone + Span) ---
     if (perfil === 'estoque') {
-        if (titulo === 'DEMAIS ITENS') {
-            botoesExtra = `
-            <button class="btn-grande btn-vidro" onclick="telaCadastrosBase()">
-                <i>⚙️</i><span>CADASTRAR NOVO</span>
-            </button>            
-            <button class="btn-grande btn-vidro" onclick="telaAbastecerEstoque()">
-                <i>📥</i><span>LANÇAR ENTRADA NO ESTOQUE</span>
-            </button>
-            <button class="btn-grande btn-vidro" onclick="telaVisualizarEstoque()">
-                <i>👕</i><span>ESTOQUE DE UNIFORMES</span>
-            </button>
-            <button class="btn-grande btn-vidro" style="background:rgba(16, 185, 129, 0.2);" onclick="telaEstoqueMateriaisEPatrimonios()">
-                <i>📦</i><span>ESTOQUE DOS DEMAIS ITENS</span>
-            </button>
-            `;
-        } else if (titulo === 'PEDIDOS') {
+        if (titulo === 'PEDIDOS') {
             botoesExtra = `
             <button class="btn-grande btn-vidro" onclick="telaEstoquePedidosPendentes()">
                 <i>📦</i><span>SEPARAÇÃO DE VOLUMES</span>
@@ -532,19 +523,7 @@ function abrirSubmenuVitrificado(titulo) {
     }
 
     if (perfil === 'admin') {
-        if (titulo === 'DEMAIS ITENS') {
-            botoesExtra = `
-            <button class="btn-grande btn-vidro" onclick="telaCadastrosBase()">
-                <i>⚙️</i><span>CADASTRAR NOVO</span>
-            </button>
-            <button class="btn-grande btn-vidro" onclick="telaVisualizarEstoque()">
-                <i>👕</i><span>ESTOQUE DE UNIFORMES</span>
-            </button>
-            <button class="btn-grande btn-vidro" style="background:rgba(16, 185, 129, 0.2);" onclick="telaEstoqueMateriaisEPatrimonios()">
-                <i>📦</i><span>ESTOQUE DOS DEMAIS ITENS</span>
-            </button>
-            `;
-        } else if (titulo === 'PEDIDOS') {
+        if (titulo === 'PEDIDOS') {
             botoesExtra = `
             <button class="btn-grande btn-vidro" onclick="telaAdminGerenciarSolicitacoes()">
                 <i>⚖️</i><span>AUTORIZAR SOLICITAÇÕES</span>
@@ -641,62 +620,6 @@ function mudarAba(novaCategoria) {
     if (busca) busca.value = '';
     
     filtrarEstoque();
-}
-
-function filtrarEstoque() {
-    const termoBusca = document.getElementById('busca-produto').value.toLowerCase();
-    
-    // Filtra por Categoria E por Texto (se houver)
-    const produtosExibidos = dadosEstoqueCache.filter(p => {
-        const matchCategoria = p.tipo === categoriaAtual;
-        const matchTexto = p.nome.toLowerCase().includes(termoBusca);
-        return matchCategoria && matchTexto;
-    });
-
-    const areaTabela = document.getElementById('conteudo-estoque');
-    
-    if (produtosExibidos.length === 0) {
-        areaTabela.innerHTML = `<div style="padding:40px; text-align:center; color:#cbd5e1;">Nenhum item encontrado.</div>`;
-        return;
-    }
-
-    areaTabela.innerHTML = `
-        <table style="width:100%; border-collapse:collapse; color:white;">
-            <thead>
-                <tr style="background:rgba(255,255,255,0.1);">
-                    <th style="padding:15px; text-align:left; font-size:0.8rem;">PRODUTO</th>
-                    <th style="padding:15px; text-align:center; font-size:0.8rem;">SALDO REAL</th>
-                    <th style="padding:15px; text-align:center; font-size:0.8rem;">STATUS</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${produtosExibidos.map(p => {
-                    // Garantimos que os valores sejam tratados como números para a comparação
-                    const saldo = Number(p.quantidade_estoque) || 0;
-                    const minimo = Number(p.notificara_minimo) || 0;
-
-                    const status = saldo <= minimo 
-                        ? '<span style="color:#f87171; font-weight:bold; font-size:0.75rem;">🔴 CRÍTICO</span>' 
-                        : '<span style="color:#4ade80; font-weight:bold; font-size:0.75rem;">🟢 OK</span>';
-                    
-                    return `
-                        <tr style="border-bottom:1px solid rgba(255,255,255,0.1); transition: 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
-                            <td style="padding:15px; font-weight:500; font-size:0.9rem;">${p.nome}</td>
-                            <td style="padding:15px; text-align:center;">
-                                ${p.tipo === 'UNIFORMES' ? 
-                                    `<button onclick="abrirModalGrade(${p.id}, '${p.nome}')" class="btn-sair-vidro" style="background:rgba(59,130,246,0.3); border:1px solid #3b82f6; font-size:0.75rem; padding: 5px 12px; cursor:pointer; width: auto; height: auto; margin: 0;">
-                                        🔍 ${saldo} (GRADE)
-                                    </button>` : 
-                                    `<strong style="font-size:1.1rem; color: #fbbf24;">${saldo}</strong> <small style="color:#94a3b8; font-size:0.7rem;">unid.</small>`
-                                }
-                            </td>
-                            <td style="padding:15px; text-align:center;">${status}</td>
-                        </tr>
-                    `;
-                }).join('')}
-            </tbody>
-        </table>
-    `;
 }
 
 async function enviarPedidoUniforme(operacao) {
@@ -814,33 +737,6 @@ async function finalizarPedidoUniforme(tipoMovimentacao) {
     }
 }
 
-async function abrirModalGrade(id, nome) {
-    const modal = document.getElementById('modalGrade');
-    const corpo = document.getElementById('modalCorpo');
-    document.getElementById('modalTitulo').innerText = nome;
-    corpo.innerHTML = "Carregando...";
-    modal.style.display = 'flex';
-
-    try {
-        const res = await fetch(`${API_URL}/estoque/grade/${id}`, {
-            headers: { 'Authorization': `Bearer ${TOKEN}` }
-        });
-        const grade = await res.json();
-
-        if (grade.length === 0) {
-            corpo.innerHTML = "<p style='grid-column: span 3; text-align:center;'>Nenhum saldo por tamanho registrado.</p>";
-        } else {
-            corpo.innerHTML = grade.map(g => `
-                <div style="background:#f8fafc; border:1px solid #e2e8f0; padding:10px; text-align:center; border-radius:6px;">
-                    <div style="font-size:0.75rem; color:#64748b; font-weight:bold;">TAM ${g.tamanho}</div>
-                    <div style="font-size:1.1rem; font-weight:bold; color:#1e293b;">${g.quantidade}</div>
-                </div>
-            `).join('');
-        }
-    } catch (err) {
-        corpo.innerHTML = "Erro ao carregar grade.";
-    }
-}
 
 function gerarCamposProduto() {
     return `
@@ -3208,42 +3104,33 @@ function toggleInputMaterial(cb) {
 }
 
 async function renderizarHistorico() {
-    const conteudo = document.getElementById('conteudo-dinamico');
-    const res = await fetch(`${API_URL}/api/cadastros/historico`, { 
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } 
-    });
-    const dados = await res.json();
+    const response = await fetch('/api/estoque/historico-recente');
+    const logs = await response.json();
+    const timeline = document.getElementById('timeline-historico');
+    timeline.innerHTML = '';
 
-    conteudo.innerHTML = `
-        <div class="card-historico">
-            <h2>AUDITORIA DE MOVIMENTAÇÕES (HISTÓRICO)</h2>
-            <p><small>* Duplo clique em um registro para ver o detalhamento dos itens.</small></p>
-            <table class="tabela-estilizada">
-                <thead>
-                    <tr>
-                        <th>DATA/HORA</th>
-                        <th>USUÁRIO</th>
-                        <th>TIPO</th>
-                        <th>QTD TOTAL</th>
-                        <th>OBSERVAÇÕES</th>
-                        <th>LOCAL</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${dados.map(h => `
-                        <tr ondblclick="verDetalhesHistorico(${h.id})" title="Duplo clique para detalhes">
-                            <td>${new Date(h.data).toLocaleString()}</td>
-                            <td>${h.usuario_nome}</td>
-                            <td><span class="badge-${h.acao.toLowerCase()}">${h.acao}</span></td>
-                            <td>${h.quantidade_total}</td>
-                            <td>${h.observacoes || '-'}</td>
-                            <td>${h.local_nome || '-'}</td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>
-        </div>
-    `;
+    logs.forEach(log => {
+        const dataFormatada = new Date(log.data).toLocaleString('pt-BR');
+        
+        timeline.innerHTML += `
+            <div class="card-historico glass-panel animate__animated animate__fadeInUp">
+                <div class="historico-header">
+                    <span class="log-data">${dataFormatada}</span>
+                    <span class="log-usuario"><i class="fas fa-user"></i> ${log.usuario}</span>
+                </div>
+                <div class="historico-body">
+                    <strong>${log.acao}</strong>
+                    <p class="log-obs">${log.observacoes || 'Sem observações'}</p>
+                    <div class="log-itens">
+                        ${log.itens.map(i => `<span>${i.produto} (<b>${i.qtd}</b>)</span>`).join('')}
+                    </div>
+                </div>
+                <div class="log-footer">
+                    <span>Total de itens: <b>${log.quantidade_total}</b></span>
+                </div>
+            </div>
+        `;
+    });
 }
 
 async function verDetalhesHistorico(id) {
@@ -16442,8 +16329,447 @@ async function atualizarBadgeInfra() {
     }
 }
 
-// Chame isso logo após carregar o Dashboard
-// atualizarBadgeInfra();
+function abrirModalGrade(produto) {
+    const isTenis = produto.nome.toUpperCase().includes('TENIS');
+    const gradeTarget = isTenis ? GRADE_TENIS : GRADE_VESTUARIO;
+    
+    // Criar o HTML do modal dinamicamente
+    let modalHTML = `
+        <div id="modalGrade" class="modal-glass animate__animated animate__fadeIn">
+            <h3>Grade: ${produto.nome}</h3>
+            <p style="font-size: 0.8rem; opacity: 0.7;">Informe as quantidades por tamanho:</p>
+            
+            <div class="grid-tamanhos">
+                ${gradeTarget.map(tam => `
+                    <div class="item-grade">
+                        <label>${tam}</label>
+                        <input type="number" 
+                               class="input-grade" 
+                               data-tamanho="${tam}" 
+                               min="0" 
+                               placeholder="0"
+                               oninput="calcularTotalGrade()">
+                    </div>
+                `).join('')}
+            </div>
+
+            <div class="modal-footer">
+                <div>Total: <span id="totalModal" class="total-badge">0</span></div>
+                <button class="btn-confirmar" onclick="confirmarGrade(${produto.id}, '${produto.nome}', '${produto.tipo}')">OK</button>
+            </div>
+        </div>
+        <div id="overlay" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:999;"></div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+}
+
+function calcularTotalGrade() {
+    const inputs = document.querySelectorAll('.input-grade');
+    let total = 0;
+    inputs.forEach(input => {
+        total += parseInt(input.value) || 0;
+    });
+    document.getElementById('totalModal').innerText = total;
+}
+
+function confirmarGrade(id, nome, tipo) {
+    const inputs = document.querySelectorAll('.input-grade');
+    const gradeFinal = {};
+    let totalGeral = 0;
+
+    inputs.forEach(input => {
+        const qtd = parseInt(input.value) || 0;
+        if (qtd > 0) {
+            gradeFinal[input.dataset.tamanho] = qtd;
+            totalGeral += qtd;
+        }
+    });
+
+    if (totalGeral === 0) {
+        alert("Insira pelo menos uma quantidade.");
+        return;
+    }
+
+    // Aqui enviamos para a função que você já possui ou para o resumo lateral
+    adicionarAoResumoLateral({
+        produto_id: id,
+        nome: nome,
+        tipo: tipo,
+        qtd_total: totalGeral,
+        grade: gradeFinal
+    });
+
+    fecharModal();
+}
+
+function fecharModal() {
+    document.getElementById('modalGrade')?.remove();
+    document.getElementById('overlay')?.remove();
+}
+
+function adicionarAoResumoLateral(item) {
+    // Verifica se o item já está no resumo para evitar duplicidade (ou somar)
+    const index = carrinhoEntrada.findIndex(p => p.produto_id === item.produto_id);
+    
+    if (index > -1) {
+        carrinhoEntrada[index] = item; // Atualiza com os novos valores
+    } else {
+        carrinhoEntrada.push(item);
+    }
+    
+    renderizarResumoLateral();
+}
+
+function renderizarResumoLateral() {
+    const container = document.getElementById('lista-resumo');
+    container.innerHTML = '';
+
+    carrinhoEntrada.forEach((item, index) => {
+        let gradeHTML = '';
+        
+        // Se for uniforme, mostra os tamanhos detalhados
+        if (item.tipo === 'UNIFORMES' && item.grade) {
+            const detalhes = Object.entries(item.grade)
+                .map(([tam, qtd]) => `<b>${tam}</b>:${qtd}`)
+                .join(' | ');
+            gradeHTML = `<div class="detalhe-grade-resumo">${detalhes}</div>`;
+        }
+
+        container.innerHTML += `
+            <div class="card-item-resumo animate__animated animate__fadeInRight">
+                <div style="display:flex; justify-content:space-between;">
+                    <strong>${item.nome}</strong>
+                    <span style="color: #00d4ff;">+${item.qtd_total}</span>
+                </div>
+                ${gradeHTML}
+                <button onclick="removerItem(${index})" 
+                        style="background:none; border:none; color:#ff4d4d; cursor:pointer; font-size:0.7rem; padding:0; margin-top:5px;">
+                    [ remover ]
+                </button>
+            </div>
+        `;
+    });
+}
+
+function removerItem(index) {
+    carrinhoEntrada.splice(index, 1);
+    renderizarResumoLateral();
+}
+
+async function finalizarEntradaEstoque() {
+    if (carrinhoEntrada.length === 0) return alert("O resumo está vazio!");
+
+    const payload = {
+        itens: carrinhoEntrada,
+        usuario_id: usuarioLogado.id // ID do usuário do seu sistema
+    };
+
+    try {
+        const response = await fetch('/api/estoque/entrada-lote', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            alert("🔥 Level Up! Estoque atualizado com sucesso.");
+            carrinhoEntrada = [];
+            renderizarResumoLateral();
+            // Opcional: recarregar listagem principal aqui
+        } else {
+            alert("Erro: " + result.error);
+        }
+    } catch (err) {
+        console.error(err);
+        alert("Falha na comunicação com o servidor.");
+    }
+}
+
+async function abrirTelaEntrada() {
+    // 1. Mostrar o container da tela de entrada e o Painel Lateral
+    document.getElementById('container-entrada').style.display = 'flex';
+    
+    // 2. Buscar produtos da sua API atual
+    const response = await fetch('/api/produtos'); 
+    const produtos = await response.json();
+
+    // 3. Filtrar e Ordenar: UNIFORMES (1º), MATERIAL (2º), PATRIMONIO (OFF)
+    const listaTratada = produtos
+        .filter(p => p.tipo !== 'PATRIMONIO')
+        .sort((a, b) => {
+            if (a.tipo === 'UNIFORMES' && b.tipo !== 'UNIFORMES') return -1;
+            if (a.tipo !== 'UNIFORMES' && b.tipo === 'UNIFORMES') return 1;
+            return a.nome.localeCompare(b.nome); // Ordem alfabética dentro do tipo
+        });
+
+    renderizarListaProdutos(listaTratada);
+}
+
+function renderizarListaProdutos(produtos) {
+    const listaHtml = document.getElementById('lista-produtos-entrada');
+    listaHtml.innerHTML = '';
+
+    produtos.forEach(p => {
+        const isUniforme = p.tipo === 'UNIFORMES';
+        
+        listaHtml.innerHTML += `
+            <div class="card-produto-entrada glass-panel">
+                <div class="info">
+                    <span class="badge-tipo ${p.tipo.toLowerCase()}">${p.tipo}</span>
+                    <p class="nome-prod">${p.nome}</p>
+                    <small>Atual: ${p.quantidade_estoque}</small>
+                </div>
+                
+                <div class="acoes">
+                    ${isUniforme 
+                        ? `<button class="btn-grade" onclick='abrirModalGrade(${JSON.stringify(p)})'>
+                             <i class="fas fa-layer-group"></i> Abrir Grade
+                           </button>`
+                        : `<input type="number" placeholder="Qtd" class="input-material" id="qtd_${p.id}">
+                           <button class="btn-add" onclick="adicionarMaterial(${p.id}, '${p.nome}')">
+                             <i class="fas fa-plus"></i>
+                           </button>`
+                    }
+                </div>
+            </div>
+        `;
+    });
+}
+
+function adicionarMaterial(id, nome) {
+    const input = document.getElementById(`qtd_${id}`);
+    const qtd = parseInt(input.value);
+
+    if (!qtd || qtd <= 0) {
+        alert("Informe uma quantidade válida.");
+        return;
+    }
+
+    adicionarAoResumoLateral({
+        produto_id: id,
+        nome: nome,
+        tipo: 'MATERIAL',
+        qtd_total: qtd,
+        grade: null // Materiais não possuem grade
+    });
+
+    input.value = ''; // Limpa o campo após adicionar
+}
+
+async function carregarConsultaEstoque() {
+    const container = document.getElementById('container-principal'); // Ajuste para o seu ID principal
+    container.innerHTML = `
+        <div class="header-consulta animate__animated animate__fadeIn">
+            <button class="btn-voltar glass-button" onclick="carregarDashboard()">
+                <i class="fas fa-arrow-left"></i> VOLTAR
+            </button>
+            <h2 class="titulo-sessao">Consulta de Estoque</h2>
+        </div>
+        <div class="abas-consulta">
+            <button class="aba-item active" onclick="mudarAba('estoque')">ESTOQUE ATUAL</button>
+            <button class="aba-item" onclick="mudarAba('historico')">HISTÓRICO DE ENTRADAS</button>
+        </div>
+        <div id="secao-estoque" class="aba-content">
+            <div id="lista-estoque-unificada"></div>
+        </div>
+        <div id="secao-historico" class="aba-content" style="display:none;">
+            <div id="timeline-historico"></div>
+        </div>        
+        <div id="lista-estoque-unificada" class="lista-container">
+            </div>
+    `;
+
+    try {
+        // Busca os dados (A query deve retornar produtos + grade se houver)
+        const response = await fetch('/api/estoque/consulta-geral');
+        const produtos = await response.json();
+
+        const listaHtml = document.getElementById('lista-estoque-unificada');
+
+        produtos.forEach(p => {
+            const isUniforme = p.tipo === 'UNIFORMES';
+            
+            listaHtml.innerHTML += `
+                <div class="card-consulta glass-panel ${isUniforme ? 'card-uniforme' : 'card-material'}" 
+                     id="card-${p.id}" 
+                     ${isUniforme ? `onclick="toggleGrade(${p.id})"` : ''}>
+                    
+                    <div class="card-header-info">
+                        <div class="info-principal">
+                            <span class="badge-tipo">${p.tipo}</span>
+                            <strong class="nome-produto">${p.nome}</strong>
+                        </div>
+                        <div class="quantidade-badge">
+                            <small>Total:</small> <span>${p.quantidade_estoque}</span>
+                        </div>
+                    </div>
+
+                    ${isUniforme ? `
+                        <div id="grade-${p.id}" class="grade-expansivel" style="display:none;">
+                            <div class="grid-tamanhos-consulta">
+                                ${p.grade.map(g => `
+                                    <div class="item-grade-view">
+                                        <span class="tam">${g.tamanho}</span>
+                                        <span class="qtd">${g.quantidade}</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        });
+    } catch (err) {
+        console.error("Erro ao carregar consulta:", err);
+    }
+}
+
+function toggleGrade(id) {
+    const gradeDiv = document.getElementById(`grade-${id}`);
+    const card = document.getElementById(`card-${id}`);
+
+    if (gradeDiv.style.display === 'none') {
+        gradeDiv.style.display = 'block';
+        card.style.background = 'rgba(255, 255, 255, 0.15)'; // Destaque ao abrir
+    } else {
+        gradeDiv.style.display = 'none';
+        card.style.background = ''; // Volta ao normal
+    }
+}
+
+// Função para renderizar os controles de filtro na tela
+function renderizarFiltroPeriodo() {
+    const containerFiltro = document.getElementById('secao-historico');
+    
+    // Inserindo o HTML dos inputs de data com estilo vitrificado
+    const htmlFiltro = `
+        <div class="toolbar-filtros glass-panel" style="margin-bottom: 20px; display: flex; gap: 15px; align-items: flex-end; padding: 15px;">
+            <div class="campo-data">
+                <label style="display:block; font-size: 0.7rem; color: #00d4ff; margin-bottom: 5px;">INÍCIO:</label>
+                <input type="date" id="data-inicio" class="input-grade" style="width: 150px;">
+            </div>
+            <div class="campo-data">
+                <label style="display:block; font-size: 0.7rem; color: #00d4ff; margin-bottom: 5px;">FIM:</label>
+                <input type="date" id="data-fim" class="input-grade" style="width: 150px;">
+            </div>
+            <button class="btn-confirmar" onclick="filtrarHistoricoPorPeriodo()" style="height: 38px; margin-bottom: 2px;">
+                <i class="fas fa-search"></i> FILTRAR
+            </button>
+        </div>
+        <div class="acoes-relatorio animate__animated animate__fadeIn">
+            <button class="btn-acao pdf" onclick="gerarPDFHistorico()">
+                <i class="fas fa-file-pdf"></i> PDF (A4 Paisagem)
+            </button>
+            <button class="btn-acao excel" onclick="exportarExcelHistorico()">
+                <i class="fas fa-file-excel"></i> Exportar Excel
+            </button>
+            <button class="btn-acao share" onclick="compartilharRelatorio()">
+                <i class="fas fa-share-alt"></i> Compartilhar
+            </button>
+        </div>            
+        <div id="timeline-historico"></div>
+    `;
+    
+    containerFiltro.innerHTML = htmlFiltro;
+    
+    // Sugestão: Preencher com a data de hoje por padrão
+    const hoje = new Date().toISOString().split('T')[0];
+    document.getElementById('data-inicio').value = hoje;
+    document.getElementById('data-fim').value = hoje;
+}
+
+async function filtrarHistoricoPorPeriodo() {
+    const inicio = document.getElementById('data-inicio').value;
+    const fim = document.getElementById('data-fim').value;
+    
+    if (!inicio || !fim) return alert("Selecione o período completo.");
+
+    // Chamada para a API passando as datas como parâmetros
+    const response = await fetch(`/api/estoque/historico-periodo?inicio=${inicio}&fim=${fim}`);
+    const logs = await response.json();
+    
+    // Chama a função de renderização que criamos anteriormente
+    renderizarCardsHistorico(logs); 
+}
+
+function gerarPDFHistorico() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({
+        orientation: "landscape",
+        unit: "mm",
+        format: "a4"
+    });
+
+    // Título e Cabeçalho
+    doc.setFontSize(18);
+    doc.text("Relatório de Entradas - Almoxarifado Central (Local 37)", 14, 20);
+    doc.setFontSize(10);
+    doc.text(`Período: ${document.getElementById('data-inicio').value} até ${document.getElementById('data-fim').value}`, 14, 28);
+
+    // Preparar dados da tabela (usando o array que você já tem no front)
+    const colunas = ["Data", "Usuário", "Ação", "Qtd Total", "Itens Detalhados"];
+    const linhas = historicoFiltrado.map(h => [
+        new Date(h.data).toLocaleString(),
+        h.usuario,
+        h.acao,
+        h.quantidade_total,
+        h.itens.map(i => `${i.produto}(${i.qtd})`).join(', ')
+    ]);
+
+    doc.autoTable({
+        head: [colunas],
+        body: linhas,
+        startY: 35,
+        theme: 'grid',
+        headStyles: { fillColor: [0, 212, 255] } // Azul neon no cabeçalho
+    });
+
+    doc.save(`Relatorio_Entradas_${Date.now()}.pdf`);
+}
+
+function exportarExcelHistorico() {
+    const ws = XLSX.utils.json_to_sheet(historicoFiltrado.map(h => ({
+        Data: new Date(h.data).toLocaleString(),
+        Usuario: h.usuario,
+        Acao: h.acao,
+        Total: h.quantidade_total,
+        Itens: h.itens.map(i => `${i.produto}(${i.qtd})`).join(' | '),
+        Observacoes: h.observacoes
+    })));
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Entradas");
+    XLSX.writeFile(wb, `Estoque_Almoxarifado_${Date.now()}.xlsx`);
+}
+
+async function compartilharRelatorio() {
+    const inicio = document.getElementById('data-inicio').value;
+    const fim = document.getElementById('data-fim').value;
+    const totalItens = historicoFiltrado.reduce((acc, curr) => acc + curr.quantidade_total, 0);
+
+    const textoShare = `📦 *Relatório Almoxarifado Central*\n` +
+                       `📅 Período: ${inicio} a ${fim}\n` +
+                       `✅ Total de itens recebidos: ${totalItens}\n` +
+                       `💻 Gerado via Sistema CEL Renato Gomes.`;
+
+    if (navigator.share) {
+        try {
+            await navigator.share({
+                title: 'Relatório de Estoque',
+                text: textoShare,
+            });
+        } catch (err) {
+            console.log("Compartilhamento cancelado.");
+        }
+    } else {
+        // Fallback para PC caso não tenha suporte: copia para o clipboard
+        navigator.clipboard.writeText(textoShare);
+        alert("Resumo copiado para a área de transferência!");
+    }
+}
 
 // Isso garante que o onclick="funcao()" funcione sempre
 window.telaVisualizarEstoque = telaVisualizarEstoque;

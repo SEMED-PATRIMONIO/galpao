@@ -6088,4 +6088,38 @@ router.get('/estoque/consulta-exclusiva', async (req, res) => {
     }
 });
 
+// Rota para buscar o histórico detalhado
+router.get('/estoque/historico-completo', async (req, res) => {
+    try {
+        const sql = `
+            SELECT 
+                h.id, 
+                h.data AS data_hora, 
+                h.observacoes, 
+                u.nome AS nome_usuario,
+                json_agg(
+                    json_build_object(
+                        'nome_produto', p.nome,
+                        'quantidade', hd.quantidade,
+                        'tamanho', hd.tamanho
+                    )
+                ) AS itens
+            FROM historico h
+            JOIN usuarios u ON h.usuario_id = u.id
+            JOIN historico_detalhes hd ON h.id = hd.historico_id
+            JOIN produtos p ON hd.produto_id = p.id
+            WHERE h.local_id = 37
+            GROUP BY h.id, u.nome
+            ORDER BY h.data DESC
+            LIMIT 50;
+        `;
+
+        const { rows } = await db.query(sql); // Usando db.query do seu db.js
+        res.json(rows);
+    } catch (err) {
+        console.error("ERRO AO BUSCAR HISTÓRICO:", err.message);
+        res.status(500).json({ error: "Erro ao carregar histórico no banco de dados." });
+    }
+});
+
 module.exports = router;

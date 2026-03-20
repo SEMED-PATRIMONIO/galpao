@@ -6017,4 +6017,32 @@ router.post('/api/estoque/entrada-lote', async (req, res) => {
     }
 });
 
+router.get('/estoque/consulta-geral', async (req, res) => {
+    try {
+        const sql = `
+            SELECT 
+                p.id, p.nome, p.tipo, p.quantidade_estoque,
+                COALESCE(
+                    (SELECT json_agg(json_build_object('tamanho', et.tamanho, 'quantidade', et.quantidade) ORDER BY et.id)
+                     FROM estoque_tamanhos et 
+                     WHERE et.produto_id = p.id), 
+                    '[]'
+                ) AS grade
+            FROM produtos p
+            WHERE p.tipo IN ('MATERIAL', 'UNIFORMES')
+              AND p.local_id = 37
+            ORDER BY 
+                CASE WHEN p.tipo = 'UNIFORMES' THEN 1 ELSE 2 END, 
+                p.nome ASC;
+        `;
+
+        // Se o seu arquivo usa 'db', mude para db.query
+        const { rows } = await pool.query(sql); 
+        res.json(rows);
+    } catch (err) {
+        console.error("ERRO NA ROTA:", err);
+        res.status(500).json({ error: "Erro interno" });
+    }
+});
+
 module.exports = router;

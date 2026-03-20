@@ -5961,25 +5961,17 @@ router.post('/entrada', async (req, res) => {
 
 // Sugestão de implementação (Node.js/Express)
 router.post('/estoque/entrada-lote', async (req, res) => {
-    console.log("📥 Recebendo tentativa de entrada...");
+    const { itens, usuario_id, observacoes } = req.body;
     
-    // 1. Verificar se o objeto de banco existe (tente db ou pool conforme seu projeto)
-    const banco = typeof db !== 'undefined' ? db : (typeof pool !== 'undefined' ? pool : null);
-    
-    if (!banco) {
-        console.error("❌ Erro: Conexão com o banco (db ou pool) não definida no arquivo de rotas.");
-        return res.status(500).send("Erro de configuração no servidor: Banco não encontrado.");
-    }
+    // Agora usamos db.pool.connect() pois exportamos o pool no db.js
+    const client = await db.pool.connect(); 
 
-    let client;
     try {
-        client = await banco.connect();
         await client.query('BEGIN');
 
-        const { itens, usuario_id, observacoes } = req.body;
         const totalGeral = itens.reduce((acc, item) => acc + item.qtd_total, 0);
 
-        // Inserção Mestre
+        // 1. Registro no histórico (MESTRE)
         const resMaster = await client.query(
             `INSERT INTO historico (usuario_id, acao, quantidade_total, observacoes, local_id, tipo) 
              VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
@@ -5988,13 +5980,13 @@ router.post('/estoque/entrada-lote', async (req, res) => {
         const historicoId = resMaster.rows[0].id;
 
         for (const item of itens) {
-            // Atualiza Saldo Global
+            // 2. Atualiza saldo na tabela produtos
             await client.query(
                 `UPDATE produtos SET quantidade_estoque = quantidade_estoque + $1 WHERE id = $2`,
                 [item.qtd_total, item.produto_id]
             );
 
-            // Detalhes do Histórico
+            // 3. Registra os detalhes
             if (item.tipo === 'MATERIAL') {
                 await client.query(
                     `INSERT INTO historico_detalhes (historico_id, produto_id, quantidade, tipo_produto) 
@@ -6009,6 +6001,8 @@ router.post('/estoque/entrada-lote', async (req, res) => {
                              VALUES ($1, $2, $3, $4, $5)`,
                             [historicoId, item.produto_id, qtd, tamanho, 'UNIFORMES']
                         );
+                        
+                        // 4. Atualiza grade de tamanhos
                         await client.query(
                             `INSERT INTO estoque_tamanhos (produto_id, tamanho, quantidade)
                              VALUES ($1, $2, $3)
@@ -6022,14 +6016,14 @@ router.post('/estoque/entrada-lote', async (req, res) => {
         }
 
         await client.query('COMMIT');
-        res.json({ success: true });
+        res.status(200).json({ success: true });
 
     } catch (err) {
-        if (client) await client.query('ROLLBACK');
-        console.error("❌ ERRO NO BANCO:", err.message);
+        await client.query('ROLLBACK');
+        console.error("ERRO NO BANCO:", err.message);
         res.status(500).json({ success: false, error: err.message });
     } finally {
-        if (client) client.release();
+        client.release();
     }
 });
 

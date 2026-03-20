@@ -5977,21 +5977,20 @@ router.post('/api/estoque/entrada-lote', async (req, res) => {
         const historicoId = resMaster.rows[0].id;
 
         for (const item of itens) {
-            // 2. Atualiza Saldo Global em 'produtos'
+            // 2. Atualiza Saldo Global (Soma o que entrou ao que já existe)
             await client.query(
                 `UPDATE produtos SET quantidade_estoque = quantidade_estoque + $1 WHERE id = $2`,
                 [item.qtd_total, item.produto_id]
             );
 
-            // 3. Grava o DETALHE do item no histórico
-            // Assumindo que historico_detalhes tenha: historico_id, produto_id, quantidade
+            // 3. Grava o detalhe individual no histórico
             await client.query(
                 `INSERT INTO historico_detalhes (historico_id, produto_id, quantidade) 
                  VALUES ($1, $2, $3)`,
                 [historicoId, item.produto_id, item.qtd_total]
             );
 
-            // 4. Se for UNIFORME, atualiza a grade
+            // 4. Se for UNIFORME, trata a grade de tamanhos
             if (item.tipo === 'UNIFORMES' && item.grade) {
                 for (const [tamanho, qtd] of Object.entries(item.grade)) {
                     if (qtd > 0) {
@@ -6011,6 +6010,7 @@ router.post('/api/estoque/entrada-lote', async (req, res) => {
         res.json({ success: true, historicoId: historicoId });
     } catch (err) {
         await client.query('ROLLBACK');
+        console.error("Erro na entrada em lote:", err);
         res.status(500).json({ error: err.message });
     } finally {
         client.release();

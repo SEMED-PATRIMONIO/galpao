@@ -5920,4 +5920,101 @@ router.get('/transferencia/contagem-infra', verificarToken, async (req, res) => 
     }
 });
 
+// Exemplo usando pg-pool ou similar
+router.post('/entrada', async (req, res) => {
+    const { itens } = req.body; // Array de objetos {produto_id, tipo, qtd_total, grades: [{tamanho, qtd}]}
+    const client = await pool.connect();
+
+    try {
+        await client.query('BEGIN');
+
+        for (const item of itens) {
+            // 1. Atualiza a tabela principal 'produtos'
+            await client.query(
+                'UPDATE produtos SET quantidade_estoque = quantidade_estoque + $1 WHERE id = $2',
+                [item.qtd_total, item.produto_id]
+            );
+
+            // 2. Se for UNIFORME, atualiza a grade 'estoque_tamanhos'
+            if (item.tipo === 'UNIFORMES' && item.grades) {
+                for (const grade of item.grades) {
+                    await client.query(
+                        `INSERT INTO estoque_tamanhos (produto_id, tamanho, quantidade) 
+                         VALUES ($1, $2, $3)
+                         ON CONFLICT (produto_id, tamanho) 
+                         DO UPDATE SET quantidade = estoque_tamanhos.quantidade + EXCLUDED.quantidade`,
+                        [item.produto_id, grade.tamanho, grade.qtd]
+                    );
+                }
+            }
+        }
+
+        await client.query('COMMIT');
+        res.status(200).json({ message: 'Estoque atualizado com sucesso!' });
+    } catch (e) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ error: e.message });
+    } finally {
+        client.release();
+    }
+});
+
+// Sugestão de implementação (Node.js/Express)
+app.post('/api/estoque/entrada-lote', async (req, res) => {
+    const { itens, usuario_id, observacoes } = req.body;
+    const client = await pool.connect();
+
+    try {
+        await client.query('BEGIN');
+
+        // 1. Criar o registro MESTRE no histórico
+        const totalGeral = itens.reduce((acc, item) => acc + item.qtd_total, 0);
+        const resMaster = await client.query(
+            `INSERT INTO historico (usuario_id, acao, quantidade_total, local_id, observacoes, tipo) 
+             VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+            [usuario_id, 'ENTRADA DE ESTOQUE', totalGeral, 37, observacoes || '', 'ENTRADA']
+        );
+        const historicoId = resMaster.rows[0].id;
+
+        for (const item of itens) {
+            // 2. Atualiza Saldo Global em 'produtos'
+            await client.query(
+                `UPDATE produtos SET quantidade_estoque = quantidade_estoque + $1 WHERE id = $2`,
+                [item.qtd_total, item.produto_id]
+            );
+
+            // 3. Grava o DETALHE do item no histórico
+            // Assumindo que historico_detalhes tenha: historico_id, produto_id, quantidade
+            await client.query(
+                `INSERT INTO historico_detalhes (historico_id, produto_id, quantidade) 
+                 VALUES ($1, $2, $3)`,
+                [historicoId, item.produto_id, item.qtd_total]
+            );
+
+            // 4. Se for UNIFORME, atualiza a grade
+            if (item.tipo === 'UNIFORMES' && item.grade) {
+                for (const [tamanho, qtd] of Object.entries(item.grade)) {
+                    if (qtd > 0) {
+                        await client.query(
+                            `INSERT INTO estoque_tamanhos (produto_id, tamanho, quantidade)
+                             VALUES ($1, $2, $3)
+                             ON CONFLICT (produto_id, tamanho) 
+                             DO UPDATE SET quantidade = estoque_tamanhos.quantidade + EXCLUDED.quantidade`,
+                            [item.produto_id, tamanho, qtd]
+                        );
+                    }
+                }
+            }
+        }
+
+        await client.query('COMMIT');
+        res.json({ success: true, historicoId: historicoId });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
 module.exports = router;

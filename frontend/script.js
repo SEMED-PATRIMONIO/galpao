@@ -2983,7 +2983,7 @@ async function processarEntradaEstoque() {
             },
             body: JSON.stringify({ 
                 itens: itensParaEnviar,
-                usuario_id: usuarioId, // Enviando o ID correto do banco
+                usuario_id: usuarioId,
                 observacoes: "Entrada via painel operacional" 
             })
         });
@@ -2991,7 +2991,7 @@ async function processarEntradaEstoque() {
         const resultado = await res.json();
         if (resultado.success) {
             alert("✅ Estoque atualizado com sucesso!");
-            carregarDashboard(); // Volta para o menu principal
+            carregarDashboard();
         } else {
             throw new Error(resultado.error);
         }

@@ -16560,60 +16560,72 @@ function adicionarMaterial(id, nome) {
 }
 
 async function carregarConsultaEstoque() {
-    const container = document.getElementById('container-principal'); // Ajuste para o seu ID principal
-    container.innerHTML = `
+    const app = document.getElementById('app-content'); // ID CORRETO EXTRAÍDO DO SEU SCRIPT
+    
+    if (!app) return;
+
+    // Limpa e prepara a tela vitrificada
+    app.innerHTML = `
         <div class="header-consulta animate__animated animate__fadeIn">
-            <button class="btn-voltar glass-button" onclick="carregarDashboard()">
+            <button class="btn-voltar-vidro" onclick="carregarDashboard()" style="margin-bottom: 20px;">
                 <i class="fas fa-arrow-left"></i> VOLTAR
             </button>
-            <h2 class="titulo-sessao">Consulta de Estoque</h2>
+            <h2 class="titulo-sessao" style="color: white; margin-bottom: 20px;">CONSULTA DE ESTOQUE</h2>
         </div>
-        <div class="abas-consulta">
-            <button class="aba-item active" onclick="mudarAba('estoque')">ESTOQUE ATUAL</button>
-            <button class="aba-item" onclick="mudarAba('historico')">HISTÓRICO DE ENTRADAS</button>
+        
+        <div class="abas-consulta" style="display: flex; gap: 15px; margin-bottom: 20px;">
+            <button class="aba-item active" onclick="mudarAba('estoque')" style="background: rgba(255,255,255,0.1); color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer;">ESTOQUE ATUAL</button>
+            <button class="aba-item" onclick="mudarAba('historico')" style="background: rgba(255,255,255,0.1); color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer;">HISTÓRICO DE ENTRADAS</button>
         </div>
+
         <div id="secao-estoque" class="aba-content">
-            <div id="lista-estoque-unificada"></div>
+            <div id="lista-estoque-unificada" class="lista-container">
+                <p style="color: white;">Carregando produtos...</p>
+            </div>
         </div>
+
         <div id="secao-historico" class="aba-content" style="display:none;">
             <div id="timeline-historico"></div>
-        </div>        
-        <div id="lista-estoque-unificada" class="lista-container">
-            </div>
+        </div>
     `;
 
     try {
-        // Busca os dados (A query deve retornar produtos + grade se houver)
-        const response = await fetch('/api/estoque/consulta-geral');
-        const produtos = await response.json();
+        // Usa o seu API_URL e o seu TOKEN que já estão definidos no topo do seu script
+        const res = await fetch(`${API_URL}/estoque/consulta-geral`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const produtos = await res.json();
 
         const listaHtml = document.getElementById('lista-estoque-unificada');
+        listaHtml.innerHTML = ''; 
 
         produtos.forEach(p => {
             const isUniforme = p.tipo === 'UNIFORMES';
             
             listaHtml.innerHTML += `
                 <div class="card-consulta glass-panel ${isUniforme ? 'card-uniforme' : 'card-material'}" 
+                     style="background: rgba(255,255,255,0.1); margin-bottom: 10px; padding: 15px; border-radius: 12px; color: white; cursor: pointer;"
                      id="card-${p.id}" 
                      ${isUniforme ? `onclick="toggleGrade(${p.id})"` : ''}>
                     
-                    <div class="card-header-info">
-                        <div class="info-principal">
-                            <span class="badge-tipo">${p.tipo}</span>
-                            <strong class="nome-produto">${p.nome}</strong>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <span style="font-size: 0.7rem; background: rgba(0,212,255,0.2); padding: 2px 6px; border-radius: 4px; color: #00d4ff;">${p.tipo}</span>
+                            <p style="margin: 5px 0 0 0; font-weight: bold;">${p.nome}</p>
                         </div>
-                        <div class="quantidade-badge">
-                            <small>Total:</small> <span>${p.quantidade_estoque}</span>
+                        <div style="text-align: right;">
+                            <small style="display: block; font-size: 0.7rem; opacity: 0.7;">TOTAL</small>
+                            <span style="font-size: 1.2rem; font-weight: bold; color: #00d4ff;">${p.quantidade_estoque}</span>
                         </div>
                     </div>
 
                     ${isUniforme ? `
-                        <div id="grade-${p.id}" class="grade-expansivel" style="display:none;">
-                            <div class="grid-tamanhos-consulta">
+                        <div id="grade-${p.id}" class="grade-expansivel" style="display:none; margin-top: 15px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1);">
+                            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(50px, 1fr)); gap: 8px;">
                                 ${p.grade.map(g => `
-                                    <div class="item-grade-view">
-                                        <span class="tam">${g.tamanho}</span>
-                                        <span class="qtd">${g.quantidade}</span>
+                                    <div style="background: rgba(0,0,0,0.2); padding: 5px; border-radius: 6px; text-align: center;">
+                                        <small style="display: block; font-size: 0.6rem; color: #aaa;">${g.tamanho}</small>
+                                        <strong style="font-size: 0.8rem;">${g.quantidade}</strong>
                                     </div>
                                 `).join('')}
                             </div>
@@ -16623,7 +16635,7 @@ async function carregarConsultaEstoque() {
             `;
         });
     } catch (err) {
-        console.error("Erro ao carregar consulta:", err);
+        console.error("Erro na consulta:", err);
     }
 }
 

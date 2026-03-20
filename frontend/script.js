@@ -16945,7 +16945,7 @@ async function carregarHistoricoEntradas() {
     timeline.innerHTML = '<p style="color: white; padding: 20px; text-align: center; opacity: 0.6;">⏳ Carregando registros...</p>';
 
     try {
-        const res = await fetch(`${API_URL}/api/estoque/historico-completo`, {
+        const res = await fetch(`${API_URL}/estoque/historico-completo`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
         const registros = await res.json();

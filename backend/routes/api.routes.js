@@ -5923,7 +5923,7 @@ router.get('/transferencia/contagem-infra', verificarToken, async (req, res) => 
 // Exemplo usando pg-pool ou similar
 router.post('/entrada', async (req, res) => {
     const { itens } = req.body; // Array de objetos {produto_id, tipo, qtd_total, grades: [{tamanho, qtd}]}
-    const client = await pool.connect();
+    const client = await db.connect();
 
     try {
         await client.query('BEGIN');
@@ -5960,9 +5960,9 @@ router.post('/entrada', async (req, res) => {
 });
 
 // Sugestão de implementação (Node.js/Express)
-app.post('/api/estoque/entrada-lote', async (req, res) => {
+router.post('/api/estoque/entrada-lote', async (req, res) => {
     const { itens, usuario_id, observacoes } = req.body;
-    const client = await pool.connect();
+    const client = await db.connect();
 
     try {
         await client.query('BEGIN');

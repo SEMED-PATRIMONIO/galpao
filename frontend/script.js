@@ -2933,10 +2933,17 @@ function adicionarLinhaEntrada() {
 }
 
 async function processarEntradaEstoque() {
+    // Captura o ID que seu script já salva no login
+    const usuarioId = localStorage.getItem('usuario_id'); 
+
+    if (!usuarioId) {
+        alert("⚠️ Erro: Sessão de usuário não encontrada. Por favor, faça login novamente.");
+        return;
+    }
+
     const inputs = document.querySelectorAll('.input-entrada-qtd');
     const mapaItens = {};
 
-    // Agrupamos os inputs por produto para calcular o qtd_total de cada um
     inputs.forEach(input => {
         const qtd = parseInt(input.value) || 0;
         if (qtd <= 0) return;
@@ -2976,15 +2983,15 @@ async function processarEntradaEstoque() {
             },
             body: JSON.stringify({ 
                 itens: itensParaEnviar,
-                usuario_id: USUARIO_LOGADO_ID, // Certifique-se de ter essa variável
+                usuario_id: usuarioId, // Enviando o ID correto do banco
                 observacoes: "Entrada via painel operacional" 
             })
         });
 
         const resultado = await res.json();
         if (resultado.success) {
-            alert("✅ Entrada processada e histórico gerado!");
-            carregarConsultaEstoque(); // Atualiza a visão de saldo
+            alert("✅ Estoque atualizado com sucesso!");
+            carregarDashboard(); // Volta para o menu principal
         } else {
             throw new Error(resultado.error);
         }

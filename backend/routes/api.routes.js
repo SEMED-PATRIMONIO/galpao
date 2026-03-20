@@ -5960,42 +5960,41 @@ router.post('/entrada', async (req, res) => {
 });
 
 // Sugestão de implementação (Node.js/Express)
-router.post('/api/estoque/entrada-lote', async (req, res) => {
-    const { itens, usuario_id, observacoes } = req.body;
-    const client = await db.connect(); // Mantendo o seu 'db.connect'
+router.post('/estoque/entrada-lote', async (req, res) => {
+    console.log("📥 Recebendo tentativa de entrada...");
+    
+    // 1. Verificar se o objeto de banco existe (tente db ou pool conforme seu projeto)
+    const banco = typeof db !== 'undefined' ? db : (typeof pool !== 'undefined' ? pool : null);
+    
+    if (!banco) {
+        console.error("❌ Erro: Conexão com o banco (db ou pool) não definida no arquivo de rotas.");
+        return res.status(500).send("Erro de configuração no servidor: Banco não encontrado.");
+    }
 
+    let client;
     try {
+        client = await banco.connect();
         await client.query('BEGIN');
 
-        // 1. Calcula o total geral para o registro MESTRE
+        const { itens, usuario_id, observacoes } = req.body;
         const totalGeral = itens.reduce((acc, item) => acc + item.qtd_total, 0);
 
-        // 2. Insere na tabela 'historico' (Respeitando as colunas exatas)
+        // Inserção Mestre
         const resMaster = await client.query(
-            `INSERT INTO historico 
-                (usuario_id, acao, quantidade_total, observacoes, local_id, tipo) 
-             VALUES ($1, $2, $3, $4, $5, $6) 
-             RETURNING id`,
-            [
-                usuario_id, 
-                'ENTRADA DE MATERIAL/UNIFORME', // acao (NOT NULL)
-                totalGeral,                     // quantidade_total
-                observacoes || '',              // observacoes
-                37,                             // local_id (Fixo para estoque central)
-                'ENTRADA'                       // tipo
-            ]
+            `INSERT INTO historico (usuario_id, acao, quantidade_total, observacoes, local_id, tipo) 
+             VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+            [usuario_id, 'ENTRADA DE ESTOQUE', totalGeral, observacoes || '', 37, 'ENTRADA']
         );
         const historicoId = resMaster.rows[0].id;
 
         for (const item of itens) {
-            // 3. Atualiza o saldo global na tabela 'produtos'
+            // Atualiza Saldo Global
             await client.query(
                 `UPDATE produtos SET quantidade_estoque = quantidade_estoque + $1 WHERE id = $2`,
                 [item.qtd_total, item.produto_id]
             );
 
-            // 4. Insere os detalhes na 'historico_detalhes'
-            // Se for MATERIAL, o tamanho vai como NULL
+            // Detalhes do Histórico
             if (item.tipo === 'MATERIAL') {
                 await client.query(
                     `INSERT INTO historico_detalhes (historico_id, produto_id, quantidade, tipo_produto) 
@@ -6003,17 +6002,13 @@ router.post('/api/estoque/entrada-lote', async (req, res) => {
                     [historicoId, item.produto_id, item.qtd_total, 'MATERIAL']
                 );
             } else {
-                // Se for UNIFORME, precisamos gravar cada tamanho no detalhe do histórico
                 for (const [tamanho, qtd] of Object.entries(item.grade)) {
                     if (qtd > 0) {
-                        // Grava no detalhe do histórico com o tamanho
                         await client.query(
                             `INSERT INTO historico_detalhes (historico_id, produto_id, quantidade, tamanho, tipo_produto) 
                              VALUES ($1, $2, $3, $4, $5)`,
                             [historicoId, item.produto_id, qtd, tamanho, 'UNIFORMES']
                         );
-
-                        // 5. Atualiza a grade específica (estoque_tamanhos)
                         await client.query(
                             `INSERT INTO estoque_tamanhos (produto_id, tamanho, quantidade)
                              VALUES ($1, $2, $3)
@@ -6027,14 +6022,14 @@ router.post('/api/estoque/entrada-lote', async (req, res) => {
         }
 
         await client.query('COMMIT');
-        res.status(200).json({ success: true, message: "Estoque e histórico atualizados!" });
+        res.json({ success: true });
 
     } catch (err) {
-        await client.query('ROLLBACK');
-        console.error("ERRO CRÍTICO NO BANCO:", err.message);
-        res.status(500).json({ error: "Erro interno no servidor ao processar banco." });
+        if (client) await client.query('ROLLBACK');
+        console.error("❌ ERRO NO BANCO:", err.message);
+        res.status(500).json({ success: false, error: err.message });
     } finally {
-        client.release();
+        if (client) client.release();
     }
 });
 

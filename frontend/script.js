@@ -415,7 +415,7 @@ async function carregarDashboard() {
                 <i>⚙️</i><span>CADASTRAR NOVO LOCAL/CATEGORIA/PRODUTO</span>
             </button>            
             <button class="btn-grande btn-vidro" onclick="carregarConsultaEstoque()">
-                <i>👕</i><span>CONSULTA ESTOQUE</span>
+                <i>🔎</i><span>CONSULTA ESTOQUE</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('RELATÓRIOS')">
                 <i>📊</i><span>RELATÓRIOS</span>
@@ -451,7 +451,7 @@ if (perfil === 'estoque') {
                 <i>📥</i><span>LANÇAR ENTRADA NO ESTOQUE</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="carregarConsultaEstoque()">
-                <i>👕</i><span>CONSULTA ESTOQUE</span>
+                <i>🔎</i><span>CONSULTA ESTOQUE</span>
             </button>
 
             <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('PEDIDOS')">
@@ -2933,42 +2933,63 @@ function adicionarLinhaEntrada() {
 }
 
 async function processarEntradaEstoque() {
-    const obs = document.getElementById('ent_obs').value;
-    const linhas = document.querySelectorAll('.item-linha');
-    const itens = [];
+    const inputs = document.querySelectorAll('.input-entrada-qtd');
+    const mapaItens = {};
 
-    linhas.forEach(linha => {
-        const produto_id = linha.querySelector('.ent_produto').value;
-        const tamanho = linha.querySelector('.ent_tamanho').value;
-        const quantidade = linha.querySelector('.ent_qtd').value;
+    // Agrupamos os inputs por produto para calcular o qtd_total de cada um
+    inputs.forEach(input => {
+        const qtd = parseInt(input.value) || 0;
+        if (qtd <= 0) return;
 
-        if (produto_id && quantidade) {
-            itens.push({ produto_id: parseInt(produto_id), tamanho, quantidade: parseInt(quantidade) });
+        const id = input.dataset.id;
+        const tipo = input.dataset.tipo;
+        const tamanho = input.dataset.tamanho;
+
+        if (!mapaItens[id]) {
+            mapaItens[id] = {
+                produto_id: id,
+                tipo: tipo,
+                qtd_total: 0,
+                grade: {} 
+            };
+        }
+
+        mapaItens[id].qtd_total += qtd;
+        if (tipo === 'UNIFORMES' && tamanho) {
+            mapaItens[id].grade[tamanho] = qtd;
         }
     });
 
-    if (itens.length === 0) return notificar("Adicione pelo menos um item!");
+    const itensParaEnviar = Object.values(mapaItens);
 
-    const payload = {
-        local_id: parseInt(localStorage.getItem('local_id')), // ID 36, 37 ou 38 automático do login
-        tipo_historico: 'ENTRADA',
-        observacoes: obs,
-        itens: itens
-    };
+    if (itensParaEnviar.length === 0) {
+        alert("Informe ao menos uma quantidade válida.");
+        return;
+    }
 
     try {
-        const res = await fetch(`${API_URL}/estoque/entrada`, {
+        const res = await fetch(`${API_URL}/api/estoque/entrada-lote`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
-            body: JSON.stringify(payload)
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${TOKEN}`
+            },
+            body: JSON.stringify({ 
+                itens: itensParaEnviar,
+                usuario_id: USUARIO_LOGADO_ID, // Certifique-se de ter essa variável
+                observacoes: "Entrada via painel operacional" 
+            })
         });
 
-        if (!res.ok) throw new Error("Erro ao processar entrada");
-        
-        notificar("ESTOQUE ATUALIZADO COM SUCESSO!");
-        renderizarMenu();
+        const resultado = await res.json();
+        if (resultado.success) {
+            alert("✅ Entrada processada e histórico gerado!");
+            carregarConsultaEstoque(); // Atualiza a visão de saldo
+        } else {
+            throw new Error(resultado.error);
+        }
     } catch (err) {
-        notificar(err.message);
+        alert("Erro na operação: " + err.message);
     }
 }
 
@@ -16489,23 +16510,98 @@ async function finalizarEntradaEstoque() {
 }
 
 async function abrirTelaEntrada() {
-    // 1. Mostrar o container da tela de entrada e o Painel Lateral
-    document.getElementById('container-entrada').style.display = 'flex';
-    
-    // 2. Buscar produtos da sua API atual
-    const response = await fetch('/api/produtos'); 
-    const produtos = await response.json();
+    const app = document.getElementById('app-content');
+    if (!app) return;
 
-    // 3. Filtrar e Ordenar: UNIFORMES (1º), MATERIAL (2º), PATRIMONIO (OFF)
-    const listaTratada = produtos
-        .filter(p => p.tipo !== 'PATRIMONIO')
-        .sort((a, b) => {
+    // 1. Monta a estrutura inicial (Evita o erro de 'null')
+    app.innerHTML = `
+        <div class="header-entrada animate__animated animate__fadeIn">
+            <button class="btn-voltar-vidro" onclick="carregarDashboard()" style="margin-bottom: 20px;">
+                <i class="fas fa-arrow-left"></i> VOLTAR
+            </button>
+            <h2 class="titulo-sessao" style="color: white; margin-bottom: 20px;">ENTRADA DE MERCADORIA</h2>
+            <p style="color: rgba(255,255,255,0.6); margin-bottom: 20px;">Selecione os itens e digite as quantidades para somar ao estoque.</p>
+        </div>
+        
+        <div id="lista-entrada-produtos">
+            <p style="color: white; padding: 20px;">Carregando produtos...</p>
+        </div>
+
+        <div id="footer-acoes" style="position: sticky; bottom: 20px; display: flex; justify-content: flex-end; margin-top: 30px;">
+            <button class="btn-confirmar-entrada" onclick="processarEntradaEstoque()" 
+                style="padding: 15px 40px; border-radius: 30px; border: none; background: #00d4ff; color: #001a2c; font-weight: bold; cursor: pointer; box-shadow: 0 10px 20px rgba(0,212,255,0.3);">
+                <i class="fas fa-check"></i> CONFIRMAR ENTRADA
+            </button>
+        </div>
+    `;
+
+    try {
+        const res = await fetch(`${API_URL}/estoque/consulta-exclusiva`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const produtos = await res.json();
+        
+        const listaHtml = document.getElementById('lista-entrada-produtos');
+        listaHtml.innerHTML = '';
+
+        // Ordenar: Uniformes primeiro, depois Material
+        const listaOrdenada = produtos.sort((a, b) => {
             if (a.tipo === 'UNIFORMES' && b.tipo !== 'UNIFORMES') return -1;
             if (a.tipo !== 'UNIFORMES' && b.tipo === 'UNIFORMES') return 1;
-            return a.nome.localeCompare(b.nome); // Ordem alfabética dentro do tipo
+            return a.nome.localeCompare(b.nome);
         });
 
-    renderizarListaProdutos(listaTratada);
+        listaOrdenada.forEach(p => {
+            const isUniforme = p.tipo === 'UNIFORMES';
+            
+            listaHtml.innerHTML += `
+                <div class="card-entrada glass-panel" 
+                     style="background: rgba(255,255,255,0.05); margin-bottom: 12px; padding: 18px; border-radius: 15px; color: white; border: 1px solid rgba(255,255,255,0.1);">
+                    
+                    <div style="display: flex; justify-content: space-between; align-items: center;" 
+                         ${isUniforme ? `onclick="toggleGrade(${p.id})"` : ''}>
+                        <div>
+                            <span style="font-size: 0.7rem; background: #00d4ff; padding: 3px 8px; border-radius: 5px; color: #001a2c; font-weight: bold;">
+                                ${p.tipo}
+                            </span>
+                            <p style="margin: 8px 0 0 0; font-weight: bold; font-size: 1.1rem;">${p.nome}</p>
+                        </div>
+
+                        ${!isUniforme ? `
+                            <div style="text-align: right;">
+                                <small style="display: block; font-size: 0.65rem; opacity: 0.6; margin-bottom: 5px;">QTD ENTRADA</small>
+                                <input type="number" class="input-entrada-qtd" data-id="${p.id}" data-tipo="MATERIAL"
+                                       style="width: 80px; background: rgba(0,0,0,0.3); border: 1px solid #00d4ff; color: white; padding: 8px; border-radius: 8px; text-align: center;"
+                                       placeholder="0" min="0">
+                            </div>
+                        ` : `
+                            <div style="color: #00d4ff; font-size: 0.8rem;">
+                                Clique para abrir tamanhos <i class="fas fa-chevron-down"></i>
+                            </div>
+                        `}
+                    </div>
+
+                    ${isUniforme ? `
+                        <div id="grade-${p.id}" class="grade-expansivel" style="display:none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);">
+                            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px;">
+                                ${p.grade.map(g => `
+                                    <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; text-align: center; border: 1px solid rgba(255,255,255,0.05);">
+                                        <small style="display: block; font-size: 0.6rem; color: #00d4ff; margin-bottom: 5px;">${g.tamanho}</small>
+                                        <input type="number" class="input-entrada-qtd" 
+                                               data-id="${p.id}" data-tipo="UNIFORMES" data-tamanho="${g.tamanho}"
+                                               style="width: 100%; background: transparent; border: none; border-bottom: 1px solid #00d4ff; color: white; text-align: center;"
+                                               placeholder="0" min="0">
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        });
+    } catch (err) {
+        console.error("Erro ao carregar tela de entrada:", err);
+    }
 }
 
 function renderizarListaProdutos(produtos) {
@@ -16832,6 +16928,53 @@ async function carregarHistoricoEntradas() {
         });
     } catch (e) { 
         timeline.innerHTML = '<p style="color: #ff4d4d; padding: 20px;">Erro ao carregar histórico.</p>'; 
+    }
+}
+
+async function carregarHistoricoEntradas() {
+    const timeline = document.getElementById('timeline-historico');
+    if (!timeline) return;
+
+    timeline.innerHTML = '<p style="color: white; padding: 20px; text-align: center; opacity: 0.6;">⏳ Carregando registros...</p>';
+
+    try {
+        const res = await fetch(`${API_URL}/api/estoque/historico-completo`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const registros = await res.json();
+        
+        timeline.innerHTML = '';
+
+        if (registros.length === 0) {
+            timeline.innerHTML = '<p style="color: white; padding: 40px; text-align: center; opacity: 0.5;">Nenhuma entrada encontrada.</p>';
+            return;
+        }
+
+        registros.forEach(reg => {
+            const data = new Date(reg.data_hora).toLocaleString();
+            
+            timeline.innerHTML += `
+                <div class="card-historico glass-panel" style="background: rgba(255,255,255,0.05); padding: 15px; margin-bottom: 12px; border-radius: 12px; border-left: 4px solid #00d4ff;">
+                    <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: #00d4ff; margin-bottom: 10px;">
+                        <span>📅 ${data}</span>
+                        <span>ID #${reg.id}</span>
+                    </div>
+                    <div style="color: white; font-weight: bold; margin-bottom: 8px;">👤 Usuário: ${reg.nome_usuario}</div>
+                    
+                    <div class="lista-itens-hist" style="background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px;">
+                        ${reg.itens.map(item => `
+                            <div style="display: flex; justify-content: space-between; color: white; font-size: 0.85rem; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                                <span>${item.nome_produto} ${item.tamanho ? `(${item.tamanho})` : ''}</span>
+                                <span style="font-weight: bold; color: #00d4ff;">+${item.quantidade}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                    ${reg.observacoes ? `<div style="margin-top:10px; font-size:0.8rem; color:rgba(255,255,255,0.6); font-style: italic;">" ${reg.observacoes} "</div>` : ''}
+                </div>
+            `;
+        });
+    } catch (err) {
+        timeline.innerHTML = '<p style="color: #ff4d4d; padding: 20px;">❌ Erro ao carregar histórico.</p>';
     }
 }
 

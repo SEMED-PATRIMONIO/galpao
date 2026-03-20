@@ -16908,35 +16908,6 @@ function toggleGrade(id) {
 }
 
 // Carrega o histórico (Necessário para a aba funcionar)
-async function carregarHistoricoEntradas() {
-    const timeline = document.getElementById('timeline-historico');
-    if (!timeline) return;
-    timeline.innerHTML = '<p style="color: white; padding: 20px;">Buscando logs...</p>';
-    
-    try {
-        const res = await fetch(`${API_URL}/estoque/historico-recente`, {
-            headers: { 'Authorization': `Bearer ${TOKEN}` }
-        });
-        const logs = await res.json();
-        timeline.innerHTML = '';
-        
-        if (logs.length === 0) {
-            timeline.innerHTML = '<p style="color: white; padding: 20px;">Nenhum registro encontrado.</p>';
-            return;
-        }
-
-        logs.forEach(log => {
-            timeline.innerHTML += `
-                <div class="card-historico glass-panel" style="padding:15px; margin-bottom:12px; color:white; background:rgba(255,255,255,0.05);">
-                    <div style="font-size:0.75rem; color:#00d4ff;">${new Date(log.data).toLocaleString()}</div>
-                    <strong>${log.usuario} - ${log.acao}</strong>
-                    <p style="margin:5px 0; font-size:0.85rem; opacity:0.8;">${log.observacoes || ''}</p>
-                </div>`;
-        });
-    } catch (e) { 
-        timeline.innerHTML = '<p style="color: #ff4d4d; padding: 20px;">Erro ao carregar histórico.</p>'; 
-    }
-}
 
 async function carregarHistoricoEntradas() {
     const timeline = document.getElementById('timeline-historico');
@@ -16945,14 +16916,17 @@ async function carregarHistoricoEntradas() {
     timeline.innerHTML = '<p style="color: white; padding: 20px; text-align: center; opacity: 0.6;">⏳ Carregando registros...</p>';
 
     try {
+        // Removido o /api/ para bater com app.use('/', apiRoutes) do seu server.js
         const res = await fetch(`${API_URL}/estoque/historico-completo`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
+
+        if (!res.ok) throw new Error("Falha na requisição");
+
         const registros = await res.json();
-        
         timeline.innerHTML = '';
 
-        if (registros.length === 0) {
+        if (!registros || registros.length === 0) {
             timeline.innerHTML = '<p style="color: white; padding: 40px; text-align: center; opacity: 0.5;">Nenhuma entrada encontrada.</p>';
             return;
         }
@@ -16971,7 +16945,7 @@ async function carregarHistoricoEntradas() {
                     <div class="lista-itens-hist" style="background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px;">
                         ${reg.itens.map(item => `
                             <div style="display: flex; justify-content: space-between; color: white; font-size: 0.85rem; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
-                                <span>${item.nome_produto} ${item.tamanho ? `(${item.tamanho})` : ''}</span>
+                                <span>${item.nome_produto} ${item.tamanho ? `(Tam: ${item.tamanho})` : ''}</span>
                                 <span style="font-weight: bold; color: #00d4ff;">+${item.quantidade}</span>
                             </div>
                         `).join('')}
@@ -16981,6 +16955,7 @@ async function carregarHistoricoEntradas() {
             `;
         });
     } catch (err) {
+        console.error("Erro no Histórico:", err);
         timeline.innerHTML = '<p style="color: #ff4d4d; padding: 20px;">❌ Erro ao carregar histórico.</p>';
     }
 }

@@ -6045,4 +6045,37 @@ router.get('/estoque/consulta-geral', async (req, res) => {
     }
 });
 
+// ROTA EXCLUSIVA PARA CONSULTA UNIFICADA (ESTOQUE + GRADE)
+router.get('/estoque/consulta-exclusiva', async (req, res) => {
+    try {
+        const sql = `
+            SELECT 
+                p.id, 
+                p.nome, 
+                p.tipo, 
+                p.quantidade_estoque, 
+                p.alerta_minimo,
+                COALESCE(
+                    (SELECT json_agg(
+                        json_build_object('tamanho', et.tamanho, 'quantidade', et.quantidade) 
+                        ORDER BY et.id ASC
+                    )
+                     FROM estoque_tamanhos et 
+                     WHERE et.produto_id = p.id), 
+                    '[]'
+                ) AS grade
+            FROM produtos p
+            WHERE p.local_id = 37
+            ORDER BY p.tipo DESC, p.nome ASC;
+        `;
+
+        // Usando a sua variável 'db' conforme confirmado
+        const { rows } = await db.query(sql); 
+        res.json(rows);
+    } catch (err) {
+        console.error("ERRO NA ROTA EXCLUSIVA:", err);
+        res.status(500).json({ error: "Erro ao processar consulta de estoque no banco." });
+    }
+});
+
 module.exports = router;

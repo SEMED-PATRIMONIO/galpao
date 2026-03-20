@@ -2975,7 +2975,7 @@ async function processarEntradaEstoque() {
     }
 
     try {
-        const res = await fetch(`${API_URL}/api/estoque/entrada-lote`, {
+        const res = await fetch(`${API_URL}/estoque/entrada-lote`, {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
@@ -16494,7 +16494,7 @@ async function finalizarEntradaEstoque() {
     };
 
     try {
-        const response = await fetch('/api/estoque/entrada-lote', {
+        const response = await fetch('/estoque/entrada-lote', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)

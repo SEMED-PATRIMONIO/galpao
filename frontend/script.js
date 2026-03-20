@@ -16643,12 +16643,16 @@ function toggleGrade(id) {
     const gradeDiv = document.getElementById(`grade-${id}`);
     const card = document.getElementById(`card-${id}`);
 
+    if (!gradeDiv) return;
+
     if (gradeDiv.style.display === 'none') {
         gradeDiv.style.display = 'block';
-        card.style.background = 'rgba(255, 255, 255, 0.15)'; // Destaque ao abrir
+        card.style.background = 'rgba(255, 255, 255, 0.2)'; // Destaque visual
+        card.style.border = '1px solid #00d4ff';
     } else {
         gradeDiv.style.display = 'none';
-        card.style.background = ''; // Volta ao normal
+        card.style.background = 'rgba(255, 255, 255, 0.1)';
+        card.style.border = '1px solid rgba(255, 255, 255, 0.1)';
     }
 }
 

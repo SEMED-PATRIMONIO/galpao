@@ -16559,126 +16559,6 @@ function adicionarMaterial(id, nome) {
     input.value = ''; // Limpa o campo após adicionar
 }
 
-async function carregarConsultaEstoque() {
-    const app = document.getElementById('app-content');
-    
-    if (!app) {
-        console.error("Erro: Elemento 'app-content' não encontrado.");
-        return;
-    }
-
-    // 1. Prepara a estrutura da tela (Header + Abas + Conteúdo)
-    // Os onclicks foram alterados para 'alternarVisualizacaoConsulta' para evitar conflitos
-    app.innerHTML = `
-        <div class="header-consulta animate__animated animate__fadeIn">
-            <button class="btn-voltar-vidro" onclick="carregarDashboard()" style="margin-bottom: 20px;">
-                <i class="fas fa-arrow-left"></i> VOLTAR
-            </button>
-            <h2 class="titulo-sessao" style="color: white; margin-bottom: 20px;">CONSULTA DE ESTOQUE</h2>
-        </div>
-        
-        <div class="abas-consulta" style="display: flex; gap: 15px; margin-bottom: 20px;">
-            <button class="aba-item active" onclick="alternarVisualizacaoConsulta('estoque')" style="background: rgba(255,255,255,0.1); color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer;">
-                ESTOQUE ATUAL
-            </button>
-            <button class="aba-item" onclick="alternarVisualizacaoConsulta('historico')" style="background: rgba(255,255,255,0.1); color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer;">
-                HISTÓRICO DE ENTRADAS
-            </button>
-        </div>
-
-        <div id="secao-estoque" class="aba-content">
-            <div id="lista-estoque-unificada" class="lista-container">
-                <p style="color: white; padding: 20px;">Sincronizando estoque...</p>
-            </div>
-        </div>
-
-        <div id="secao-historico" class="aba-content" style="display:none;">
-            <div id="timeline-historico"></div>
-        </div>
-    `;
-
-    try {
-        // 2. Busca os dados no servidor usando suas constantes globais
-        const res = await fetch(`${API_URL}/estoque/consulta-geral`, {
-            headers: { 'Authorization': `Bearer ${TOKEN}` }
-        });
-
-        if (!res.ok) throw new Error(`Erro HTTP: ${res.status}`);
-        
-        const produtos = await res.json();
-        const listaHtml = document.getElementById('lista-estoque-unificada');
-        
-        if (!listaHtml) return;
-        listaHtml.innerHTML = ''; 
-
-        // 3. Renderiza os cards vitrificados
-        produtos.forEach(p => {
-            const isUniforme = p.tipo === 'UNIFORMES';
-            
-            listaHtml.innerHTML += `
-                <div class="card-consulta glass-panel ${isUniforme ? 'card-uniforme' : 'card-material'}" 
-                     style="background: rgba(255,255,255,0.1); margin-bottom: 12px; padding: 18px; border-radius: 15px; color: white; cursor: ${isUniforme ? 'pointer' : 'default'}; border: 1px solid rgba(255,255,255,0.1);"
-                     id="card-${p.id}" 
-                     ${isUniforme ? `onclick="toggleGrade(${p.id})"` : ''}>
-                    
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div>
-                            <span style="font-size: 0.7rem; background: rgba(0,212,255,0.2); padding: 3px 8px; border-radius: 5px; color: #00d4ff; font-weight: bold;">
-                                ${p.tipo}
-                            </span>
-                            <p style="margin: 8px 0 0 0; font-size: 1.1rem; font-weight: bold; letter-spacing: 0.5px;">
-                                ${p.nome}
-                            </p>
-                        </div>
-                        <div style="text-align: right;">
-                            <small style="display: block; font-size: 0.65rem; opacity: 0.6; text-transform: uppercase;">Saldo Total</small>
-                            <span style="font-size: 1.4rem; font-weight: 900; color: #00d4ff; text-shadow: 0 0 10px rgba(0, 212, 255, 0.3);">
-                                ${p.quantidade_estoque}
-                            </span>
-                        </div>
-                    </div>
-
-                    ${isUniforme ? `
-                        <div id="grade-${p.id}" class="grade-expansivel" style="display:none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);">
-                            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(55px, 1fr)); gap: 10px;">
-                                ${p.grade.map(g => `
-                                    <div style="background: rgba(0,0,0,0.25); padding: 6px; border-radius: 8px; text-align: center; border: 1px solid rgba(255,255,255,0.05);">
-                                        <small style="display: block; font-size: 0.6rem; color: #00d4ff; margin-bottom: 2px;">${g.tamanho}</small>
-                                        <strong style="font-size: 0.9rem;">${g.quantidade}</strong>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        </div>
-                    ` : ''}
-                </div>
-            `;
-        });
-    } catch (err) {
-        console.error("Erro na consulta:", err);
-        const listaHtml = document.getElementById('lista-estoque-unificada');
-        if (listaHtml) {
-            listaHtml.innerHTML = `<p style="color: #ff4d4d; padding: 20px;">❌ Erro ao sincronizar estoque: ${err.message}</p>`;
-        }
-    }
-}
-
-function toggleGrade(id) {
-    const gradeDiv = document.getElementById(`grade-${id}`);
-    const card = document.getElementById(`card-${id}`);
-
-    if (!gradeDiv) return;
-
-    if (gradeDiv.style.display === 'none') {
-        gradeDiv.style.display = 'block';
-        card.style.background = 'rgba(255, 255, 255, 0.2)'; // Destaque visual
-        card.style.border = '1px solid #00d4ff';
-    } else {
-        gradeDiv.style.display = 'none';
-        card.style.background = 'rgba(255, 255, 255, 0.1)';
-        card.style.border = '1px solid rgba(255, 255, 255, 0.1)';
-    }
-}
-
 // Função para renderizar os controles de filtro na tela
 function renderizarFiltroPeriodo() {
     const containerFiltro = document.getElementById('secao-historico');
@@ -16810,23 +16690,148 @@ async function compartilharRelatorio() {
     }
 }
 
+// --- BLOCO DE CONSULTA DE ESTOQUE (LOCAL 37) ---
+
+async function carregarConsultaEstoque() {
+    const app = document.getElementById('app-content');
+    if (!app) return;
+
+    // Monta a estrutura inicial
+    app.innerHTML = `
+        <div class="header-consulta animate__animated animate__fadeIn">
+            <button class="btn-voltar-vidro" onclick="carregarDashboard()" style="margin-bottom: 20px;">
+                <i class="fas fa-arrow-left"></i> VOLTAR
+            </button>
+            <h2 class="titulo-sessao" style="color: white; margin-bottom: 20px;">CONSULTA DE ESTOQUE</h2>
+        </div>
+        
+        <div class="abas-consulta" style="display: flex; gap: 15px; margin-bottom: 20px;">
+            <button class="aba-item active" onclick="alternarVisualizacaoConsulta('estoque')">ESTOQUE ATUAL</button>
+            <button class="aba-item" onclick="alternarVisualizacaoConsulta('historico')">HISTÓRICO DE ENTRADAS</button>
+        </div>
+
+        <div id="secao-estoque" class="aba-content">
+            <div id="lista-estoque-unificada">
+                <p style="color: white; padding: 20px;">Sincronizando dados...</p>
+            </div>
+        </div>
+
+        <div id="secao-historico" class="aba-content" style="display:none;">
+            <div id="timeline-historico"></div>
+        </div>
+    `;
+
+    try {
+        const res = await fetch(`${API_URL}/estoque/consulta-exclusiva`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+
+        if (!res.ok) throw new Error(`Erro HTTP: ${res.status}`);
+        
+        const produtos = await res.json();
+        const listaHtml = document.getElementById('lista-estoque-unificada');
+        listaHtml.innerHTML = ''; 
+
+        produtos.forEach(p => {
+            const isUniforme = p.tipo === 'UNIFORMES';
+            const nivelBaixo = p.quantidade_estoque <= p.alerta_minimo;
+            
+            listaHtml.innerHTML += `
+                <div class="card-consulta glass-panel" 
+                     style="background: rgba(255,255,255,0.1); margin-bottom: 12px; padding: 18px; border-radius: 15px; color: white; border: 1px solid ${nivelBaixo ? '#ff4d4d' : 'rgba(255,255,255,0.1)'}; cursor: pointer;"
+                     id="card-${p.id}" 
+                     ${isUniforme ? `onclick="toggleGrade(${p.id})"` : ''}>
+                    
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <span style="font-size: 0.7rem; background: ${nivelBaixo ? '#ef4444' : '#00d4ff'}; padding: 3px 8px; border-radius: 5px; color: white; font-weight: bold;">
+                                ${p.tipo}
+                            </span>
+                            <p style="margin: 8px 0 0 0; font-weight: bold; font-size: 1.1rem;">${p.nome}</p>
+                        </div>
+                        <div style="text-align: right;">
+                            <small style="display: block; font-size: 0.65rem; opacity: 0.6;">SALDO</small>
+                            <span style="font-size: 1.5rem; font-weight: 900; color: ${nivelBaixo ? '#ff4d4d' : '#00d4ff'};">
+                                ${p.quantidade_estoque}
+                            </span>
+                        </div>
+                    </div>
+
+                    ${isUniforme ? `
+                        <div id="grade-${p.id}" class="grade-expansivel" style="display:none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);">
+                            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(55px, 1fr)); gap: 10px;">
+                                ${p.grade.map(g => `
+                                    <div style="background: rgba(0,0,0,0.3); padding: 6px; border-radius: 8px; text-align: center;">
+                                        <small style="display: block; font-size: 0.6rem; color: #00d4ff;">${g.tamanho}</small>
+                                        <strong style="font-size: 0.9rem;">${g.quantidade}</strong>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        });
+    } catch (err) {
+        console.error("Erro na consulta:", err);
+        document.getElementById('lista-estoque-unificada').innerHTML = `<p style="color: #ff4d4d; padding: 20px;">❌ Erro: ${err.message}</p>`;
+    }
+}
+
+// Suporte para as abas (Evita conflito com mudarAba)
 function alternarVisualizacaoConsulta(sessao) {
     const secaoEstoque = document.getElementById('secao-estoque');
     const secaoHistorico = document.getElementById('secao-historico');
     const botoes = document.querySelectorAll('.aba-item');
 
-    // Remove classe ativa e esconde as seções
     botoes.forEach(btn => btn.classList.remove('active'));
-    if (secaoEstoque) secaoEstoque.style.display = 'none';
-    if (secaoHistorico) secaoHistorico.style.display = 'none';
+    if(secaoEstoque) secaoEstoque.style.display = 'none';
+    if(secaoHistorico) secaoHistorico.style.display = 'none';
 
     if (sessao === 'estoque') {
-        if (secaoEstoque) secaoEstoque.style.display = 'block';
+        secaoEstoque.style.display = 'block';
         botoes[0].classList.add('active');
     } else {
-        if (secaoHistorico) secaoHistorico.style.display = 'block';
+        secaoHistorico.style.display = 'block';
         botoes[1].classList.add('active');
-        carregarHistoricoEntradas(); // Chama a busca de dados do histórico
+        carregarHistoricoEntradas(); 
+    }
+}
+
+// Abre/Fecha grade de uniformes
+function toggleGrade(id) {
+    const grade = document.getElementById(`grade-${id}`);
+    if (grade) grade.style.display = grade.style.display === 'none' ? 'block' : 'none';
+}
+
+// Carrega o histórico (Necessário para a aba funcionar)
+async function carregarHistoricoEntradas() {
+    const timeline = document.getElementById('timeline-historico');
+    if (!timeline) return;
+    timeline.innerHTML = '<p style="color: white; padding: 20px;">Buscando logs...</p>';
+    
+    try {
+        const res = await fetch(`${API_URL}/estoque/historico-recente`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const logs = await res.json();
+        timeline.innerHTML = '';
+        
+        if (logs.length === 0) {
+            timeline.innerHTML = '<p style="color: white; padding: 20px;">Nenhum registro encontrado.</p>';
+            return;
+        }
+
+        logs.forEach(log => {
+            timeline.innerHTML += `
+                <div class="card-historico glass-panel" style="padding:15px; margin-bottom:12px; color:white; background:rgba(255,255,255,0.05);">
+                    <div style="font-size:0.75rem; color:#00d4ff;">${new Date(log.data).toLocaleString()}</div>
+                    <strong>${log.usuario} - ${log.acao}</strong>
+                    <p style="margin:5px 0; font-size:0.85rem; opacity:0.8;">${log.observacoes || ''}</p>
+                </div>`;
+        });
+    } catch (e) { 
+        timeline.innerHTML = '<p style="color: #ff4d4d; padding: 20px;">Erro ao carregar histórico.</p>'; 
     }
 }
 

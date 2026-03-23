@@ -830,9 +830,10 @@ async function analisarPedidoEstoque(pedidoId) {
         if (falta) saldoSuficiente = false;
 
         return `
-            <tr style="border-bottom: 1px solid #eee; background: ${falta ? '#fff1f2' : 'transparent'}">
+            <tr data-produto-id="${i.produto_id}" data-tamanho="${i.tamanho || ''}" data-tipo="${i.tipo}"
+                style="border-bottom: 1px solid #eee; background: ${falta ? '#fff1f2' : 'transparent'}">
                 <td style="padding:15px; color:#1e3a8a; font-weight:bold;">${i.produto} ${i.tamanho ? `(${i.tamanho})` : ''}</td>
-                <td style="padding:15px; text-align:center;">${solicitado}</td>
+                <td style="padding:15px; text-align:center;" contenteditable="true" class="edit-qtd">${solicitado}</td>
                 <td style="padding:15px; text-align:center; color:${falta ? '#e11d48' : '#16a34a'}; font-weight:bold;">${emEstoque}</td>
                 <td style="padding:15px; text-align:right;">${falta ? '❌ SEM SALDO' : '✅ OK'}</td>
             </tr>
@@ -1014,28 +1015,60 @@ async function finalizarPedido(pedidoId) {
 }
 
 async function finalizarAutorizacao(pedidoId) {
-    if (!confirm("Deseja autorizar este pedido e dar baixa no estoque?")) return;
+    const usuarioId = localStorage.getItem('usuario_id');
+    const rows = document.querySelectorAll('#modal-analise tbody tr');
+    const itensParaAutorizar = [];
+
+    // Coleta os dados diretamente da tabela do modal (garante que pega as edições)
+    rows.forEach(row => {
+        const celulas = row.querySelectorAll('td');
+        const nomeCompleto = celulas[0].innerText;
+        
+        // Extrai ID do produto e tamanho se existir (armazenados no dataset ou processados por regex)
+        // Dica: na função analisarPedidoEstoque, adicione data-id e data-tamanho no <tr> para facilitar
+        const solicitado = Number(celulas[1].innerText);
+
+        // Aqui assumimos que você já tem os dados do produto mapeados
+        // Se a quantidade for 0, o loop pula (conforme sua regra)
+        if (solicitado > 0) {
+            // Busca os dados que foram injetados no dataset da linha
+            itensParaAutorizar.push({
+                produto_id: row.dataset.produtoId,
+                tamanho: row.dataset.tamanho || null,
+                quantidade: solicitado,
+                tipo: row.dataset.tipo // MATERIAL ou UNIFORMES
+            });
+        }
+    });
+
+    if (!confirm(`Deseja confirmar a saída definitiva de ${itensParaAutorizar.length} itens do estoque?`)) return;
 
     try {
-        const res = await fetch(`${API_URL}/pedidos/autorizar-final`, {
+        const res = await fetch(`${API_URL}/estoque/confirmar-autorizacao`, {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${TOKEN}`
             },
-            body: JSON.stringify({ pedidoId: pedidoId })
+            body: JSON.stringify({
+                pedido_id: pedidoId,
+                itens: itensParaAutorizar,
+                usuario_id: usuarioId
+            })
         });
 
-        if (res.ok) {
-            notificar("✅ Pedido Autorizado! O status agora é 'AGUARDANDO SEPARAÇÃO'.");
+        const resultado = await res.json();
+
+        if (resultado.success) {
+            alert("✅ Pedido Autorizado! O estoque foi atualizado e o histórico registrado.");
             document.getElementById('modal-analise').style.display = 'none';
-            telaAdminGerenciarSolicitacoes(); // Recarrega a lista de pendentes
+            // Recarrega a fila de pedidos ou dashboard
+            if (typeof carregarFilaPedidos === 'function') carregarFilaPedidos();
         } else {
-            const erro = await res.json();
-            notificar("❌ Erro ao autorizar: " + erro.error);
+            throw new Error(resultado.error);
         }
     } catch (err) {
-        notificar("🚨 Erro de conexão com o servidor.");
+        alert("Erro ao finalizar: " + err.message);
     }
 }
 

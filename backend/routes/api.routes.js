@@ -6205,4 +6205,20 @@ router.post('/estoque/saida-pedido', async (req, res) => {
     }
 });
 
+// Rota para listar todos os locais (Unidades)
+router.get('/locais', async (req, res) => {
+    try {
+        // Busca id e nome da tabela locais
+        const sql = 'SELECT id, nome FROM locais ORDER BY nome ASC';
+        const { rows } = await db.query(sql); // Usando db.query conforme seu db.js
+        
+        res.json(rows);
+    } catch (err) {
+        console.error("ERRO AO BUSCAR LOCAIS:", err.message);
+        res.status(500).json({ 
+            error: "Erro interno ao buscar a lista de unidades no banco de dados." 
+        });
+    }
+});
+
 module.exports = router;

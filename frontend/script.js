@@ -531,7 +531,7 @@ function abrirSubmenuVitrificado(titulo) {
             <button class="btn-grande btn-vidro" onclick="listarDevolucoesAdmin()">
                 <i>🔄</i><span>AUTORIZAR DEVOLUÇÕES</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="modalEscolhaTipoPedido()">
+            <button class="btn-grande btn-vidro" onclick="abrirTelaSaidaPedido()">
                 <i>➕</i><span>CRIAR PEDIDO</span>
             </button>
             `;
@@ -16957,6 +16957,186 @@ async function carregarHistoricoEntradas() {
     } catch (err) {
         console.error("Erro no Histórico:", err);
         timeline.innerHTML = '<p style="color: #ff4d4d; padding: 20px;">❌ Erro ao carregar histórico.</p>';
+    }
+}
+
+async function abrirTelaSaidaPedido() {
+    const app = document.getElementById('app-content');
+    if (!app) return;
+
+    // 1. Estrutura Inicial com seletor de destino
+    app.innerHTML = `
+        <div class="header-saida animate__animated animate__fadeIn">
+            <button class="btn-voltar-vidro" onclick="carregarDashboard()" style="margin-bottom: 20px;">
+                ⬅️ VOLTAR
+            </button>
+            <h2 class="titulo-sessao" style="color: white; margin-bottom: 20px;">SAÍDA DE ESTOQUE / NOVO PEDIDO</h2>
+            
+            <div class="glass-panel" style="padding: 20px; margin-bottom: 20px; border-radius: 15px;">
+                <label style="color: #00d4ff; font-weight: bold; display: block; margin-bottom: 10px;">📍 SELECIONE O LOCAL DESTINO:</label>
+                <select id="select-local-destino" style="width: 100%; padding: 12px; background: rgba(0,0,0,0.4); color: white; border: 1px solid #00d4ff; border-radius: 8px;">
+                    <option value="">Carregando locais...</option>
+                </select>
+            </div>
+        </div>
+        
+        <div id="lista-saida-produtos">
+            <p style="color: white; padding: 20px;">Sincronizando produtos e saldos...</p>
+        </div>
+
+        <div id="footer-acoes" style="position: sticky; bottom: 20px; display: flex; justify-content: flex-end; margin-top: 30px;">
+            <button class="btn-confirmar-saida" onclick="processarSaidaPedido()" 
+                style="padding: 15px 40px; border-radius: 30px; border: none; background: #ff4d4d; color: white; font-weight: bold; cursor: pointer; box-shadow: 0 10px 20px rgba(255,77,77,0.3);">
+                ✅ CONFIRMAR PEDIDO
+            </button>
+        </div>
+    `;
+
+    try {
+        // 2. Carregar Locais (Filtrando 37 e 50)
+        const resLocais = await fetch(`${API_URL}/locais`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+        const locais = await resLocais.json();
+        const selectDestino = document.getElementById('select-local-destino');
+        // Filtra conforme regra: não 37 (estoque próprio) e não 50 (transferência reservada)
+        selectDestino.innerHTML = '<option value="">-- SELECIONE A UNIDADE --</option>' + 
+            locais.filter(l => l.id !== 37 && l.id !== 50)
+                  .map(l => `<option value="${l.id}">${l.nome}</option>`).join('');
+
+        // 3. Carregar Produtos com saldo atualizado
+        const resProd = await fetch(`${API_URL}/estoque/consulta-exclusiva`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+        const produtos = await resProd.json();
+        const listaHtml = document.getElementById('lista-saida-produtos');
+        listaHtml.innerHTML = '';
+
+        produtos.forEach(p => {
+            const isUniforme = p.tipo === 'UNIFORMES';
+            listaHtml.innerHTML += `
+                <div class="card-saida glass-panel" id="card-saida-${p.id}" 
+                     style="background: rgba(255,255,255,0.05); margin-bottom: 12px; padding: 18px; border-radius: 15px; color: white; border: 1px solid rgba(255,255,255,0.1);">
+                    
+                    <div style="display: flex; justify-content: space-between; align-items: center;" 
+                         ${isUniforme ? `onclick="toggleGradeSaida(${p.id})"` : ''}>
+                        <div>
+                            <span style="font-size: 0.7rem; background: #00d4ff; padding: 3px 8px; border-radius: 5px; color: #001a2c; font-weight: bold;">
+                                ${p.tipo}
+                            </span>
+                            <p style="margin: 8px 0 0 0; font-weight: bold; font-size: 1.1rem;">${p.nome}</p>
+                            <small style="color: #aaa;">Estoque: <strong style="color: #00d4ff;">${p.quantidade_estoque}</strong></small>
+                        </div>
+
+                        ${!isUniforme ? `
+                            <div style="text-align: right;">
+                                <small style="display: block; font-size: 0.65rem; opacity: 0.6; margin-bottom: 5px;">QTD SAÍDA</small>
+                                <input type="number" class="input-saida-qtd" data-id="${p.id}" data-tipo="MATERIAL" data-max="${p.quantidade_estoque}"
+                                       onchange="validarEstoqueMax(this)"
+                                       style="width: 80px; background: rgba(0,0,0,0.3); border: 1px solid #ff4d4d; color: white; padding: 8px; border-radius: 8px; text-align: center;"
+                                       placeholder="0" min="0">
+                            </div>
+                        ` : `
+                            <div style="text-align: right;">
+                                <span id="total-uniforme-${p.id}" style="font-size: 1.2rem; font-weight: bold; color: #ff4d4d; display: block;">0</span>
+                                <small style="color: #00d4ff;">Grade 👕 <i class="fas fa-chevron-down"></i></small>
+                            </div>
+                        `}
+                    </div>
+
+                    ${isUniforme ? `
+                        <div id="grade-saida-${p.id}" class="grade-expansivel" style="display:none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);">
+                            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px;">
+                                ${p.grade.map(g => `
+                                    <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; text-align: center;">
+                                        <small style="display: block; font-size: 0.6rem; color: #00d4ff;">${g.tamanho}</small>
+                                        <small style="display: block; font-size: 0.55rem; color: #777;">Saldo: ${g.quantidade}</small>
+                                        <input type="number" class="input-saida-qtd" 
+                                               data-id="${p.id}" data-tipo="UNIFORMES" data-tamanho="${g.tamanho}" data-max="${g.quantidade}"
+                                               oninput="atualizarTotalGradeSaida(${p.id})" onchange="validarEstoqueMax(this)"
+                                               style="width: 100%; background: transparent; border: none; border-bottom: 1px solid #ff4d4d; color: white; text-align: center;"
+                                               placeholder="0" min="0">
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        });
+    } catch (err) {
+        console.error("Erro ao carregar tela de saída:", err);
+    }
+}
+
+// Funções Auxiliares de UI
+function toggleGradeSaida(id) {
+    const grade = document.getElementById(`grade-saida-${id}`);
+    if (grade) grade.style.display = grade.style.display === 'none' ? 'block' : 'none';
+}
+
+function atualizarTotalGradeSaida(produtoId) {
+    const inputs = document.querySelectorAll(`.input-saida-qtd[data-id="${produtoId}"]`);
+    let soma = 0;
+    inputs.forEach(i => soma += (parseInt(i.value) || 0));
+    document.getElementById(`total-uniforme-${produtoId}`).innerText = soma;
+}
+
+function validarEstoqueMax(input) {
+    const max = parseInt(input.dataset.max);
+    const atual = parseInt(input.value) || 0;
+    if (atual > max) {
+        alert(`⚠️ Quantidade insuficiente! Estoque disponível: ${max}`);
+        input.value = 0;
+        input.focus();
+    }
+}
+
+async function processarSaidaPedido() {
+    const localDestinoId = document.getElementById('select-local-destino').value;
+    const usuarioId = localStorage.getItem('usuario_id'); //
+
+    if (!localDestinoId) return alert("Selecione o Local de Destino!");
+
+    const inputs = document.querySelectorAll('.input-saida-qtd');
+    const mapaItens = {};
+
+    inputs.forEach(input => {
+        const qtd = parseInt(input.value) || 0;
+        if (qtd <= 0) return;
+
+        const id = input.dataset.id;
+        const tipo = input.dataset.tipo;
+        const tamanho = input.dataset.tamanho;
+
+        if (!mapaItens[id]) {
+            mapaItens[id] = { produto_id: id, tipo: tipo, qtd_total: 0, grade: {} };
+        }
+
+        mapaItens[id].qtd_total += qtd;
+        if (tipo === 'UNIFORMES') mapaItens[id].grade[tamanho] = qtd;
+    });
+
+    const itensParaEnviar = Object.values(mapaItens);
+    if (itensParaEnviar.length === 0) return alert("Selecione ao menos um produto!");
+
+    try {
+        const res = await fetch(`${API_URL}/estoque/saida-pedido`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ 
+                itens: itensParaEnviar, 
+                local_origem_id: 37, 
+                local_destino_id: localDestinoId, 
+                usuario_id: usuarioId 
+            })
+        });
+
+        if (res.ok) {
+            alert("📦 Pedido AUTORIZADO e estoque atualizado!");
+            carregarDashboard();
+        } else {
+            const erro = await res.json();
+            throw new Error(erro.error);
+        }
+    } catch (err) {
+        alert("Erro no Pedido: " + err.message);
     }
 }
 

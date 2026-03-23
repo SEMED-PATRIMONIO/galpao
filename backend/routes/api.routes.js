@@ -1671,57 +1671,56 @@ router.post('/pedidos/logistica/despachar', verificarToken, async (req, res) => 
 });
 
 router.post('/escola/confirmar-recebimento', async (req, res) => {
-    const { remessaId, pedidoId, usuarioId } = req.body;
+    const { remessaId, usuarioId } = req.body;
     const client = await db.pool.connect();
 
     try {
         await client.query('BEGIN');
 
-        // 1. Pegar detalhes do pedido para saber destino e itens
-        const resPedido = await client.query(
-            `SELECT local_destino_id, status FROM pedidos WHERE id = $1`, 
-            [pedidoId]
-        );
-        const { local_destino_id, status: statusAnterior } = resPedido.rows[0];
+        // 1. Identificar o pedido através da remessa
+        const resRem = await client.query('SELECT pedido_id FROM remessas WHERE id = $1', [remessaId]);
+        if (resRem.rows.length === 0) throw new Error("Remessa não localizada.");
+        const pedidoId = resRem.rows[0].pedido_id;
 
-        // 2. Atualizar status do Pedido para 'ENTREGUE'
+        // 2. Obter local de destino e status atual
+        const resPed = await client.query('SELECT status, local_destino_id FROM pedidos WHERE id = $1', [pedidoId]);
+        const { status: statusAnterior, local_destino_id: localId } = resPed.rows[0];
+
+        // 3. Finalizar o Pedido (Status ENTREGUE)
         await client.query(
-            `UPDATE pedidos SET status = 'ENTREGUE', data_recebimento = NOW() WHERE id = $1`,
+            "UPDATE pedidos SET status = 'ENTREGUE', data_recebimento = NOW() WHERE id = $1",
             [pedidoId]
         );
 
-        // 3. Registrar no Log de Status (Auditoria)
+        // 4. Log de Status para Auditoria
         await client.query(
             `INSERT INTO log_status_pedidos (pedido_id, usuario_id, status_anterior, status_novo, observacao) 
-             VALUES ($1, $2, $3, 'ENTREGUE', 'Carga recebida e conferida na unidade escolar.')`,
+             VALUES ($1, $2, $3, 'ENTREGUE', 'Carga recebida e conferida pela unidade escolar.')`,
             [pedidoId, usuarioId, statusAnterior]
         );
 
-        // 4. Buscar os itens para subir o estoque da escola
+        // 5. Transferir saldo para o Estoque Individual da Escola
         const resItens = await client.query(
-            `SELECT produto_id, quantidade, tamanho FROM itens_pedido WHERE pedido_id = $1`,
+            "SELECT produto_id, tamanho, quantidade FROM itens_pedido WHERE pedido_id = $1",
             [pedidoId]
         );
 
         for (const item of resItens.rows) {
-            // Sobe o estoque individual da escola (local_destino_id)
-            // Se o produto/tamanho já existe lá, soma. Se não, cria.
-            await client.query(
-                `INSERT INTO estoque_individual (local_id, produto_id, tamanho, quantidade)
-                 VALUES ($1, $2, $3, $4)
-                 ON CONFLICT (local_id, produto_id, (COALESCE(tamanho, ''))) 
-                 DO UPDATE SET quantidade = estoque_individual.quantidade + EXCLUDED.quantidade`,
-                [local_destino_id, item.produto_id, item.tamanho, item.quantidade]
-            );
+            // Soma ao estoque existente ou cria novo registro se for a primeira vez do item na escola
+            await client.query(`
+                INSERT INTO estoque_individual (local_id, produto_id, tamanho, quantidade)
+                VALUES ($1, $2, $3, $4)
+                ON CONFLICT (local_id, produto_id, COALESCE(tamanho, '')) 
+                DO UPDATE SET quantidade = estoque_individual.quantidade + EXCLUDED.quantidade
+            `, [localId, item.produto_id, item.tamanho, item.quantidade]);
         }
 
         await client.query('COMMIT');
         res.json({ success: true });
-
     } catch (err) {
         await client.query('ROLLBACK');
-        console.error("ERRO RECEBIMENTO:", err.message);
-        res.status(500).json({ error: "Falha ao processar recebimento: " + err.message });
+        console.error("ERRO NO RECEBIMENTO:", err.message);
+        res.status(500).json({ error: "Falha na transação: " + err.message });
     } finally {
         client.release();
     }

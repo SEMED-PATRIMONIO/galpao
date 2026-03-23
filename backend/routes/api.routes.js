@@ -2037,8 +2037,16 @@ router.patch('/pedidos/remessa/:id/status', verificarToken, async (req, res) => 
     }
 });
 
-router.get('/escola/remessas-a-caminho', async (req, res) => {
-    // Pegamos o local_id do usuário logado (o técnico na escola)
+// ARQUIVO: backend/routes/api.routes.js
+
+// ADICIONE 'verificarToken' AQUI vvv
+router.get('/escola/remessas-a-caminho', verificarToken, async (req, res) => {
+    
+    // Verificação de segurança para evitar que o servidor caia caso o token mude
+    if (!req.user || !req.user.local_id) {
+        return res.status(401).json({ error: "Sessão inválida ou local não identificado." });
+    }
+
     const localId = req.user.local_id; 
 
     try {
@@ -2051,13 +2059,14 @@ router.get('/escola/remessas-a-caminho', async (req, res) => {
             JOIN pedidos p ON r.pedido_id = p.id
             JOIN locais l ON p.local_destino_id = l.id
             WHERE p.local_destino_id = $1 
-              AND p.status = 'EM_TRANSPORTE'
+              AND p.status IN ('APROVADO', 'EM_TRANSPORTE')
             ORDER BY r.data_criacao DESC;
         `;
 
         const { rows } = await db.query(sql, [localId]);
         res.json(rows);
     } catch (err) {
+        console.error("Erro SQL:", err.message);
         res.status(500).json({ error: err.message });
     }
 });

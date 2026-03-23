@@ -6141,7 +6141,7 @@ router.post('/estoque/saida-pedido', async (req, res) => {
         // 1. Criar o Pedido Master
         const resPedido = await client.query(
             `INSERT INTO pedidos (local_origem_id, local_destino_id, usuario_origem_id, status, data_pedido) 
-             VALUES ($1, $2, $3, 'AUTORIZADO', NOW()) RETURNING id`,
+             VALUES ($1, $2, $3, 'APROVADO', NOW()) RETURNING id`,
             [local_origem_id, local_destino_id, usuario_id]
         );
         const pedidoId = resPedido.rows[0].id;
@@ -6240,7 +6240,7 @@ router.post('/estoque/confirmar-autorizacao', async (req, res) => {
         // 1. Atualiza o Pedido: Status para 'AUTORIZADO', data e quem autorizou
         await client.query(
             `UPDATE pedidos 
-             SET status = 'AUTORIZADO', 
+             SET status = 'APROVADO', 
                  data_autorizacao = NOW(), 
                  autorizado_por = $1 
              WHERE id = $2`,

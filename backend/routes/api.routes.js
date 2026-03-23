@@ -1670,47 +1670,60 @@ router.post('/pedidos/logistica/despachar', verificarToken, async (req, res) => 
     res.json({ message: "Carga em transporte!" });
 });
 
-router.post('/pedidos/escola/confirmar-recebimento', verificarToken, async (req, res) => {
-    const { remessaId, pedidoId } = req.body;
-    const usuario_id = req.userId;
+router.post('/escola/confirmar-recebimento', async (req, res) => {
+    const { remessaId, pedidoId, usuarioId } = req.body;
+    const client = await db.pool.connect();
 
     try {
-        await db.query('BEGIN');
+        await client.query('BEGIN');
 
-        // A. Atualiza a Remessa para ENTREGUE
-        await db.query("UPDATE pedido_remessas SET status = 'ENTREGUE' WHERE id = $1", [remessaId]);
+        // 1. Pegar detalhes do pedido para saber destino e itens
+        const resPedido = await client.query(
+            `SELECT local_destino_id, status FROM pedidos WHERE id = $1`, 
+            [pedidoId]
+        );
+        const { local_destino_id, status: statusAnterior } = resPedido.rows[0];
 
-        // B. Verifica se todas as remessas deste pedido já foram entregues
-        // e se a soma das quantidades enviadas bate com o total do pedido
-        const conferênciaFinal = await db.query(`
-            SELECT 
-                (SELECT SUM(quantidade) FROM itens_pedido WHERE pedido_id = $1) as total_pedido,
-                (SELECT SUM(pri.quantidade_enviada) 
-                 FROM pedido_remessa_itens pri 
-                 JOIN pedido_remessas pr ON pri.remessa_id = pr.id 
-                 WHERE pr.pedido_id = $1 AND pr.status = 'ENTREGUE') as total_recebido
-        `, [pedidoId]);
+        // 2. Atualizar status do Pedido para 'ENTREGUE'
+        await client.query(
+            `UPDATE pedidos SET status = 'ENTREGUE', data_recebimento = NOW() WHERE id = $1`,
+            [pedidoId]
+        );
 
-        const { total_pedido, total_recebido } = conferênciaFinal.rows[0];
+        // 3. Registrar no Log de Status (Auditoria)
+        await client.query(
+            `INSERT INTO log_status_pedidos (pedido_id, usuario_id, status_anterior, status_novo, observacao) 
+             VALUES ($1, $2, $3, 'ENTREGUE', 'Carga recebida e conferida na unidade escolar.')`,
+            [pedidoId, usuarioId, statusAnterior]
+        );
 
-        // C. Se o total recebido atingiu o total do pedido, encerra o Pedido Pai
-        if (parseInt(total_recebido) >= parseInt(total_pedido)) {
-            await db.query("UPDATE pedidos SET status = 'ENTREGUE' WHERE id = $1", [pedidoId]);
-            
-            // Log de Encerramento Total
-            await db.query(
-                `INSERT INTO log_status_pedidos (pedido_id, usuario_id, status_anterior, status_novo, observacao, data_hora) 
-                 VALUES ($1, $2, 'EM_TRANSPORTE', 'ENTREGUE', 'Pedido totalmente recebido pela escola', NOW())`,
-                [pedidoId, usuario_id]
+        // 4. Buscar os itens para subir o estoque da escola
+        const resItens = await client.query(
+            `SELECT produto_id, quantidade, tamanho FROM itens_pedido WHERE pedido_id = $1`,
+            [pedidoId]
+        );
+
+        for (const item of resItens.rows) {
+            // Sobe o estoque individual da escola (local_destino_id)
+            // Se o produto/tamanho já existe lá, soma. Se não, cria.
+            await client.query(
+                `INSERT INTO estoque_individual (local_id, produto_id, tamanho, quantidade)
+                 VALUES ($1, $2, $3, $4)
+                 ON CONFLICT (local_id, produto_id, (COALESCE(tamanho, ''))) 
+                 DO UPDATE SET quantidade = estoque_individual.quantidade + EXCLUDED.quantidade`,
+                [local_destino_id, item.produto_id, item.tamanho, item.quantidade]
             );
         }
 
-        await db.query('COMMIT');
-        res.json({ message: "Recebimento confirmado com sucesso!" });
+        await client.query('COMMIT');
+        res.json({ success: true });
 
     } catch (err) {
-        await db.query('ROLLBACK');
-        res.status(500).json({ error: err.message });
+        await client.query('ROLLBACK');
+        console.error("ERRO RECEBIMENTO:", err.message);
+        res.status(500).json({ error: "Falha ao processar recebimento: " + err.message });
+    } finally {
+        client.release();
     }
 });
 
@@ -2025,37 +2038,28 @@ router.patch('/pedidos/remessa/:id/status', verificarToken, async (req, res) => 
     }
 });
 
-router.get('/escola/remessas-a-caminho', verificarToken, async (req, res) => {
+router.get('/escola/remessas-a-caminho', async (req, res) => {
+    // Pegamos o local_id do usuário logado (o técnico na escola)
+    const localId = req.user.local_id; 
+
     try {
-        // Tenta capturar o ID do usuário de todas as formas possíveis que seu sistema pode usar
-        const usuarioId = req.usuario?.id || req.user?.id || req.userId || req.id;
-
-        if (!usuarioId) {
-            console.error("Objeto req completo para inspeção:", req.usuario, req.user);
-            return res.status(401).json({ error: "Sessão expirada ou usuário não identificado. Tente fazer login novamente." });
-        }
-
-        const query = `
+        const sql = `
             SELECT 
-                pr.id as remessa_id,
-                pr.pedido_id,
-                pr.data_criacao,
-                l.nome as escola_nome
-            FROM usuarios u
-            JOIN locais l ON u.local_id = l.id
-            JOIN pedidos p ON p.local_destino_id = l.id
-            JOIN pedido_remessas pr ON pr.pedido_id = p.id
-            WHERE u.id = $1 
-            AND pr.status = 'EM_TRANSPORTE'
-            ORDER BY pr.id DESC
+                r.id AS remessa_id,
+                p.id AS pedido_id,
+                l.nome AS escola_nome
+            FROM remessas r
+            JOIN pedidos p ON r.pedido_id = p.id
+            JOIN locais l ON p.local_destino_id = l.id
+            WHERE p.local_destino_id = $1 
+              AND p.status = 'EM_TRANSPORTE'
+            ORDER BY r.data_criacao DESC;
         `;
 
-        const { rows } = await db.query(query, [usuarioId]);
+        const { rows } = await db.query(sql, [localId]);
         res.json(rows);
-
     } catch (err) {
-        console.error("Erro na rota escola:", err.message);
-        res.status(500).json({ error: "Erro no banco: " + err.message });
+        res.status(500).json({ error: err.message });
     }
 });
 
@@ -6132,50 +6136,54 @@ router.get('/estoque/historico-completo', async (req, res) => {
 
 // backend/routes/api.routes.js
 router.post('/estoque/saida-pedido', async (req, res) => {
-    const { itens, local_origem_id, local_destino_id, usuario_id } = req.body;
-    const client = await db.pool.connect(); //
+    const { itens, local_destino_id, usuario_id } = req.body;
+    const client = await db.pool.connect();
 
     try {
         await client.query('BEGIN');
 
-        // 1. Criar o Pedido Master
+        // 1. Criar o Pedido (Status APROVADO conforme seu ENUM)
+        // Removida a coluna local_origem_id que não existe no seu banco
         const resPedido = await client.query(
-            `INSERT INTO pedidos (local_origem_id, local_destino_id, usuario_origem_id, status, data_pedido) 
-             VALUES ($1, $2, $3, 'APROVADO', NOW()) RETURNING id`,
-            [local_origem_id, local_destino_id, usuario_id]
+            `INSERT INTO pedidos 
+                (usuario_origem_id, local_destino_id, status, data_criacao, data_autorizacao, autorizado_por, tipo_pedido) 
+             VALUES ($1, $2, 'APROVADO', NOW(), NOW(), $1, 'SAIDA_DIRETA') 
+             RETURNING id`,
+            [usuario_id, local_destino_id]
         );
         const pedidoId = resPedido.rows[0].id;
 
-        // 2. Criar registro Mestre no Histórico
-        const totalGeral = itens.reduce((acc, item) => acc + item.qtd_total, 0);
+        // 2. Registro Mestre no Histórico (Local 37 - Almoxarifado Central)
+        const totalGeral = itens.reduce((acc, item) => acc + Number(item.qtd_total), 0);
         const resHist = await client.query(
             `INSERT INTO historico (usuario_id, acao, quantidade_total, local_id, tipo, observacoes) 
              VALUES ($1, $2, $3, $4, 'SAIDA', $5) RETURNING id`,
-            [usuario_id, 'PEDIDO', totalGeral, local_origem_id, `Referente ao Pedido #${pedidoId}`]
+            [usuario_id, 'PEDIDO', totalGeral, 37, `Saída Ref. Pedido #${pedidoId}`]
         );
         const historicoId = resHist.rows[0].id;
 
         for (const item of itens) {
-            // 3. Baixa no Estoque Global (produtos)
+            // 3. Baixa no Estoque Global (tabela produtos)
             await client.query(
                 `UPDATE produtos SET quantidade_estoque = quantidade_estoque - $1 WHERE id = $2`,
                 [item.qtd_total, item.produto_id]
             );
 
-            // 4. Registrar em pedido_itens e historico_detalhes
             if (item.tipo === 'MATERIAL') {
+                // 4. Registro em itens_pedido (nome correto da sua tabela)
                 await client.query(
-                    `INSERT INTO pedido_itens (pedido_id, produto_id, quantidade_solicitada, quantidade_atendida) 
-                     VALUES ($1, $2, $3, $3)`, // Assume atendido na hora por ser pronta entrega do estoque
+                    `INSERT INTO itens_pedido (pedido_id, produto_id, quantidade) 
+                     VALUES ($1, $2, $3)`,
                     [pedidoId, item.produto_id, item.qtd_total]
                 );
+                // 5. Histórico Detalhado
                 await client.query(
                     `INSERT INTO historico_detalhes (historico_id, produto_id, quantidade, tipo_produto) 
                      VALUES ($1, $2, $3, 'MATERIAL')`,
                     [historicoId, item.produto_id, item.qtd_total]
                 );
             } else {
-                // UNIFORMES: Loop na grade
+                // UNIFORMES: Processar grade de tamanhos
                 for (const [tamanho, qtd] of Object.entries(item.grade)) {
                     if (qtd > 0) {
                         // Baixa na Grade específica
@@ -6184,13 +6192,13 @@ router.post('/estoque/saida-pedido', async (req, res) => {
                              WHERE produto_id = $2 AND tamanho = $3`,
                             [qtd, item.produto_id, tamanho]
                         );
-                        // Registro no Item do Pedido
+                        // Registro em itens_pedido com tamanho
                         await client.query(
-                            `INSERT INTO pedido_itens (pedido_id, produto_id, quantidade_solicitada, quantidade_atendida, tamanho) 
-                             VALUES ($1, $2, $3, $3, $4)`,
+                            `INSERT INTO itens_pedido (pedido_id, produto_id, quantidade, tamanho) 
+                             VALUES ($1, $2, $3, $4)`,
                             [pedidoId, item.produto_id, qtd, tamanho]
                         );
-                        // Registro no Detalhe do Histórico
+                        // Registro em historico_detalhes
                         await client.query(
                             `INSERT INTO historico_detalhes (historico_id, produto_id, quantidade, tamanho, tipo_produto) 
                              VALUES ($1, $2, $3, $4, 'UNIFORMES')`,
@@ -6202,12 +6210,12 @@ router.post('/estoque/saida-pedido', async (req, res) => {
         }
 
         await client.query('COMMIT');
-        res.json({ success: true, pedidoId: pedidoId });
+        res.status(200).json({ success: true, pedidoId });
 
     } catch (err) {
         await client.query('ROLLBACK');
-        console.error("ERRO NA SAÍDA DE ESTOQUE:", err.message);
-        res.status(500).json({ error: "Erro ao processar baixa de estoque: " + err.message });
+        console.error("ERRO NA OPERAÇÃO:", err.message);
+        res.status(500).json({ error: "Erro ao processar baixa: " + err.message });
     } finally {
         client.release();
     }
@@ -6236,6 +6244,8 @@ router.post('/estoque/confirmar-autorizacao', async (req, res) => {
 
     try {
         await client.query('BEGIN');
+        const resStatusAnt = await client.query(`SELECT status FROM pedidos WHERE id = $1`, [pedido_id]);
+        const statusAnterior = resStatusAnt.rows[0]?.status || 'DESCONHECIDO';        
 
         // 1. Atualiza o Pedido: Status para 'AUTORIZADO', data e quem autorizou
         await client.query(
@@ -6246,7 +6256,11 @@ router.post('/estoque/confirmar-autorizacao', async (req, res) => {
              WHERE id = $2`,
             [usuario_id, pedido_id]
         );
-
+        await client.query(
+            `INSERT INTO log_status_pedidos (pedido_id, usuario_id, status_anterior, status_novo, observacao) 
+            VALUES ($1, $2, $3, $4, $5)`,
+            [pedido_id, usuario_id, statusAnterior, 'APROVADO', 'Saída confirmada pelo Almoxarifado Central com baixa automática.']
+        );
         // 2. Criar registro Mestre no Histórico (Saída do Almoxarifado 37)
         const totalGeral = itens.reduce((acc, item) => acc + Number(item.quantidade), 0);
         const resHist = await client.query(

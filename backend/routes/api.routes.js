@@ -6221,4 +6221,80 @@ router.get('/locais', async (req, res) => {
     }
 });
 
+// Rota exclusiva para autorizar pedido com baixa de estoque e histórico
+router.post('/estoque/confirmar-autorizacao', async (req, res) => {
+    const { pedido_id, itens, usuario_id } = req.body;
+    const client = await db.pool.connect();
+
+    try {
+        await client.query('BEGIN');
+
+        // 1. Atualiza o Pedido: Status para 'AUTORIZADO', data e quem autorizou
+        await client.query(
+            `UPDATE pedidos 
+             SET status = 'AUTORIZADO', 
+                 data_autorizacao = NOW(), 
+                 autorizado_por = $1 
+             WHERE id = $2`,
+            [usuario_id, pedido_id]
+        );
+
+        // 2. Criar registro Mestre no Histórico (Saída do Almoxarifado 37)
+        const totalGeral = itens.reduce((acc, item) => acc + Number(item.quantidade), 0);
+        const resHist = await client.query(
+            `INSERT INTO historico (usuario_id, acao, quantidade_total, local_id, tipo, observacoes) 
+             VALUES ($1, $2, $3, $4, 'SAIDA', $5) RETURNING id`,
+            [usuario_id, 'AUTORIZACAO PEDIDO', totalGeral, 37, `Saída autorizada para Pedido #${pedido_id}`]
+        );
+        const historicoId = resHist.rows[0].id;
+
+        for (const item of itens) {
+            // 3. Atualiza as quantidades no Pedido (caso tenham sido editadas no modal)
+            await client.query(
+                `UPDATE itens_pedido SET quantidade = $1 WHERE pedido_id = $2 AND produto_id = $3 AND (tamanho = $4 OR (tamanho IS NULL AND $4 IS NULL))`,
+                [item.quantidade, pedido_id, item.produto_id, item.tamanho || null]
+            );
+
+            // 4. Baixa no Estoque Global (Tabela produtos)
+            await client.query(
+                `UPDATE produtos SET quantidade_estoque = quantidade_estoque - $1 WHERE id = $2`,
+                [item.quantidade, item.produto_id]
+            );
+
+            // 5. Registros detalhados e baixas específicas (Uniformes)
+            if (item.tipo === 'UNIFORMES') {
+                // Baixa na Grade
+                await client.query(
+                    `UPDATE estoque_tamanhos SET quantidade = quantidade - $1 
+                     WHERE produto_id = $2 AND tamanho = $3`,
+                    [item.quantidade, item.produto_id, item.tamanho]
+                );
+                // Histórico Detalhado
+                await client.query(
+                    `INSERT INTO historico_detalhes (historico_id, produto_id, quantidade, tamanho, tipo_produto) 
+                     VALUES ($1, $2, $3, $4, 'UNIFORMES')`,
+                    [historicoId, item.produto_id, item.quantidade, item.tamanho]
+                );
+            } else {
+                // Material: Histórico Detalhado
+                await client.query(
+                    `INSERT INTO historico_detalhes (historico_id, produto_id, quantidade, tipo_produto) 
+                     VALUES ($1, $2, $3, 'MATERIAL')`,
+                    [historicoId, item.produto_id, item.quantidade]
+                );
+            }
+        }
+
+        await client.query('COMMIT');
+        res.json({ success: true, message: "Pedido autorizado e estoque atualizado!" });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error("ERRO NA AUTORIZAÇÃO:", err.message);
+        res.status(500).json({ error: "Erro ao processar autorização: " + err.message });
+    } finally {
+        client.release();
+    }
+});
+
 module.exports = router;

@@ -823,8 +823,8 @@ async function analisarPedidoEstoque(pedidoId) {
     let saldoSuficiente = true;
     const linhas = itens.map(i => {
         // Garantindo que a comparação seja numérica
-        const solicitado = Number(i.solicitado);
-        const emEstoque = Number(i.em_estoque);
+        const solicitado = parseInt(i.solicitado) || 0;
+        const emEstoque = parseInt(i.em_estoque) || 0;
         const falta = solicitado > emEstoque;
         
         if (falta) saldoSuficiente = false;

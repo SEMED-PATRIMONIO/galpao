@@ -1615,19 +1615,190 @@ body.login-body {
     font-weight: bold;
 }
 
+@page {
+    size: A4 landscape;
+    margin: 1cm;
+}
+
 @media print {
-    body { background: white !important; color: black !important; }
-    .painel-vidro { 
-        background: transparent !important; 
-        border: 1px solid #eee !important; 
-        box-shadow: none !important; 
-        color: black !important;
-    }
-    .btn-vidro, .btn-voltar-vidro, #pc_inicio, #pc_fim { display: none !important; } /* Esconde a interface do sistema */
+    .no-print { display: none !important; }
+    body { background: white !important; }
+    #modal-romaneio { position: static; box-shadow: none; padding: 0; }
+    .folha-a4 { border: none; }
     table { page-break-inside: auto; }
     tr { page-break-inside: avoid; page-break-after: auto; }
     thead { display: table-header-group; } /* Repete o cabeçalho da tabela em todas as páginas */
     footer { page-break-after: always; }
+    .print-area, .print-area * { visibility: visible; }
+    .print-area { position: absolute; left: 0; top: 0; width: 100%; }
+}
+
+.folha-a4 {
+    width: 100%;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    color: #000;
+}
+
+.cabecalho {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 2px solid #000;
+    padding-bottom: 10px;
+}
+
+.logo-txt {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.logo-txt img { height: 70px; }
+
+.logo-txt div p {
+    margin: 0;
+    font-weight: 800;
+    font-size: 15px;
+    text-transform: uppercase;
+}
+
+.info-pedido {
+    text-align: right;
+}
+
+.info-pedido p { margin: 0; font-size: 14px; font-weight: bold; }
+.info-pedido h1 { margin: 0; font-size: 32px; font-weight: 900; }
+
+.titulo-doc {
+    text-align: center;
+    margin: 15px 0;
+}
+
+.titulo-doc h2 {
+    margin: 0;
+    font-size: 20px;
+    text-transform: uppercase;
+    letter-spacing: 4px;
+    border: 1px solid #000;
+    display: inline-block;
+    padding: 5px 30px;
+}
+
+.cabecalho-romaneio {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 20px;
+}
+
+.logo-container {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.logo-container img {
+    height: 60px; /* Tamanho pequeno e proporcional */
+    width: auto;
+}
+
+.textos-prefeitura p {
+    margin: 0;
+    font-weight: bold;
+    font-size: 14px;
+    text-transform: uppercase;
+}
+
+.numeros-pedido {
+    text-align: right;
+}
+
+.numeros-pedido h1 {
+    margin: 0;
+    font-size: 28px;
+    color: #333;
+}
+
+.numeros-pedido p {
+    margin: 0;
+    font-size: 18px;
+    font-weight: bold;
+}
+
+.titulo-central {
+    text-align: center;
+    margin: 30px 0;
+    border-top: 2px solid #000;
+    border-bottom: 2px solid #000;
+    padding: 10px 0;
+}
+
+.tabela-itens {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 30px;
+}
+
+.tabela-itens th {
+    background: #f0f0f0 !important;
+    border: 1px solid #000;
+    padding: 10px;
+    font-size: 12px;
+}
+
+.tabela-itens td {
+    border: 1px solid #000;
+    padding: 8px;
+    font-size: 12px;
+}
+
+.rodape-assinaturas {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 40px;
+}
+
+.info-saida {
+    width: 50%;
+}
+
+.bloco-recebedor {
+    width: 45%;
+    text-align: right;
+}
+
+.tabela-grade {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+}
+
+.tabela-grade th, .tabela-grade td {
+    border: 1px solid #000;
+    padding: 6px;
+    font-size: 11px;
+    text-align: center;
+}
+
+.tabela-grade th { background-color: #f2f2f2 !important; }
+.tabela-grade .txt-esquerda { text-align: left; font-weight: bold; }
+
+/* Rodapé */
+.rodape {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 30px;
+}
+
+.assinatura-box {
+    width: 300px;
+    text-align: center;
+}
+
+.linha-assinatura {
+    border-bottom: 1px solid #000;
+    margin-bottom: 5px;
+    margin-top: 35px;
 }
 
 .linha-patrimonio:active {
@@ -1683,12 +1854,30 @@ body.login-body {
 }
 
 .glass-panel {
-    background: rgba(255, 255, 255, 0.1);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 15px;
-    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    transition: all 0.3s ease;
+}
+
+.glass-panel:hover {
+    background: rgba(255, 255, 255, 0.08);
+    transform: translateY(-2px);
+}
+
+.spinner {
+    width: 30px;
+    height: 30px;
+    border: 3px solid rgba(255,255,255,0.1);
+    border-top: 3px solid #f59e0b;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
 }
 
 .grade-input {
@@ -1984,3 +2173,31 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .btn-acao.pdf:hover { background: rgba(255, 77, 77, 0.2); border-color: #ff4d4d; box-shadow: 0 0 10px #ff4d4d; }
 .btn-acao.excel:hover { background: rgba(46, 204, 113, 0.2); border-color: #2ecc71; box-shadow: 0 0 10px #2ecc71; }
 .btn-acao.share:hover { background: rgba(0, 212, 255, 0.2); border-color: #00d4ff; box-shadow: 0 0 10px #00d4ff; }
+
+.ferramentas-modal {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    padding: 15px;
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.btn-acao-romaneio {
+    background: #1e3a8a;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: 0.3s;
+}
+
+.btn-acao-romaneio:hover { background: #00d4ff; color: #001a2c; }
+.btn-fechar { background: #ef4444; }
+
+

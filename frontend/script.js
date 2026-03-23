@@ -105,7 +105,7 @@ document.getElementById('form-login')?.addEventListener('submit', async (e) => {
             TOKEN = data.token;
             carregarDashboard();
         } else {
-            notificar('ERRO: ' + (data.message || 'Falha no login'));
+            notificar(data.message || 'Usuário ou senha inválidos', 'erro');
         }
     } catch (err) {
         console.error("Erro na conexão:", err);
@@ -8574,7 +8574,7 @@ async function telaLogisticaEntregas() {
                                 <button class="btn-coletar-remessa" 
                                         data-remessa-id="${r.remessa_id}" 
                                         style="background:#1e40af; color:white; border:none; padding:12px 25px; border-radius:6px; cursor:pointer; font-weight:bold; transition: background 0.3s;">
-                                    🚚 COLETAR REMESSA
+                                    🚚 LIBERAR SAÍDA
                                 </button>
                             </div>
                         </div>
@@ -8703,104 +8703,137 @@ window.iniciarTransporteRemessa = async function(remessaId) {
     }
 };
 
-function gerarModalRomaneioA4(remessaId, dados) {
-    const overlay = document.createElement('div');
-    overlay.id = 'modal-romaneio-logistica';
-    overlay.className = 'alerta-vidro-overlay';
+function gerarModalRomaneioA4(pedidoId, remessaId, dados) {
+    const modal = document.createElement('div');
+    modal.id = 'modal-romaneio';
     
-    // Agrupamento de itens por Produto para criar a grade visual
-    const itensAgrupados = {};
-    dados.itens.forEach(item => {
-        if (!itensAgrupados[item.produto]) {
-            itensAgrupados[item.produto] = { categoria: item.categoria, tamanhos: {} };
+    // 1. Identificar todos os tamanhos únicos na remessa para criar as colunas
+    const tamanhosExistentes = [...new Set(dados.itens
+        .filter(i => i.tamanho)
+        .map(i => i.tamanho))].sort((a, b) => a.localeCompare(b, undefined, {numeric: true}));
+
+    // 2. Agrupar produtos por nome para consolidar a grade
+    const produtosAgrupados = {};
+    dados.itens.forEach(i => {
+        if (!produtosAgrupados[i.nome]) {
+            produtosAgrupados[i.nome] = { nome: i.nome, tipo: i.tipo, total: 0, tamanhos: {} };
         }
-        itensAgrupados[item.produto].tamanhos[item.tamanho] = item.quantidade_enviada;
+        produtosAgrupados[i.nome].total += Number(i.quantidade);
+        if (i.tamanho) {
+            produtosAgrupados[i.nome].tamanhos[i.tamanho] = i.quantidade;
+        }
     });
 
-    overlay.innerHTML = `
-        <div class="painel-vidro" style="width: 98vw; height: 98vh; display: flex; flex-direction: column; padding: 15px; overflow: hidden;">
-            
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 8px;">
-                <div style="color:white; font-weight:bold;">📄 PRÉ-VISUALIZAÇÃO DO ROMANEIO (A4 PAISAGEM)</div>
-                <div style="display: flex; gap: 8px;">
-                    <button onclick="exportarRomaneioPDF()" class="btn-sair-vidro" style="background:#ef4444; border:none;">PDF 📄</button>
-                    <button onclick="exportarRomaneioExcel()" class="btn-sair-vidro" style="background:#16a34a; border:none;">EXCEL 📊</button>
-                    <button onclick="compartilharRomaneio(${remessaId})" class="btn-sair-vidro" style="background:#3b82f6; border:none;">WHATSAPP 🟢</button>
-                    <button onclick="efetivarSaidaTransporte(${remessaId})" style="background:#10b981; color:white; border:none; padding:8px 20px; border-radius:8px; font-weight:bold; cursor:pointer;">CONFIRMAR CARREGAMENTO ✅</button>
-                    <button onclick="document.getElementById('modal-romaneio-logistica').remove()" class="btn-sair-vidro">FECHAR</button>
+    modal.innerHTML = `
+        <div class="ferramentas-modal no-print" style="position:fixed; top:10px; right:10px; z-index:10000; display:flex; gap:10px;">
+            <button onclick="window.print()" class="btn-vidro" style="background:#16a34a; padding:12px 25px;">🖨️ IMPRIMIR / PDF</button>
+            <button onclick="this.closest('#modal-romaneio').remove()" class="btn-vidro" style="background:#ef4444;">❌ FECHAR</button>
+        </div>
+        
+        <div class="folha-a4">
+            <header class="cabecalho">
+                <div class="logo-txt">
+                    <img src="braque.png" alt="SME">
+                    <div>
+                        <p>PREFEITURA MUNICIPAL DE QUEIMADOS</p>
+                        <p>SECRETARIA MUNICIPAL DE EDUCAÇÃO</p>
+                    </div>
                 </div>
+                <div class="info-pedido">
+                    <p>PEDIDO: #${pedidoId}</p>
+                    <h1>REMESSA: ${remessaId || '---'}</h1>
+                </div>
+            </header>
+
+            <div class="titulo-doc">
+                <h2>ROMANEIO DE ENTREGA</h2>
             </div>
 
-            <div id="scroll-documento" style="flex: 1; overflow: auto; background: #333; padding: 20px; display: flex; justify-content: center;">
-                
-                <div id="documento-a4-print" style="width: 297mm; min-height: 210mm; background: white; padding: 10mm; color: black; font-family: 'Segoe UI', Arial; box-shadow: 0 0 30px rgba(0,0,0,0.5); position: relative;">
-                    
-                    <div style="display: flex; justify-content: space-between; border-bottom: 2px solid black; padding-bottom: 10px;">
-                        <img src="braque.png" style="height: 50px;">
-                        <div style="text-align: right;">
-                            <h2 style="margin:0; font-size: 14pt;">ROMANEIO DE CARGA / GUIA DE REMESSA</h2>
-                            <p style="margin:0; font-size: 10pt;">Remessa: <strong>#${remessaId}</strong> | Pedido: #${dados.pedido_id}</p>
-                            <p style="margin:0; font-size: 9pt;">Emissão: ${new Date().toLocaleString()}</p>
-                        </div>
-                    </div>
+            <table class="tabela-grade">
+                <thead>
+                    <tr>
+                        <th class="txt-esquerda">DESCRIÇÃO DO PRODUTO</th>
+                        ${tamanhosExistentes.map(t => `<th width="40">${t}</th>`).join('')}
+                        <th width="60">TOTAL</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${Object.values(produtosAgrupados).map(p => `
+                        <tr>
+                            <td class="txt-esquerda">${p.nome}</td>
+                            ${tamanhosExistentes.map(t => `
+                                <td>${p.tamanhos[t] || '-'}</td>
+                            `).join('')}
+                            <td style="font-weight:bold; background:#f9f9f9;">${p.total}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
 
-                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin: 15px 0; font-size: 9pt; background: #f0f0f0; padding: 10px; border: 1px solid #ccc;">
-                        <div><strong>DESTINO:</strong><br>${dados.destino}</div>
-                        <div><strong>MOTORISTA:</strong><br>${dados.motorista_nome || 'NÃO INFORMADO'}</div>
-                        <div><strong>PLACA / VEÍCULO:</strong><br>${dados.veiculo_placa || '---'}</div>
-                    </div>
+            <div class="rodape">
+                <div style="font-size: 13px;">
+                    <p><strong>DESTINO:</strong> ${dados.destino}</p>
+                    <p><strong>DATA DE SAÍDA:</strong> ${new Date().toLocaleString()}</p>
+                    <p><strong>EMISSOR:</strong> ${localStorage.getItem('nome')}</p>
+                </div>
 
-                    <table style="width: 100%; border-collapse: collapse; font-size: 8.5pt;">
-                        <thead>
-                            <tr style="background: #333; color: white;">
-                                <th style="border: 1px solid #000; padding: 6px; text-align: left;">PRODUTO / DESCRIÇÃO</th>
-                                <th style="border: 1px solid #000; padding: 6px; text-align: center;">CATEGORIA</th>
-                                <th style="border: 1px solid #000; padding: 6px; text-align: center;">GRADE DE TAMANHOS / QUANTIDADES</th>
-                                <th style="border: 1px solid #000; padding: 6px; text-align: center; width: 60px;">TOTAL</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${Object.keys(itensAgrupados).map(nome => {
-                                const item = itensAgrupados[nome];
-                                let totalLinha = 0;
-                                // Monta a string da grade (Ex: P:2, M:4)
-                                const gradeTexto = Object.entries(item.tamanhos).map(([tam, qtd]) => {
-                                    totalLinha += qtd;
-                                    return `<span style="border: 1px solid #ddd; padding: 2px 5px; margin: 0 2px;">${tam}: <strong>${qtd}</strong></span>`;
-                                }).join(' ');
-
-                                return `
-                                    <tr>
-                                        <td style="border: 1px solid #000; padding: 6px; font-weight:bold;">${nome}</td>
-                                        <td style="border: 1px solid #000; padding: 6px; text-align: center;">${item.categoria || '---'}</td>
-                                        <td style="border: 1px solid #000; padding: 6px; text-align: center;">${gradeTexto}</td>
-                                        <td style="border: 1px solid #000; padding: 6px; text-align: center; background: #f9f9f9;"><strong>${totalLinha}</strong></td>
-                                    </tr>
-                                `;
-                            }).join('')}
-                        </tbody>
-                    </table>
-
-                    <div style="margin-top: 15px; font-size: 9pt;">
-                        <strong>Total de Volumes:</strong> ${dados.volumes || '---'}
-                    </div>
-
-                    <div style="position: absolute; bottom: 10mm; left: 10mm; right: 10mm; display: flex; gap: 50px;">
-                        <div style="flex: 1; border-top: 1px solid black; text-align: center; padding-top: 5px;">
-                            <p style="font-size: 8pt; margin:0;">Data de Recebimento</p>
-                            <p style="font-size: 10pt; margin: 5px 0;">____/____/________</p>
-                        </div>
-                        <div style="flex: 2; border-top: 1px solid black; text-align: center; padding-top: 5px;">
-                            <p style="font-size: 8pt; margin:0;">Assinatura do Responsável pelo Recebimento (Nome Legível / Carimbo)</p>
-                            <div style="height: 30px;"></div>
-                        </div>
-                    </div>
-
+                <div class="assinatura-box">
+                    <div class="linha-assinatura"></div>
+                    <p style="font-size:11px;">RECEBIDO POR (NOME LEGÍVEL)</p>
+                    <div class="linha-assinatura"></div>
+                    <p style="font-size:11px;">MATRÍCULA / RG / DATA</p>
                 </div>
             </div>
         </div>
     `;
-    document.body.appendChild(overlay);
+
+    // Estilo do container do Modal (Overlay)
+    Object.assign(modal.style, {
+        position: 'fixed', top: '0', left: '0', width: '100vw', height: '100vh',
+        background: 'rgba(0,0,0,0.9)', zIndex: '9999', padding: '20px',
+        overflowY: 'auto', display: 'flex', justifyContent: 'center'
+    });
+
+    document.body.appendChild(modal);
+}
+
+// Lógica de Exportação para Excel (CSV)
+// --- FUNÇÕES DE EXPORTAÇÃO ---
+
+// 1. Excel (Gera um CSV compatível que o Excel abre direto)
+function exportarExcelRomaneio(pedidoId) {
+    const tabela = document.querySelector('#modal-romaneio table');
+    let csv = [];
+    const rows = tabela.querySelectorAll("tr");
+    
+    for (let i = 0; i < rows.length; i++) {
+        const row = [], cols = rows[i].querySelectorAll("td, th");
+        for (let j = 0; j < cols.length; j++) {
+            // Limpa vírgulas e pontos para não quebrar o CSV
+            row.push(cols[j].innerText.replace(/[\n\r,]/g, ''));
+        }
+        csv.push(row.join(";")); // Usando ponto e vírgula para Excel PT-BR
+    }
+
+    const blob = new Blob(["\ufeff" + csv.join("\n")], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `Romaneio_Pedido_${pedidoId}.csv`;
+    link.click();
+}
+
+// 2. WhatsApp (Compartilha o resumo textual)
+function compartilharWhatsApp(pedidoId, destino, itens) {
+    let texto = `*📦 ROMANEIO DE SAÍDA - PEDIDO #${pedidoId}*%0A`;
+    texto += `*Destino:* ${destino}%0A`;
+    texto += `*Data:* ${new Date().toLocaleDateString()}%0A`;
+    texto += `-----------------------------------%0A`;
+    
+    itens.forEach(i => {
+        texto += `• ${i.nome} ${i.tamanho ? `(${i.tamanho})` : ''}: *${i.quantidade}*%0A`;
+    });
+
+    window.open(`https://wa.me/?text=${texto}`, '_blank');
 }
 
 async function efetivarSaidaTransporte(remessaId) {
@@ -8963,74 +8996,133 @@ async function efetivarInicioTransporte(remessaId) {
 
 async function telaEscolaConfirmarRecebimento() {
     const container = document.getElementById('app-content');
-    container.innerHTML = '<div style="padding:20px; text-align:center;">🔍 Localizando mercadorias em trânsito...</div>';
+    container.innerHTML = '<div style="padding:40px; text-align:center; color:white;">🔍 Localizando mercadorias em trânsito...</div>';
 
     try {
         const res = await fetch(`${API_URL}/escola/remessas-a-caminho`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
 
-        if (!res.ok) {
-            const erro = await res.json();
-            throw new Error(erro.error || "Erro ao buscar dados.");
-        }
-
+        if (!res.ok) throw new Error("Erro ao buscar dados.");
         const dados = await res.json();
 
         container.innerHTML = `
-            <div style="padding:20px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
+            <div style="padding:20px; max-width: 900px; margin: 0 auto;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:25px;">
                     <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                    <h2 style="color:white; margin:0; font-size:1.2rem;">📦 CONFIRMAR RECEBIMENTO</h2>
                 </div>
-                    ${dados.length === 0 ? `
-                        <div style="background:#f8fafc; padding:40px; text-align:center; border-radius:10px; color:#64748b; border:1px dashed #cbd5e1;">
-                            Nenhuma remessa vindo para sua unidade no momento.
-                        </div>` : 
-                        dados.map(r => `
-                        <div style="background:#fffbeb; padding:20px; border-radius:10px; border-left:10px solid #f59e0b; box-shadow:0 4px 6px rgba(0,0,0,0.05);">
-                            <div style="display:flex; justify-content:space-between; align-items:center;">
-                                <div>
-                                    <div style="font-weight:bold; font-size:1.1rem; color:#92400e;">📦 CARGA A CAMINHO</div>
-                                    <div style="color:#b45309; margin-top:5px;">
-                                        Remessa: <strong>#${r.remessa_id}</strong> | Pedido: #${r.pedido_id}
-                                    </div>
-                                    <div style="font-size:0.8rem; color:#d97706; margin-top:5px;">
-                                        Escola: ${r.escola_nome}
-                                    </div>
-                                </div>
-                                <button class="btn-confirmar-entrega" data-remessa-id="${r.remessa_id}" 
-                                        style="background:#059669; color:white; border:none; padding:12px 25px; border-radius:6px; cursor:pointer; font-weight:bold;">
-                                    ✅ CONFIRMAR CHEGADA
+
+                ${dados.length === 0 ? `
+                    <div class="glass-panel" style="padding:40px; text-align:center; color:rgba(255,255,255,0.6);">
+                        Nenhuma remessa vindo para sua unidade no momento.
+                    </div>` : 
+                    dados.map(r => `
+                    <div class="glass-panel" style="margin-bottom:20px; overflow:hidden; border-left: 6px solid #f59e0b;">
+                        <div style="padding:20px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:15px;">
+                            <div style="flex:1; min-width:200px;">
+                                <div style="font-weight:bold; font-size:1.1rem; color:#f59e0b;">REMESSA #${r.remessa_id}</div>
+                                <div style="color:white; opacity:0.8; margin-top:5px;">Pedido: #${r.pedido_id} | Origem: Almoxarifado Central</div>
+                            </div>
+                            
+                            <div style="display:flex; gap:10px;">
+                                <button onclick="visualizarDetalhesRemessa(${r.remessa_id}, ${r.pedido_id})" 
+                                        style="background:rgba(255,255,255,0.1); color:white; border:1px solid rgba(255,255,255,0.2); padding:10px 15px; border-radius:8px; cursor:pointer;">
+                                    🔎 VER ITENS
+                                </button>
+                                <button onclick="confirmarChegadaEscola(${r.remessa_id})" 
+                                        style="background:#059669; color:white; border:none; padding:10px 20px; border-radius:8px; cursor:pointer; font-weight:bold;">
+                                    ✅ CONFIRMAR
                                 </button>
                             </div>
                         </div>
-                    `).join('')}
-                </div>
+
+                        <div id="detalhes-remessa-${r.remessa_id}" style="display:none; background:rgba(0,0,0,0.2); padding:20px; border-top:1px solid rgba(255,255,255,0.1);">
+                            <div class="spinner" style="margin: 0 auto;"></div>
+                        </div>
+                    </div>
+                `).join('')}
             </div>
         `;
     } catch (err) {
-        container.innerHTML = `
-            <div style="padding:20px; color:#ef4444; background:#fef2f2; border:1px solid #fee2e2; border-radius:8px;">
-                <strong>⚠️ Falha:</strong> ${err.message}
-            </div>`;
+        container.innerHTML = `<div class="glass-panel" style="color:#ef4444; margin:20px;">⚠️ Erro: ${err.message}</div>`;
+    }
+}
+
+// Função para buscar e exibir os itens da remessa
+async function visualizarDetalhesRemessa(remessaId, pedidoId) {
+    const divDetalhes = document.getElementById(`detalhes-remessa-${remessaId}`);
+    
+    // Se já estiver aberto, fecha
+    if (divDetalhes.style.display === 'block') {
+        divDetalhes.style.display = 'none';
+        return;
+    }
+
+    divDetalhes.style.display = 'block';
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/detalhes-estoque/${pedidoId}`, { 
+            headers: { 'Authorization': `Bearer ${TOKEN}` } 
+        });
+        const itens = await res.json();
+
+        divDetalhes.innerHTML = `
+            <table style="width:100%; border-collapse:collapse; color:white; font-size:0.9rem;">
+                <thead>
+                    <tr style="border-bottom:1px solid rgba(255,255,255,0.2); text-align:left;">
+                        <th style="padding:10px;">PRODUTO</th>
+                        <th style="padding:10px; text-align:center;">TAMANHO</th>
+                        <th style="padding:10px; text-align:center;">QTD ENVIADA</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${itens.map(i => `
+                        <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                            <td style="padding:10px;">${i.produto}</td>
+                            <td style="padding:10px; text-align:center;">${i.tamanho || '-'}</td>
+                            <td style="padding:10px; text-align:center; font-weight:bold; color:#00d4ff;">${i.solicitado}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+    } catch (err) {
+        divDetalhes.innerHTML = `<p style="color:#ff4d4d;">Erro ao carregar itens.</p>`;
     }
 }
 
 async function confirmarRecebimentoRemessa(remessaId, pedidoId) {
-    if (!confirm("Você confirma que conferiu e recebeu todos os itens desta remessa?")) return;
+    const usuarioId = localStorage.getItem('usuario_id');
+    
+    if (!confirm("Confirmar o recebimento físico desta carga? O saldo entrará no estoque da sua unidade.")) return;
 
     try {
-        const res = await fetch(`${API_URL}/pedidos/escola/confirmar-recebimento`, {
+        const res = await fetch(`${API_URL}/escola/confirmar-recebimento`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
-            body: JSON.stringify({ remessaId, pedidoId })
+            headers: { 
+                'Content-Type': 'application/json', 
+                'Authorization': `Bearer ${TOKEN}` 
+            },
+            body: JSON.stringify({ 
+                remessaId, 
+                pedidoId, 
+                usuarioId // Enviando quem recebeu
+            })
         });
 
+        const resultado = await res.json();
+
         if (res.ok) {
-            notificar("✨ Recebimento registrado! O estoque da escola foi atualizado.");
-            telaEscolaConfirmarRecebimento(); // Atualiza a lista
+            // Notificação com estilo de sucesso
+            notificar("✨ Recebimento confirmado! Estoque da unidade atualizado.");
+            telaEscolaConfirmarRecebimento(); // Recarrega a lista para sumir a remessa recebida
+        } else {
+            throw new Error(resultado.error || "Erro desconhecido.");
         }
-    } catch (err) { notificar("Erro ao processar recebimento."); }
+    } catch (err) {
+        notificar("❌ Erro: " + err.message);
+    }
 }
 
 async function confirmarEntregaFinal(pedidoId) {
@@ -12225,8 +12317,11 @@ async function finalizarProcessoDevolucao(pedidoId) {
 }
 
 function notificar(mensagem, tipo = 'sucesso') {
-    // 1. Injeta o estilo de animação se ele ainda não existir
+    const overlayAntiga = document.getElementById('notificara-overlay');
+    if (overlayAntiga) overlayAntiga.remove();
+
     if (!document.getElementById('notificar-estilo')) {
+
         const estilo = document.createElement('style');
         estilo.id = 'notificar-estilo';
         estilo.innerHTML = `
@@ -12244,6 +12339,7 @@ function notificar(mensagem, tipo = 'sucesso') {
     // 2. Cria o elemento da overlay (Fundo escurecido com blur)
     const overlay = document.createElement('div');
     overlay.id = 'notificara-overlay';
+    const bgOverlay = tipo === 'erro' ? 'rgba(20, 10, 10, 0.85)' : 'rgba(7, 11, 22, 0.8)';
     overlay.style.cssText = `
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
         background: rgba(7, 11, 22, 0.8);
@@ -12254,7 +12350,7 @@ function notificar(mensagem, tipo = 'sucesso') {
 
     // 3. Configurações de Ícone e Cores (Gamificadas)
     // Amarelo vibrante para alertas/erros e Verde Neon para sucesso
-    const corNeon = tipo === 'erro' ? '#fbbf24' : '#4ade80';
+    const corNeon = tipo === 'erro' ? '#ff4d4d' : '#4ade80'; // Vermelho mais vivo para erro
     const icone = tipo === 'erro' ? '⚠️' : '✅';
     const titulo = tipo === 'erro' ? 'ATENÇÃO!' : 'SUCESSO!';
 
@@ -17123,9 +17219,12 @@ function validarEstoqueMax(input) {
 
 async function processarSaidaPedido() {
     const localDestinoId = document.getElementById('select-local-destino').value;
-    const usuarioId = localStorage.getItem('usuario_id'); //
+    const usuarioId = localStorage.getItem('usuario_id');
 
-    if (!localDestinoId) return alert("Selecione o Local de Destino!");
+    if (!localDestinoId) {
+        alert("⚠️ Selecione o Local de Destino!");
+        return;
+    }
 
     const inputs = document.querySelectorAll('.input-saida-qtd');
     const mapaItens = {};
@@ -17139,37 +17238,52 @@ async function processarSaidaPedido() {
         const tamanho = input.dataset.tamanho;
 
         if (!mapaItens[id]) {
-            mapaItens[id] = { produto_id: id, tipo: tipo, qtd_total: 0, grade: {} };
+            mapaItens[id] = { 
+                produto_id: id, 
+                tipo: tipo, 
+                qtd_total: 0, 
+                grade: {} 
+            };
         }
 
         mapaItens[id].qtd_total += qtd;
-        if (tipo === 'UNIFORMES') mapaItens[id].grade[tamanho] = qtd;
+        if (tipo === 'UNIFORMES' && tamanho) {
+            mapaItens[id].grade[tamanho] = qtd;
+        }
     });
 
     const itensParaEnviar = Object.values(mapaItens);
-    if (itensParaEnviar.length === 0) return alert("Selecione ao menos um produto!");
+    if (itensParaEnviar.length === 0) {
+        alert("⚠️ Informe as quantidades para saída.");
+        return;
+    }
+
+    if (!confirm("Confirmar a saída do estoque e geração do pedido?")) return;
 
     try {
         const res = await fetch(`${API_URL}/estoque/saida-pedido`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${TOKEN}` 
+            },
             body: JSON.stringify({ 
                 itens: itensParaEnviar, 
-                local_origem_id: 37, 
                 local_destino_id: localDestinoId, 
                 usuario_id: usuarioId 
             })
         });
 
+        const resultado = await res.json();
+
         if (res.ok) {
-            alert("📦 Pedido AUTORIZADO e estoque atualizado!");
+            alert("✅ Pedido APROVADO! Estoque atualizado e histórico registrado.");
             carregarDashboard();
         } else {
-            const erro = await res.json();
-            throw new Error(erro.error);
+            throw new Error(resultado.error);
         }
     } catch (err) {
-        alert("Erro no Pedido: " + err.message);
+        alert("❌ Erro no Pedido: " + err.message);
     }
 }
 

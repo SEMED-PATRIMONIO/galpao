@@ -17316,6 +17316,26 @@ async function processarSaidaPedido() {
     }
 }
 
+function verificarToken(req, res, next) {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) return res.status(401).json({ error: "Token não fornecido" });
+
+    jwt.verify(token, SECRET, (err, decoded) => {
+        if (err) return res.status(403).json({ error: "Token inválido ou expirado" });
+
+        // IMPORTANTE: Aqui injetamos os dados no req.user
+        // Como no login você salvou { id, perfil, local_id }, tudo estará aqui
+        req.user = decoded; 
+        
+        // Mantemos req.userId para compatibilidade com sua rota 'quem-sou-eu'
+        req.userId = decoded.id; 
+        
+        next();
+    });
+}
+
 // Isso garante que o onclick="funcao()" funcione sempre
 window.telaVisualizarEstoque = telaVisualizarEstoque;
 window.telaAbastecerEstoque = telaAbastecerEstoque;

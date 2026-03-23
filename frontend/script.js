@@ -9049,6 +9049,35 @@ async function telaEscolaConfirmarRecebimento() {
     }
 }
 
+async function confirmarChegadaEscola(remessaId) {
+    const usuarioId = localStorage.getItem('usuario_id');
+    
+    // Alerta estilizado para confirmação
+    if (!confirm("Deseja confirmar o recebimento físico desta carga? O saldo será adicionado ao estoque da sua unidade.")) return;
+
+    try {
+        const res = await fetch(`${API_URL}/escola/confirmar-recebimento`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${TOKEN}` 
+            },
+            body: JSON.stringify({ remessaId, usuarioId })
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+            notificar("✨ Carga recebida com sucesso! Estoque local atualizado.", "sucesso");
+            telaEscolaConfirmarRecebimento(); // Recarrega a lista para remover o card
+        } else {
+            throw new Error(data.error || "Erro ao processar recebimento.");
+        }
+    } catch (err) {
+        notificar(err.message, "erro");
+    }
+}
+
 // Função para buscar e exibir os itens da remessa
 async function visualizarDetalhesRemessa(remessaId, pedidoId) {
     const divDetalhes = document.getElementById(`detalhes-remessa-${remessaId}`);

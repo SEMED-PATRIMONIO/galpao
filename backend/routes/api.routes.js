@@ -145,27 +145,35 @@ router.get('/pedidos/admin/pendentes', verificarToken, async (req, res) => {
 });
 
 // DETALHES DO PEDIDO VS ESTOQUE ATUAL
-router.get('/pedidos/detalhes-estoque/:id', verificarToken, async (req, res) => {
+router.get('/pedidos/detalhes-estoque/:id', async (req, res) => {
     try {
-        const query = `
+        const sql = `
             SELECT 
-                p.nome as produto,
-                ip.tamanho,
-                ip.quantidade as solicitado,
-                -- O TRIM remove espaços que impedem o sistema de achar o estoque
+                ip.produto_id,
+                p.nome AS produto,
+                p.tipo,
+                TRIM(ip.tamanho) AS tamanho,
+                ip.quantidade AS solicitado,
                 CASE 
-                    WHEN p.tipo = 'UNIFORMES' THEN COALESCE(eg.quantidade, 0)
-                    ELSE COALESCE(p.quantidade_estoque, 0)
-                END as em_estoque
+                    WHEN p.tipo = 'MATERIAL' THEN p.quantidade_estoque
+                    WHEN p.tipo = 'UNIFORMES' THEN (
+                        SELECT COALESCE(SUM(et.quantidade), 0) 
+                        FROM estoque_tamanhos et 
+                        WHERE et.produto_id = ip.produto_id 
+                          AND TRIM(UPPER(et.tamanho)) = TRIM(UPPER(ip.tamanho))
+                    )
+                    ELSE 0 
+                END AS em_estoque
             FROM itens_pedido ip
             JOIN produtos p ON ip.produto_id = p.id
-            LEFT JOIN estoque_grades eg ON (ip.produto_id = eg.produto_id AND TRIM(ip.tamanho) = TRIM(eg.tamanho))
             WHERE ip.pedido_id = $1
         `;
-        const { rows } = await db.query(query, [req.params.id]);
+
+        const { rows } = await db.query(sql, [req.params.id]);
         res.json(rows);
     } catch (err) {
-        res.status(500).json({ error: "Erro ao consultar estoque real." });
+        console.error("ERRO NA ANÁLISE DE ESTOQUE:", err.message);
+        res.status(500).json({ error: "Erro interno ao processar comparação." });
     }
 });
 

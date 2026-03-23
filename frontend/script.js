@@ -290,8 +290,8 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="telaGerenciarUsuarios()">
                 <i>👥</i><span>GERENCIAR USUÁRIOS</span>
             </button>
-            <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaAdminDashboard()">
-                <i>📈</i><span>PAINEL DE PEDIDOS</span>
+            <button class="btn-grande btn-vidro" onclick="abrirPainelGerencial()">
+                <i>📈</i><span>PAINEL ATUAL</span>
             </button>
             <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
                 <i>🔑</i><span>ALTERAR MINHA SENHA</span>
@@ -417,6 +417,9 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="carregarConsultaEstoque()">
                 <i>🔎</i><span>CONSULTA ESTOQUE</span>
             </button>
+            <button class="btn-grande btn-vidro" onclick="abrirPainelGerencial()">
+                <i>📈</i><span>PAINEL ATUAL</span>
+            </button>
             <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('RELATÓRIOS')">
                 <i>📊</i><span>RELATÓRIOS</span>
             </button>
@@ -457,7 +460,9 @@ if (perfil === 'estoque') {
             <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('PEDIDOS')">
                 <i>📝</i><span>PEDIDOS</span>
             </button>
-
+            <button class="btn-grande btn-vidro" onclick="abrirPainelGerencial()">
+                <i>📈</i><span>PAINEL ATUAL</span>
+            </button>
             <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('RELATÓRIOS')">
                 <i>📊</i><span>RELATÓRIOS</span>
             </button>
@@ -8687,19 +8692,34 @@ window.iniciarTransporteRemessa = async function(remessaId) {
     console.log("Iniciando processo de romaneio para remessa:", remessaId);
 
     try {
-        // Busca os dados consolidados para o documento
-        const res = await fetch(`${API_URL}/pedidos/remessa/${remessaId}/detalhes-romaneio`, {
+        // 1. Primeiro, avisa o banco para mudar o status e gerar o LOG
+        const resStatus = await fetch(`${API_URL}/estoque/confirmar-inicio-transporte`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${TOKEN}` 
+            },
+            body: JSON.stringify({ remessaId })
+        });
+
+        if (!resStatus.ok) throw new Error("Falha ao atualizar status de transporte no servidor.");
+
+        // 2. Se o status atualizou, busca os dados para o documento A4
+        const resDados = await fetch(`${API_URL}/pedidos/remessa/${remessaId}/detalhes-romaneio`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
-        if (!res.ok) throw new Error("Erro ao carregar dados do romaneio.");
-        const dados = await res.json();
+        
+        if (!resDados.ok) throw new Error("Erro ao carregar dados do romaneio.");
+        const dados = await resDados.json();
 
-        // Abre o Modal com o Documento A4 Paisagem
+        // 3. Abre o Modal com o Documento A4 Paisagem que configuramos
         gerarModalRomaneioA4(remessaId, dados);
+        
+        notificar(`🚚 Remessa #${remessaId} em transporte!`, "sucesso");
 
     } catch (err) {
         console.error(err);
-        notificar("Falha ao preparar documento.", "erro");
+        notificar("Falha ao iniciar transporte: " + err.message, "erro");
     }
 };
 
@@ -8996,56 +9016,52 @@ async function efetivarInicioTransporte(remessaId) {
 
 async function telaEscolaConfirmarRecebimento() {
     const container = document.getElementById('app-content');
-    container.innerHTML = '<div style="padding:40px; text-align:center; color:white;">🔍 Localizando mercadorias em trânsito...</div>';
+    container.innerHTML = '<div style="padding:40px; text-align:center; color:white;">🔍 Localizando mercadorias...</div>';
 
     try {
-        const res = await fetch(`${API_URL}/escola/remessas-a-caminho`, {
+        // Chamando a nova rota cirúrgica
+        const res = await fetch(`${API_URL}/escola/painel-v2`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
 
-        if (!res.ok) throw new Error("Erro ao buscar dados.");
+        if (!res.ok) throw new Error("Erro na comunicação com o servidor.");
         const dados = await res.json();
 
         container.innerHTML = `
             <div style="padding:20px; max-width: 900px; margin: 0 auto;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:25px;">
                     <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
-                    <h2 style="color:white; margin:0; font-size:1.2rem;">📦 CONFIRMAR RECEBIMENTO</h2>
+                    <h2 style="color:white; margin:0; font-size:1.2rem;">📦 RECEBIMENTO DE CARGAS</h2>
                 </div>
 
                 ${dados.length === 0 ? `
                     <div class="glass-panel" style="padding:40px; text-align:center; color:rgba(255,255,255,0.6);">
-                        Nenhuma remessa vindo para sua unidade no momento.
+                        Nenhuma remessa a caminho para sua unidade.
                     </div>` : 
                     dados.map(r => `
-                    <div class="glass-panel" style="margin-bottom:20px; overflow:hidden; border-left: 6px solid #f59e0b;">
-                        <div style="padding:20px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:15px;">
-                            <div style="flex:1; min-width:200px;">
+                    <div class="glass-panel" style="margin-bottom:20px; border-left: 6px solid #f59e0b;">
+                        <div style="padding:20px; display:flex; justify-content:space-between; align-items:center;">
+                            <div>
                                 <div style="font-weight:bold; font-size:1.1rem; color:#f59e0b;">REMESSA #${r.remessa_id}</div>
-                                <div style="color:white; opacity:0.8; margin-top:5px;">Pedido: #${r.pedido_id} | Origem: Almoxarifado Central</div>
+                                <div style="color:white; opacity:0.8; font-size:0.9rem;">Pedido #${r.pedido_id} | Destino: ${r.escola_nome}</div>
                             </div>
                             
                             <div style="display:flex; gap:10px;">
-                                <button onclick="visualizarDetalhesRemessa(${r.remessa_id}, ${r.pedido_id})" 
-                                        style="background:rgba(255,255,255,0.1); color:white; border:1px solid rgba(255,255,255,0.2); padding:10px 15px; border-radius:8px; cursor:pointer;">
+                                <button onclick="visualizarDetalhesRemessa(${r.remessa_id}, ${r.pedido_id})" class="btn-vidro" style="padding:8px 15px; font-size:0.8rem;">
                                     🔎 VER ITENS
                                 </button>
-                                <button onclick="confirmarChegadaEscola(${r.remessa_id})" 
-                                        style="background:#059669; color:white; border:none; padding:10px 20px; border-radius:8px; cursor:pointer; font-weight:bold;">
-                                    ✅ CONFIRMAR
+                                <button onclick="confirmarChegadaEscola(${r.remessa_id})" class="btn-vidro" style="background:#059669; border:none; padding:8px 15px;">
+                                    ✅ RECEBER
                                 </button>
                             </div>
                         </div>
-
-                        <div id="detalhes-remessa-${r.remessa_id}" style="display:none; background:rgba(0,0,0,0.2); padding:20px; border-top:1px solid rgba(255,255,255,0.1);">
-                            <div class="spinner" style="margin: 0 auto;"></div>
-                        </div>
+                        <div id="detalhes-remessa-${r.remessa_id}" style="display:none; background:rgba(0,0,0,0.2); padding:15px;"></div>
                     </div>
                 `).join('')}
             </div>
         `;
     } catch (err) {
-        container.innerHTML = `<div class="glass-panel" style="color:#ef4444; margin:20px;">⚠️ Erro: ${err.message}</div>`;
+        container.innerHTML = `<div class="glass-panel" style="color:#ef4444;">⚠️ Falha: ${err.message}</div>`;
     }
 }
 
@@ -17334,6 +17350,135 @@ function verificarToken(req, res, next) {
         
         next();
     });
+}
+
+async function abrirPainelGerencial() {
+    const container = document.getElementById('app-content');
+    container.innerHTML = '<div class="spinner"></div>';
+
+    try {
+        const res = await fetch(`${API_URL}/gerencial/resumo-status`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const resumo = await res.json();
+
+        // Mapeamento de Cores e Ícones por Status
+        const configStatus = {
+            'AGUARDANDO_AUTORIZACAO': { icon: '⏳', label: 'PENDENTES', cor: '#fbbf24' },
+            'APROVADO': { icon: '✅', label: 'APROVADOS', cor: '#4ade80' },
+            'SEPARACAO_INICIADA': { icon: '📦', label: 'EM SEPARAÇÃO', cor: '#60a5fa' },
+            'EM_TRANSPORTE': { icon: '🚚', label: 'A CAMINHO', cor: '#f472b6' },
+            'ENTREGUE': { icon: '🏠', label: 'ENTREGUES', cor: '#a78bfa' }
+        };
+
+        container.innerHTML = `
+            <div class="painel-gerencial-glass animate__animated animate__fadeIn">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:30px;">
+                    <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                    <h2 style="color:white; margin:0;">📈 PAINEL GERENCIAL DE PEDIDOS</h2>
+                </div>
+
+                <div class="grid-movel-celular" style="gap:20px;">
+                    ${Object.keys(configStatus).map(status => `
+                        <div class="card-status-gerencial" onclick="abrirListaPedidosStatus('${status}')">
+                            <span style="font-size:3rem; filter: drop-shadow(0 0 10px ${configStatus[status].cor});">${configStatus[status].icon}</span>
+                            <span style="color:white; font-weight:bold; letter-spacing:1px;">${configStatus[status].label}</span>
+                            <span class="badge-qtd">${resumo[status] || 0}</span>
+                        </div>
+                    `).join('')}
+                </div>
+                <p style="text-align:center; color:rgba(255,255,255,0.4); margin-top:30px; font-size:0.8rem;">
+                    💡 Clique em um card para ver a listagem detalhada de cada setor.
+                </p>
+            </div>
+        `;
+    } catch (err) {
+        notificar("Erro ao carregar painel.", "erro");
+    }
+}
+
+// --- MODAL NÍVEL 1: LISTAGEM DE PEDIDOS ---
+async function abrirListaPedidosStatus(status) {
+    const modal = document.createElement('div');
+    modal.className = 'modal-stack animate__animated animate__zoomIn';
+    modal.id = 'modal-lista-status';
+
+    try {
+        const res = await fetch(`${API_URL}/gerencial/lista-por-status/${status}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const pedidos = await res.json();
+
+        modal.innerHTML = `
+            <div class="painel-gerencial-glass" style="width:90%; max-width:800px; max-height:80vh; overflow-y:auto;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                    <button onclick="this.closest('.modal-stack').remove()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                    <h3 style="color:#00d4ff; margin:0;">PEDIDOS: ${status}</h3>
+                </div>
+
+                <table style="width:100%; color:white; border-collapse:collapse;">
+                    <thead>
+                        <tr style="border-bottom:2px solid rgba(255,255,255,0.1); text-align:left;">
+                            <th style="padding:10px;">ID</th>
+                            <th style="padding:10px;">DESTINO</th>
+                            <th style="padding:10px;">DATA</th>
+                            <th style="padding:10px;">AÇÃO</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${pedidos.map(p => `
+                            <tr style="border-bottom:1px solid rgba(255,255,255,0.05); hover:background:rgba(255,255,255,0.02);">
+                                <td style="padding:12px;">#${p.id}</td>
+                                <td style="padding:12px;">${p.destino}</td>
+                                <td style="padding:12px;">${new Date(p.data_criacao).toLocaleDateString()}</td>
+                                <td style="padding:12px;">
+                                    <button class="btn-vidro" style="padding:5px 10px; font-size:0.7rem;" onclick="abrirDetalhesItensGerencial(${p.id})">VER ITENS 🔍</button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    } catch (err) {
+        notificar("Erro ao listar pedidos.", "erro");
+    }
+}
+
+// --- MODAL NÍVEL 2: DETALHES DOS PRODUTOS (EM CIMA DO NÍVEL 1) ---
+async function abrirDetalhesItensGerencial(pedidoId) {
+    const modalItens = document.createElement('div');
+    modalItens.className = 'modal-stack animate__animated animate__fadeInUp';
+    modalItens.style.zIndex = '11000'; // Fica por cima do modal de lista
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/detalhes-estoque/${pedidoId}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const itens = await res.json();
+
+        modalItens.innerHTML = `
+            <div class="painel-gerencial-glass" style="width:80%; max-width:500px; border:2px solid #00d4ff;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                    <button onclick="this.closest('.modal-stack').remove()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                    <h4 style="color:white; margin:0;">ITENS DO PEDIDO #${pedidoId}</h4>
+                </div>
+
+                <div style="max-height:400px; overflow-y:auto;">
+                    ${itens.map(i => `
+                        <div style="display:flex; justify-content:space-between; padding:10px; border-bottom:1px solid rgba(255,255,255,0.1); color:white;">
+                            <span>${i.produto} ${i.tamanho ? `(${i.tamanho})` : ''}</span>
+                            <span style="font-weight:bold; color:#00d4ff;">QTD: ${i.solicitado}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modalItens);
+    } catch (err) {
+        notificar("Erro ao carregar itens.", "erro");
+    }
 }
 
 // Isso garante que o onclick="funcao()" funcione sempre

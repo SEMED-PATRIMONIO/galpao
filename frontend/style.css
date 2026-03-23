@@ -2200,4 +2200,52 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .btn-acao-romaneio:hover { background: #00d4ff; color: #001a2c; }
 .btn-fechar { background: #ef4444; }
 
+.painel-gerencial-glass {
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(25px);
+    -webkit-backdrop-filter: blur(25px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 24px;
+    padding: 30px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
 
+.card-status-gerencial {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 20px;
+    padding: 25px;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+.card-status-gerencial:hover {
+    transform: translateY(-5px) scale(1.02);
+    background: rgba(255, 255, 255, 0.2);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+}
+
+.badge-qtd {
+    background: #00d4ff;
+    color: #001a2c;
+    padding: 5px 15px;
+    border-radius: 50px;
+    font-weight: 900;
+    font-size: 1.2rem;
+}
+
+/* Modal Stack (Camadas de Modal) */
+.modal-stack {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    z-index: 10000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(5px);
+}

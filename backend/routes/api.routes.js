@@ -6122,4 +6122,87 @@ router.get('/estoque/historico-completo', async (req, res) => {
     }
 });
 
+// backend/routes/api.routes.js
+router.post('/estoque/saida-pedido', async (req, res) => {
+    const { itens, local_origem_id, local_destino_id, usuario_id } = req.body;
+    const client = await db.pool.connect(); //
+
+    try {
+        await client.query('BEGIN');
+
+        // 1. Criar o Pedido Master
+        const resPedido = await client.query(
+            `INSERT INTO pedidos (local_origem_id, local_destino_id, usuario_origem_id, status, data_pedido) 
+             VALUES ($1, $2, $3, 'AUTORIZADO', NOW()) RETURNING id`,
+            [local_origem_id, local_destino_id, usuario_id]
+        );
+        const pedidoId = resPedido.rows[0].id;
+
+        // 2. Criar registro Mestre no Histórico
+        const totalGeral = itens.reduce((acc, item) => acc + item.qtd_total, 0);
+        const resHist = await client.query(
+            `INSERT INTO historico (usuario_id, acao, quantidade_total, local_id, tipo, observacoes) 
+             VALUES ($1, $2, $3, $4, 'SAIDA', $5) RETURNING id`,
+            [usuario_id, 'PEDIDO', totalGeral, local_origem_id, `Referente ao Pedido #${pedidoId}`]
+        );
+        const historicoId = resHist.rows[0].id;
+
+        for (const item of itens) {
+            // 3. Baixa no Estoque Global (produtos)
+            await client.query(
+                `UPDATE produtos SET quantidade_estoque = quantidade_estoque - $1 WHERE id = $2`,
+                [item.qtd_total, item.produto_id]
+            );
+
+            // 4. Registrar em pedido_itens e historico_detalhes
+            if (item.tipo === 'MATERIAL') {
+                await client.query(
+                    `INSERT INTO pedido_itens (pedido_id, produto_id, quantidade_solicitada, quantidade_atendida) 
+                     VALUES ($1, $2, $3, $3)`, // Assume atendido na hora por ser pronta entrega do estoque
+                    [pedidoId, item.produto_id, item.qtd_total]
+                );
+                await client.query(
+                    `INSERT INTO historico_detalhes (historico_id, produto_id, quantidade, tipo_produto) 
+                     VALUES ($1, $2, $3, 'MATERIAL')`,
+                    [historicoId, item.produto_id, item.qtd_total]
+                );
+            } else {
+                // UNIFORMES: Loop na grade
+                for (const [tamanho, qtd] of Object.entries(item.grade)) {
+                    if (qtd > 0) {
+                        // Baixa na Grade específica
+                        await client.query(
+                            `UPDATE estoque_tamanhos SET quantidade = quantidade - $1 
+                             WHERE produto_id = $2 AND tamanho = $3`,
+                            [qtd, item.produto_id, tamanho]
+                        );
+                        // Registro no Item do Pedido
+                        await client.query(
+                            `INSERT INTO pedido_itens (pedido_id, produto_id, quantidade_solicitada, quantidade_atendida, tamanho) 
+                             VALUES ($1, $2, $3, $3, $4)`,
+                            [pedidoId, item.produto_id, qtd, tamanho]
+                        );
+                        // Registro no Detalhe do Histórico
+                        await client.query(
+                            `INSERT INTO historico_detalhes (historico_id, produto_id, quantidade, tamanho, tipo_produto) 
+                             VALUES ($1, $2, $3, $4, 'UNIFORMES')`,
+                            [historicoId, item.produto_id, qtd, tamanho]
+                        );
+                    }
+                }
+            }
+        }
+
+        await client.query('COMMIT');
+        res.json({ success: true, pedidoId: pedidoId });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error("ERRO NA SAÍDA DE ESTOQUE:", err.message);
+        res.status(500).json({ error: "Erro ao processar baixa de estoque: " + err.message });
+    } finally {
+        client.release();
+    }
+});
+
 module.exports = router;

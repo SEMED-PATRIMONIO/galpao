@@ -6327,4 +6327,211 @@ router.post('/estoque/confirmar-autorizacao', async (req, res) => {
     }
 });
 
+// ROTA CIRÚRGICA: Baseada no seu backup funcional
+router.get('/escola/painel-v2', verificarToken, async (req, res) => {
+    try {
+        // Usa a mesma lógica de captura de ID do seu backup
+        const usuarioId = req.usuario?.id || req.user?.id || req.userId || req.id;
+
+        if (!usuarioId) {
+            return res.status(401).json({ error: "Sessão expirada. Refaça o login." });
+        }
+
+        // QUERY BASEADA NO SEU BACKUP (Join usuarios -> locais -> pedidos -> pedido_remessas)
+        const query = `
+            SELECT 
+                pr.id as remessa_id,
+                pr.pedido_id,
+                pr.data_criacao,
+                l.nome as escola_nome,
+                p.status as status_pedido
+            FROM usuarios u
+            JOIN locais l ON u.local_id = l.id
+            JOIN pedidos p ON p.local_destino_id = l.id
+            JOIN pedido_remessas pr ON pr.pedido_id = p.id
+            WHERE u.id = $1 
+            AND pr.status IN ('EM_TRANSPORTE', 'APROVADO') 
+            ORDER BY pr.id DESC
+        `;
+
+        const { rows } = await db.query(query, [usuarioId]);
+        res.json(rows);
+
+    } catch (err) {
+        console.error("Erro na rota escola V2:", err.message);
+        res.status(500).json({ error: "Erro interno: " + err.message });
+    }
+});
+
+router.post('/escola/confirmar-recebimento-exclusivo', verificarToken, async (req, res) => {
+    const { remessaId } = req.body;
+    const idUsuarioLogado = req.userId; // Vem do middleware verificarToken
+    const client = await db.pool.connect();
+
+    try {
+        await client.query('BEGIN');
+
+        // 1. Busca o local_id do técnico e valida o vínculo
+        const resUser = await client.query("SELECT local_id FROM usuarios WHERE id = $1", [idUsuarioLogado]);
+        const localIdTecnico = resUser.rows[0]?.local_id;
+
+        if (!localIdTecnico) throw new Error("Usuário não vinculado a uma unidade escolar.");
+
+        // 2. Busca o Pedido, o Status Atual e o Destino para validar a posse
+        const resRem = await client.query(`
+            SELECT p.id, p.local_destino_id, p.status 
+            FROM pedido_remessas pr
+            JOIN pedidos p ON pr.pedido_id = p.id
+            WHERE pr.id = $1`, [remessaId]);
+
+        if (resRem.rows.length === 0) throw new Error("Remessa não localizada.");
+        
+        const pedido = resRem.rows[0];
+
+        // Validação cirúrgica: a escola só recebe o que é dela
+        if (pedido.local_destino_id !== localIdTecnico) {
+            throw new Error("Acesso negado. Esta carga é destinada a outra unidade.");
+        }
+
+        // 3. Atualiza o Pedido para 'ENTREGUE'
+        await client.query(
+            "UPDATE pedidos SET status = 'ENTREGUE', data_recebimento = NOW() WHERE id = $1",
+            [pedido.id]
+        );
+
+        // 4. REGISTRO NO LOG DE STATUS (Auditoria completa)
+        await client.query(
+            `INSERT INTO log_status_pedidos (pedido_id, usuario_id, status_anterior, status_novo, observacao) 
+             VALUES ($1, $2, $3, $4, $5)`,
+            [
+                pedido.id, 
+                idUsuarioLogado, 
+                pedido.status,      // Status que estava no banco (ex: EM_TRANSPORTE)
+                'ENTREGUE',         // Novo status
+                'Carga recebida e conferida pela unidade escolar via Painel de Recebimento.'
+            ]
+        );
+
+        // 5. Atualiza o estoque da unidade (Upsert)
+        const resItens = await client.query(
+            "SELECT produto_id, tamanho, quantidade FROM itens_pedido WHERE pedido_id = $1",
+            [pedido.id]
+        );
+
+        for (const item of resItens.rows) {
+            await client.query(`
+                INSERT INTO estoque_individual (local_id, produto_id, tamanho, quantidade)
+                VALUES ($1, $2, $3, $4)
+                ON CONFLICT (local_id, produto_id, COALESCE(tamanho, '')) 
+                DO UPDATE SET quantidade = estoque_individual.quantidade + EXCLUDED.quantidade`,
+                [localIdTecnico, item.produto_id, item.tamanho, item.quantidade]
+            );
+        }
+
+        await client.query('COMMIT');
+        res.json({ success: true, message: "Recebimento registrado com sucesso!" });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error("ERRO NO RECEBIMENTO:", err.message);
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
+router.post('/estoque/confirmar-inicio-transporte', verificarToken, async (req, res) => {
+    const { remessaId } = req.body;
+    const usuarioId = req.userId; // ID do técnico que está enviando
+    const client = await db.pool.connect();
+
+    try {
+        await client.query('BEGIN');
+
+        // 1. Localiza o pedido e o status atual para o LOG
+        const resDados = await client.query(`
+            SELECT p.id as pedido_id, p.status as status_atual 
+            FROM pedido_remessas pr
+            JOIN pedidos p ON pr.pedido_id = p.id
+            WHERE pr.id = $1`, [remessaId]);
+
+        if (resDados.rows.length === 0) throw new Error("Remessa não encontrada.");
+        const { pedido_id, status_atual } = resDados.rows[0];
+
+        // 2. Atualiza o status do PEDIDO
+        await client.query(
+            "UPDATE pedidos SET status = 'EM_TRANSPORTE' WHERE id = $1",
+            [pedido_id]
+        );
+
+        // 3. Atualiza o status da REMESSA
+        await client.query(
+            "UPDATE pedido_remessas SET status = 'EM_TRANSPORTE' WHERE id = $1",
+            [remessaId]
+        );
+
+        // 4. REGISTRO NO LOG (Seguindo seu padrão exato)
+        await client.query(
+            `INSERT INTO log_status_pedidos (pedido_id, usuario_id, status_anterior, status_novo, observacao) 
+             VALUES ($1, $2, $3, 'EM_TRANSPORTE', $4)`,
+            [
+                pedido_id, 
+                usuarioId, 
+                status_atual, 
+                `Transporte iniciado. Romaneio gerado para a Remessa #${remessaId}.`
+            ]
+        );
+
+        await client.query('COMMIT');
+        res.json({ success: true });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error("ERRO AO INICIAR TRANSPORTE:", err.message);
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
+// ROTA EXCLUSIVA: Resumo para o Painel Gerencial
+router.get('/gerencial/resumo-status', verificarToken, async (req, res) => {
+    try {
+        const sql = `
+            SELECT status, COUNT(*) as quantidade 
+            FROM pedidos 
+            GROUP BY status;
+        `;
+        const { rows } = await db.query(sql);
+        
+        // Formata os dados para facilitar o frontend
+        const resumo = rows.reduce((acc, row) => {
+            acc[row.status] = row.quantidade;
+            return acc;
+        }, {});
+
+        res.json(resumo);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ROTA EXCLUSIVA: Lista pedidos por status específico
+router.get('/gerencial/lista-por-status/:status', verificarToken, async (req, res) => {
+    try {
+        const { status } = req.params;
+        const sql = `
+            SELECT p.id, p.data_criacao, l.nome as destino, p.status
+            FROM pedidos p
+            JOIN locais l ON p.local_destino_id = l.id
+            WHERE p.status = $1
+            ORDER BY p.data_criacao DESC;
+        `;
+        const { rows } = await db.query(sql, [status]);
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;

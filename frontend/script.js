@@ -8504,29 +8504,30 @@ async function telaAdminDashboard() {
         const s = await res.json();
 
         container.innerHTML = `
-            <div class="painel-vidro" style="max-width: 1000px; margin: auto;">
-                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid rgba(255,255,255,0.1); padding-bottom:15px; margin-bottom:20px;">
+            <div class="painel-vidro" style="max-width: 1100px; margin: auto;">
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid rgba(255,255,255,0.1); padding-bottom:15px; margin-bottom:25px;">
                     <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
                     <h2 style="color:white; margin:0; font-size:1.3rem;">📊 PAINEL GERENCIAL DE PEDIDOS</h2>
                 </div>
 
                 <div style="background:rgba(0,0,0,0.2); border-radius:15px; padding: 25px;">
-                    <div class="grid-movel-celular" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;">
                         
-                        ${renderCirculo('PENDENTES', s.qtd_solicitado || 0, '⏳', '#ef4444')}
-                        ${renderCirculo('APROVADOS', s.qtd_autorizado || 0, '✅', '#3b82f6')}
-
+                        ${renderCirculo('SOLICITADO', s.qtd_solicitado || 0, '📩', '#ef4444')}
+                        ${renderCirculo('AUTORIZADO', s.qtd_autorizado || 0, '⚖️', '#f59e0b')}
                         ${renderCirculo('EM SEPARAÇÃO', s.qtd_separacao || 0, '📦', '#8b5cf6')}
-                        ${renderCirculo('PRONTO PARA ENTREGA', s.qtd_pronto || 0, '📋', '#10b981')} 
 
-                        ${renderCirculo('A CAMINHO', s.qtd_transporte || 0, '🚚', '#f59e0b')}
-                        ${renderCirculo('ENTREGUES', s.qtd_entregue || 0, '🏠', '#06b6d4')}
+                        ${renderCirculo('PRONTO PARA ENTREGA', s.qtd_pronto || 0, '✅', '#3b82f6')}
+                        ${renderCirculo('A CAMINHO', s.qtd_transporte || 0, '🚚', '#06b6d4')}
+                        ${renderCirculo('ENTREGUE', s.qtd_entregue || 0, '🏠', '#10b981')}
+
                     </div>
 
                     <div id="detalhes-dashboard" style="margin-top:40px; background:rgba(255,255,255,0.05); border-radius:12px; padding:25px; border: 1px solid rgba(255,255,255,0.1); color: white;">
                         <h3 id="titulo-fase" style="color:white; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:10px;">📊 Detalhes da Operação</h3>
                         <div id="lista-fase-conteudo" style="margin-top:15px; text-align:center; opacity:0.6;">
-                            Clique num card para ver a listagem das remessas em determinado status.
+                            Clique em um card acima para listar os pedidos deste setor.
                         </div>
                     </div>
                 </div>

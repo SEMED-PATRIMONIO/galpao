@@ -420,7 +420,7 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="carregarConsultaEstoque()">
                 <i>🔎</i><span>CONSULTA ESTOQUE</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="abrirPainelGerencial()">
+            <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()">
                 <i>📈</i><span>PAINEL (em construção)</span>
             </button>
 

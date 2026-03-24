@@ -1249,25 +1249,22 @@ body.login-body {
 }
 
 .fase-card {
-    width: 150px;
-    height: 150px;
-    background: white;
-    border-radius: 50%; /* Faz o card ser um círculo */
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
+    background: rgba(255, 255, 255, 0.05);
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-radius: 15px;
+    padding: 15px;
     cursor: pointer;
     transition: all 0.3s ease;
-    border: 4px solid #e2e8f0;
-    position: relative;
-    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+    min-width: 120px;
 }
 
 .fase-card:hover {
-    transform: scale(1.1);
-    border-color: #3b82f6;
-    box-shadow: 0 10px 15px -3px rgba(0,0,0,0.2);
+    background: rgba(255, 255, 255, 0.1);
+    transform: translateY(-5px);
 }
 
 .fase-card .icone { font-size: 2.5rem; margin-bottom: 5px; }

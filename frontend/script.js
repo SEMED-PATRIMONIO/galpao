@@ -424,7 +424,7 @@ async function carregarDashboard() {
                 <i>📈</i><span>PAINEL (em construção)</span>
             </button>
 
-            <button class="btn-grande btn-vidro btn-breve" // --- onclick="abrirSubmenuVitrificado('RELATÓRIOS')">
+            <button class="btn-grande btn-vidro btn-breve" // ---onclick="abrirSubmenuVitrificado('RELATÓRIOS')">
                 <i>📊</i><span>RELATÓRIOS</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()">
@@ -468,7 +468,7 @@ if (perfil === 'estoque') {
             <button class="btn-grande btn-vidro" onclick="abrirPainelGerencial()">
                 <i>📈</i><span>PAINEL (em construção)</span>
             </button>
-            <button class="btn-grande btn-vidro btn-breve" // --- onclick="abrirSubmenuVitrificado('RELATÓRIOS')">
+            <button class="btn-grande btn-vidro btn-breve" // ---onclick="abrirSubmenuVitrificado('RELATÓRIOS')">
                 <i>📊</i><span>RELATÓRIOS</span>
             </button>
 
@@ -746,7 +746,6 @@ async function finalizarPedidoUniforme(tipoMovimentacao) {
         notificar("Falha na conexão com o servidor.");
     }
 }
-
 
 function gerarCamposProduto() {
     return `
@@ -8450,29 +8449,33 @@ async function telaAdminDashboard() {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
         
-        if (!res.ok) throw new Error("A rota não foi encontrada no servidor (Erro 404).");
-        
+        if (!res.ok) throw new Error("Não foi possível obter dados do servidor.");
         const s = await res.json();
 
         container.innerHTML = `
-            <div class="painel-vidro" style="max-width: 1000px; margin: auto;">
-                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
+            <div class="painel-vidro" style="max-width: 1000px; margin: auto; padding: 25px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid rgba(255,255,255,0.1); padding-bottom:15px; margin-bottom:25px;">
                     <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                    <h2 style="color:white; margin:0; font-size:1.4rem;">📊 PAINEL GERENCIAL DE PEDIDOS</h2>
                 </div>
-                <div style="background:rgba(0,0,0,0.2); border-radius:10px; padding: 25px;">
-                    <div class="fluxo-container" style="display: flex; justify-content: space-around; gap: 10px; flex-wrap: wrap;">
-                        ${renderCirculo('SOLICITADO', s.qtd_solicitado || 0, '📩', '#ef4444')}
-                        ${renderCirculo('AUTORIZADO', s.qtd_autorizado || 0, '⚖️', '#f59e0b')}
-                        ${renderCirculo('EM SEPARAÇÃO', s.qtd_separacao || 0, '📦', '#8b5cf6')}
-                        ${renderCirculo('PRONTO', s.qtd_pronto || 0, '✅', '#3b82f6')}
-                        ${renderCirculo('EM_TRANSPORTE', s.qtd_transporte || 0, '🚚', '#06b6d4')}
-                        ${renderCirculo('ENTREGUE', s.qtd_entregue || 0, '🏠', '#10b981')}
+
+                <div style="background:rgba(0,0,0,0.2); border-radius:15px; padding: 30px;">
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 25px;">
+                        
+                        ${renderCirculo('SOLICITADO', s.qtd_solicitado, '📩', '#ef4444')}
+                        ${renderCirculo('AUTORIZADO', s.qtd_autorizado, '⚖️', '#f59e0b')}
+                        ${renderCirculo('EM SEPARAÇÃO', s.qtd_separacao, '📦', '#8b5cf6')}
+
+                        ${renderCirculo('PRONTO PARA ENTREGA', s.qtd_pronto, '✅', '#3b82f6')}
+                        ${renderCirculo('A CAMINHO', s.qtd_transporte, '🚚', '#06b6d4')}
+                        ${renderCirculo('ENTREGUE', s.qtd_entregue, '🏠', '#10b981')}
+
                     </div>
 
-                    <div id="detalhes-dashboard" style="margin-top:40px; background:rgba(255,255,255,0.05); border-radius:12px; padding:25px; border: 1px solid rgba(255,255,255,0.1); min-height:200px; color: white;">
-                        <h3 id="titulo-fase" style="color:white; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:10px; font-size: 1.1rem;">📊 Detalhes da Operação</h3>
+                    <div id="detalhes-dashboard" style="margin-top:40px; background:rgba(255,255,255,0.05); border-radius:12px; padding:25px; border: 1px solid rgba(255,255,255,0.1); color: white;">
+                        <h3 id="titulo-fase" style="color:white; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:10px;">📊 Detalhes da Operação</h3>
                         <div id="lista-fase-conteudo" style="margin-top:15px; text-align:center; opacity:0.6;">
-                            Clique numa fase do círculo para investigar os pedidos.
+                            Clique em um dos cards acima para listar os pedidos deste status.
                         </div>
                     </div>
                 </div>
@@ -8480,18 +8483,21 @@ async function telaAdminDashboard() {
         `;
     } catch (err) { 
         console.error(err);
-        if (typeof notificaraVidro === 'function') {
-            notificaraVidro("Erro ao carregar Dashboard. Verifique se o servidor foi reiniciado após adicionar a nova rota.", "erro");
-        }
+        notificar("Erro ao abrir painel gerencial.", "erro");
     }
 }
 
+// Função Auxiliar de Renderização (Estilo Círculo/Card)
 function renderCirculo(fase, qtd, icone, cor) {
     return `
-        <div class="fase-card" style="border-color: ${qtd > 0 ? cor : '#e2e8f0'}" onclick="verDetalhesFase('${fase}')">
-            <span class="icone">${icone}</span>
-            <span class="qtd" style="color:${cor}">${qtd}</span>
-            <span class="label">${fase}</span>
+        <div class="fase-card" 
+             style="display: flex; flex-direction: column; align-items: center; justify-content: center; 
+                    background: rgba(255,255,255,0.05); border: 2px solid ${qtd > 0 ? cor : 'rgba(255,255,255,0.1)'}; 
+                    border-radius: 20px; padding: 20px; cursor: pointer; transition: transform 0.2s;"
+             onclick="verDetalhesFase('${fase}')">
+            <span style="font-size: 1.8rem;">${icone}</span>
+            <span style="font-size: 2.5rem; font-weight: 900; color: ${cor}; line-height: 1; margin: 5px 0;">${qtd}</span>
+            <span style="font-size: 0.7rem; font-weight: bold; color: white; text-align: center; text-transform: uppercase;">${fase}</span>
         </div>
     `;
 }
@@ -8511,38 +8517,56 @@ function renderCard(fase, qtd, cor, icone) {
 window.verDetalhesFase = async function(fase) {
     const listaArea = document.getElementById('lista-fase-conteudo');
     const titulo = document.getElementById('titulo-fase');
-    titulo.innerText = `📋 LISTAGEM: ${fase}`;
-    listaArea.innerHTML = '🔍 Carregando dados...';
+    
+    titulo.innerHTML = `📋 LISTAGEM: <span style="color: #fbbf24;">${fase}</span>`;
+    listaArea.innerHTML = '<div class="spinner" style="margin: 20px auto;"></div>';
 
-    const res = await fetch(`${API_URL}/admin/dashboard/detalhes/${fase}`, {
-        headers: { 'Authorization': `Bearer ${TOKEN}` }
-    });
-    const dados = await res.json();
+    try {
+        const res = await fetch(`${API_URL}/admin/dashboard/detalhes/${encodeURIComponent(fase)}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        
+        if (!res.ok) throw new Error("Erro ao buscar detalhes da fase.");
+        const dados = await res.json();
 
-    if (dados.length === 0) {
-        listaArea.innerHTML = '<p style="text-align:center; padding:20px;">Nenhum registro nesta fase.</p>';
-        return;
+        if (dados.length === 0) {
+            listaArea.innerHTML = `
+                <div style="padding:30px; opacity:0.5;">
+                    <p>📭 Nenhum registro encontrado para esta fase.</p>
+                </div>`;
+            return;
+        }
+
+        listaArea.innerHTML = `
+            <div style="overflow-x:auto;">
+                <table style="width:100%; border-collapse:collapse; color:white; font-size:0.9rem;">
+                    <thead>
+                        <tr style="text-align:left; background:rgba(255,255,255,0.05); color:rgba(255,255,255,0.7);">
+                            <th style="padding:12px; border-bottom:1px solid rgba(255,255,255,0.1);">ID</th>
+                            <th style="padding:12px; border-bottom:1px solid rgba(255,255,255,0.1);">UNIDADE ESCOLAR</th>
+                            <th style="padding:12px; border-bottom:1px solid rgba(255,255,255,0.1); text-align:center;">AÇÃO</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${dados.map(d => `
+                            <tr style="border-bottom:1px solid rgba(255,255,255,0.03); transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.02)'" onmouseout="this.style.background='transparent'">
+                                <td style="padding:12px; font-weight:bold; color:#fbbf24;">#${d.id}</td>
+                                <td style="padding:12px;">${d.escola.toUpperCase()}</td>
+                                <td style="padding:12px; text-align:center;">
+                                    <button class="btn-vidro" onclick="abrirModalInvestigarItens(${d.id})" 
+                                            style="padding:6px 12px; font-size:0.75rem; background:rgba(59, 130, 246, 0.2); border-color:rgba(59, 130, 246, 0.4);">
+                                        🔎 INVESTIGAR
+                                    </button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    } catch (err) {
+        listaArea.innerHTML = `<p style="color:#ef4444; padding:20px;">⚠️ ${err.message}</p>`;
     }
-
-    listaArea.innerHTML = `
-        <table style="width:100%; border-collapse:collapse;">
-            <tr style="text-align:left; background:#f8fafc; color:#64748b; font-size:0.8rem;">
-                <th style="padding:12px;">ID</th>
-                <th style="padding:12px;">UNIDADE ESCOLAR</th>
-                <th style="padding:12px;">AÇÃO</th>
-            </tr>
-            ${dados.map(d => `
-                <tr style="border-bottom:1px solid #f1f5f9;">
-                    <td style="padding:12px; font-weight:bold;">#${d.id}</td>
-                    <td style="padding:12px;">${d.escola}</td>
-                    <td style="padding:12px;">
-                        <button class="btn-investigar" data-id="${d.id}" style="background:#3b82f6; color:white; border:none; padding:5px 12px; border-radius:4px; cursor:pointer;">🔍 Itens</button>
-                    </td>
-                </tr>
-            `).join('')}
-        </table>
-        <div id="box-produtos" style="margin-top:20px;"></div>
-    `;
 };
 
 async function telaLogisticaEntregas() {
@@ -17485,6 +17509,75 @@ async function abrirDetalhesItensGerencial(pedidoId) {
         notificar("Erro ao carregar itens.", "erro");
     }
 }
+
+window.abrirModalInvestigarItens = async function(pedidoId) {
+    // 1. Criar o elemento do modal (Overlay)
+    const overlay = document.createElement('div');
+    overlay.id = 'modal-investigar-overlay';
+    overlay.style = `
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.7); backdrop-filter: blur(8px);
+        display: flex; align-items: center; justify-content: center;
+        z-index: 10000; animation: fadeIn 0.3s ease;
+    `;
+
+    // 2. Conteúdo Interno (O Painel de Vidro)
+    overlay.innerHTML = `
+        <div class="painel-vidro" style="width: 90%; max-width: 500px; padding: 25px; border: 1px solid rgba(255,255,255,0.2); box-shadow: 0 20px 50px rgba(0,0,0,0.5);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom:10px;">
+                <h3 style="color:white; margin:0;">📦 ITENS DO PEDIDO #${pedidoId}</h3>
+                <button onclick="document.getElementById('modal-investigar-overlay').remove()" 
+                        style="background:none; border:none; color:white; font-size:1.5rem; cursor:pointer; opacity:0.6;">&times;</button>
+            </div>
+            <div id="conteudo-itens-modal" style="max-height: 400px; overflow-y: auto;">
+                <div class="spinner" style="margin: 20px auto;"></div>
+            </div>
+            <div style="margin-top:20px; text-align:right;">
+                <button onclick="document.getElementById('modal-investigar-overlay').remove()" class="btn-voltar-vidro">FECHAR</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    try {
+        // 3. Buscar os dados no backend
+        const res = await fetch(`${API_URL}/admin/dashboard/itens/${pedidoId}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const itens = await res.json();
+
+        const modalContteudo = document.getElementById('conteudo-itens-modal');
+
+        if (itens.length === 0) {
+            modalContteudo.innerHTML = '<p style="color:white; opacity:0.5; text-align:center;">Nenhum item encontrado.</p>';
+            return;
+        }
+
+        modalContteudo.innerHTML = `
+            <table style="width:100%; color:white; border-collapse:collapse;">
+                <thead>
+                    <tr style="text-align:left; font-size:0.8rem; color:rgba(255,255,255,0.5);">
+                        <th style="padding:8px;">PRODUTO</th>
+                        <th style="padding:8px; text-align:center;">TAM.</th>
+                        <th style="padding:8px; text-align:right;">QTD.</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${itens.map(i => `
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                            <td style="padding:10px; font-size:0.9rem;">${i.produto}</td>
+                            <td style="padding:10px; text-align:center; color:#fbbf24;">${i.tamanho || '-'}</td>
+                            <td style="padding:10px; text-align:right; font-weight:bold;">${i.solicitado}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+    } catch (err) {
+        document.getElementById('conteudo-itens-modal').innerHTML = `<p style="color:#ef4444;">Erro: ${err.message}</p>`;
+    }
+};
 
 // Isso garante que o onclick="funcao()" funcione sempre
 window.telaVisualizarEstoque = telaVisualizarEstoque;

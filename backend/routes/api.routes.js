@@ -2983,17 +2983,30 @@ router.get('/admin/dashboard/stats', verificarToken, async (req, res) => {
         const query = `
             SELECT 
                 COUNT(*) FILTER (WHERE status = 'AGUARDANDO_AUTORIZACAO') as qtd_solicitado,
-                COUNT(*) FILTER (WHERE status = 'AUTORIZADO') as qtd_autorizado,
+                COUNT(*) FILTER (WHERE status = 'APROVADO') as qtd_autorizado,
                 COUNT(*) FILTER (WHERE status = 'EM_SEPARACAO') as qtd_separacao,
-                COUNT(*) FILTER (WHERE status = 'PRONTO') as qtd_pronto,
+                COUNT(*) FILTER (WHERE status = 'COLETA_LIBERADA') as qtd_pronto,
                 COUNT(*) FILTER (WHERE status = 'EM_TRANSPORTE') as qtd_transporte,
-                COUNT(*) FILTER (WHERE status = 'RECEBIDO') as qtd_entregue
+                COUNT(*) FILTER (WHERE status = 'ENTREGUE') as qtd_entregue
             FROM pedidos;
         `;
         const { rows } = await db.query(query);
-        res.json(rows[0]);
+        
+        // Converte os valores para números inteiros para garantir o funcionamento no JS
+        const stats = rows[0];
+        const formatado = {
+            qtd_solicitado: parseInt(stats.qtd_solicitado) || 0,
+            qtd_autorizado: parseInt(stats.qtd_autorizado) || 0,
+            qtd_separacao: parseInt(stats.qtd_separacao) || 0,
+            qtd_pronto: parseInt(stats.qtd_pronto) || 0,
+            qtd_transporte: parseInt(stats.qtd_transporte) || 0,
+            qtd_entregue: parseInt(stats.qtd_entregue) || 0
+        };
+
+        res.json(formatado);
     } catch (err) {
-        res.status(500).json({ error: "Erro ao calcular estatísticas: " + err.message });
+        console.error("Erro na rota stats:", err.message);
+        res.status(500).json({ error: "Erro ao carregar estatísticas: " + err.message });
     }
 });
 
@@ -6531,6 +6544,60 @@ router.get('/gerencial/lista-por-status/:status', verificarToken, async (req, re
         res.json(rows);
     } catch (err) {
         res.status(500).json({ error: err.message });
+    }
+});
+
+router.get('/admin/dashboard/detalhes/:fase', verificarToken, async (req, res) => {
+    const { fase } = req.params;
+
+    // DICIONÁRIO DE TRADUÇÃO: Frontend -> Banco de Dados
+    const mapaStatus = {
+        'SOLICITADO': 'AGUARDANDO_AUTORIZACAO',
+        'AUTORIZADO': 'APROVADO',           // Ajustado para bater com seu ENUM
+        'EM SEPARAÇÃO': 'EM_SEPARACAO',
+        'PRONTO PARA ENTREGA': 'COLETA_LIBERADA',
+        'A CAMINHO': 'EM_TRANSPORTE',
+        'ENTREGUE': 'ENTREGUE'
+    };
+
+    const statusReal = mapaStatus[fase] || fase;
+
+    try {
+        const sql = `
+            SELECT p.id, l.nome as escola, p.status 
+            FROM pedidos p 
+            JOIN locais l ON p.local_destino_id = l.id 
+            WHERE p.status = $1
+            ORDER BY p.id DESC;
+        `;
+        const { rows } = await db.query(sql, [statusReal]);
+        res.json(rows);
+    } catch (err) {
+        console.error("Erro ao listar detalhes:", err.message);
+        res.status(500).json({ error: "Erro ao buscar detalhes: " + err.message });
+    }
+});
+
+// ROTA: Buscar itens detalhados de um pedido para o Modal
+router.get('/admin/dashboard/itens/:pedidoId', verificarToken, async (req, res) => {
+    const { pedidoId } = req.params;
+
+    try {
+        const sql = `
+            SELECT 
+                p.nome as produto,
+                ip.tamanho,
+                ip.quantidade as solicitado
+            FROM itens_pedido ip
+            JOIN produtos p ON ip.produto_id = p.id
+            WHERE ip.pedido_id = $1
+            ORDER BY p.nome ASC;
+        `;
+        const { rows } = await db.query(sql, [pedidoId]);
+        res.json(rows);
+    } catch (err) {
+        console.error("Erro ao buscar itens do pedido:", err.message);
+        res.status(500).json({ error: "Erro ao carregar itens: " + err.message });
     }
 });
 

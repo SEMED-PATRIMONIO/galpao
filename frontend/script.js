@@ -1,8 +1,6 @@
 const API_URL = 'https://patrimoniosemed.paiva.api.br';
 let TOKEN = localStorage.getItem('token');
 const tokenParaUso = localStorage.getItem('token');
-const GRADE_VESTUARIO = ['2', '4', '6', '8', '10', '12', '14', '16', 'PP', 'P', 'M', 'G', 'GG', 'EGG'];
-const GRADE_TENIS = Array.from({length: 22}, (_, i) => (i + 22).toString()); // 22 a 43
 // Mapeamento extraído do PDF de Nomenclatura 
 const PREFIXOS_LOCAIS = {
     1:"CL", 2:"IG", 3:"VF", 4:"GO", 5:"AK", 6:"CN", 7:"CC", 8:"FB", 9:"ET", 10:"JR",
@@ -105,7 +103,7 @@ document.getElementById('form-login')?.addEventListener('submit', async (e) => {
             TOKEN = data.token;
             carregarDashboard();
         } else {
-            notificar(data.message || 'Usuário ou senha inválidos', 'erro');
+            notificar('ERRO: ' + (data.message || 'Falha no login'));
         }
     } catch (err) {
         console.error("Erro na conexão:", err);
@@ -238,50 +236,40 @@ async function carregarDashboard() {
     const app = document.getElementById('app-content');
     if (app) {
         app.style.background = "transparent";
-        app.innerHTML = ''; 
+        app.innerHTML = ''; // Limpa o conteúdo antes de reconstruir os cards [cite: 2, 3]
     }   
-    
-    // Variáveis de controle de gráficos e dados
     let chart1, chart2;
     let dadosEstoqueCache = [];
     let categoriaAtual = 'UNIFORMES';
     let carrinhoAdmin = [];
-    let carrinhoEntrada = [];
-    let chartTecnicos = null; 
+    let chartTecnicos = null; // Variável global para controle do gráfico [cite: 4, 5]
     
     await inicializarSessaoUsuario();
-
-    // 1. Recuperação de dados da sessão
     const perfil = localStorage.getItem('perfil') ? localStorage.getItem('perfil').toLowerCase() : null;
-    const nome = localStorage.getItem('nome') || "Usuário"; // Garantia para não dar erro no .toUpperCase()
+    const nome = localStorage.getItem('nome');
     const localId = localStorage.getItem('local_id');
-    const loginContainer = document.getElementById('login-container');
     const container = document.getElementById('app-content');
+    const classeGrelha = 'grid-movel-celular';
+    let htmlBotoes = '';
+    const loginContainer = document.getElementById('login-container');
+    let modoComparacao = false; // [cite: 6, 7]
 
-    // 2. LÓGICA DA GRELHA (CORRIGIDA: Removida a re-declaração que causava erro)
-    let classeGrelha = 'grid-movel-celular'; // Padrão 2 colunas para perfis de celular/escola
-    
-    const perfisPainelLargo = ['admin', 'estoque', 'dti']; 
-    if (perfisPainelLargo.includes(perfil)) {
-        classeGrelha = 'grid-quatro-colunas';
-    }   
+    if (container) {
+        container.style.display = 'block';
+        container.style.position = 'relative'; // Reforço via JS [cite: 8]
+        container.style.zIndex = '20'; // Reforço via JS [cite: 9]
+    }
 
-    // 3. Verificação de autenticação e containers
     if (!perfil) {
         if (loginContainer) loginContainer.style.display = 'block';
         if (container) container.style.display = 'none';
-        return; 
+        return; // [cite: 10]
     }
 
     if (loginContainer) loginContainer.style.display = 'none';
-    
-    if (container) {
-        container.style.display = 'block';
-        container.style.position = 'relative'; 
-        container.style.zIndex = '20'; 
-    }
+    if (container) container.style.display = 'block';
 
-    // 4. Início da construção do HTML
+    // Cabeçalho Padrão [cite: 11]
     let html = `
         <div class="painel-usuario-vidro">
             <span class="nome-usuario-painel">${nome.toUpperCase()}</span>
@@ -290,19 +278,28 @@ async function carregarDashboard() {
 
         <div id="area-notificaras" style="margin-top: 80px; margin-bottom: 20px;"></div>
         
-        <div class="${classeGrelha}"> `;
+        <div class="${classeGrelha}">
+    `;
+
+    // --- 2. PERFIL: SUPER (Gestão de Usuários) --- [cite: 12]
     if (perfil === 'super') {
         html += `
             <button class="btn-grande btn-vidro" onclick="telaGerenciarUsuarios()">
                 <i>👥</i><span>GERENCIAR USUÁRIOS</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="abrirPainelGerencial()">
-                <i>📈</i><span>PAINEL (em construção)</span>
+            <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()">
+                <i>📈</i><span>PAINEL DE PEDIDOS</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="telaVisualizarEstoque()">
+                <i>👕</i><span>ESTOQUE UNIFORMES</span>
+            </button>
+            <button class="btn-grande btn-vidro" style="background:rgba(16, 185, 129, 0.2);" onclick="telaEstoqueMateriaisEPatrimonios()">
+                <i>📦</i><span>ESTOQUE DEMAIS MATERIAIS</span>
             </button>
             <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
                 <i>🔑</i><span>ALTERAR MINHA SENHA</span>
             </button>            
-        `; 
+        `; // [cite: 13, 14, 15]
     }
 
     if (perfil === 'logistica') {
@@ -310,7 +307,7 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="telaSaidaTransferencia37()">
                 <i>🏛️</i><span>SOLICITAR AO PATRIMÔNIO</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()">
+            <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
                 <i>🔑</i><span>ALTERAR MINHA SENHA</span>
             </button>
         `;
@@ -318,11 +315,14 @@ async function carregarDashboard() {
 
     if (perfil === 'humanos') {
         html += `
+            <button class="btn-grande btn-vidro" onclick="telaAuditoriaAcessos()">
+                <i>🛡️</i><span>ACESSOS AO INFORME DE RENDIMENTOS</span>
+            </button>
             <button class="btn-grande btn-vidro" onclick="telaSolicitarServicoImpressora('recarga')">
-                <i>💧</i><span>SOLICITAR RECARGA DE TONER</span>
+                <i>💧</i><span>RECARGA DE TONER</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="telaSolicitarManutencaoPC('')">
-                <i>💻</i><span>SOLICITAR MANUTENÇÃO INFORMÁTICA</span>
+                <i>💻</i><span>MANUTENÇÃO INFORMÁTICA</span>
             </button>
             <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
                 <i>🔑</i><span>ALTERAR MINHA SENHA</span>
@@ -354,7 +354,7 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="telaCadastroImpressoras()">
                 <i>📋</i><span>CADASTRAR NOVA IMPRESSORA</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()">
+            <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
                 <i>🔑</i><span>ALTERAR MINHA SENHA</span>
             </button>                        
         `; // [cite: 17, 18, 19, 20]
@@ -372,7 +372,7 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="telaDashboardImpressoras()">
                 <i>📈</i><span>ATENDIMENTOS REALIZADOS (IMPRESSORAS)</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()">
+            <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
                 <i>🔑</i><span>ALTERAR MINHA SENHA</span>
             </button> 
         `; // [cite: 22, 23, 24]
@@ -393,7 +393,7 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="abrirMenuPatrimonioEscola()">
                 <i>🏛️</i><span>PATRIMÔNIO</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()">
+            <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
                 <i>🔑</i><span>ALTERAR MINHA SENHA</span>
             </button>    
             <button class="btn-grande btn-vidro" onclick="telaEscolaConfirmarRecebimento()">
@@ -411,31 +411,27 @@ async function carregarDashboard() {
     // --- 4. PERFIL: ADMIN (NOVA INTERFACE) --- [cite: 32]
     if (perfil === 'admin') {
         html += `
+            <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('DEMAIS ITENS')">
+                <i>📦</i><span>ESTOQUE</span>
+            </button>
             <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('PEDIDOS')">
                 <i>📝</i><span>PEDIDOS</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="telaCadastrosBase()">
-                <i>⚙️</i><span>CADASTRAR NOVO LOCAL/CATEGORIA/PRODUTO</span>
-            </button>            
-            <button class="btn-grande btn-vidro" onclick="carregarConsultaEstoque()">
-                <i>🔎</i><span>CONSULTA ESTOQUE</span>
-            </button>
-            <button class="btn-grande btn-vidro" onclick="abrirPainelGerencial()">
-                <i>📈</i><span>PAINEL (em construção)</span>
-            </button>
-
-            <button class="btn-grande btn-vidro btn-breve" // --- onclick="abrirSubmenuVitrificado('RELATÓRIOS')">
+            <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('RELATÓRIOS')">
                 <i>📊</i><span>RELATÓRIOS</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()">
+            <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
                 <i>🔑</i><span>ALTERAR MINHA SENHA</span>
             </button>    
-        `; 
+        `; // Note: Você moverá os botões de [cite: 33, 34, 35, 36] para dentro da função abaixo.
     }
 
     // --- 5. PERFIL: ESTOQUE (NOVA INTERFACE) --- [cite: 37]
-if (perfil === 'estoque') {
-        html += `
+    if (perfil === 'estoque') {
+        const containerBotoes = document.getElementById('grid-botoes-dashboard');
+        
+        // Usamos backticks (`) para envolver todo o bloco HTML
+        containerBotoes.innerHTML = `
             <button class="btn-grande btn-vidro" style="position: relative;" onclick="telaPendentesInfra()">
                 <div id="badge-infra-count" style="display: none; position: absolute; top: -10px; right: -10px; 
                     background: #ef4444; color: white; min-width: 26px; height: 26px; border-radius: 50%; 
@@ -451,31 +447,27 @@ if (perfil === 'estoque') {
                 <i>🏛️</i><span>PATRIMÔNIO</span>
             </button>
 
-            <button class="btn-grande btn-vidro" onclick="telaCadastrosBase()">
-                <i>⚙️</i><span>CADASTRAR NOVO LOCAL/CATEGORIA/PRODUTO</span>
+            <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('DEMAIS ITENS')">
+                <i>📦</i><span>ESTOQUE</span>
             </button>
+
             <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('PEDIDOS')">
                 <i>📝</i><span>PEDIDOS</span>
             </button>
 
-            <button class="btn-grande btn-vidro" onclick="abrirTelaEntrada()">
-                <i>📥</i><span>LANÇAR ENTRADA NO ESTOQUE</span>
-            </button>
-            <button class="btn-grande btn-vidro" onclick="carregarConsultaEstoque()">
-                <i>🔎</i><span>CONSULTA ESTOQUE</span>
-            </button>
-
-            <button class="btn-grande btn-vidro" onclick="abrirPainelGerencial()">
-                <i>📈</i><span>PAINEL (em construção)</span>
-            </button>
-            <button class="btn-grande btn-vidro btn-breve" // --- onclick="abrirSubmenuVitrificado('RELATÓRIOS')">
+            <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('RELATÓRIOS')">
                 <i>📊</i><span>RELATÓRIOS</span>
             </button>
 
-            <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()">
+            <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
                 <i>🔑</i><span>ALTERAR MINHA SENHA</span>
             </button>
         `;
+
+        // CRÍTICO: Chama a função para atualizar o número no badge assim que cria os botões
+        if (typeof atualizarBadgeInfra === 'function') {
+            atualizarBadgeInfra();
+        }
     }
 
     html += `</div>`;
@@ -505,7 +497,22 @@ function abrirSubmenuVitrificado(titulo) {
 
     // --- LÓGICA DE DISTRIBUIÇÃO (Botões Padronizados com Ícone + Span) ---
     if (perfil === 'estoque') {
-        if (titulo === 'PEDIDOS') {
+        if (titulo === 'DEMAIS ITENS') {
+            botoesExtra = `
+            <button class="btn-grande btn-vidro" onclick="telaCadastrosBase()">
+                <i>⚙️</i><span>CADASTRAR NOVO</span>
+            </button>            
+            <button class="btn-grande btn-vidro" onclick="telaAbastecerEstoque()">
+                <i>📥</i><span>LANÇAR ENTRADA NO ESTOQUE</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="telaVisualizarEstoque()">
+                <i>👕</i><span>ESTOQUE DE UNIFORMES</span>
+            </button>
+            <button class="btn-grande btn-vidro" style="background:rgba(16, 185, 129, 0.2);" onclick="telaEstoqueMateriaisEPatrimonios()">
+                <i>📦</i><span>ESTOQUE DOS DEMAIS ITENS</span>
+            </button>
+            `;
+        } else if (titulo === 'PEDIDOS') {
             botoesExtra = `
             <button class="btn-grande btn-vidro" onclick="telaEstoquePedidosPendentes()">
                 <i>📦</i><span>SEPARAÇÃO DE VOLUMES</span>
@@ -533,7 +540,19 @@ function abrirSubmenuVitrificado(titulo) {
     }
 
     if (perfil === 'admin') {
-        if (titulo === 'PEDIDOS') {
+        if (titulo === 'DEMAIS ITENS') {
+            botoesExtra = `
+            <button class="btn-grande btn-vidro" onclick="telaCadastrosBase()">
+                <i>⚙️</i><span>CADASTRAR NOVO</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="telaVisualizarEstoque()">
+                <i>👕</i><span>ESTOQUE DE UNIFORMES</span>
+            </button>
+            <button class="btn-grande btn-vidro" style="background:rgba(16, 185, 129, 0.2);" onclick="telaEstoqueMateriaisEPatrimonios()">
+                <i>📦</i><span>ESTOQUE DOS DEMAIS ITENS</span>
+            </button>
+            `;
+        } else if (titulo === 'PEDIDOS') {
             botoesExtra = `
             <button class="btn-grande btn-vidro" onclick="telaAdminGerenciarSolicitacoes()">
                 <i>⚖️</i><span>AUTORIZAR SOLICITAÇÕES</span>
@@ -541,7 +560,7 @@ function abrirSubmenuVitrificado(titulo) {
             <button class="btn-grande btn-vidro" onclick="listarDevolucoesAdmin()">
                 <i>🔄</i><span>AUTORIZAR DEVOLUÇÕES</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="abrirTelaSaidaPedido()">
+            <button class="btn-grande btn-vidro" onclick="modalEscolhaTipoPedido()">
                 <i>➕</i><span>CRIAR PEDIDO</span>
             </button>
             `;
@@ -630,6 +649,62 @@ function mudarAba(novaCategoria) {
     if (busca) busca.value = '';
     
     filtrarEstoque();
+}
+
+function filtrarEstoque() {
+    const termoBusca = document.getElementById('busca-produto').value.toLowerCase();
+    
+    // Filtra por Categoria E por Texto (se houver)
+    const produtosExibidos = dadosEstoqueCache.filter(p => {
+        const matchCategoria = p.tipo === categoriaAtual;
+        const matchTexto = p.nome.toLowerCase().includes(termoBusca);
+        return matchCategoria && matchTexto;
+    });
+
+    const areaTabela = document.getElementById('conteudo-estoque');
+    
+    if (produtosExibidos.length === 0) {
+        areaTabela.innerHTML = `<div style="padding:40px; text-align:center; color:#cbd5e1;">Nenhum item encontrado.</div>`;
+        return;
+    }
+
+    areaTabela.innerHTML = `
+        <table style="width:100%; border-collapse:collapse; color:white;">
+            <thead>
+                <tr style="background:rgba(255,255,255,0.1);">
+                    <th style="padding:15px; text-align:left; font-size:0.8rem;">PRODUTO</th>
+                    <th style="padding:15px; text-align:center; font-size:0.8rem;">SALDO REAL</th>
+                    <th style="padding:15px; text-align:center; font-size:0.8rem;">STATUS</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${produtosExibidos.map(p => {
+                    // Garantimos que os valores sejam tratados como números para a comparação
+                    const saldo = Number(p.quantidade_estoque) || 0;
+                    const minimo = Number(p.notificara_minimo) || 0;
+
+                    const status = saldo <= minimo 
+                        ? '<span style="color:#f87171; font-weight:bold; font-size:0.75rem;">🔴 CRÍTICO</span>' 
+                        : '<span style="color:#4ade80; font-weight:bold; font-size:0.75rem;">🟢 OK</span>';
+                    
+                    return `
+                        <tr style="border-bottom:1px solid rgba(255,255,255,0.1); transition: 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
+                            <td style="padding:15px; font-weight:500; font-size:0.9rem;">${p.nome}</td>
+                            <td style="padding:15px; text-align:center;">
+                                ${p.tipo === 'UNIFORMES' ? 
+                                    `<button onclick="abrirModalGrade(${p.id}, '${p.nome}')" class="btn-sair-vidro" style="background:rgba(59,130,246,0.3); border:1px solid #3b82f6; font-size:0.75rem; padding: 5px 12px; cursor:pointer; width: auto; height: auto; margin: 0;">
+                                        🔍 ${saldo} (GRADE)
+                                    </button>` : 
+                                    `<strong style="font-size:1.1rem; color: #fbbf24;">${saldo}</strong> <small style="color:#94a3b8; font-size:0.7rem;">unid.</small>`
+                                }
+                            </td>
+                            <td style="padding:15px; text-align:center;">${status}</td>
+                        </tr>
+                    `;
+                }).join('')}
+            </tbody>
+        </table>
+    `;
 }
 
 async function enviarPedidoUniforme(operacao) {
@@ -747,6 +822,33 @@ async function finalizarPedidoUniforme(tipoMovimentacao) {
     }
 }
 
+async function abrirModalGrade(id, nome) {
+    const modal = document.getElementById('modalGrade');
+    const corpo = document.getElementById('modalCorpo');
+    document.getElementById('modalTitulo').innerText = nome;
+    corpo.innerHTML = "Carregando...";
+    modal.style.display = 'flex';
+
+    try {
+        const res = await fetch(`${API_URL}/estoque/grade/${id}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const grade = await res.json();
+
+        if (grade.length === 0) {
+            corpo.innerHTML = "<p style='grid-column: span 3; text-align:center;'>Nenhum saldo por tamanho registrado.</p>";
+        } else {
+            corpo.innerHTML = grade.map(g => `
+                <div style="background:#f8fafc; border:1px solid #e2e8f0; padding:10px; text-align:center; border-radius:6px;">
+                    <div style="font-size:0.75rem; color:#64748b; font-weight:bold;">TAM ${g.tamanho}</div>
+                    <div style="font-size:1.1rem; font-weight:bold; color:#1e293b;">${g.quantidade}</div>
+                </div>
+            `).join('');
+        }
+    } catch (err) {
+        corpo.innerHTML = "Erro ao carregar grade.";
+    }
+}
 
 function gerarCamposProduto() {
     return `
@@ -833,17 +935,16 @@ async function analisarPedidoEstoque(pedidoId) {
     let saldoSuficiente = true;
     const linhas = itens.map(i => {
         // Garantindo que a comparação seja numérica
-        const solicitado = parseInt(i.solicitado) || 0;
-        const emEstoque = parseInt(i.em_estoque) || 0;
+        const solicitado = Number(i.solicitado);
+        const emEstoque = Number(i.em_estoque);
         const falta = solicitado > emEstoque;
         
         if (falta) saldoSuficiente = false;
 
         return `
-            <tr data-produto-id="${i.produto_id}" data-tamanho="${i.tamanho || ''}" data-tipo="${i.tipo}"
-                style="border-bottom: 1px solid #eee; background: ${falta ? '#fff1f2' : 'transparent'}">
+            <tr style="border-bottom: 1px solid #eee; background: ${falta ? '#fff1f2' : 'transparent'}">
                 <td style="padding:15px; color:#1e3a8a; font-weight:bold;">${i.produto} ${i.tamanho ? `(${i.tamanho})` : ''}</td>
-                <td style="padding:15px; text-align:center;" contenteditable="true" class="edit-qtd">${solicitado}</td>
+                <td style="padding:15px; text-align:center;">${solicitado}</td>
                 <td style="padding:15px; text-align:center; color:${falta ? '#e11d48' : '#16a34a'}; font-weight:bold;">${emEstoque}</td>
                 <td style="padding:15px; text-align:right;">${falta ? '❌ SEM SALDO' : '✅ OK'}</td>
             </tr>
@@ -1025,60 +1126,28 @@ async function finalizarPedido(pedidoId) {
 }
 
 async function finalizarAutorizacao(pedidoId) {
-    const usuarioId = localStorage.getItem('usuario_id');
-    const rows = document.querySelectorAll('#modal-analise tbody tr');
-    const itensParaAutorizar = [];
-
-    // Coleta os dados diretamente da tabela do modal (garante que pega as edições)
-    rows.forEach(row => {
-        const celulas = row.querySelectorAll('td');
-        const nomeCompleto = celulas[0].innerText;
-        
-        // Extrai ID do produto e tamanho se existir (armazenados no dataset ou processados por regex)
-        // Dica: na função analisarPedidoEstoque, adicione data-id e data-tamanho no <tr> para facilitar
-        const solicitado = Number(celulas[1].innerText);
-
-        // Aqui assumimos que você já tem os dados do produto mapeados
-        // Se a quantidade for 0, o loop pula (conforme sua regra)
-        if (solicitado > 0) {
-            // Busca os dados que foram injetados no dataset da linha
-            itensParaAutorizar.push({
-                produto_id: row.dataset.produtoId,
-                tamanho: row.dataset.tamanho || null,
-                quantidade: solicitado,
-                tipo: row.dataset.tipo // MATERIAL ou UNIFORMES
-            });
-        }
-    });
-
-    if (!confirm(`Deseja confirmar a saída definitiva de ${itensParaAutorizar.length} itens do estoque?`)) return;
+    if (!confirm("Deseja autorizar este pedido e dar baixa no estoque?")) return;
 
     try {
-        const res = await fetch(`${API_URL}/estoque/confirmar-autorizacao`, {
+        const res = await fetch(`${API_URL}/pedidos/autorizar-final`, {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${TOKEN}`
             },
-            body: JSON.stringify({
-                pedido_id: pedidoId,
-                itens: itensParaAutorizar,
-                usuario_id: usuarioId
-            })
+            body: JSON.stringify({ pedidoId: pedidoId })
         });
 
-        const resultado = await res.json();
-
-        if (resultado.success) {
-            alert("✅ Pedido Autorizado! O estoque foi atualizado e o histórico registrado.");
+        if (res.ok) {
+            notificar("✅ Pedido Autorizado! O status agora é 'AGUARDANDO SEPARAÇÃO'.");
             document.getElementById('modal-analise').style.display = 'none';
-            // Recarrega a fila de pedidos ou dashboard
-            if (typeof carregarFilaPedidos === 'function') carregarFilaPedidos();
+            telaAdminGerenciarSolicitacoes(); // Recarrega a lista de pendentes
         } else {
-            throw new Error(resultado.error);
+            const erro = await res.json();
+            notificar("❌ Erro ao autorizar: " + erro.error);
         }
     } catch (err) {
-        alert("Erro ao finalizar: " + err.message);
+        notificar("🚨 Erro de conexão com o servidor.");
     }
 }
 
@@ -1872,12 +1941,12 @@ async function telaGerenciarUsuarios() {
         const nomesPerfis = {
             'escola': 'Escola',
             'admin': 'Administração',
-            'estoque': 'Patrimônio',
-            'logistica': 'Infra',
+            'estoque': 'Estoque',
+            'logistica': 'Logística',
             'super': 'Supervisão',
-            'dti': 'Informática',
+            'dti': 'DTI - Admin',
             'impres': 'Técnico Impressora',
-            'humanos': 'RH'
+            'humanos': 'RH' // Mapeamento visual conforme solicitado
         };
 
         container.innerHTML = `
@@ -1898,15 +1967,14 @@ async function telaGerenciarUsuarios() {
 
                         <label style="color:white; font-size:0.8rem;">PERFIL:</label>
                         <select id="novo_perfil" class="input-vidro" style="width:100%; margin-bottom:10px;">
-                            <option value="">-- SELECIONE O PERFIL --</option>
                             <option value="escola">ESCOLA</option>
-                            <option value="admin">ADMINISTRAÇÃO</option>
-                            <option value="estoque">PATRIMÔNIO</option>
-                            <option value="logistica">INFRA</option> <option value="humanos">RH (Recursos Humanos)</option>
-                            <option value="dti">INFORMÁTICA</option>
-                            <option value="impres">TÉCNICO IMPRESSORA</option>
-                            <option value="super">SUPERVISÃO</option>
-                            <option value="humanos">RH</option>
+                            <option value="admin">ADMIN</option>
+                            <option value="estoque">ESTOQUE</option>
+                            <option value="logistica">INFRA</option>
+                            <option value="humanos">RH (Recursos Humanos)</option>
+                            <option value="dti">DTI - Admin</option>
+                            <option value="impres">Técnico Impressora</option>
+                            <option value="super">SUPER</option>
                         </select>
 
                         <label style="color:white; font-size:0.8rem;">UNIDADE:</label>
@@ -1932,8 +2000,10 @@ async function telaGerenciarUsuarios() {
                             </thead>
                             <tbody>
                                 ${usuarios
-                                    .filter(u => u.status === 'ativo')
-                                    .map(u => `
+                                    .filter(u => u.status === 'ativo') // AJUSTE CIRÚRGICO: Filtra apenas ativos
+                                    .map(u => {
+                                        const ativo = u.status === 'ativo';
+                                        return `
                                         <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
                                             <td style="padding:12px;">${u.nome.toUpperCase()}</td>
                                             <td style="padding:12px;">
@@ -1950,7 +2020,7 @@ async function telaGerenciarUsuarios() {
                                                 </button>
                                             </td>
                                         </tr>
-                                    `).join('')}
+                                    `}).join('')}
                             </tbody>
                         </table>
                     </div>
@@ -2976,70 +3046,42 @@ function adicionarLinhaEntrada() {
 }
 
 async function processarEntradaEstoque() {
-    // Captura o ID que seu script já salva no login
-    const usuarioId = localStorage.getItem('usuario_id'); 
+    const obs = document.getElementById('ent_obs').value;
+    const linhas = document.querySelectorAll('.item-linha');
+    const itens = [];
 
-    if (!usuarioId) {
-        alert("⚠️ Erro: Sessão de usuário não encontrada. Por favor, faça login novamente.");
-        return;
-    }
+    linhas.forEach(linha => {
+        const produto_id = linha.querySelector('.ent_produto').value;
+        const tamanho = linha.querySelector('.ent_tamanho').value;
+        const quantidade = linha.querySelector('.ent_qtd').value;
 
-    const inputs = document.querySelectorAll('.input-entrada-qtd');
-    const mapaItens = {};
-
-    inputs.forEach(input => {
-        const qtd = parseInt(input.value) || 0;
-        if (qtd <= 0) return;
-
-        const id = input.dataset.id;
-        const tipo = input.dataset.tipo;
-        const tamanho = input.dataset.tamanho;
-
-        if (!mapaItens[id]) {
-            mapaItens[id] = {
-                produto_id: id,
-                tipo: tipo,
-                qtd_total: 0,
-                grade: {} 
-            };
-        }
-
-        mapaItens[id].qtd_total += qtd;
-        if (tipo === 'UNIFORMES' && tamanho) {
-            mapaItens[id].grade[tamanho] = qtd;
+        if (produto_id && quantidade) {
+            itens.push({ produto_id: parseInt(produto_id), tamanho, quantidade: parseInt(quantidade) });
         }
     });
 
-    const itensParaEnviar = Object.values(mapaItens);
+    if (itens.length === 0) return notificar("Adicione pelo menos um item!");
 
-    if (itensParaEnviar.length === 0) {
-        alert("Informe ao menos uma quantidade válida.");
-        return;
-    }
+    const payload = {
+        local_id: parseInt(localStorage.getItem('local_id')), // ID 36, 37 ou 38 automático do login
+        tipo_historico: 'ENTRADA',
+        observacoes: obs,
+        itens: itens
+    };
 
     try {
-        const res = await fetch(`${API_URL}/estoque/entrada-lote`, {
+        const res = await fetch(`${API_URL}/estoque/entrada`, {
             method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${TOKEN}`
-            },
-            body: JSON.stringify({ 
-                itens: itensParaEnviar,
-                usuario_id: usuarioId,
-                observacoes: "Entrada via painel operacional" 
-            })
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify(payload)
         });
 
-        const resultado = await res.json();
-        if (resultado.success) {
-            alert("✅ Estoque atualizado com sucesso!");
-            carregarDashboard();
-        } else {
-            throw new Error(resultado.error);
-        }
+        if (!res.ok) throw new Error("Erro ao processar entrada");
+        
+        notificar("ESTOQUE ATUALIZADO COM SUCESSO!");
+        renderizarMenu();
     } catch (err) {
-        alert("Erro na operação: " + err.message);
+        notificar(err.message);
     }
 }
 
@@ -3175,33 +3217,42 @@ function toggleInputMaterial(cb) {
 }
 
 async function renderizarHistorico() {
-    const response = await fetch('/api/estoque/historico-recente');
-    const logs = await response.json();
-    const timeline = document.getElementById('timeline-historico');
-    timeline.innerHTML = '';
-
-    logs.forEach(log => {
-        const dataFormatada = new Date(log.data).toLocaleString('pt-BR');
-        
-        timeline.innerHTML += `
-            <div class="card-historico glass-panel animate__animated animate__fadeInUp">
-                <div class="historico-header">
-                    <span class="log-data">${dataFormatada}</span>
-                    <span class="log-usuario"><i class="fas fa-user"></i> ${log.usuario}</span>
-                </div>
-                <div class="historico-body">
-                    <strong>${log.acao}</strong>
-                    <p class="log-obs">${log.observacoes || 'Sem observações'}</p>
-                    <div class="log-itens">
-                        ${log.itens.map(i => `<span>${i.produto} (<b>${i.qtd}</b>)</span>`).join('')}
-                    </div>
-                </div>
-                <div class="log-footer">
-                    <span>Total de itens: <b>${log.quantidade_total}</b></span>
-                </div>
-            </div>
-        `;
+    const conteudo = document.getElementById('conteudo-dinamico');
+    const res = await fetch(`${API_URL}/api/cadastros/historico`, { 
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } 
     });
+    const dados = await res.json();
+
+    conteudo.innerHTML = `
+        <div class="card-historico">
+            <h2>AUDITORIA DE MOVIMENTAÇÕES (HISTÓRICO)</h2>
+            <p><small>* Duplo clique em um registro para ver o detalhamento dos itens.</small></p>
+            <table class="tabela-estilizada">
+                <thead>
+                    <tr>
+                        <th>DATA/HORA</th>
+                        <th>USUÁRIO</th>
+                        <th>TIPO</th>
+                        <th>QTD TOTAL</th>
+                        <th>OBSERVAÇÕES</th>
+                        <th>LOCAL</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${dados.map(h => `
+                        <tr ondblclick="verDetalhesHistorico(${h.id})" title="Duplo clique para detalhes">
+                            <td>${new Date(h.data).toLocaleString()}</td>
+                            <td>${h.usuario_nome}</td>
+                            <td><span class="badge-${h.acao.toLowerCase()}">${h.acao}</span></td>
+                            <td>${h.quantidade_total}</td>
+                            <td>${h.observacoes || '-'}</td>
+                            <td>${h.local_nome || '-'}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
 }
 
 async function verDetalhesHistorico(id) {
@@ -6774,7 +6825,6 @@ async function telaAbastecerEstoque() {
     }
 }
 
-
 async function enviarEntradaEstoque() {
     const inputs = document.querySelectorAll('.input-entrada-estoque');
     const itens = [];
@@ -8455,25 +8505,25 @@ async function telaAdminDashboard() {
         const s = await res.json();
 
         container.innerHTML = `
-            <div class="painel-vidro" style="max-width: 1000px; margin: auto;">
-                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
+            <div class="painel-vidro" style="max-width: 1200px; margin: auto;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
                     <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                    <h2 style="color:white; margin:0;">📊 FLUXO LOGÍSTICO SEMED</h2>
                 </div>
-                <div style="background:rgba(0,0,0,0.2); border-radius:10px; padding: 25px;">
+                
+                <div style="background:rgba(0,0,0,0.2); border-radius:15px; padding: 25px;">
                     <div class="fluxo-container" style="display: flex; justify-content: space-around; gap: 10px; flex-wrap: wrap;">
-                        ${renderCirculo('SOLICITADO', s.qtd_solicitado || 0, '📩', '#ef4444')}
-                        ${renderCirculo('AUTORIZADO', s.qtd_autorizado || 0, '⚖️', '#f59e0b')}
-                        ${renderCirculo('EM SEPARAÇÃO', s.qtd_separacao || 0, '📦', '#8b5cf6')}
-                        ${renderCirculo('PRONTO', s.qtd_pronto || 0, '✅', '#3b82f6')}
-                        ${renderCirculo('EM_TRANSPORTE', s.qtd_transporte || 0, '🚚', '#06b6d4')}
-                        ${renderCirculo('ENTREGUE', s.qtd_entregue || 0, '🏠', '#10b981')}
+                        ${renderCirculo('SOLICITADO', s.qtd_solicitado, '📩', '#ef4444')}
+                        ${renderCirculo('AUTORIZADO', s.qtd_autorizado, '⚖️', '#f59e0b')}
+                        ${renderCirculo('EM SEPARAÇÃO', s.qtd_separacao, '📦', '#8b5cf6')}
+                        ${renderCirculo('PRONTO PARA ENTREGA', s.qtd_pronto, '✅', '#3b82f6')}
+                        ${renderCirculo('EM TRANSPORTE', s.qtd_transporte, '🚚', '#06b6d4')}
+                        ${renderCirculo('ENTREGUE', s.qtd_entregue, '🏠', '#10b981')}
                     </div>
 
-                    <div id="detalhes-dashboard" style="margin-top:40px; background:rgba(255,255,255,0.05); border-radius:12px; padding:25px; border: 1px solid rgba(255,255,255,0.1); min-height:200px; color: white;">
-                        <h3 id="titulo-fase" style="color:white; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:10px; font-size: 1.1rem;">📊 Detalhes da Operação</h3>
-                        <div id="lista-fase-conteudo" style="margin-top:15px; text-align:center; opacity:0.6;">
-                            Clique numa fase do círculo para investigar os pedidos.
-                        </div>
+                    <div id="detalhes-dashboard" style="margin-top:40px; background:rgba(255,255,255,0.05); border-radius:12px; padding:25px; color: white;">
+                        <h3 id="titulo-fase">📊 Detalhes da Operação</h3>
+                        <div id="lista-fase-conteudo" style="opacity:0.6;">Clique em uma fase para investigar.</div>
                     </div>
                 </div>
             </div>
@@ -8584,7 +8634,7 @@ async function telaLogisticaEntregas() {
                                 <button class="btn-coletar-remessa" 
                                         data-remessa-id="${r.remessa_id}" 
                                         style="background:#1e40af; color:white; border:none; padding:12px 25px; border-radius:6px; cursor:pointer; font-weight:bold; transition: background 0.3s;">
-                                    🚚 LIBERAR SAÍDA
+                                    🚚 COLETAR REMESSA
                                 </button>
                             </div>
                         </div>
@@ -8697,168 +8747,120 @@ window.iniciarTransporteRemessa = async function(remessaId) {
     console.log("Iniciando processo de romaneio para remessa:", remessaId);
 
     try {
-        // 1. Primeiro, avisa o banco para mudar o status e gerar o LOG
-        const resStatus = await fetch(`${API_URL}/estoque/confirmar-inicio-transporte`, {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${TOKEN}` 
-            },
-            body: JSON.stringify({ remessaId })
-        });
-
-        if (!resStatus.ok) throw new Error("Falha ao atualizar status de transporte no servidor.");
-
-        // 2. Se o status atualizou, busca os dados para o documento A4
-        const resDados = await fetch(`${API_URL}/pedidos/remessa/${remessaId}/detalhes-romaneio`, {
+        // Busca os dados consolidados para o documento
+        const res = await fetch(`${API_URL}/pedidos/remessa/${remessaId}/detalhes-romaneio`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
-        
-        if (!resDados.ok) throw new Error("Erro ao carregar dados do romaneio.");
-        const dados = await resDados.json();
+        if (!res.ok) throw new Error("Erro ao carregar dados do romaneio.");
+        const dados = await res.json();
 
-        // 3. Abre o Modal com o Documento A4 Paisagem que configuramos
+        // Abre o Modal com o Documento A4 Paisagem
         gerarModalRomaneioA4(remessaId, dados);
-        
-        notificar(`🚚 Remessa #${remessaId} em transporte!`, "sucesso");
 
     } catch (err) {
         console.error(err);
-        notificar("Falha ao iniciar transporte: " + err.message, "erro");
+        notificar("Falha ao preparar documento.", "erro");
     }
 };
 
-function gerarModalRomaneioA4(pedidoId, remessaId, dados) {
-    const modal = document.createElement('div');
-    modal.id = 'modal-romaneio';
+function gerarModalRomaneioA4(remessaId, dados) {
+    const overlay = document.createElement('div');
+    overlay.id = 'modal-romaneio-logistica';
+    overlay.className = 'alerta-vidro-overlay';
     
-    // 1. Identificar todos os tamanhos únicos na remessa para criar as colunas
-    const tamanhosExistentes = [...new Set(dados.itens
-        .filter(i => i.tamanho)
-        .map(i => i.tamanho))].sort((a, b) => a.localeCompare(b, undefined, {numeric: true}));
-
-    // 2. Agrupar produtos por nome para consolidar a grade
-    const produtosAgrupados = {};
-    dados.itens.forEach(i => {
-        if (!produtosAgrupados[i.nome]) {
-            produtosAgrupados[i.nome] = { nome: i.nome, tipo: i.tipo, total: 0, tamanhos: {} };
+    // Agrupamento de itens por Produto para criar a grade visual
+    const itensAgrupados = {};
+    dados.itens.forEach(item => {
+        if (!itensAgrupados[item.produto]) {
+            itensAgrupados[item.produto] = { categoria: item.categoria, tamanhos: {} };
         }
-        produtosAgrupados[i.nome].total += Number(i.quantidade);
-        if (i.tamanho) {
-            produtosAgrupados[i.nome].tamanhos[i.tamanho] = i.quantidade;
-        }
+        itensAgrupados[item.produto].tamanhos[item.tamanho] = item.quantidade_enviada;
     });
 
-    modal.innerHTML = `
-        <div class="ferramentas-modal no-print" style="position:fixed; top:10px; right:10px; z-index:10000; display:flex; gap:10px;">
-            <button onclick="window.print()" class="btn-vidro" style="background:#16a34a; padding:12px 25px;">🖨️ IMPRIMIR / PDF</button>
-            <button onclick="this.closest('#modal-romaneio').remove()" class="btn-vidro" style="background:#ef4444;">❌ FECHAR</button>
-        </div>
-        
-        <div class="folha-a4">
-            <header class="cabecalho">
-                <div class="logo-txt">
-                    <img src="braque.png" alt="SME">
-                    <div>
-                        <p>PREFEITURA MUNICIPAL DE QUEIMADOS</p>
-                        <p>SECRETARIA MUNICIPAL DE EDUCAÇÃO</p>
-                    </div>
+    overlay.innerHTML = `
+        <div class="painel-vidro" style="width: 98vw; height: 98vh; display: flex; flex-direction: column; padding: 15px; overflow: hidden;">
+            
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 8px;">
+                <div style="color:white; font-weight:bold;">📄 PRÉ-VISUALIZAÇÃO DO ROMANEIO (A4 PAISAGEM)</div>
+                <div style="display: flex; gap: 8px;">
+                    <button onclick="exportarRomaneioPDF()" class="btn-sair-vidro" style="background:#ef4444; border:none;">PDF 📄</button>
+                    <button onclick="exportarRomaneioExcel()" class="btn-sair-vidro" style="background:#16a34a; border:none;">EXCEL 📊</button>
+                    <button onclick="compartilharRomaneio(${remessaId})" class="btn-sair-vidro" style="background:#3b82f6; border:none;">WHATSAPP 🟢</button>
+                    <button onclick="efetivarSaidaTransporte(${remessaId})" style="background:#10b981; color:white; border:none; padding:8px 20px; border-radius:8px; font-weight:bold; cursor:pointer;">CONFIRMAR CARREGAMENTO ✅</button>
+                    <button onclick="document.getElementById('modal-romaneio-logistica').remove()" class="btn-sair-vidro">FECHAR</button>
                 </div>
-                <div class="info-pedido">
-                    <p>PEDIDO: #${pedidoId}</p>
-                    <h1>REMESSA: ${remessaId || '---'}</h1>
-                </div>
-            </header>
-
-            <div class="titulo-doc">
-                <h2>ROMANEIO DE ENTREGA</h2>
             </div>
 
-            <table class="tabela-grade">
-                <thead>
-                    <tr>
-                        <th class="txt-esquerda">DESCRIÇÃO DO PRODUTO</th>
-                        ${tamanhosExistentes.map(t => `<th width="40">${t}</th>`).join('')}
-                        <th width="60">TOTAL</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${Object.values(produtosAgrupados).map(p => `
-                        <tr>
-                            <td class="txt-esquerda">${p.nome}</td>
-                            ${tamanhosExistentes.map(t => `
-                                <td>${p.tamanhos[t] || '-'}</td>
-                            `).join('')}
-                            <td style="font-weight:bold; background:#f9f9f9;">${p.total}</td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>
+            <div id="scroll-documento" style="flex: 1; overflow: auto; background: #333; padding: 20px; display: flex; justify-content: center;">
+                
+                <div id="documento-a4-print" style="width: 297mm; min-height: 210mm; background: white; padding: 10mm; color: black; font-family: 'Segoe UI', Arial; box-shadow: 0 0 30px rgba(0,0,0,0.5); position: relative;">
+                    
+                    <div style="display: flex; justify-content: space-between; border-bottom: 2px solid black; padding-bottom: 10px;">
+                        <img src="braque.png" style="height: 50px;">
+                        <div style="text-align: right;">
+                            <h2 style="margin:0; font-size: 14pt;">ROMANEIO DE CARGA / GUIA DE REMESSA</h2>
+                            <p style="margin:0; font-size: 10pt;">Remessa: <strong>#${remessaId}</strong> | Pedido: #${dados.pedido_id}</p>
+                            <p style="margin:0; font-size: 9pt;">Emissão: ${new Date().toLocaleString()}</p>
+                        </div>
+                    </div>
 
-            <div class="rodape">
-                <div style="font-size: 13px;">
-                    <p><strong>DESTINO:</strong> ${dados.destino}</p>
-                    <p><strong>DATA DE SAÍDA:</strong> ${new Date().toLocaleString()}</p>
-                    <p><strong>EMISSOR:</strong> ${localStorage.getItem('nome')}</p>
-                </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin: 15px 0; font-size: 9pt; background: #f0f0f0; padding: 10px; border: 1px solid #ccc;">
+                        <div><strong>DESTINO:</strong><br>${dados.destino}</div>
+                        <div><strong>MOTORISTA:</strong><br>${dados.motorista_nome || 'NÃO INFORMADO'}</div>
+                        <div><strong>PLACA / VEÍCULO:</strong><br>${dados.veiculo_placa || '---'}</div>
+                    </div>
 
-                <div class="assinatura-box">
-                    <div class="linha-assinatura"></div>
-                    <p style="font-size:11px;">RECEBIDO POR (NOME LEGÍVEL)</p>
-                    <div class="linha-assinatura"></div>
-                    <p style="font-size:11px;">MATRÍCULA / RG / DATA</p>
+                    <table style="width: 100%; border-collapse: collapse; font-size: 8.5pt;">
+                        <thead>
+                            <tr style="background: #333; color: white;">
+                                <th style="border: 1px solid #000; padding: 6px; text-align: left;">PRODUTO / DESCRIÇÃO</th>
+                                <th style="border: 1px solid #000; padding: 6px; text-align: center;">CATEGORIA</th>
+                                <th style="border: 1px solid #000; padding: 6px; text-align: center;">GRADE DE TAMANHOS / QUANTIDADES</th>
+                                <th style="border: 1px solid #000; padding: 6px; text-align: center; width: 60px;">TOTAL</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${Object.keys(itensAgrupados).map(nome => {
+                                const item = itensAgrupados[nome];
+                                let totalLinha = 0;
+                                // Monta a string da grade (Ex: P:2, M:4)
+                                const gradeTexto = Object.entries(item.tamanhos).map(([tam, qtd]) => {
+                                    totalLinha += qtd;
+                                    return `<span style="border: 1px solid #ddd; padding: 2px 5px; margin: 0 2px;">${tam}: <strong>${qtd}</strong></span>`;
+                                }).join(' ');
+
+                                return `
+                                    <tr>
+                                        <td style="border: 1px solid #000; padding: 6px; font-weight:bold;">${nome}</td>
+                                        <td style="border: 1px solid #000; padding: 6px; text-align: center;">${item.categoria || '---'}</td>
+                                        <td style="border: 1px solid #000; padding: 6px; text-align: center;">${gradeTexto}</td>
+                                        <td style="border: 1px solid #000; padding: 6px; text-align: center; background: #f9f9f9;"><strong>${totalLinha}</strong></td>
+                                    </tr>
+                                `;
+                            }).join('')}
+                        </tbody>
+                    </table>
+
+                    <div style="margin-top: 15px; font-size: 9pt;">
+                        <strong>Total de Volumes:</strong> ${dados.volumes || '---'}
+                    </div>
+
+                    <div style="position: absolute; bottom: 10mm; left: 10mm; right: 10mm; display: flex; gap: 50px;">
+                        <div style="flex: 1; border-top: 1px solid black; text-align: center; padding-top: 5px;">
+                            <p style="font-size: 8pt; margin:0;">Data de Recebimento</p>
+                            <p style="font-size: 10pt; margin: 5px 0;">____/____/________</p>
+                        </div>
+                        <div style="flex: 2; border-top: 1px solid black; text-align: center; padding-top: 5px;">
+                            <p style="font-size: 8pt; margin:0;">Assinatura do Responsável pelo Recebimento (Nome Legível / Carimbo)</p>
+                            <div style="height: 30px;"></div>
+                        </div>
+                    </div>
+
                 </div>
             </div>
         </div>
     `;
-
-    // Estilo do container do Modal (Overlay)
-    Object.assign(modal.style, {
-        position: 'fixed', top: '0', left: '0', width: '100vw', height: '100vh',
-        background: 'rgba(0,0,0,0.9)', zIndex: '9999', padding: '20px',
-        overflowY: 'auto', display: 'flex', justifyContent: 'center'
-    });
-
-    document.body.appendChild(modal);
-}
-
-// Lógica de Exportação para Excel (CSV)
-// --- FUNÇÕES DE EXPORTAÇÃO ---
-
-// 1. Excel (Gera um CSV compatível que o Excel abre direto)
-function exportarExcelRomaneio(pedidoId) {
-    const tabela = document.querySelector('#modal-romaneio table');
-    let csv = [];
-    const rows = tabela.querySelectorAll("tr");
-    
-    for (let i = 0; i < rows.length; i++) {
-        const row = [], cols = rows[i].querySelectorAll("td, th");
-        for (let j = 0; j < cols.length; j++) {
-            // Limpa vírgulas e pontos para não quebrar o CSV
-            row.push(cols[j].innerText.replace(/[\n\r,]/g, ''));
-        }
-        csv.push(row.join(";")); // Usando ponto e vírgula para Excel PT-BR
-    }
-
-    const blob = new Blob(["\ufeff" + csv.join("\n")], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = `Romaneio_Pedido_${pedidoId}.csv`;
-    link.click();
-}
-
-// 2. WhatsApp (Compartilha o resumo textual)
-function compartilharWhatsApp(pedidoId, destino, itens) {
-    let texto = `*📦 ROMANEIO DE SAÍDA - PEDIDO #${pedidoId}*%0A`;
-    texto += `*Destino:* ${destino}%0A`;
-    texto += `*Data:* ${new Date().toLocaleDateString()}%0A`;
-    texto += `-----------------------------------%0A`;
-    
-    itens.forEach(i => {
-        texto += `• ${i.nome} ${i.tamanho ? `(${i.tamanho})` : ''}: *${i.quantidade}*%0A`;
-    });
-
-    window.open(`https://wa.me/?text=${texto}`, '_blank');
+    document.body.appendChild(overlay);
 }
 
 async function efetivarSaidaTransporte(remessaId) {
@@ -9021,158 +9023,74 @@ async function efetivarInicioTransporte(remessaId) {
 
 async function telaEscolaConfirmarRecebimento() {
     const container = document.getElementById('app-content');
-    container.innerHTML = '<div style="padding:40px; text-align:center; color:white;">🔍 Localizando mercadorias...</div>';
+    container.innerHTML = '<div style="padding:20px; text-align:center;">🔍 Localizando mercadorias em trânsito...</div>';
 
     try {
-        // Chamando a nova rota cirúrgica
-        const res = await fetch(`${API_URL}/escola/painel-v2`, {
+        const res = await fetch(`${API_URL}/escola/remessas-a-caminho`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
 
-        if (!res.ok) throw new Error("Erro na comunicação com o servidor.");
+        if (!res.ok) {
+            const erro = await res.json();
+            throw new Error(erro.error || "Erro ao buscar dados.");
+        }
+
         const dados = await res.json();
 
         container.innerHTML = `
-            <div style="padding:20px; max-width: 900px; margin: 0 auto;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:25px;">
+            <div style="padding:20px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
                     <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
-                    <h2 style="color:white; margin:0; font-size:1.2rem;">📦 RECEBIMENTO DE CARGAS</h2>
                 </div>
-
-                ${dados.length === 0 ? `
-                    <div class="glass-panel" style="padding:40px; text-align:center; color:rgba(255,255,255,0.6);">
-                        Nenhuma remessa a caminho para sua unidade.
-                    </div>` : 
-                    dados.map(r => `
-                    <div class="glass-panel" style="margin-bottom:20px; border-left: 6px solid #f59e0b;">
-                        <div style="padding:20px; display:flex; justify-content:space-between; align-items:center;">
-                            <div>
-                                <div style="font-weight:bold; font-size:1.1rem; color:#f59e0b;">REMESSA #${r.remessa_id}</div>
-                                <div style="color:white; opacity:0.8; font-size:0.9rem;">Pedido #${r.pedido_id} | Destino: ${r.escola_nome}</div>
-                            </div>
-                            
-                            <div style="display:flex; gap:10px;">
-                                <button onclick="visualizarDetalhesRemessa(${r.remessa_id}, ${r.pedido_id})" class="btn-vidro" style="padding:8px 15px; font-size:0.8rem;">
-                                    🔎 VER ITENS
-                                </button>
-                                <button onclick="confirmarChegadaEscola(${r.remessa_id})" class="btn-vidro" style="background:#059669; border:none; padding:8px 15px;">
-                                    ✅ RECEBER
+                    ${dados.length === 0 ? `
+                        <div style="background:#f8fafc; padding:40px; text-align:center; border-radius:10px; color:#64748b; border:1px dashed #cbd5e1;">
+                            Nenhuma remessa vindo para sua unidade no momento.
+                        </div>` : 
+                        dados.map(r => `
+                        <div style="background:#fffbeb; padding:20px; border-radius:10px; border-left:10px solid #f59e0b; box-shadow:0 4px 6px rgba(0,0,0,0.05);">
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <div>
+                                    <div style="font-weight:bold; font-size:1.1rem; color:#92400e;">📦 CARGA A CAMINHO</div>
+                                    <div style="color:#b45309; margin-top:5px;">
+                                        Remessa: <strong>#${r.remessa_id}</strong> | Pedido: #${r.pedido_id}
+                                    </div>
+                                    <div style="font-size:0.8rem; color:#d97706; margin-top:5px;">
+                                        Escola: ${r.escola_nome}
+                                    </div>
+                                </div>
+                                <button class="btn-confirmar-entrega" data-remessa-id="${r.remessa_id}" 
+                                        style="background:#059669; color:white; border:none; padding:12px 25px; border-radius:6px; cursor:pointer; font-weight:bold;">
+                                    ✅ CONFIRMAR CHEGADA
                                 </button>
                             </div>
                         </div>
-                        <div id="detalhes-remessa-${r.remessa_id}" style="display:none; background:rgba(0,0,0,0.2); padding:15px;"></div>
-                    </div>
-                `).join('')}
+                    `).join('')}
+                </div>
             </div>
         `;
     } catch (err) {
-        container.innerHTML = `<div class="glass-panel" style="color:#ef4444;">⚠️ Falha: ${err.message}</div>`;
-    }
-}
-
-async function confirmarChegadaEscola(remessaId) {
-    const usuarioId = localStorage.getItem('usuario_id');
-    
-    // Alerta estilizado para confirmação
-    if (!confirm("Deseja confirmar o recebimento físico desta carga? O saldo será adicionado ao estoque da sua unidade.")) return;
-
-    try {
-        const res = await fetch(`${API_URL}/escola/confirmar-recebimento`, {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${TOKEN}` 
-            },
-            body: JSON.stringify({ remessaId, usuarioId })
-        });
-
-        const data = await res.json();
-
-        if (res.ok) {
-            notificar("✨ Carga recebida com sucesso! Estoque local atualizado.", "sucesso");
-            telaEscolaConfirmarRecebimento(); // Recarrega a lista para remover o card
-        } else {
-            throw new Error(data.error || "Erro ao processar recebimento.");
-        }
-    } catch (err) {
-        notificar(err.message, "erro");
-    }
-}
-
-// Função para buscar e exibir os itens da remessa
-async function visualizarDetalhesRemessa(remessaId, pedidoId) {
-    const divDetalhes = document.getElementById(`detalhes-remessa-${remessaId}`);
-    
-    // Se já estiver aberto, fecha
-    if (divDetalhes.style.display === 'block') {
-        divDetalhes.style.display = 'none';
-        return;
-    }
-
-    divDetalhes.style.display = 'block';
-
-    try {
-        const res = await fetch(`${API_URL}/pedidos/detalhes-estoque/${pedidoId}`, { 
-            headers: { 'Authorization': `Bearer ${TOKEN}` } 
-        });
-        const itens = await res.json();
-
-        divDetalhes.innerHTML = `
-            <table style="width:100%; border-collapse:collapse; color:white; font-size:0.9rem;">
-                <thead>
-                    <tr style="border-bottom:1px solid rgba(255,255,255,0.2); text-align:left;">
-                        <th style="padding:10px;">PRODUTO</th>
-                        <th style="padding:10px; text-align:center;">TAMANHO</th>
-                        <th style="padding:10px; text-align:center;">QTD ENVIADA</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${itens.map(i => `
-                        <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                            <td style="padding:10px;">${i.produto}</td>
-                            <td style="padding:10px; text-align:center;">${i.tamanho || '-'}</td>
-                            <td style="padding:10px; text-align:center; font-weight:bold; color:#00d4ff;">${i.solicitado}</td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>
-        `;
-    } catch (err) {
-        divDetalhes.innerHTML = `<p style="color:#ff4d4d;">Erro ao carregar itens.</p>`;
+        container.innerHTML = `
+            <div style="padding:20px; color:#ef4444; background:#fef2f2; border:1px solid #fee2e2; border-radius:8px;">
+                <strong>⚠️ Falha:</strong> ${err.message}
+            </div>`;
     }
 }
 
 async function confirmarRecebimentoRemessa(remessaId, pedidoId) {
-    const usuarioId = localStorage.getItem('usuario_id');
-    
-    if (!confirm("Confirmar o recebimento físico desta carga? O saldo entrará no estoque da sua unidade.")) return;
+    if (!confirm("Você confirma que conferiu e recebeu todos os itens desta remessa?")) return;
 
     try {
-        const res = await fetch(`${API_URL}/escola/confirmar-recebimento`, {
+        const res = await fetch(`${API_URL}/pedidos/escola/confirmar-recebimento`, {
             method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json', 
-                'Authorization': `Bearer ${TOKEN}` 
-            },
-            body: JSON.stringify({ 
-                remessaId, 
-                pedidoId, 
-                usuarioId // Enviando quem recebeu
-            })
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ remessaId, pedidoId })
         });
 
-        const resultado = await res.json();
-
         if (res.ok) {
-            // Notificação com estilo de sucesso
-            notificar("✨ Recebimento confirmado! Estoque da unidade atualizado.");
-            telaEscolaConfirmarRecebimento(); // Recarrega a lista para sumir a remessa recebida
-        } else {
-            throw new Error(resultado.error || "Erro desconhecido.");
+            notificar("✨ Recebimento registrado! O estoque da escola foi atualizado.");
+            telaEscolaConfirmarRecebimento(); // Atualiza a lista
         }
-    } catch (err) {
-        notificar("❌ Erro: " + err.message);
-    }
+    } catch (err) { notificar("Erro ao processar recebimento."); }
 }
 
 async function confirmarEntregaFinal(pedidoId) {
@@ -12367,11 +12285,8 @@ async function finalizarProcessoDevolucao(pedidoId) {
 }
 
 function notificar(mensagem, tipo = 'sucesso') {
-    const overlayAntiga = document.getElementById('notificara-overlay');
-    if (overlayAntiga) overlayAntiga.remove();
-
+    // 1. Injeta o estilo de animação se ele ainda não existir
     if (!document.getElementById('notificar-estilo')) {
-
         const estilo = document.createElement('style');
         estilo.id = 'notificar-estilo';
         estilo.innerHTML = `
@@ -12389,7 +12304,6 @@ function notificar(mensagem, tipo = 'sucesso') {
     // 2. Cria o elemento da overlay (Fundo escurecido com blur)
     const overlay = document.createElement('div');
     overlay.id = 'notificara-overlay';
-    const bgOverlay = tipo === 'erro' ? 'rgba(20, 10, 10, 0.85)' : 'rgba(7, 11, 22, 0.8)';
     overlay.style.cssText = `
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
         background: rgba(7, 11, 22, 0.8);
@@ -12400,7 +12314,7 @@ function notificar(mensagem, tipo = 'sucesso') {
 
     // 3. Configurações de Ícone e Cores (Gamificadas)
     // Amarelo vibrante para alertas/erros e Verde Neon para sucesso
-    const corNeon = tipo === 'erro' ? '#ff4d4d' : '#4ade80'; // Vermelho mais vivo para erro
+    const corNeon = tipo === 'erro' ? '#fbbf24' : '#4ade80';
     const icone = tipo === 'erro' ? '⚠️' : '✅';
     const titulo = tipo === 'erro' ? 'ATENÇÃO!' : 'SUCESSO!';
 
@@ -16228,27 +16142,18 @@ window.confirmarEnvioTransferencia = async function(produtoId, qtdMax) {
 };
 
 window.telaSaidaTransferencia37 = async function() {
-    // CORREÇÃO: Alterado de 'app' para 'app-content'
-    const container = document.getElementById('app-content');
+    const app = document.getElementById('app');
     
-    // Trava de segurança: se não achar o container, tenta o 'app' ou avisa o erro
-    if (!container) {
-        console.error("Erro: Container de conteúdo não encontrado!");
-        return;
-    }
-
-    container.innerHTML = `
-        <div class="painel-vidro animar-entrada" style="width: 100%; min-height: 80vh; padding: 30px; display: flex; flex-direction: column;">
+    app.innerHTML = `
+        <div class="painel-vidro animar-entrada" style="width: 100%; min-height: 100vh; padding: 30px; display: flex; flex-direction: column;">
             
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
                 <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);">⬅ VOLTAR</button>
                 <h2 style="color: white; margin: 0; text-shadow: 0 0 10px rgba(0,0,0,0.5);">📦 ENVIO DE PATRIMÔNIO</h2>
-                <div style="width: 100px;"></div> 
-            </div>
+                <div style="width: 100px;"></div> </div>
 
             <div id="grid-produtos-transferencia" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; flex: 1; align-content: start;">
-                <p style="color: white; text-align: center; grid-column: 1/-1;">🔍 Buscando produtos no local 37...</p>
-            </div>
+                </div>
         </div>
     `;
 
@@ -16256,18 +16161,12 @@ window.telaSaidaTransferencia37 = async function() {
         const res = await fetch(`${API_URL}/transferencia/estoque-fonte`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
-        
         const produtos = await res.json();
         const grid = document.getElementById('grid-produtos-transferencia');
 
-        if (!produtos || produtos.length === 0) {
-            grid.innerHTML = '<p style="color: gray; text-align: center; grid-column: 1/-1;">Nenhum patrimônio disponível para transferência no Local 37.</p>';
-            return;
-        }
-
         grid.innerHTML = produtos.map(p => `
             <div class="item-setor-global" onclick="abrirModalDestinoTransferencia(${p.id}, '${p.nome}', ${p.quantidade_estoque})" 
-                 style="padding: 20px; cursor: pointer; border: 1px solid rgba(255,255,255,0.05); text-align: left; transition: 0.3s; background: rgba(255,255,255,0.02); border-radius: 15px;">
+                 style="padding: 20px; cursor: pointer; border: 1px solid rgba(255,255,255,0.05); text-align: left; transition: 0.3s;">
                 <span style="color: #aaa; font-size: 0.7rem; display: block; margin-bottom: 5px;">PRODUTO</span>
                 <strong style="color: white; font-size: 1rem; display: block; margin-bottom: 15px; text-transform: uppercase;">${p.nome}</strong>
                 
@@ -16279,9 +16178,7 @@ window.telaSaidaTransferencia37 = async function() {
         `).join('');
 
     } catch (err) {
-        console.error("Erro ao carregar estoque para transferência:", err);
-        const grid = document.getElementById('grid-produtos-transferencia');
-        if(grid) grid.innerHTML = '<p style="color: #ef4444; text-align: center; grid-column: 1/-1;">Erro ao conectar com o servidor.</p>';
+        console.error(err);
     }
 };
 
@@ -16349,55 +16246,36 @@ window.processarEnvioTransferencia = async function(produtoId, maxQtd) {
 };
 
 window.telaPendentesInfra = async function() {
-    // Tenta pegar o 'app-content', se não existir, tenta o 'app'
-    const container = document.getElementById('app-content') || document.getElementById('app');
-    
-    if (!container) {
-        console.error("ERRO CRÍTICO: Nenhum container (app-content ou app) foi encontrado no HTML!");
-        return alert("Erro interno: Container de tela não encontrado.");
-    }
-
-    // Agora que garantimos que o container existe, limpamos e desenhamos a tela
-    container.innerHTML = `
-        <div class="painel-vidro animar-entrada" style="width: 100%; min-height: 80vh; padding: 30px; display: flex; flex-direction: column;">
+    const app = document.getElementById('app');
+    app.innerHTML = `
+        <div class="painel-vidro animar-entrada" style="width: 100%; min-height: 100vh; padding: 30px;">
             <div style="display: flex; align-items: center; margin-bottom: 30px;">
-                <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);">⬅ VOLTAR</button>
-                <h2 style="color: white; margin-left: 20px; text-shadow: 0 0 10px rgba(0,0,0,0.5);">🏗️ SOLICITAÇÕES DA INFRAESTRUTURA</h2>
+                <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background: rgba(255,255,255,0.1);">⬅ VOLTAR</button>
+                <h2 style="color: white; margin-left: 20px;">🏗️ SOLICITADO PELA INFRA</h2>
             </div>
             
-            <div id="lista-infra-pendente" style="display: grid; gap: 15px; flex: 1; align-content: start;">
-                <p style="color: white; text-align: center;">🔍 Buscando solicitações pendentes...</p>
-            </div>
+            <div id="lista-infra-pendente" style="display: grid; gap: 15px;">
+                </div>
         </div>
     `;
 
-    try {
-        const res = await fetch(`${API_URL}/transferencia/pendentes-infra`, { 
-            headers: { 'Authorization': `Bearer ${TOKEN}` } 
-        });
-        const pendencias = await res.json();
-        const lista = document.getElementById('lista-infra-pendente');
+    const res = await fetch(`${API_URL}/transferencia/pendentes-infra`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+    const pendencias = await res.json();
+    const lista = document.getElementById('lista-infra-pendente');
 
-        if (!pendencias || pendencias.length === 0) {
-            lista.innerHTML = '<p style="color:gray; text-align:center; margin-top: 50px;">Nenhuma solicitação pendente no momento.</p>';
-            return;
-        }
-
-        lista.innerHTML = pendencias.map(p => `
-            <div class="item-setor-global" onclick="abrirAcaoInfra(${p.produto_id}, ${p.destino_id}, '${p.produto_nome}', '${p.destino_nome}', ${p.quantidade})" 
-                 style="display: flex; justify-content: space-between; align-items: center; padding: 20px; cursor: pointer; background: rgba(255,255,255,0.02); border-radius: 12px; border: 1px solid rgba(255,255,255,0.05);">
-                <div>
-                    <strong style="color: white; font-size: 1.1rem; text-transform: uppercase;">${p.produto_nome}</strong>
-                    <p style="color: #60a5fa; margin: 5px 0 0 0; font-size: 0.85rem; font-weight: bold;">📍 DESTINO: ${p.destino_nome}</p>
-                </div>
-                <div style="text-align: right;">
-                    <span style="background: #3b82f6; color: white; padding: 6px 15px; border-radius: 20px; font-weight: 900; font-size: 0.9rem;">${p.quantidade} UN</span>
-                </div>
+    lista.innerHTML = pendencias.map(p => `
+        <div class="item-setor-global" onclick="abrirAcaoInfra(${p.produto_id}, ${p.destino_id}, '${p.produto_nome}', '${p.destino_nome}', ${p.quantidade})" 
+             style="display: flex; justify-content: space-between; align-items: center; padding: 20px; border: 1px solid rgba(255,255,255,0.05);">
+            <div>
+                <strong style="color: white; font-size: 1.1rem;">${p.produto_nome}</strong>
+                <p style="color: #aaa; margin: 5px 0 0 0; font-size: 0.8rem;">DESTINO: ${p.destino_nome}</p>
             </div>
-        `).join('');
-    } catch (err) {
-        console.error("Erro na rota pendentes-infra:", err);
-    }
+            <div style="text-align: right;">
+                <span style="background: #3b82f6; color: white; padding: 5px 15px; border-radius: 20px; font-weight: bold;">${p.quantidade} UN</span>
+                <small style="display: block; color: #666; margin-top: 5px;">Solicitado em: ${new Date(p.data_solicitacao).toLocaleDateString()}</small>
+            </div>
+        </div>
+    `).join('') || '<p style="color:gray; text-align:center;">Nenhuma solicitação pendente.</p>';
 };
 
 window.abrirAcaoInfra = function(prodId, destId, nome, destino, qtd) {
@@ -16536,955 +16414,8 @@ async function atualizarBadgeInfra() {
     }
 }
 
-function abrirModalGrade(produto) {
-    const isTenis = produto.nome.toUpperCase().includes('TENIS');
-    const gradeTarget = isTenis ? GRADE_TENIS : GRADE_VESTUARIO;
-    
-    // Criar o HTML do modal dinamicamente
-    let modalHTML = `
-        <div id="modalGrade" class="modal-glass animate__animated animate__fadeIn">
-            <h3>Grade: ${produto.nome}</h3>
-            <p style="font-size: 0.8rem; opacity: 0.7;">Informe as quantidades por tamanho:</p>
-            
-            <div class="grid-tamanhos">
-                ${gradeTarget.map(tam => `
-                    <div class="item-grade">
-                        <label>${tam}</label>
-                        <input type="number" 
-                               class="input-grade" 
-                               data-tamanho="${tam}" 
-                               min="0" 
-                               placeholder="0"
-                               oninput="calcularTotalGrade()">
-                    </div>
-                `).join('')}
-            </div>
-
-            <div class="modal-footer">
-                <div>Total: <span id="totalModal" class="total-badge">0</span></div>
-                <button class="btn-confirmar" onclick="confirmarGrade(${produto.id}, '${produto.nome}', '${produto.tipo}')">OK</button>
-            </div>
-        </div>
-        <div id="overlay" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:999;"></div>
-    `;
-
-    document.body.insertAdjacentHTML('beforeend', modalHTML);
-}
-
-function calcularTotalGrade() {
-    const inputs = document.querySelectorAll('.input-grade');
-    let total = 0;
-    inputs.forEach(input => {
-        total += parseInt(input.value) || 0;
-    });
-    document.getElementById('totalModal').innerText = total;
-}
-
-function confirmarGrade(id, nome, tipo) {
-    const inputs = document.querySelectorAll('.input-grade');
-    const gradeFinal = {};
-    let totalGeral = 0;
-
-    inputs.forEach(input => {
-        const qtd = parseInt(input.value) || 0;
-        if (qtd > 0) {
-            gradeFinal[input.dataset.tamanho] = qtd;
-            totalGeral += qtd;
-        }
-    });
-
-    if (totalGeral === 0) {
-        alert("Insira pelo menos uma quantidade.");
-        return;
-    }
-
-    // Aqui enviamos para a função que você já possui ou para o resumo lateral
-    adicionarAoResumoLateral({
-        produto_id: id,
-        nome: nome,
-        tipo: tipo,
-        qtd_total: totalGeral,
-        grade: gradeFinal
-    });
-
-    fecharModal();
-}
-
-function fecharModal() {
-    document.getElementById('modalGrade')?.remove();
-    document.getElementById('overlay')?.remove();
-}
-
-function adicionarAoResumoLateral(item) {
-    // Verifica se o item já está no resumo para evitar duplicidade (ou somar)
-    const index = carrinhoEntrada.findIndex(p => p.produto_id === item.produto_id);
-    
-    if (index > -1) {
-        carrinhoEntrada[index] = item; // Atualiza com os novos valores
-    } else {
-        carrinhoEntrada.push(item);
-    }
-    
-    renderizarResumoLateral();
-}
-
-function renderizarResumoLateral() {
-    const container = document.getElementById('lista-resumo');
-    container.innerHTML = '';
-
-    carrinhoEntrada.forEach((item, index) => {
-        let gradeHTML = '';
-        
-        // Se for uniforme, mostra os tamanhos detalhados
-        if (item.tipo === 'UNIFORMES' && item.grade) {
-            const detalhes = Object.entries(item.grade)
-                .map(([tam, qtd]) => `<b>${tam}</b>:${qtd}`)
-                .join(' | ');
-            gradeHTML = `<div class="detalhe-grade-resumo">${detalhes}</div>`;
-        }
-
-        container.innerHTML += `
-            <div class="card-item-resumo animate__animated animate__fadeInRight">
-                <div style="display:flex; justify-content:space-between;">
-                    <strong>${item.nome}</strong>
-                    <span style="color: #00d4ff;">+${item.qtd_total}</span>
-                </div>
-                ${gradeHTML}
-                <button onclick="removerItem(${index})" 
-                        style="background:none; border:none; color:#ff4d4d; cursor:pointer; font-size:0.7rem; padding:0; margin-top:5px;">
-                    [ remover ]
-                </button>
-            </div>
-        `;
-    });
-}
-
-function removerItem(index) {
-    carrinhoEntrada.splice(index, 1);
-    renderizarResumoLateral();
-}
-
-async function finalizarEntradaEstoque() {
-    if (carrinhoEntrada.length === 0) return alert("O resumo está vazio!");
-
-    const payload = {
-        itens: carrinhoEntrada,
-        usuario_id: usuarioLogado.id // ID do usuário do seu sistema
-    };
-
-    try {
-        const response = await fetch('/estoque/entrada-lote', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-
-        const result = await response.json();
-
-        if (result.success) {
-            alert("🔥 Level Up! Estoque atualizado com sucesso.");
-            carrinhoEntrada = [];
-            renderizarResumoLateral();
-            // Opcional: recarregar listagem principal aqui
-        } else {
-            alert("Erro: " + result.error);
-        }
-    } catch (err) {
-        console.error(err);
-        alert("Falha na comunicação com o servidor.");
-    }
-}
-
-async function abrirTelaEntrada() {
-    const app = document.getElementById('app-content');
-    if (!app) return;
-
-    // 1. Monta a estrutura inicial (Evita o erro de 'null')
-    app.innerHTML = `
-        <div class="header-entrada animate__animated animate__fadeIn">
-            <button class="btn-voltar-vidro" onclick="carregarDashboard()" style="margin-bottom: 20px;">
-                <i class="fas fa-arrow-left"></i> VOLTAR
-            </button>
-            <h2 class="titulo-sessao" style="color: white; margin-bottom: 20px;">ENTRADA DE MERCADORIA</h2>
-            <p style="color: rgba(255,255,255,0.6); margin-bottom: 20px;">Selecione os itens e digite as quantidades para somar ao estoque.</p>
-        </div>
-        
-        <div id="lista-entrada-produtos">
-            <p style="color: white; padding: 20px;">Carregando produtos...</p>
-        </div>
-
-        <div id="footer-acoes" style="position: sticky; bottom: 20px; display: flex; justify-content: flex-end; margin-top: 30px;">
-            <button class="btn-confirmar-entrada" onclick="processarEntradaEstoque()" 
-                style="padding: 15px 40px; border-radius: 30px; border: none; background: #00d4ff; color: #001a2c; font-weight: bold; cursor: pointer; box-shadow: 0 10px 20px rgba(0,212,255,0.3);">
-                <i class="fas fa-check"></i> CONFIRMAR ENTRADA
-            </button>
-        </div>
-    `;
-
-    try {
-        const res = await fetch(`${API_URL}/estoque/consulta-exclusiva`, {
-            headers: { 'Authorization': `Bearer ${TOKEN}` }
-        });
-        const produtos = await res.json();
-        
-        const listaHtml = document.getElementById('lista-entrada-produtos');
-        listaHtml.innerHTML = '';
-
-        // Ordenar: Uniformes primeiro, depois Material
-        const listaOrdenada = produtos.sort((a, b) => {
-            if (a.tipo === 'UNIFORMES' && b.tipo !== 'UNIFORMES') return -1;
-            if (a.tipo !== 'UNIFORMES' && b.tipo === 'UNIFORMES') return 1;
-            return a.nome.localeCompare(b.nome);
-        });
-
-        listaOrdenada.forEach(p => {
-            const isUniforme = p.tipo === 'UNIFORMES';
-            
-            listaHtml.innerHTML += `
-                <div class="card-entrada glass-panel" 
-                     style="background: rgba(255,255,255,0.05); margin-bottom: 12px; padding: 18px; border-radius: 15px; color: white; border: 1px solid rgba(255,255,255,0.1);">
-                    
-                    <div style="display: flex; justify-content: space-between; align-items: center;" 
-                         ${isUniforme ? `onclick="toggleGrade(${p.id})"` : ''}>
-                        <div>
-                            <span style="font-size: 0.7rem; background: #00d4ff; padding: 3px 8px; border-radius: 5px; color: #001a2c; font-weight: bold;">
-                                ${p.tipo}
-                            </span>
-                            <p style="margin: 8px 0 0 0; font-weight: bold; font-size: 1.1rem;">${p.nome}</p>
-                        </div>
-
-                        ${!isUniforme ? `
-                            <div style="text-align: right;">
-                                <small style="display: block; font-size: 0.65rem; opacity: 0.6; margin-bottom: 5px;">QTD ENTRADA</small>
-                                <input type="number" class="input-entrada-qtd" data-id="${p.id}" data-tipo="MATERIAL"
-                                       style="width: 80px; background: rgba(0,0,0,0.3); border: 1px solid #00d4ff; color: white; padding: 8px; border-radius: 8px; text-align: center;"
-                                       placeholder="0" min="0">
-                            </div>
-                        ` : `
-                            <div style="color: #00d4ff; font-size: 0.8rem;">
-                                Clique para abrir tamanhos <i class="fas fa-chevron-down"></i>
-                            </div>
-                        `}
-                    </div>
-
-                    ${isUniforme ? `
-                        <div id="grade-${p.id}" class="grade-expansivel" style="display:none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);">
-                            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px;">
-                                ${p.grade.map(g => `
-                                    <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; text-align: center; border: 1px solid rgba(255,255,255,0.05);">
-                                        <small style="display: block; font-size: 0.6rem; color: #00d4ff; margin-bottom: 5px;">${g.tamanho}</small>
-                                        <input type="number" class="input-entrada-qtd" 
-                                               data-id="${p.id}" data-tipo="UNIFORMES" data-tamanho="${g.tamanho}"
-                                               style="width: 100%; background: transparent; border: none; border-bottom: 1px solid #00d4ff; color: white; text-align: center;"
-                                               placeholder="0" min="0">
-                                    </div>
-                                `).join('')}
-                            </div>
-                        </div>
-                    ` : ''}
-                </div>
-            `;
-        });
-    } catch (err) {
-        console.error("Erro ao carregar tela de entrada:", err);
-    }
-}
-
-function renderizarListaProdutos(produtos) {
-    const listaHtml = document.getElementById('lista-produtos-entrada');
-    listaHtml.innerHTML = '';
-
-    produtos.forEach(p => {
-        const isUniforme = p.tipo === 'UNIFORMES';
-        
-        listaHtml.innerHTML += `
-            <div class="card-produto-entrada glass-panel">
-                <div class="info">
-                    <span class="badge-tipo ${p.tipo.toLowerCase()}">${p.tipo}</span>
-                    <p class="nome-prod">${p.nome}</p>
-                    <small>Atual: ${p.quantidade_estoque}</small>
-                </div>
-                
-                <div class="acoes">
-                    ${isUniforme 
-                        ? `<button class="btn-grade" onclick='abrirModalGrade(${JSON.stringify(p)})'>
-                             <i class="fas fa-layer-group"></i> Abrir Grade
-                           </button>`
-                        : `<input type="number" placeholder="Qtd" class="input-material" id="qtd_${p.id}">
-                           <button class="btn-add" onclick="adicionarMaterial(${p.id}, '${p.nome}')">
-                             <i class="fas fa-plus"></i>
-                           </button>`
-                    }
-                </div>
-            </div>
-        `;
-    });
-}
-
-function adicionarMaterial(id, nome) {
-    const input = document.getElementById(`qtd_${id}`);
-    const qtd = parseInt(input.value);
-
-    if (!qtd || qtd <= 0) {
-        alert("Informe uma quantidade válida.");
-        return;
-    }
-
-    adicionarAoResumoLateral({
-        produto_id: id,
-        nome: nome,
-        tipo: 'MATERIAL',
-        qtd_total: qtd,
-        grade: null // Materiais não possuem grade
-    });
-
-    input.value = ''; // Limpa o campo após adicionar
-}
-
-// Função para renderizar os controles de filtro na tela
-function renderizarFiltroPeriodo() {
-    const containerFiltro = document.getElementById('secao-historico');
-    
-    // Inserindo o HTML dos inputs de data com estilo vitrificado
-    const htmlFiltro = `
-        <div class="toolbar-filtros glass-panel" style="margin-bottom: 20px; display: flex; gap: 15px; align-items: flex-end; padding: 15px;">
-            <div class="campo-data">
-                <label style="display:block; font-size: 0.7rem; color: #00d4ff; margin-bottom: 5px;">INÍCIO:</label>
-                <input type="date" id="data-inicio" class="input-grade" style="width: 150px;">
-            </div>
-            <div class="campo-data">
-                <label style="display:block; font-size: 0.7rem; color: #00d4ff; margin-bottom: 5px;">FIM:</label>
-                <input type="date" id="data-fim" class="input-grade" style="width: 150px;">
-            </div>
-            <button class="btn-confirmar" onclick="filtrarHistoricoPorPeriodo()" style="height: 38px; margin-bottom: 2px;">
-                <i class="fas fa-search"></i> FILTRAR
-            </button>
-        </div>
-        <div class="acoes-relatorio animate__animated animate__fadeIn">
-            <button class="btn-acao pdf" onclick="gerarPDFHistorico()">
-                <i class="fas fa-file-pdf"></i> PDF (A4 Paisagem)
-            </button>
-            <button class="btn-acao excel" onclick="exportarExcelHistorico()">
-                <i class="fas fa-file-excel"></i> Exportar Excel
-            </button>
-            <button class="btn-acao share" onclick="compartilharRelatorio()">
-                <i class="fas fa-share-alt"></i> Compartilhar
-            </button>
-        </div>            
-        <div id="timeline-historico"></div>
-    `;
-    
-    containerFiltro.innerHTML = htmlFiltro;
-    
-    // Sugestão: Preencher com a data de hoje por padrão
-    const hoje = new Date().toISOString().split('T')[0];
-    document.getElementById('data-inicio').value = hoje;
-    document.getElementById('data-fim').value = hoje;
-}
-
-async function filtrarHistoricoPorPeriodo() {
-    const inicio = document.getElementById('data-inicio').value;
-    const fim = document.getElementById('data-fim').value;
-    
-    if (!inicio || !fim) return alert("Selecione o período completo.");
-
-    // Chamada para a API passando as datas como parâmetros
-    const response = await fetch(`/api/estoque/historico-periodo?inicio=${inicio}&fim=${fim}`);
-    const logs = await response.json();
-    
-    // Chama a função de renderização que criamos anteriormente
-    renderizarCardsHistorico(logs); 
-}
-
-function gerarPDFHistorico() {
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({
-        orientation: "landscape",
-        unit: "mm",
-        format: "a4"
-    });
-
-    // Título e Cabeçalho
-    doc.setFontSize(18);
-    doc.text("Relatório de Entradas - Almoxarifado Central (Local 37)", 14, 20);
-    doc.setFontSize(10);
-    doc.text(`Período: ${document.getElementById('data-inicio').value} até ${document.getElementById('data-fim').value}`, 14, 28);
-
-    // Preparar dados da tabela (usando o array que você já tem no front)
-    const colunas = ["Data", "Usuário", "Ação", "Qtd Total", "Itens Detalhados"];
-    const linhas = historicoFiltrado.map(h => [
-        new Date(h.data).toLocaleString(),
-        h.usuario,
-        h.acao,
-        h.quantidade_total,
-        h.itens.map(i => `${i.produto}(${i.qtd})`).join(', ')
-    ]);
-
-    doc.autoTable({
-        head: [colunas],
-        body: linhas,
-        startY: 35,
-        theme: 'grid',
-        headStyles: { fillColor: [0, 212, 255] } // Azul neon no cabeçalho
-    });
-
-    doc.save(`Relatorio_Entradas_${Date.now()}.pdf`);
-}
-
-function exportarExcelHistorico() {
-    const ws = XLSX.utils.json_to_sheet(historicoFiltrado.map(h => ({
-        Data: new Date(h.data).toLocaleString(),
-        Usuario: h.usuario,
-        Acao: h.acao,
-        Total: h.quantidade_total,
-        Itens: h.itens.map(i => `${i.produto}(${i.qtd})`).join(' | '),
-        Observacoes: h.observacoes
-    })));
-
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Entradas");
-    XLSX.writeFile(wb, `Estoque_Almoxarifado_${Date.now()}.xlsx`);
-}
-
-async function compartilharRelatorio() {
-    const inicio = document.getElementById('data-inicio').value;
-    const fim = document.getElementById('data-fim').value;
-    const totalItens = historicoFiltrado.reduce((acc, curr) => acc + curr.quantidade_total, 0);
-
-    const textoShare = `📦 *Relatório Almoxarifado Central*\n` +
-                       `📅 Período: ${inicio} a ${fim}\n` +
-                       `✅ Total de itens recebidos: ${totalItens}\n` +
-                       `💻 Gerado via Sistema CEL Renato Gomes.`;
-
-    if (navigator.share) {
-        try {
-            await navigator.share({
-                title: 'Relatório de Estoque',
-                text: textoShare,
-            });
-        } catch (err) {
-            console.log("Compartilhamento cancelado.");
-        }
-    } else {
-        // Fallback para PC caso não tenha suporte: copia para o clipboard
-        navigator.clipboard.writeText(textoShare);
-        alert("Resumo copiado para a área de transferência!");
-    }
-}
-
-// --- BLOCO DE CONSULTA DE ESTOQUE (LOCAL 37) ---
-
-async function carregarConsultaEstoque() {
-    const app = document.getElementById('app-content');
-    if (!app) return;
-
-    // Monta a estrutura inicial
-    app.innerHTML = `
-        <div class="header-consulta animate__animated animate__fadeIn">
-            <button class="btn-voltar-vidro" onclick="carregarDashboard()" style="margin-bottom: 20px;">
-                <i class="fas fa-arrow-left"></i> VOLTAR
-            </button>
-            <h2 class="titulo-sessao" style="color: white; margin-bottom: 20px;">CONSULTA DE ESTOQUE</h2>
-        </div>
-        
-        <div class="abas-consulta" style="display: flex; gap: 15px; margin-bottom: 20px;">
-            <button class="aba-item active" onclick="alternarVisualizacaoConsulta('estoque')">ESTOQUE ATUAL</button>
-            <button class="aba-item" onclick="alternarVisualizacaoConsulta('historico')">HISTÓRICO DE ENTRADAS</button>
-        </div>
-
-        <div id="secao-estoque" class="aba-content">
-            <div id="lista-estoque-unificada">
-                <p style="color: white; padding: 20px;">Sincronizando dados...</p>
-            </div>
-        </div>
-
-        <div id="secao-historico" class="aba-content" style="display:none;">
-            <div id="timeline-historico"></div>
-        </div>
-    `;
-
-    try {
-        const res = await fetch(`${API_URL}/estoque/consulta-exclusiva`, {
-            headers: { 'Authorization': `Bearer ${TOKEN}` }
-        });
-
-        if (!res.ok) throw new Error(`Erro HTTP: ${res.status}`);
-        
-        const produtos = await res.json();
-        const listaHtml = document.getElementById('lista-estoque-unificada');
-        listaHtml.innerHTML = ''; 
-
-        produtos.forEach(p => {
-            const isUniforme = p.tipo === 'UNIFORMES';
-            const nivelBaixo = p.quantidade_estoque <= p.alerta_minimo;
-            
-            listaHtml.innerHTML += `
-                <div class="card-consulta glass-panel" 
-                     style="background: rgba(255,255,255,0.1); margin-bottom: 12px; padding: 18px; border-radius: 15px; color: white; border: 1px solid ${nivelBaixo ? '#ff4d4d' : 'rgba(255,255,255,0.1)'}; cursor: pointer;"
-                     id="card-${p.id}" 
-                     ${isUniforme ? `onclick="toggleGrade(${p.id})"` : ''}>
-                    
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div>
-                            <span style="font-size: 0.7rem; background: ${nivelBaixo ? '#ef4444' : '#00d4ff'}; padding: 3px 8px; border-radius: 5px; color: white; font-weight: bold;">
-                                ${p.tipo}
-                            </span>
-                            <p style="margin: 8px 0 0 0; font-weight: bold; font-size: 1.1rem;">${p.nome}</p>
-                        </div>
-                        <div style="text-align: right;">
-                            <small style="display: block; font-size: 0.65rem; opacity: 0.6;">SALDO</small>
-                            <span style="font-size: 1.5rem; font-weight: 900; color: ${nivelBaixo ? '#ff4d4d' : '#00d4ff'};">
-                                ${p.quantidade_estoque}
-                            </span>
-                        </div>
-                    </div>
-
-                    ${isUniforme ? `
-                        <div id="grade-${p.id}" class="grade-expansivel" style="display:none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);">
-                            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(55px, 1fr)); gap: 10px;">
-                                ${p.grade.map(g => `
-                                    <div style="background: rgba(0,0,0,0.3); padding: 6px; border-radius: 8px; text-align: center;">
-                                        <small style="display: block; font-size: 0.6rem; color: #00d4ff;">${g.tamanho}</small>
-                                        <strong style="font-size: 0.9rem;">${g.quantidade}</strong>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        </div>
-                    ` : ''}
-                </div>
-            `;
-        });
-    } catch (err) {
-        console.error("Erro na consulta:", err);
-        document.getElementById('lista-estoque-unificada').innerHTML = `<p style="color: #ff4d4d; padding: 20px;">❌ Erro: ${err.message}</p>`;
-    }
-}
-
-// Suporte para as abas (Evita conflito com mudarAba)
-function alternarVisualizacaoConsulta(sessao) {
-    const secaoEstoque = document.getElementById('secao-estoque');
-    const secaoHistorico = document.getElementById('secao-historico');
-    const botoes = document.querySelectorAll('.aba-item');
-
-    botoes.forEach(btn => btn.classList.remove('active'));
-    if(secaoEstoque) secaoEstoque.style.display = 'none';
-    if(secaoHistorico) secaoHistorico.style.display = 'none';
-
-    if (sessao === 'estoque') {
-        secaoEstoque.style.display = 'block';
-        botoes[0].classList.add('active');
-    } else {
-        secaoHistorico.style.display = 'block';
-        botoes[1].classList.add('active');
-        carregarHistoricoEntradas(); 
-    }
-}
-
-// Abre/Fecha grade de uniformes
-function toggleGrade(id) {
-    const grade = document.getElementById(`grade-${id}`);
-    if (grade) grade.style.display = grade.style.display === 'none' ? 'block' : 'none';
-}
-
-// Carrega o histórico (Necessário para a aba funcionar)
-
-async function carregarHistoricoEntradas() {
-    const timeline = document.getElementById('timeline-historico');
-    if (!timeline) return;
-
-    timeline.innerHTML = '<p style="color: white; padding: 20px; text-align: center; opacity: 0.6;">⏳ Carregando registros...</p>';
-
-    try {
-        // Removido o /api/ para bater com app.use('/', apiRoutes) do seu server.js
-        const res = await fetch(`${API_URL}/estoque/historico-completo`, {
-            headers: { 'Authorization': `Bearer ${TOKEN}` }
-        });
-
-        if (!res.ok) throw new Error("Falha na requisição");
-
-        const registros = await res.json();
-        timeline.innerHTML = '';
-
-        if (!registros || registros.length === 0) {
-            timeline.innerHTML = '<p style="color: white; padding: 40px; text-align: center; opacity: 0.5;">Nenhuma entrada encontrada.</p>';
-            return;
-        }
-
-        registros.forEach(reg => {
-            const data = new Date(reg.data_hora).toLocaleString();
-            
-            timeline.innerHTML += `
-                <div class="card-historico glass-panel" style="background: rgba(255,255,255,0.05); padding: 15px; margin-bottom: 12px; border-radius: 12px; border-left: 4px solid #00d4ff;">
-                    <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: #00d4ff; margin-bottom: 10px;">
-                        <span>📅 ${data}</span>
-                        <span>ID #${reg.id}</span>
-                    </div>
-                    <div style="color: white; font-weight: bold; margin-bottom: 8px;">👤 Usuário: ${reg.nome_usuario}</div>
-                    
-                    <div class="lista-itens-hist" style="background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px;">
-                        ${reg.itens.map(item => `
-                            <div style="display: flex; justify-content: space-between; color: white; font-size: 0.85rem; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
-                                <span>${item.nome_produto} ${item.tamanho ? `(Tam: ${item.tamanho})` : ''}</span>
-                                <span style="font-weight: bold; color: #00d4ff;">+${item.quantidade}</span>
-                            </div>
-                        `).join('')}
-                    </div>
-                    ${reg.observacoes ? `<div style="margin-top:10px; font-size:0.8rem; color:rgba(255,255,255,0.6); font-style: italic;">" ${reg.observacoes} "</div>` : ''}
-                </div>
-            `;
-        });
-    } catch (err) {
-        console.error("Erro no Histórico:", err);
-        timeline.innerHTML = '<p style="color: #ff4d4d; padding: 20px;">❌ Erro ao carregar histórico.</p>';
-    }
-}
-
-async function abrirTelaSaidaPedido() {
-    const app = document.getElementById('app-content');
-    if (!app) return;
-
-    // 1. Estrutura Inicial com seletor de destino
-    app.innerHTML = `
-        <div class="header-saida animate__animated animate__fadeIn">
-            <button class="btn-voltar-vidro" onclick="carregarDashboard()" style="margin-bottom: 20px;">
-                ⬅️ VOLTAR
-            </button>
-            <h2 class="titulo-sessao" style="color: white; margin-bottom: 20px;">SAÍDA DE ESTOQUE / NOVO PEDIDO</h2>
-            
-            <div class="glass-panel" style="padding: 20px; margin-bottom: 20px; border-radius: 15px;">
-                <label style="color: #00d4ff; font-weight: bold; display: block; margin-bottom: 10px;">📍 SELECIONE O LOCAL DESTINO:</label>
-                <select id="select-local-destino" style="width: 100%; padding: 12px; background: rgba(0,0,0,0.4); color: white; border: 1px solid #00d4ff; border-radius: 8px;">
-                    <option value="">Carregando locais...</option>
-                </select>
-            </div>
-        </div>
-        
-        <div id="lista-saida-produtos">
-            <p style="color: white; padding: 20px;">Sincronizando produtos e saldos...</p>
-        </div>
-
-        <div id="footer-acoes" style="position: sticky; bottom: 20px; display: flex; justify-content: flex-end; margin-top: 30px;">
-            <button class="btn-confirmar-saida" onclick="processarSaidaPedido()" 
-                style="padding: 15px 40px; border-radius: 30px; border: none; background: #ff4d4d; color: white; font-weight: bold; cursor: pointer; box-shadow: 0 10px 20px rgba(255,77,77,0.3);">
-                ✅ CONFIRMAR PEDIDO
-            </button>
-        </div>
-    `;
-
-    try {
-        // 2. Carregar Locais (Filtrando 37 e 50)
-        const resLocais = await fetch(`${API_URL}/locais`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
-        const locais = await resLocais.json();
-        const selectDestino = document.getElementById('select-local-destino');
-        // Filtra conforme regra: não 37 (estoque próprio) e não 50 (transferência reservada)
-        selectDestino.innerHTML = '<option value="">-- SELECIONE A UNIDADE --</option>' + 
-            locais.filter(l => l.id !== 37 && l.id !== 50)
-                  .map(l => `<option value="${l.id}">${l.nome}</option>`).join('');
-
-        // 3. Carregar Produtos com saldo atualizado
-        const resProd = await fetch(`${API_URL}/estoque/consulta-exclusiva`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
-        const produtos = await resProd.json();
-        const listaHtml = document.getElementById('lista-saida-produtos');
-        listaHtml.innerHTML = '';
-
-        produtos.forEach(p => {
-            const isUniforme = p.tipo === 'UNIFORMES';
-            listaHtml.innerHTML += `
-                <div class="card-saida glass-panel" id="card-saida-${p.id}" 
-                     style="background: rgba(255,255,255,0.05); margin-bottom: 12px; padding: 18px; border-radius: 15px; color: white; border: 1px solid rgba(255,255,255,0.1);">
-                    
-                    <div style="display: flex; justify-content: space-between; align-items: center;" 
-                         ${isUniforme ? `onclick="toggleGradeSaida(${p.id})"` : ''}>
-                        <div>
-                            <span style="font-size: 0.7rem; background: #00d4ff; padding: 3px 8px; border-radius: 5px; color: #001a2c; font-weight: bold;">
-                                ${p.tipo}
-                            </span>
-                            <p style="margin: 8px 0 0 0; font-weight: bold; font-size: 1.1rem;">${p.nome}</p>
-                            <small style="color: #aaa;">Estoque: <strong style="color: #00d4ff;">${p.quantidade_estoque}</strong></small>
-                        </div>
-
-                        ${!isUniforme ? `
-                            <div style="text-align: right;">
-                                <small style="display: block; font-size: 0.65rem; opacity: 0.6; margin-bottom: 5px;">QTD SAÍDA</small>
-                                <input type="number" class="input-saida-qtd" data-id="${p.id}" data-tipo="MATERIAL" data-max="${p.quantidade_estoque}"
-                                       onchange="validarEstoqueMax(this)"
-                                       style="width: 80px; background: rgba(0,0,0,0.3); border: 1px solid #ff4d4d; color: white; padding: 8px; border-radius: 8px; text-align: center;"
-                                       placeholder="0" min="0">
-                            </div>
-                        ` : `
-                            <div style="text-align: right;">
-                                <span id="total-uniforme-${p.id}" style="font-size: 1.2rem; font-weight: bold; color: #ff4d4d; display: block;">0</span>
-                                <small style="color: #00d4ff;">Grade 👕 <i class="fas fa-chevron-down"></i></small>
-                            </div>
-                        `}
-                    </div>
-
-                    ${isUniforme ? `
-                        <div id="grade-saida-${p.id}" class="grade-expansivel" style="display:none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);">
-                            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px;">
-                                ${p.grade.map(g => `
-                                    <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; text-align: center;">
-                                        <small style="display: block; font-size: 0.6rem; color: #00d4ff;">${g.tamanho}</small>
-                                        <small style="display: block; font-size: 0.55rem; color: #777;">Saldo: ${g.quantidade}</small>
-                                        <input type="number" class="input-saida-qtd" 
-                                               data-id="${p.id}" data-tipo="UNIFORMES" data-tamanho="${g.tamanho}" data-max="${g.quantidade}"
-                                               oninput="atualizarTotalGradeSaida(${p.id})" onchange="validarEstoqueMax(this)"
-                                               style="width: 100%; background: transparent; border: none; border-bottom: 1px solid #ff4d4d; color: white; text-align: center;"
-                                               placeholder="0" min="0">
-                                    </div>
-                                `).join('')}
-                            </div>
-                        </div>
-                    ` : ''}
-                </div>
-            `;
-        });
-    } catch (err) {
-        console.error("Erro ao carregar tela de saída:", err);
-    }
-}
-
-// Funções Auxiliares de UI
-function toggleGradeSaida(id) {
-    const grade = document.getElementById(`grade-saida-${id}`);
-    if (grade) grade.style.display = grade.style.display === 'none' ? 'block' : 'none';
-}
-
-function atualizarTotalGradeSaida(produtoId) {
-    const inputs = document.querySelectorAll(`.input-saida-qtd[data-id="${produtoId}"]`);
-    let soma = 0;
-    inputs.forEach(i => soma += (parseInt(i.value) || 0));
-    document.getElementById(`total-uniforme-${produtoId}`).innerText = soma;
-}
-
-function validarEstoqueMax(input) {
-    const max = parseInt(input.dataset.max);
-    const atual = parseInt(input.value) || 0;
-    if (atual > max) {
-        alert(`⚠️ Quantidade insuficiente! Estoque disponível: ${max}`);
-        input.value = 0;
-        input.focus();
-    }
-}
-
-async function processarSaidaPedido() {
-    const localDestinoId = document.getElementById('select-local-destino').value;
-    const usuarioId = localStorage.getItem('usuario_id');
-
-    if (!localDestinoId) {
-        alert("⚠️ Selecione o Local de Destino!");
-        return;
-    }
-
-    const inputs = document.querySelectorAll('.input-saida-qtd');
-    const mapaItens = {};
-
-    inputs.forEach(input => {
-        const qtd = parseInt(input.value) || 0;
-        if (qtd <= 0) return;
-
-        const id = input.dataset.id;
-        const tipo = input.dataset.tipo;
-        const tamanho = input.dataset.tamanho;
-
-        if (!mapaItens[id]) {
-            mapaItens[id] = { 
-                produto_id: id, 
-                tipo: tipo, 
-                qtd_total: 0, 
-                grade: {} 
-            };
-        }
-
-        mapaItens[id].qtd_total += qtd;
-        if (tipo === 'UNIFORMES' && tamanho) {
-            mapaItens[id].grade[tamanho] = qtd;
-        }
-    });
-
-    const itensParaEnviar = Object.values(mapaItens);
-    if (itensParaEnviar.length === 0) {
-        alert("⚠️ Informe as quantidades para saída.");
-        return;
-    }
-
-    if (!confirm("Confirmar a saída do estoque e geração do pedido?")) return;
-
-    try {
-        const res = await fetch(`${API_URL}/estoque/saida-pedido`, {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${TOKEN}` 
-            },
-            body: JSON.stringify({ 
-                itens: itensParaEnviar, 
-                local_destino_id: localDestinoId, 
-                usuario_id: usuarioId 
-            })
-        });
-
-        const resultado = await res.json();
-
-        if (res.ok) {
-            alert("✅ Pedido APROVADO! Estoque atualizado e histórico registrado.");
-            carregarDashboard();
-        } else {
-            throw new Error(resultado.error);
-        }
-    } catch (err) {
-        alert("❌ Erro no Pedido: " + err.message);
-    }
-}
-
-function verificarToken(req, res, next) {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
-
-    if (!token) return res.status(401).json({ error: "Token não fornecido" });
-
-    jwt.verify(token, SECRET, (err, decoded) => {
-        if (err) return res.status(403).json({ error: "Token inválido ou expirado" });
-
-        // IMPORTANTE: Aqui injetamos os dados no req.user
-        // Como no login você salvou { id, perfil, local_id }, tudo estará aqui
-        req.user = decoded; 
-        
-        // Mantemos req.userId para compatibilidade com sua rota 'quem-sou-eu'
-        req.userId = decoded.id; 
-        
-        next();
-    });
-}
-
-async function abrirPainelGerencial() {
-    const container = document.getElementById('app-content');
-    container.innerHTML = '<div class="spinner"></div>';
-
-    try {
-        const res = await fetch(`${API_URL}/gerencial/resumo-status`, {
-            headers: { 'Authorization': `Bearer ${TOKEN}` }
-        });
-        const resumo = await res.json();
-
-        // Mapeamento de Cores e Ícones por Status
-        const configStatus = {
-            'AGUARDANDO_AUTORIZACAO': { icon: '⏳', label: 'PENDENTES', cor: '#fbbf24' },
-            'APROVADO': { icon: '✅', label: 'APROVADOS', cor: '#4ade80' },
-            'SEPARACAO_INICIADA': { icon: '📦', label: 'EM SEPARAÇÃO', cor: '#60a5fa' },
-            'EM_TRANSPORTE': { icon: '🚚', label: 'A CAMINHO', cor: '#f472b6' },
-            'ENTREGUE': { icon: '🏠', label: 'ENTREGUES', cor: '#a78bfa' }
-        };
-
-        container.innerHTML = `
-            <div class="painel-gerencial-glass animate__animated animate__fadeIn">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:30px;">
-                    <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
-                    <h2 style="color:white; margin:0;">📈 PAINEL GERENCIAL DE PEDIDOS</h2>
-                </div>
-
-                <div class="grid-movel-celular" style="gap:20px;">
-                    ${Object.keys(configStatus).map(status => `
-                        <div class="card-status-gerencial" onclick="abrirListaPedidosStatus('${status}')">
-                            <span style="font-size:3rem; filter: drop-shadow(0 0 10px ${configStatus[status].cor});">${configStatus[status].icon}</span>
-                            <span style="color:white; font-weight:bold; letter-spacing:1px;">${configStatus[status].label}</span>
-                            <span class="badge-qtd">${resumo[status] || 0}</span>
-                        </div>
-                    `).join('')}
-                </div>
-                <p style="text-align:center; color:rgba(255,255,255,0.4); margin-top:30px; font-size:0.8rem;">
-                    💡 Clique em um card para ver a listagem das remessas em determinado status.
-                </p>
-            </div>
-        `;
-    } catch (err) {
-        notificar("Erro ao carregar painel.", "erro");
-    }
-}
-
-// --- MODAL NÍVEL 1: LISTAGEM DE PEDIDOS ---
-async function abrirListaPedidosStatus(status) {
-    const modal = document.createElement('div');
-    modal.className = 'modal-stack animate__animated animate__zoomIn';
-    modal.id = 'modal-lista-status';
-
-    try {
-        const res = await fetch(`${API_URL}/gerencial/lista-por-status/${status}`, {
-            headers: { 'Authorization': `Bearer ${TOKEN}` }
-        });
-        const pedidos = await res.json();
-
-        modal.innerHTML = `
-            <div class="painel-gerencial-glass" style="width:90%; max-width:800px; max-height:80vh; overflow-y:auto;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                    <button onclick="this.closest('.modal-stack').remove()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
-                    <h3 style="color:#00d4ff; margin:0;">PEDIDOS: ${status}</h3>
-                </div>
-
-                <table style="width:100%; color:white; border-collapse:collapse;">
-                    <thead>
-                        <tr style="border-bottom:2px solid rgba(255,255,255,0.1); text-align:left;">
-                            <th style="padding:10px;">ID</th>
-                            <th style="padding:10px;">DESTINO</th>
-                            <th style="padding:10px;">DATA</th>
-                            <th style="padding:10px;">AÇÃO</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${pedidos.map(p => `
-                            <tr style="border-bottom:1px solid rgba(255,255,255,0.05); hover:background:rgba(255,255,255,0.02);">
-                                <td style="padding:12px;">#${p.id}</td>
-                                <td style="padding:12px;">${p.destino}</td>
-                                <td style="padding:12px;">${new Date(p.data_criacao).toLocaleDateString()}</td>
-                                <td style="padding:12px;">
-                                    <button class="btn-vidro" style="padding:5px 10px; font-size:0.7rem;" onclick="abrirDetalhesItensGerencial(${p.id})">VER ITENS 🔍</button>
-                                </td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            </div>
-        `;
-        document.body.appendChild(modal);
-    } catch (err) {
-        notificar("Erro ao listar pedidos.", "erro");
-    }
-}
-
-// --- MODAL NÍVEL 2: DETALHES DOS PRODUTOS (EM CIMA DO NÍVEL 1) ---
-async function abrirDetalhesItensGerencial(pedidoId) {
-    const modalItens = document.createElement('div');
-    modalItens.className = 'modal-stack animate__animated animate__fadeInUp';
-    modalItens.style.zIndex = '11000'; // Fica por cima do modal de lista
-
-    try {
-        const res = await fetch(`${API_URL}/pedidos/detalhes-estoque/${pedidoId}`, {
-            headers: { 'Authorization': `Bearer ${TOKEN}` }
-        });
-        const itens = await res.json();
-
-        modalItens.innerHTML = `
-            <div class="painel-gerencial-glass" style="width:80%; max-width:500px; border:2px solid #00d4ff;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                    <button onclick="this.closest('.modal-stack').remove()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
-                    <h4 style="color:white; margin:0;">ITENS DO PEDIDO #${pedidoId}</h4>
-                </div>
-
-                <div style="max-height:400px; overflow-y:auto;">
-                    ${itens.map(i => `
-                        <div style="display:flex; justify-content:space-between; padding:10px; border-bottom:1px solid rgba(255,255,255,0.1); color:white;">
-                            <span>${i.produto} ${i.tamanho ? `(${i.tamanho})` : ''}</span>
-                            <span style="font-weight:bold; color:#00d4ff;">QTD: ${i.solicitado}</span>
-                        </div>
-                    `).join('')}
-                </div>
-            </div>
-        `;
-        document.body.appendChild(modalItens);
-    } catch (err) {
-        notificar("Erro ao carregar itens.", "erro");
-    }
-}
+// Chame isso logo após carregar o Dashboard
+// atualizarBadgeInfra();
 
 // Isso garante que o onclick="funcao()" funcione sempre
 window.telaVisualizarEstoque = telaVisualizarEstoque;

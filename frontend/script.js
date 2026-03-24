@@ -297,7 +297,7 @@ async function carregarDashboard() {
                 <i>👥</i><span>GERENCIAR USUÁRIOS</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="abrirPainelGerencial()">
-                <i>📈</i><span>PAINEL ATUAL</span>
+                <i>📈</i><span>PAINEL (em construção)</span>
             </button>
             <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
                 <i>🔑</i><span>ALTERAR MINHA SENHA</span>
@@ -421,10 +421,10 @@ async function carregarDashboard() {
                 <i>🔎</i><span>CONSULTA ESTOQUE</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="abrirPainelGerencial()">
-                <i>📈</i><span>PAINEL ATUAL</span>
+                <i>📈</i><span>PAINEL (em construção)</span>
             </button>
 
-            <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('RELATÓRIOS')">
+            <button class="btn-grande btn-vidro btn-breve" onclick="abrirSubmenuVitrificado('RELATÓRIOS')">
                 <i>📊</i><span>RELATÓRIOS</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()">
@@ -466,7 +466,7 @@ if (perfil === 'estoque') {
             </button>
 
             <button class="btn-grande btn-vidro" onclick="abrirPainelGerencial()">
-                <i>📈</i><span>PAINEL ATUAL</span>
+                <i>📈</i><span>PAINEL (em construção)</span>
             </button>
             <button class="btn-grande btn-vidro btn-breve" onclick="abrirSubmenuVitrificado('RELATÓRIOS')">
                 <i>📊</i><span>RELATÓRIOS</span>

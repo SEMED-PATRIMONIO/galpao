@@ -8507,7 +8507,6 @@ async function telaAdminDashboard() {
             <div class="painel-vidro" style="max-width: 1100px; margin: auto;">
                 <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid rgba(255,255,255,0.1); padding-bottom:15px; margin-bottom:25px;">
                     <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
-                    <h2 style="color:white; margin:0; font-size:1.3rem;">📊 PAINEL GERENCIAL DE PEDIDOS</h2>
                 </div>
 
                 <div style="background:rgba(0,0,0,0.2); border-radius:15px; padding: 25px;">

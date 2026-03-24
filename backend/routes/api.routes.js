@@ -2978,6 +2978,7 @@ router.get('/estoque/historico/detalhes/:id', verificarToken, async (req, res) =
     }
 });
 
+// Rota de Estatísticas (Stats)
 router.get('/admin/dashboard/stats', verificarToken, async (req, res) => {
     try {
         const query = `
@@ -2985,15 +2986,45 @@ router.get('/admin/dashboard/stats', verificarToken, async (req, res) => {
                 COUNT(*) FILTER (WHERE status = 'AGUARDANDO_AUTORIZACAO') as qtd_solicitado,
                 COUNT(*) FILTER (WHERE status = 'AUTORIZADO') as qtd_autorizado,
                 COUNT(*) FILTER (WHERE status = 'EM_SEPARACAO') as qtd_separacao,
-                COUNT(*) FILTER (WHERE status = 'PRONTO') as qtd_pronto,
+                COUNT(*) FILTER (WHERE status = 'COLETA_LIBERADA') as qtd_pronto,
                 COUNT(*) FILTER (WHERE status = 'EM_TRANSPORTE') as qtd_transporte,
-                COUNT(*) FILTER (WHERE status = 'RECEBIDO') as qtd_entregue
+                COUNT(*) FILTER (WHERE status = 'ENTREGUE') as qtd_entregue
             FROM pedidos;
         `;
         const { rows } = await db.query(query);
         res.json(rows[0]);
     } catch (err) {
-        res.status(500).json({ error: "Erro ao calcular estatísticas: " + err.message });
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Rota de Detalhes (Ajustada para entender os nomes dos botões)
+router.get('/admin/dashboard/detalhes/:fase', verificarToken, async (req, res) => {
+    const { fase } = req.params;
+
+    // Mapeamento: O que vem do botão -> O que está no Banco
+    const mapaStatus = {
+        'SOLICITADO': 'AGUARDANDO_AUTORIZACAO',
+        'AUTORIZADO': 'AUTORIZADO',
+        'EM SEPARAÇÃO': 'EM_SEPARACAO',
+        'PRONTO PARA ENTREGA': 'COLETA_LIBERADA', // O ajuste que você pediu
+        'EM TRANSPORTE': 'EM_TRANSPORTE',
+        'ENTREGUE': 'ENTREGUE'
+    };
+
+    const statusReal = mapaStatus[fase] || fase;
+
+    try {
+        const sql = `
+            SELECT p.id, l.nome as escola, p.status 
+            FROM pedidos p 
+            JOIN locais l ON p.local_destino_id = l.id 
+            WHERE p.status = $1
+        `;
+        const { rows } = await db.query(sql, [statusReal]);
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
     }
 });
 

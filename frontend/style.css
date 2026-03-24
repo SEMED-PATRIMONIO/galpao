@@ -2249,3 +2249,29 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     background: rgba(0, 0, 0, 0.6);
     backdrop-filter: blur(5px);
 }
+
+/* Grid para telas grandes (4 colunas) */
+.grid-quatro-colunas {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr); /* 4 colunas iguais */
+    gap: 20px;
+    padding: 10px;
+}
+
+/* Responsividade: Se a tela for pequena (Celular), volta para 2 colunas */
+@media (max-width: 800px) {
+    .grid-quatro-colunas {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+/* Ajuste de Dimensão dos Botões para não ficarem "esmagados" */
+.btn-grande.btn-vidro {
+    min-height: 160px; /* Mantém a altura do seu padrão */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 20px;
+}

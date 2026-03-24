@@ -238,53 +238,59 @@ async function carregarDashboard() {
     const app = document.getElementById('app-content');
     if (app) {
         app.style.background = "transparent";
-        app.innerHTML = ''; // Limpa o conteúdo antes de reconstruir os cards [cite: 2, 3]
+        app.innerHTML = ''; 
     }   
+    
+    // Variáveis de controle de gráficos e dados
     let chart1, chart2;
     let dadosEstoqueCache = [];
     let categoriaAtual = 'UNIFORMES';
     let carrinhoAdmin = [];
     let carrinhoEntrada = [];
-    let chartTecnicos = null; // Variável global para controle do gráfico [cite: 4, 5]
+    let chartTecnicos = null; 
     
     await inicializarSessaoUsuario();
+
+    // 1. Recuperação de dados da sessão
     const perfil = localStorage.getItem('perfil') ? localStorage.getItem('perfil').toLowerCase() : null;
-    const nome = localStorage.getItem('nome');
+    const nome = localStorage.getItem('nome') || "Usuário"; // Garantia para não dar erro no .toUpperCase()
     const localId = localStorage.getItem('local_id');
-    const container = document.getElementById('app-content');
-    const classeGrelha = 'grid-movel-celular';
-    let htmlBotoes = '';
     const loginContainer = document.getElementById('login-container');
-    let modoComparacao = false; // [cite: 6, 7]
+    const container = document.getElementById('app-content');
 
-    if (container) {
-        container.style.display = 'block';
-        container.style.position = 'relative'; // Reforço via JS [cite: 8]
-        container.style.zIndex = '20'; // Reforço via JS [cite: 9]
-    }
+    // 2. LÓGICA DA GRELHA (CORRIGIDA: Removida a re-declaração que causava erro)
+    let classeGrelha = 'grid-movel-celular'; // Padrão 2 colunas para perfis de celular/escola
+    
+    const perfisPainelLargo = ['admin', 'estoque', 'dti']; 
+    if (perfisPainelLargo.includes(perfil)) {
+        classeGrelha = 'grid-quatro-colunas';
+    }   
 
+    // 3. Verificação de autenticação e containers
     if (!perfil) {
         if (loginContainer) loginContainer.style.display = 'block';
         if (container) container.style.display = 'none';
-        return; // [cite: 10]
+        return; 
     }
 
     if (loginContainer) loginContainer.style.display = 'none';
-    if (container) container.style.display = 'block';
+    
+    if (container) {
+        container.style.display = 'block';
+        container.style.position = 'relative'; 
+        container.style.zIndex = '20'; 
+    }
 
-    // Cabeçalho Padrão [cite: 11]
+    // 4. Início da construção do HTML
     let html = `
-            <div class="painel-usuario-vidro">
-                <span class="nome-usuario-painel">${nome.toUpperCase()}</span>
-                <button onclick="logout()" class="btn-sair-vidro">SAIR</button>
-            </div>
+        <div class="painel-usuario-vidro">
+            <span class="nome-usuario-painel">${nome.toUpperCase()}</span>
+            <button onclick="logout()" class="btn-sair-vidro">SAIR</button>
+        </div>
 
-            <div id="area-notificaras" style="margin-top: 80px; margin-bottom: 20px;"></div>
-            
-            <div class="grid-movel-celular">
-        `;
-
-    // --- 2. PERFIL: SUPER (Gestão de Usuários) --- [cite: 12]
+        <div id="area-notificaras" style="margin-top: 80px; margin-bottom: 20px;"></div>
+        
+        <div class="${classeGrelha}"> `;
     if (perfil === 'super') {
         html += `
             <button class="btn-grande btn-vidro" onclick="telaGerenciarUsuarios()">
@@ -304,7 +310,7 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="telaSaidaTransferencia37()">
                 <i>🏛️</i><span>SOLICITAR AO PATRIMÔNIO</span>
             </button>
-            <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
+            <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()">
                 <i>🔑</i><span>ALTERAR MINHA SENHA</span>
             </button>
         `;
@@ -312,9 +318,6 @@ async function carregarDashboard() {
 
     if (perfil === 'humanos') {
         html += `
-            <button class="btn-grande btn-vidro" onclick="telaAuditoriaAcessos()">
-                <i>🛡️</i><span>ACESSOS AO INFORME DE RENDIMENTOS</span>
-            </button>
             <button class="btn-grande btn-vidro" onclick="telaSolicitarServicoImpressora('recarga')">
                 <i>💧</i><span>SOLICITAR RECARGA DE TONER</span>
             </button>
@@ -351,7 +354,7 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="telaCadastroImpressoras()">
                 <i>📋</i><span>CADASTRAR NOVA IMPRESSORA</span>
             </button>
-            <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
+            <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()">
                 <i>🔑</i><span>ALTERAR MINHA SENHA</span>
             </button>                        
         `; // [cite: 17, 18, 19, 20]
@@ -369,7 +372,7 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="telaDashboardImpressoras()">
                 <i>📈</i><span>ATENDIMENTOS REALIZADOS (IMPRESSORAS)</span>
             </button>
-            <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
+            <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()">
                 <i>🔑</i><span>ALTERAR MINHA SENHA</span>
             </button> 
         `; // [cite: 22, 23, 24]
@@ -390,7 +393,7 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="abrirMenuPatrimonioEscola()">
                 <i>🏛️</i><span>PATRIMÔNIO</span>
             </button>
-            <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
+            <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()">
                 <i>🔑</i><span>ALTERAR MINHA SENHA</span>
             </button>    
             <button class="btn-grande btn-vidro" onclick="telaEscolaConfirmarRecebimento()">
@@ -420,13 +423,14 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="abrirPainelGerencial()">
                 <i>📈</i><span>PAINEL ATUAL</span>
             </button>
+
             <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('RELATÓRIOS')">
                 <i>📊</i><span>RELATÓRIOS</span>
             </button>
-            <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
+            <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()">
                 <i>🔑</i><span>ALTERAR MINHA SENHA</span>
             </button>    
-        `; // Note: Você moverá os botões de [cite: 33, 34, 35, 36] para dentro da função abaixo.
+        `; 
     }
 
     // --- 5. PERFIL: ESTOQUE (NOVA INTERFACE) --- [cite: 37]
@@ -449,7 +453,11 @@ if (perfil === 'estoque') {
 
             <button class="btn-grande btn-vidro" onclick="telaCadastrosBase()">
                 <i>⚙️</i><span>CADASTRAR NOVO LOCAL/CATEGORIA/PRODUTO</span>
-            </button>            
+            </button>
+            <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('PEDIDOS')">
+                <i>📝</i><span>PEDIDOS</span>
+            </button>
+
             <button class="btn-grande btn-vidro" onclick="abrirTelaEntrada()">
                 <i>📥</i><span>LANÇAR ENTRADA NO ESTOQUE</span>
             </button>
@@ -457,17 +465,14 @@ if (perfil === 'estoque') {
                 <i>🔎</i><span>CONSULTA ESTOQUE</span>
             </button>
 
-            <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('PEDIDOS')">
-                <i>📝</i><span>PEDIDOS</span>
-            </button>
             <button class="btn-grande btn-vidro" onclick="abrirPainelGerencial()">
                 <i>📈</i><span>PAINEL ATUAL</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('RELATÓRIOS')">
+            <button class="btn-grande btn-vidro btn-breve" onclick="abrirSubmenuVitrificado('RELATÓRIOS')">
                 <i>📊</i><span>RELATÓRIOS</span>
             </button>
 
-            <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
+            <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()">
                 <i>🔑</i><span>ALTERAR MINHA SENHA</span>
             </button>
         `;
@@ -17388,7 +17393,7 @@ async function abrirPainelGerencial() {
                     `).join('')}
                 </div>
                 <p style="text-align:center; color:rgba(255,255,255,0.4); margin-top:30px; font-size:0.8rem;">
-                    💡 Clique em um card para ver a listagem detalhada de cada setor.
+                    💡 Clique em um card para ver a listagem das remessas em determinado status.
                 </p>
             </div>
         `;

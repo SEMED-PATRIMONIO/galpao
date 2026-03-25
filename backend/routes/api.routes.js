@@ -5680,7 +5680,7 @@ router.post('/patrimonio/cadastrar', verificarToken, upload.single('arquivo'), a
         } else {
             // Se o produto não existe, criamos um registro básico na tabela produtos
             const novoProd = await db.query(
-                "INSERT INTO produtos (nome, local_id, tipo) VALUES ($1, $2, 'MATERIAL') RETURNING id",
+                "INSERT INTO produtos (nome, local_id, tipo) VALUES ($1, $2, 'PATRIMONIO') RETURNING id",
                 [nome_produto.toUpperCase(), local_id]
             );
             produtoId = novoProd.rows[0].id;

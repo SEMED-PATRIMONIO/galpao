@@ -6646,4 +6646,320 @@ router.get('/escola/meu-estoque', verificarToken, async (req, res) => {
     }
 });
 
+// ROTA: Listar Etapas de Ensino (Para preencher o Select no formulário)
+router.get('/escola/etapas', verificarToken, async (req, res) => {
+    try {
+        const { rows } = await db.query("SELECT * FROM etapas_ensino ORDER BY id ASC");
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao buscar etapas: " + err.message });
+    }
+});
+
+// ROTA: Listar Turmas da Unidade (Isolado por local_id)
+router.get('/escola/turmas', verificarToken, async (req, res) => {
+    const localId = req.user.local_id; // Pegamos do Token para total segurança
+    try {
+        const sql = `
+            SELECT t.*, e.nome as etapa_nome 
+            FROM turmas t
+            JOIN etapas_ensino e ON t.etapa_id = e.id
+            WHERE t.local_id = $1
+            ORDER BY e.id ASC, t.nome ASC
+        `;
+        const { rows } = await db.query(sql, [localId]);
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao buscar turmas: " + err.message });
+    }
+});
+
+// ROTA: Cadastrar Nova Turma
+router.post('/escola/turmas', verificarToken, async (req, res) => {
+    const { nome, etapaId, anoLetivo } = req.body;
+    const localId = req.user.local_id;
+
+    try {
+        const sql = `
+            INSERT INTO turmas (nome, etapa_id, local_id, ano_letivo) 
+            VALUES ($1, $2, $3, $4) RETURNING *
+        `;
+        const { rows } = await db.query(sql, [nome.toUpperCase(), etapaId, localId, anoLetivo || 2026]);
+        res.status(201).json(rows[0]);
+    } catch (err) {
+        if (err.code === '23505') {
+            return res.status(400).json({ error: "Já existe uma turma com este nome na sua escola." });
+        }
+        res.status(500).json({ error: "Erro ao salvar turma: " + err.message });
+    }
+});
+
+// ROTA: Listar Alunos da Unidade (com filtro de turma opcional)
+router.get('/escola/alunos', verificarToken, async (req, res) => {
+    const localId = req.user.local_id;
+    try {
+        const sql = `
+            SELECT a.*, t.nome as turma_nome, e.nome as etapa_nome
+            FROM alunos a
+            LEFT JOIN turmas t ON a.turma_id = t.id
+            LEFT JOIN etapas_ensino e ON t.etapa_id = e.id
+            WHERE a.local_id = $1
+            ORDER BY a.nome ASC
+        `;
+        const { rows } = await db.query(sql, [localId]);
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao buscar alunos: " + err.message });
+    }
+});
+
+// ROTA: Cadastrar Novo Aluno
+router.post('/escola/alunos', verificarToken, async (req, res) => {
+    const { nome, matricula, turmaId } = req.body;
+    const localId = req.user.local_id;
+
+    try {
+        const sql = `
+            INSERT INTO alunos (nome, matricula, turma_id, local_id) 
+            VALUES ($1, $2, $3, $4) RETURNING *
+        `;
+        const { rows } = await db.query(sql, [nome.toUpperCase(), matricula, turmaId, localId]);
+        res.status(201).json(rows[0]);
+    } catch (err) {
+        if (err.code === '23505') { // Erro de matrícula duplicada
+            return res.status(400).json({ error: "Esta matrícula já está cadastrada no sistema." });
+        }
+        res.status(500).json({ error: "Erro ao salvar aluno: " + err.message });
+    }
+});
+
+// ROTA: Realizar a entrega de um item para o aluno
+router.post('/escola/entregar-item', verificarToken, async (req, res) => {
+    const { alunoId, estoqueId, observacao } = req.body;
+    const usuarioId = req.user.id;
+    const client = await db.pool.connect();
+
+    try {
+        await client.query('BEGIN');
+
+        // 1. Verificar se o item ainda está disponível
+        const checkItem = await client.query(
+            "SELECT status FROM estoque_individual WHERE id = $1 AND status = 'DISPONIVEL' FOR UPDATE",
+            [estoqueId]
+        );
+
+        if (checkItem.rows.length === 0) {
+            throw new Error("Este item já foi entregue ou não está disponível.");
+        }
+
+        // 2. Registrar a entrega na tabela de histórico
+        await client.query(
+            `INSERT INTO entregas_alunos (aluno_id, estoque_id, usuario_id, observacao) 
+             VALUES ($1, $2, $3, $4)`,
+            [alunoId, estoqueId, usuarioId, observacao || 'Entrega de uniforme/material regular.']
+        );
+
+        // 3. Mudar o status no estoque para 'ENTREGUE'
+        await client.query(
+            "UPDATE estoque_individual SET status = 'ENTREGUE' WHERE id = $1",
+            [estoqueId]
+        );
+
+        await client.query('COMMIT');
+        res.json({ success: true, message: "Entrega realizada com sucesso!" });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
+// ROTA: Buscar alunos ativos que ainda não receberam uniforme
+router.get('/escola/alunos-pendentes', verificarToken, async (req, res) => {
+    const localId = req.user.local_id; // Pegamos do token para total segurança
+
+    try {
+        const sql = `
+            SELECT 
+                a.matricula,
+                a.nome as aluno_nome,
+                t.nome as turma_nome,
+                e.nome as etapa_nome
+            FROM alunos a
+            JOIN turmas t ON a.turma_id = t.id
+            JOIN etapas_ensino e ON t.etapa_id = e.id
+            WHERE a.local_id = $1 
+              AND a.status = 'ATIVO'
+              AND NOT EXISTS (
+                  SELECT 1 
+                  FROM entregas_alunos ea
+                  JOIN estoque_individual ei ON ea.estoque_id = ei.id
+                  JOIN produtos p ON ei.produto_id = p.id
+                  WHERE ea.aluno_id = a.id
+                  -- Opcional: Filtrar apenas por categoria 'UNIFORME' no futuro
+              )
+            ORDER BY e.id ASC, t.nome ASC, a.nome ASC;
+        `;
+        const { rows } = await db.query(sql, [localId]);
+        res.json(rows);
+    } catch (err) {
+        console.error("Erro ao buscar alunos pendentes:", err.message);
+        res.status(500).json({ error: "Erro interno ao gerar listagem de pendências." });
+    }
+});
+
+// ROTA: Buscar logs de alteração de status com filtros de data
+router.get('/admin/relatorios/log-status', verificarToken, async (req, res) => {
+    const { inicio, fim } = req.query;
+
+    try {
+        const sql = `
+            SELECT 
+                l.id,
+                l.data_hora,
+                l.pedido_id,
+                u.nome as usuario_nome,
+                l.status_anterior,
+                l.status_novo,
+                l.observacao,
+                loc.nome as unidade_destino
+            FROM log_status_pedidos l
+            JOIN usuarios u ON l.usuario_id = u.id
+            JOIN pedidos p ON l.pedido_id = p.id
+            JOIN locais loc ON p.local_destino_id = loc.id
+            WHERE l.data_hora::date BETWEEN $1 AND $2
+            ORDER BY l.data_hora DESC;
+        `;
+        const { rows } = await db.query(sql, [inicio, fim]);
+
+        // Estatísticas para os cards
+        const stats = {
+            total: rows.length,
+            porUsuario: {},
+            porStatus: {}
+        };
+
+        rows.forEach(r => {
+            stats.porUsuario[r.usuario_nome] = (stats.porUsuario[r.usuario_nome] || 0) + 1;
+            stats.porStatus[r.status_novo] = (stats.porStatus[r.status_novo] || 0) + 1;
+        });
+
+        res.json({ registros: rows, stats });
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao carregar log: " + err.message });
+    }
+});
+
+// ROTA: Buscar inventário de patrimônio por local
+router.get('/admin/relatorios/patrimonio-local', verificarToken, async (req, res) => {
+    const { localId } = req.query;
+
+    if (!localId) return res.status(400).json({ error: "Selecione um local." });
+
+    try {
+        const sql = `
+            SELECT 
+                p.id,
+                p.patrimonio as tag,
+                prod.nome as produto_nome,
+                p.numero_serie,
+                s.nome as setor_nome,
+                p.estado,
+                p.status,
+                p.nota_fiscal,
+                p.adquirido_pos_2025
+            FROM patrimonios p
+            JOIN produtos prod ON p.produto_id = prod.id
+            LEFT JOIN setores s ON p.setor_id = s.id
+            WHERE p.local_id = $1
+            ORDER BY s.nome ASC, prod.nome ASC;
+        `;
+        const { rows } = await db.query(sql, [localId]);
+
+        // Estatísticas para os cards
+        const stats = {
+            total: rows.length,
+            bomEstado: rows.filter(r => r.estado === 'BOM').length,
+            emUso: rows.filter(r => r.status === 'EM_USO' || r.status === 'ATIVO').length
+        };
+
+        res.json({ registros: rows, stats });
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao gerar inventário: " + err.message });
+    }
+});
+
+// ROTA: Relatório de Transferências Externas (Entre Unidades)
+router.get('/admin/relatorios/transferencias-externas', verificarToken, async (req, res) => {
+    const { inicio, fim } = req.query;
+
+    try {
+        const sql = `
+            SELECT 
+                h.id,
+                h.data_movimentacao,
+                p.patrimonio as tag,
+                prod.nome as produto,
+                l_origem.nome as origem,
+                l_destino.nome as destino,
+                u.nome as operador,
+                h.status, -- 'CONCLUIDO', 'RECUSADO', 'PENDENTE'
+                h.observacao as motivo
+            FROM historico_movimentacoes h
+            JOIN patrimonios p ON h.patrimonio_id = p.id
+            JOIN produtos prod ON p.produto_id = prod.id
+            JOIN locais l_origem ON h.local_origem_id = l_origem.id
+            JOIN locais l_destino ON h.local_destino_id = l_destino.id
+            JOIN usuarios u ON h.usuario_id = u.id
+            WHERE h.data_movimentacao::date BETWEEN $1 AND $2
+              AND h.local_origem_id <> h.local_destino_id -- SOMENTE EXTERNAS
+            ORDER BY h.data_movimentacao DESC;
+        `;
+        const { rows } = await db.query(sql, [inicio, fim]);
+
+        const stats = {
+            total: rows.length,
+            concluidas: rows.filter(r => r.status === 'CONCLUIDO' || r.status === 'ACEITO').length,
+            recusadas: rows.filter(r => r.status === 'RECUSADO').length
+        };
+
+        res.json({ registros: rows, stats });
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao carregar transferências: " + err.message });
+    }
+});
+
+// ROTA: Buscar todos os pedidos com status COLETA_LIBERADA (Prontos para sair)
+router.get('/admin/relatorios/coleta-liberada', verificarToken, async (req, res) => {
+    try {
+        const sql = `
+            SELECT 
+                p.id,
+                p.data_criacao,
+                p.data_separacao,
+                l.nome as unidade_destino,
+                u.nome as solicitante,
+                p.volumes,
+                p.tipo_pedido
+            FROM pedidos p
+            JOIN locais l ON p.local_destino_id = l.id
+            JOIN usuarios u ON p.usuario_origem_id = u.id
+            WHERE p.status = 'COLETA_LIBERADA'
+            ORDER BY p.data_separacao ASC; -- O que foi separado há mais tempo primeiro
+        `;
+        const { rows } = await db.query(sql);
+
+        const stats = {
+            totalPedidos: rows.length,
+            totalVolumes: rows.reduce((acc, curr) => acc + (curr.volumes || 0), 0)
+        };
+
+        res.json({ registros: rows, stats });
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao carregar mapa de coleta: " + err.message });
+    }
+});
+
 module.exports = router;

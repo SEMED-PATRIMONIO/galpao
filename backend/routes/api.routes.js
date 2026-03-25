@@ -1670,56 +1670,71 @@ router.post('/pedidos/logistica/despachar', verificarToken, async (req, res) => 
     res.json({ message: "Carga em transporte!" });
 });
 
-router.post('/escola/confirmar-recebimento', async (req, res) => {
+router.post('/escola/confirmar-recebimento', verificarToken, async (req, res) => {
     const { remessaId, usuarioId } = req.body;
     const client = await db.pool.connect();
 
     try {
         await client.query('BEGIN');
 
-        // 1. Identificar o pedido através da remessa
-        const resRem = await client.query('SELECT pedido_id FROM remessas WHERE id = $1', [remessaId]);
-        if (resRem.rows.length === 0) throw new Error("Remessa não localizada.");
+        // 1. CORREÇÃO: Busca na tabela pedido_remessas (que é a que contém os dados de trânsito)
+        const resRem = await client.query('SELECT pedido_id FROM pedido_remessas WHERE id = $1', [remessaId]);
+        
+        if (resRem.rows.length === 0) {
+            throw new Error("Remessa #" + remessaId + " não localizada na tabela de remessas ativas.");
+        }
         const pedidoId = resRem.rows[0].pedido_id;
 
-        // 2. Obter local de destino e status atual
+        // 2. Obter local de destino e status atual do pedido
         const resPed = await client.query('SELECT status, local_destino_id FROM pedidos WHERE id = $1', [pedidoId]);
+        if (resPed.rows.length === 0) throw new Error("Pedido vinculado à remessa não encontrado.");
+        
         const { status: statusAnterior, local_destino_id: localId } = resPed.rows[0];
 
-        // 3. Finalizar o Pedido (Status ENTREGUE)
+        // 3. Atualizar o Pedido para ENTREGUE
         await client.query(
             "UPDATE pedidos SET status = 'ENTREGUE', data_recebimento = NOW() WHERE id = $1",
             [pedidoId]
         );
 
-        // 4. Log de Status para Auditoria
+        // 4. Registrar no Log de Status (Auditoria)
         await client.query(
             `INSERT INTO log_status_pedidos (pedido_id, usuario_id, status_anterior, status_novo, observacao) 
-             VALUES ($1, $2, $3, 'ENTREGUE', 'Carga recebida e conferida pela unidade escolar.')`,
+             VALUES ($1, $2, $3, 'ENTREGUE', 'Carga recebida e conferida pela unidade escolar via painel digital.')`,
             [pedidoId, usuarioId, statusAnterior]
         );
 
-        // 5. Transferir saldo para o Estoque Individual da Escola
+        // 5. Transferir saldo para o Estoque da Escola
+        // Buscamos os itens que foram solicitados neste pedido
         const resItens = await client.query(
             "SELECT produto_id, tamanho, quantidade FROM itens_pedido WHERE pedido_id = $1",
             [pedidoId]
         );
 
         for (const item of resItens.rows) {
-            // Soma ao estoque existente ou cria novo registro se for a primeira vez do item na escola
+            /* NOTA IMPORTANTE: 
+               Como sua tabela 'estoque_individual' exige 'numero_serie', 
+               estamos gerando um identificador de lote para uniformes/consumo.
+            */
+            const loteInfo = `LOTE-PED-${pedidoId}-${item.tamanho || 'UNICA'}`;
+
             await client.query(`
-                INSERT INTO estoque_individual (local_id, produto_id, tamanho, quantidade)
-                VALUES ($1, $2, $3, $4)
-                ON CONFLICT (local_id, produto_id, COALESCE(tamanho, '')) 
-                DO UPDATE SET quantidade = estoque_individual.quantidade + EXCLUDED.quantidade
-            `, [localId, item.produto_id, item.tamanho, item.quantidade]);
+                INSERT INTO estoque_individual (local_id, produto_id, numero_serie, status, data_entrada)
+                VALUES ($1, $2, $3, 'DISPONIVEL', NOW())
+                ON CONFLICT (numero_serie) 
+                DO UPDATE SET status = 'DISPONIVEL'
+            `, [localId, item.produto_id, loteInfo]);
+            
+            // Se você tiver uma tabela de 'estoque_unidades' (quantidade), adicione a soma aqui.
+            // Se usar apenas a 'estoque_individual' por número de série, o insert acima resolve o registro.
         }
 
         await client.query('COMMIT');
-        res.json({ success: true });
+        res.json({ success: true, message: "Recebimento confirmado com sucesso!" });
+
     } catch (err) {
         await client.query('ROLLBACK');
-        console.error("ERRO NO RECEBIMENTO:", err.message);
+        console.error("ERRO NO PROCESSAMENTO DE RECEBIMENTO:", err.message);
         res.status(500).json({ error: "Falha na transação: " + err.message });
     } finally {
         client.release();
@@ -6598,6 +6613,36 @@ router.get('/admin/dashboard/itens/:pedidoId', verificarToken, async (req, res) 
     } catch (err) {
         console.error("Erro ao buscar itens do pedido:", err.message);
         res.status(500).json({ error: "Erro ao carregar itens: " + err.message });
+    }
+});
+
+// ROTA: Buscar estoque exclusivo da unidade escolar
+router.get('/escola/meu-estoque', verificarToken, async (req, res) => {
+    // Pegamos o local_id do token (mais seguro) ou via query param
+    const localId = req.query.localId || req.user?.local_id;
+
+    if (!localId) {
+        return res.status(400).json({ error: "Identificação da unidade não fornecida." });
+    }
+
+    try {
+        const sql = `
+            SELECT 
+                p.nome as produto,
+                ei.numero_serie,
+                ei.status,
+                ei.data_entrada,
+                p.categoria_id
+            FROM estoque_individual ei
+            JOIN produtos p ON ei.produto_id = p.id
+            WHERE ei.local_id = $1
+            ORDER BY ei.data_entrada DESC;
+        `;
+        const { rows } = await db.query(sql, [localId]);
+        res.json(rows);
+    } catch (err) {
+        console.error("Erro ao consultar estoque local:", err.message);
+        res.status(500).json({ error: "Erro interno ao buscar estoque." });
     }
 });
 

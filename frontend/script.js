@@ -546,7 +546,7 @@ function abrirSubmenuVitrificado(titulo) {
             <button class="btn-grande btn-vidro" onclick="telaRelatorioLogStatus()">
                 <i>🕵️</i><span>AUDITORIA DE MOVIMENTAÇÕES</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="telaRelatorioPedidosGeral()">
+            <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaRelatorioPedidosGeral()">
                 <i>📦</i><span>RELATÓRIO DE PEDIDOS</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="telaRelatorioPatrimonioLocal()">
@@ -577,7 +577,7 @@ function abrirSubmenuVitrificado(titulo) {
             <button class="btn-grande btn-vidro" onclick="telaRelatorioLogStatus()">
                 <i>🕵️</i><span>AUDITORIA DE MOVIMENTAÇÕES</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="telaRelatorioPedidosGeral()">
+            <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaRelatorioPedidosGeral()">
                 <i>📦</i><span>RELATÓRIO DE PEDIDOS</span>
             </button>
             `;

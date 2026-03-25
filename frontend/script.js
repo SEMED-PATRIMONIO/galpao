@@ -310,6 +310,7 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="telaSaidaTransferencia37()">
                 <i>🏛️</i><span>SOLICITAR AO PATRIMÔNIO</span>
             </button>
+            <button onclick="telaRelatorioColetaLiberada()" class="btn-vidro" style="color: #4ade80;">🚚 PEDIDOS LIBERADOS PARA ENTREGA</button>
             <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()">
                 <i>🔑</i><span>ALTERAR MINHA SENHA</span>
             </button>
@@ -404,8 +405,13 @@ async function carregarDashboard() {
             </button>
             <button class="btn-grande btn-vidro" onclick="telaDevolucaoUniforme()">
                 <i>🔄</i><span>DEVOLVER UNIFORMES</span>
-            </button>                
-        `; // [cite: 26, 27, 28, 29, 30, 31]
+            </button> 
+            <button onclick="telaEscolaGestaoTurmas()" class="btn-vidro">🏫 GESTÃO DE TURMAS</button>
+            <button onclick="telaEscolaGestaoAlunos()" class="btn-vidro">👥 GESTÃO DE ALUNOS</button>
+            <button onclick="telaEscolaConsultaEstoque()" class="btn-vidro">📦 CONSULTAR MEU ESTOQUE</button>
+            <button onclick="telaEscolaEntregaMaterial()" class="btn-vidro" style="background: rgba(16, 185, 129, 0.2); border-color: #10b981;">🎁 ENTREGA DE UNIFORMES</button>
+            <button onclick="telaEscolaRelatorios()" class="btn-vidro" style="background: rgba(59, 130, 246, 0.2); border-color: #3b82f6;">📊 RELATÓRIOS ESCOLARES</button>               
+        `; 
     }
 
     // --- 4. PERFIL: ADMIN (NOVA INTERFACE) --- [cite: 32]
@@ -424,7 +430,7 @@ async function carregarDashboard() {
                 <i>📈</i><span>PAINEL DE PEDIDOS</span>
             </button>
 
-            <button class="btn-grande btn-vidro btn-breve" // ---onclick="abrirSubmenuVitrificado('RELATÓRIOS')">
+            <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('RELATÓRIOS')">
                 <i>📊</i><span>RELATÓRIOS</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()">
@@ -468,7 +474,7 @@ if (perfil === 'estoque') {
             <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()">
                 <i>📈</i><span>PAINEL DE PEDIDOS</span>
             </button>
-            <button class="btn-grande btn-vidro btn-breve" // ---onclick="abrirSubmenuVitrificado('RELATÓRIOS')">
+            <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('RELATÓRIOS')">
                 <i>📊</i><span>RELATÓRIOS</span>
             </button>
 
@@ -525,9 +531,10 @@ function abrirSubmenuVitrificado(titulo) {
             `;
         } else if (titulo === 'RELATÓRIOS') {
             botoesExtra = `
-            <button class="btn-grande btn-vidro" onclick="renderizarTelaRelatorios()">
-                <i>🚚</i><span>SAÍDA DE PEDIDOS</span>
-            </button>
+            <button onclick="telaRelatorioLogStatus()" class="btn-vidro">🕵️ AUDITORIA DE MOVIMENTAÇÕES</button>
+            <button onclick="telaRelatorioPedidosGeral()" class="btn-vidro">📦 RELATÓRIO DE PEDIDOS</button>
+            <button onclick="telaRelatorioPatrimonioLocal()" class="btn-vidro">📋 INVENTÁRIO POR LOCAL</button>
+            <button onclick="telaRelatorioTransferenciasExternas()" class="btn-vidro">🚚 TRANSFERÊNCIAS DE BENS ENTRE UNIDADES</button>
             `;
         }
     }
@@ -547,9 +554,10 @@ function abrirSubmenuVitrificado(titulo) {
             `;
         } else if (titulo === 'RELATÓRIOS') {
             botoesExtra = `
-            <button class="btn-grande btn-vidro" onclick="renderizarTelaRelatorios()">
-                <i>🚚</i><span>SAÍDA DE PEDIDOS</span>
-            </button>
+            <button onclick="telaRelatorioLogStatus()" class="btn-vidro">🕵️ AUDITORIA DE MOVIMENTAÇÕES</button>
+            <button onclick="telaRelatorioPedidosGeral()" class="btn-vidro">📦 RELATÓRIO DE PEDIDOS</button>
+            <button onclick="telaRelatorioPatrimonioLocal()" class="btn-vidro">📋 INVENTÁRIO POR LOCAL</button>
+            <button onclick="telaRelatorioTransferenciasExternas()" class="btn-vidro">🚚 TRANSFERÊNCIAS DE BENS ENTRE UNIDADES</button>
             `;
         }
     }
@@ -17652,6 +17660,1067 @@ function filtrarTabelaEstoque() {
         rows[i].style.display = txtValue.toUpperCase().indexOf(filter) > -1 ? "" : "none";
     }
 }
+
+async function telaEscolaGestaoTurmas() {
+    const container = document.getElementById('app-content');
+    container.innerHTML = '<div class="spinner" style="margin: 50px auto;"></div>';
+
+    try {
+        const res = await fetch(`${API_URL}/escola/turmas`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const turmas = await res.json();
+
+        container.innerHTML = `
+            <div class="painel-vidro" style="max-width: 900px; margin: auto; padding: 25px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:25px;">
+                    <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                    <div style="text-align:right;">
+                        <h2 style="color:white; margin:0; font-size:1.2rem;">🏫 GESTÃO DE TURMAS</h2>
+                        <small style="color:rgba(255,255,255,0.5);">Configuração de classes e anos escolares</small>
+                    </div>
+                </div>
+
+                <div style="margin-bottom:20px; text-align:right;">
+                    <button onclick="abrirModalNovaTurma()" class="btn-vidro" style="background:#3b82f6; border:none; padding:10px 20px;">
+                        ➕ CADASTRAR NOVA TURMA
+                    </button>
+                </div>
+
+                <div style="background:rgba(0,0,0,0.2); border-radius:15px; overflow:hidden;">
+                    <table style="width:100%; border-collapse:collapse; color:white;">
+                        <thead>
+                            <tr style="background:rgba(255,255,255,0.05); text-align:left; font-size:0.8rem; color:rgba(255,255,255,0.5);">
+                                <th style="padding:15px;">ETAPA / ANO</th>
+                                <th style="padding:15px;">IDENTIFICAÇÃO DA TURMA</th>
+                                <th style="padding:15px;">ANO LETIVO</th>
+                                <th style="padding:15px; text-align:center;">AÇÕES</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${turmas.length === 0 ? `<tr><td colspan="4" style="padding:40px; text-align:center; opacity:0.5;">Nenhuma turma cadastrada.</td></tr>` : 
+                            turmas.map(t => `
+                                <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                                    <td style="padding:15px;">${t.etapa_nome}</td>
+                                    <td style="padding:15px; font-weight:bold; color:#fbbf24;">${t.nome}</td>
+                                    <td style="padding:15px;">${t.ano_letivo}</td>
+                                    <td style="padding:15px; text-align:center;">
+                                        <button class="btn-vidro" style="padding:5px 10px; font-size:0.7rem; opacity:0.7;" onclick="notificar('Função em desenvolvimento', 'alerta')">⚙️ EDITAR</button>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+    } catch (err) {
+        notificar("Erro ao carregar módulo de turmas.", "erro");
+    }
+}
+
+async function abrirModalNovaTurma() {
+    // Busca as etapas para o Select
+    const res = await fetch(`${API_URL}/escola/etapas`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+    const etapas = await res.json();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'modal-turma-overlay';
+    overlay.style = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); backdrop-filter:blur(10px); display:flex; align-items:center; justify-content:center; z-index:1000;";
+    
+    overlay.innerHTML = `
+        <div class="painel-vidro" style="width:90%; max-width:400px; padding:30px;">
+            <h3 style="color:white; margin-top:0;">🆕 NOVA TURMA</h3>
+            
+            <label style="color:rgba(255,255,255,0.6); font-size:0.8rem;">Etapa de Ensino</label>
+            <select id="reg-turma-etapa" style="width:100%; padding:12px; margin-bottom:15px; border-radius:8px; background:rgba(0,0,0,0.3); color:white; border:1px solid rgba(255,255,255,0.2);">
+                ${etapas.map(e => `<option value="${e.id}">${e.nome}</option>`).join('')}
+            </select>
+
+            <label style="color:rgba(255,255,255,0.6); font-size:0.8rem;">Nome/Número da Turma (Ex: Turma A, 101...)</label>
+            <input type="text" id="reg-turma-nome" placeholder="Ex: TURMA A" style="width:100%; padding:12px; margin-bottom:20px; border-radius:8px; background:rgba(0,0,0,0.3); color:white; border:1px solid rgba(255,255,255,0.2);">
+
+            <div style="display:flex; gap:10px; justify-content:flex-end;">
+                <button onclick="document.getElementById('modal-turma-overlay').remove()" class="btn-voltar-vidro">CANCELAR</button>
+                <button onclick="salvarNovaTurma()" class="btn-vidro" style="background:#10b981; border:none;">SALVAR TURMA</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+}
+
+async function salvarNovaTurma() {
+    const etapaId = document.getElementById('reg-turma-etapa').value;
+    const nome = document.getElementById('reg-turma-nome').value;
+
+    if (!nome) return notificar("Digite o nome da turma.", "alerta");
+
+    try {
+        const res = await fetch(`${API_URL}/escola/turmas`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ etapaId, nome })
+        });
+
+        if (res.ok) {
+            notificar("Turma criada com sucesso!", "sucesso");
+            document.getElementById('modal-turma-overlay').remove();
+            telaEscolaGestaoTurmas();
+        } else {
+            const err = await res.json();
+            notificar(err.error, "erro");
+        }
+    } catch (err) {
+        notificar("Erro ao salvar.", "erro");
+    }
+}
+
+async function telaEscolaGestaoAlunos() {
+    const container = document.getElementById('app-content');
+    container.innerHTML = '<div class="spinner" style="margin: 50px auto;"></div>';
+
+    try {
+        const res = await fetch(`${API_URL}/escola/alunos`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const alunos = await res.json();
+
+        container.innerHTML = `
+            <div class="painel-vidro" style="max-width: 1000px; margin: auto; padding: 25px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:25px;">
+                    <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                    <div style="text-align:right;">
+                        <h2 style="color:white; margin:0; font-size:1.2rem;">👥 GESTÃO DE ALUNOS</h2>
+                        <small style="color:rgba(255,255,255,0.5);">Controle de matrículas da unidade</small>
+                    </div>
+                </div>
+
+                <div style="display:flex; gap:15px; margin-bottom:20px;">
+                    <input type="text" id="busca-aluno" placeholder="🔍 Buscar aluno por nome ou matrícula..." 
+                           style="flex:1; padding:12px; border-radius:8px; border:1px solid rgba(255,255,255,0.2); background:rgba(0,0,0,0.2); color:white;"
+                           onkeyup="filtrarAlunos()">
+                    <button onclick="abrirModalNovoAluno()" class="btn-vidro" style="background:#10b981; border:none; padding:10px 20px;">
+                        ➕ NOVO ALUNO
+                    </button>
+                </div>
+
+                <div style="background:rgba(0,0,0,0.2); border-radius:15px; overflow:hidden;">
+                    <table style="width:100%; border-collapse:collapse; color:white;">
+                        <thead>
+                            <tr style="background:rgba(255,255,255,0.05); text-align:left; font-size:0.8rem; color:rgba(255,255,255,0.5);">
+                                <th style="padding:15px;">MATRÍCULA</th>
+                                <th style="padding:15px;">NOME COMPLETO</th>
+                                <th style="padding:15px;">TURMA</th>
+                                <th style="padding:15px; text-align:center;">STATUS</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabela-alunos-corpo">
+                            ${alunos.length === 0 ? `<tr><td colspan="4" style="padding:40px; text-align:center; opacity:0.5;">Nenhum aluno cadastrado nesta unidade.</td></tr>` : 
+                            alunos.map(a => `
+                                <tr class="linha-aluno" style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                                    <td style="padding:15px; font-family:monospace; color:#fbbf24;">${a.matricula || '---'}</td>
+                                    <td style="padding:15px; font-weight:bold;">${a.nome}</td>
+                                    <td style="padding:15px;">${a.etapa_nome} - ${a.turma_nome}</td>
+                                    <td style="padding:15px; text-align:center;">
+                                        <span style="background:#064e3b; color:#34d399; padding:4px 10px; border-radius:20px; font-size:0.7rem; font-weight:bold;">${a.status}</span>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+    } catch (err) {
+        notificar("Erro ao carregar módulo de alunos.", "erro");
+    }
+}
+
+async function abrirModalNovoAluno() {
+    // Busca as turmas da escola para o select
+    const res = await fetch(`${API_URL}/escola/turmas`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+    const turmas = await res.json();
+
+    if (turmas.length === 0) {
+        return notificar("Cadastre ao menos uma turma antes de adicionar alunos.", "alerta");
+    }
+
+    const overlay = document.createElement('div');
+    overlay.id = 'modal-aluno-overlay';
+    overlay.className = 'modal-full-blur'; // Use sua classe de desfoque
+    overlay.style = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); backdrop-filter:blur(10px); display:flex; align-items:center; justify-content:center; z-index:1100;";
+    
+    overlay.innerHTML = `
+        <div class="painel-vidro" style="width:95%; max-width:450px; padding:30px;">
+            <h3 style="color:white; margin-top:0;">📝 MATRICULAR ALUNO</h3>
+            
+            <div style="margin-bottom:15px;">
+                <label style="color:rgba(255,255,255,0.6); font-size:0.8rem;">Nome Completo</label>
+                <input type="text" id="reg-aluno-nome" style="width:100%; padding:12px; border-radius:8px; background:rgba(0,0,0,0.3); color:white; border:1px solid rgba(255,255,255,0.2);">
+            </div>
+
+            <div style="margin-bottom:15px;">
+                <label style="color:rgba(255,255,255,0.6); font-size:0.8rem;">Número de Matrícula</label>
+                <input type="text" id="reg-aluno-matricula" placeholder="Ex: 20261234" style="width:100%; padding:12px; border-radius:8px; background:rgba(0,0,0,0.3); color:white; border:1px solid rgba(255,255,255,0.2);">
+            </div>
+
+            <div style="margin-bottom:25px;">
+                <label style="color:rgba(255,255,255,0.6); font-size:0.8rem;">Turma Destino</label>
+                <select id="reg-aluno-turma" style="width:100%; padding:12px; border-radius:8px; background:rgba(0,0,0,0.3); color:white; border:1px solid rgba(255,255,255,0.2);">
+                    ${turmas.map(t => `<option value="${t.id}">${t.etapa_nome} - ${t.nome}</option>`).join('')}
+                </select>
+            </div>
+
+            <div style="display:flex; gap:10px; justify-content:flex-end;">
+                <button onclick="document.getElementById('modal-aluno-overlay').remove()" class="btn-voltar-vidro">CANCELAR</button>
+                <button onclick="salvarNovoAluno()" class="btn-vidro" style="background:#3b82f6; border:none;">SALVAR MATRÍCULA</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+}
+
+async function salvarNovoAluno() {
+    const nome = document.getElementById('reg-aluno-nome').value;
+    const matricula = document.getElementById('reg-aluno-matricula').value;
+    const turmaId = document.getElementById('reg-aluno-turma').value;
+
+    if (!nome || !matricula) return notificar("Preencha todos os campos.", "alerta");
+
+    try {
+        const res = await fetch(`${API_URL}/escola/alunos`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ nome, matricula, turmaId })
+        });
+
+        if (res.ok) {
+            notificar("Aluno matriculado com sucesso!", "sucesso");
+            document.getElementById('modal-aluno-overlay').remove();
+            telaEscolaGestaoAlunos();
+        } else {
+            const err = await res.json();
+            notificar(err.error, "erro");
+        }
+    } catch (err) {
+        notificar("Erro ao salvar matrícula.", "erro");
+    }
+}
+
+function filtrarAlunos() {
+    const busca = document.getElementById('busca-aluno').value.toUpperCase();
+    const linhas = document.getElementsByClassName('linha-aluno');
+    for (let linha of linhas) {
+        linha.style.display = linha.innerText.toUpperCase().includes(busca) ? "" : "none";
+    }
+}
+
+async function telaEscolaEntregaMaterial() {
+    const container = document.getElementById('app-content');
+    container.innerHTML = '<div class="spinner" style="margin: 50px auto;"></div>';
+
+    try {
+        // Busca Alunos e Estoque Disponível simultaneamente
+        const [resAlunos, resEstoque] = await Promise.all([
+            fetch(`${API_URL}/escola/alunos`, { headers: { 'Authorization': `Bearer ${TOKEN}` } }),
+            fetch(`${API_URL}/escola/meu-estoque`, { headers: { 'Authorization': `Bearer ${TOKEN}` } })
+        ]);
+
+        const alunos = await resAlunos.json();
+        const estoque = await resEstoque.json();
+        const itensDisponiveis = estoque.filter(i => i.status === 'DISPONIVEL');
+
+        container.innerHTML = `
+            <div class="painel-vidro" style="max-width: 600px; margin: auto; padding: 30px;">
+                <div style="text-align:center; margin-bottom:25px;">
+                    <h2 style="color:white; margin:0; font-size:1.3rem;">📦 SAÍDA DE MATERIAL / UNIFORME</h2>
+                    <p style="color:rgba(255,255,255,0.5); font-size:0.8rem;">Vincular entrega ao prontuário do aluno</p>
+                </div>
+
+                <div style="margin-bottom:20px;">
+                    <label style="color:white; font-size:0.85rem; display:block; margin-bottom:8px;">1. Selecione o Aluno</label>
+                    <select id="entrega-aluno-id" style="width:100%; padding:12px; border-radius:8px; background:rgba(0,0,0,0.3); color:white; border:1px solid rgba(255,255,255,0.2);">
+                        <option value="">-- Escolha o aluno --</option>
+                        ${alunos.map(a => `<option value="${a.id}">${a.nome} (${a.turma_nome})</option>`).join('')}
+                    </select>
+                </div>
+
+                <div style="margin-bottom:20px;">
+                    <label style="color:white; font-size:0.85rem; display:block; margin-bottom:8px;">2. Selecione o Item do Estoque</label>
+                    <select id="entrega-estoque-id" style="width:100%; padding:12px; border-radius:8px; background:rgba(0,0,0,0.3); color:white; border:1px solid rgba(255,255,255,0.2);">
+                        <option value="">-- Escolha o item disponível --</option>
+                        ${itensDisponiveis.map(i => `<option value="${i.id}">${i.produto} - Lote: ${i.numero_serie}</option>`).join('')}
+                    </select>
+                </div>
+
+                <div style="margin-bottom:30px;">
+                    <label style="color:white; font-size:0.85rem; display:block; margin-bottom:8px;">3. Observação (Opcional)</label>
+                    <textarea id="entrega-obs" placeholder="Ex: Tamanho M entregue para o responsável." 
+                              style="width:100%; padding:12px; border-radius:8px; background:rgba(0,0,0,0.3); color:white; border:1px solid rgba(255,255,255,0.2); height:80px;"></textarea>
+                </div>
+
+                <div style="display:flex; gap:15px;">
+                    <button onclick="carregarDashboard()" class="btn-voltar-vidro" style="flex:1;">CANCELAR</button>
+                    <button onclick="processarEntregaAluno()" class="btn-vidro" style="flex:2; background:#10b981; border:none; font-weight:bold;">
+                        CONFIRMAR ENTREGA ✅
+                    </button>
+                </div>
+            </div>
+        `;
+    } catch (err) {
+        notificar("Erro ao carregar dados de entrega.", "erro");
+    }
+}
+
+async function processarEntregaAluno() {
+    const alunoId = document.getElementById('entrega-aluno-id').value;
+    const estoqueId = document.getElementById('entrega-estoque-id').value;
+    const observacao = document.getElementById('entrega-obs').value;
+
+    if (!alunoId || !estoqueId) {
+        return notificar("Por favor, selecione o aluno e o item.", "alerta");
+    }
+
+    try {
+        const res = await fetch(`${API_URL}/escola/entregar-item`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ alunoId, estoqueId, observacao })
+        });
+
+        if (res.ok) {
+            notificar("Entrega registrada e estoque atualizado!", "sucesso");
+            telaEscolaEntregaMaterial(); // Recarrega para limpar o item já entregue da lista
+        } else {
+            const data = await res.json();
+            throw new Error(data.error);
+        }
+    } catch (err) {
+        notificar(err.message, "erro");
+    }
+}
+
+// Substitua o conteúdo entre aspas pelo código Base64 do seu arquivo braque.png
+const LOGO_BASE64 = "DATA_BASE64_DO_SEU_LOGO_AQUI"; 
+
+function aplicarCabecalhoPadrao(doc, orientacao = 'p') {
+    const larguraPagina = orientacao === 'p' ? 210 : 297;
+    
+    // 1. Inserir Logotipo (Lado esquerdo, topo)
+    // Parâmetros: imagem, tipo, x, y, largura, altura
+    try {
+        doc.addImage(LOGO_BASE64, 'PNG', 14, 10, 20, 20);
+    } catch (e) {
+        console.warn("Logo não carregado. Verifique o Base64.");
+    }
+
+    // 2. Textos do Cabeçalho (Ao lado do logo)
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text("PREFEITURA MUNICIPAL DE QUEIMADOS", 38, 18);
+    
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.text("SECRETARIA MUNICIPAL DE EDUCAÇÃO", 38, 23);
+
+    // 3. Linha divisória fina
+    doc.setDrawColor(200, 200, 200);
+    doc.line(14, 32, larguraPagina - 14, 32);
+}
+
+window.gerarReciboEntregaAluno = function(dados) {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+
+    aplicarCabecalhoPadrao(doc, 'p');
+
+    // Título do Documento
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.text("RECIBO DE ENTREGA DE MATERIAL/UNIFORME", 105, 45, { align: "center" });
+
+    // Conteúdo do Recibo
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "normal");
+    
+    const textoRecibo = `Declaramos para os devidos fins que o aluno(a) ${dados.alunoNome.toUpperCase()}, matriculado(a) na turma ${dados.turmaNome}, recebeu nesta data o seguinte item:`;
+    
+    const splitTexto = doc.splitTextToSize(textoRecibo, 180);
+    doc.text(splitTexto, 14, 60);
+
+    // Tabela do Item
+    doc.autoTable({
+        startY: 75,
+        head: [['ITEM / PRODUTO', 'LOTE / SÉRIE', 'DATA']],
+        body: [[dados.produto, dados.lote, new Date().toLocaleDateString()]],
+        theme: 'plain',
+        headStyles: { fontStyle: 'bold', textColor: 0 },
+        styles: { cellPadding: 5, fontSize: 10, borderBottom: 1 }
+    });
+
+    // Campos de Assinatura
+    doc.text("__________________________________________", 105, 130, { align: "center" });
+    doc.text("Assinatura do Responsável", 105, 135, { align: "center" });
+    
+    doc.setFontSize(8);
+    doc.text(`Documento gerado em ${new Date().toLocaleString()} - Unidade: ${localStorage.getItem('nome')}`, 105, 280, { align: "center" });
+
+    doc.save(`Recibo_Aluno_${dados.alunoId}.pdf`);
+};
+
+window.gerarListagemGeralAlunos = function(lista) {
+    const { jsPDF } = window.jspdf;
+    // 'l' define a orientação como Landscape (Paisagem)
+    const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4' });
+
+    aplicarCabecalhoPadrao(doc, 'l');
+
+    doc.setFontSize(14);
+    doc.text("RELAÇÃO GERAL DE ALUNOS MATRICULADOS", 148, 45, { align: "center" });
+
+    doc.autoTable({
+        startY: 50,
+        head: [['MATRÍCULA', 'NOME COMPLETO', 'TURMA', 'ETAPA', 'STATUS']],
+        body: lista.map(a => [a.matricula, a.nome, a.turma_nome, a.etapa_nome, a.status]),
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [30, 41, 59] } // Cor escura institucional
+    });
+
+    doc.save("Listagem_Alunos_Queimados.pdf");
+};
+
+// Função para abrir o submenu de Relatórios da Escola
+function telaEscolaRelatorios() {
+    const container = document.getElementById('app-content');
+    container.innerHTML = `
+        <div class="painel-vidro" style="max-width: 800px; margin: auto; padding: 30px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:30px; border-bottom: 2px solid rgba(255,255,255,0.1); padding-bottom:15px;">
+                <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                <div style="text-align:right;">
+                    <h2 style="color:white; margin:0; font-size:1.3rem;">📊 RELATÓRIOS GERENCIAIS</h2>
+                    <small style="color:rgba(255,255,255,0.5);">Indicadores e listagens da unidade escolar</small>
+                </div>
+            </div>
+
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap:20px;">
+                
+                <div class="card-estatistica" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); padding:25px; border-radius:12px; text-align:center;">
+                    <span style="font-size:2.5rem;">🛑</span>
+                    <h3 style="color:white; margin:15px 0 10px 0; font-size:1.1rem;">PENDÊNCIAS DE UNIFORME</h3>
+                    <p style="color:rgba(255,255,255,0.6); font-size:0.8rem; margin-bottom:20px;">Listagem de alunos ativos que ainda não receberam uniforme este ano.</p>
+                    <button onclick="gerarRelatorioAlunosPendentesPDF()" class="btn-vidro" style="background:#ef4444; border:none; padding:10px 20px; font-weight:bold;">
+                        ⬇️ BAIXAR PDF (RETRATO)
+                    </button>
+                </div>
+
+                <div class="card-estatistica" style="background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.05); padding:25px; border-radius:12px; text-align:center; opacity:0.3;">
+                    <span style="font-size:2.5rem;">📊</span>
+                    <h3 style="color:white; margin:15px 0 10px 0; font-size:1.1rem;">ESTOQUE CRÍTICO</h3>
+                    <button class="btn-vidro" disabled style="padding:10px 20px;">EM BREVE</button>
+                </div>
+
+            </div>
+        </div>
+    `;
+}
+
+// Função que chama a API e o gerador de PDF
+async function gerarRelatorioAlunosPendentesPDF() {
+    notificar("📊 Gerando relatório de pendências...", "alerta");
+    try {
+        const res = await fetch(`${API_URL}/escola/alunos-pendentes`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const alunos = await res.json();
+
+        if (alunos.length === 0) {
+            return notificar("✨ Ótima notícia! Todos os alunos ativos já receberam uniforme.", "sucesso");
+        }
+
+        // Chama a função geradora de PDF que criaremos abaixo
+        formataPDFAlunosPendentes(alunos);
+        notificar("📄 PDF gerado com sucesso!", "sucesso");
+    } catch (err) {
+        notificar("Erro ao gerar relatório.", "erro");
+    }
+}
+
+function formataPDFAlunosPendentes(alunos) {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+
+    // Aplica o cabeçalho mestre (Prefeitura + SEMED + Logo braque.png)
+    aplicarCabecalhoPadrao(doc, 'p');
+
+    // Título do Relatório
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.text("RELAÇÃO DE ALUNOS ATIVOS PENDENTES DE UNIFORME", 105, 45, { align: "center" });
+    
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Unidade: ${localStorage.getItem('nome')}`, 105, 50, { align: "center" });
+
+    // Tabela de Dados
+    doc.autoTable({
+        startY: 55,
+        head: [['MATRÍCULA', 'NOME DO ALUNO', 'ETAPA / ANO', 'TURMA']],
+        body: alunos.map(a => [
+            a.matricula || '---',
+            a.aluno_nome.toUpperCase(),
+            a.etapa_nome,
+            a.turma_nome
+        ]),
+        styles: { fontSize: 8, cellPadding: 3 },
+        headStyles: { fillColor: [185, 28, 28] }, // Vermelho escuro para indicar pendência
+        columnStyles: {
+            0: { halign: 'left', fontStyle: 'monospace' },
+            1: { halign: 'left' },
+            2: { halign: 'left' },
+            3: { halign: 'center' }
+        },
+        alternateRowStyles: { fillColor: [245, 245, 245] }
+    });
+
+    // Rodapé
+    const totalPaginas = doc.internal.getNumberOfPages();
+    doc.setFontSize(8);
+    doc.setTextColor(150);
+    doc.text(`Total de alunos pendentes: ${alunos.length}`, 14, doc.internal.pageSize.height - 10);
+    doc.text(`Gerado em: ${new Date().toLocaleString()}`, 105, doc.internal.pageSize.height - 10, { align: "center" });
+    
+    // Download do arquivo
+    doc.save(`Relatorio_Pendencias_${localStorage.getItem('nome')}.pdf`);
+}
+
+async function telaRelatorioLogStatus() {
+    const area = document.getElementById('app-content');
+    const hoje = new Date().toISOString().split('T')[0];
+    const inicioMes = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
+
+    area.innerHTML = `
+        <div class="painel-vidro" style="max-width: 1300px; margin: auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                <h2 style="color:white; margin:0;">🕵️ AUDITORIA DE STATUS</h2>
+                <div style="display:flex; gap:10px;">
+                    <button onclick="imprimirLogStatusPDF()" class="btn-vidro" style="background:#2563eb; font-size:0.7rem;">🖨️ IMPRIMIR PDF</button>
+                    <button onclick="compartilharLogWhatsApp()" class="btn-vidro" style="background:#16a34a; font-size:0.7rem;">📱 WHATSAPP</button>
+                </div>
+            </div>
+            
+            <div style="display:flex; gap:15px; justify-content:center; background:rgba(255,255,255,0.05); padding:15px; border-radius:12px; margin-bottom:20px;">
+                <input type="date" id="log_inicio" value="${inicioMes}" class="input-vidro" style="width:160px;">
+                <input type="date" id="log_fim" value="${hoje}" class="input-vidro" style="width:160px;">
+                <button onclick="carregarDadosLogStatus()" class="btn-vidro" style="background:#3b82f6; margin:0; font-weight:bold;">
+                    🔍 FILTRAR LOGS
+                </button>
+            </div>
+
+            <div id="cards-resumo-log" style="display:grid; grid-template-columns: repeat(3, 1fr); gap:15px; margin-bottom:20px;">
+                <div class="painel-vidro" style="text-align:center;"><h3 id="total-logs">0</h3><small>TOTAL DE ALTERAÇÕES</small></div>
+                <div class="painel-vidro" style="text-align:center; color:#fbbf24;"><h3 id="usuario-mais-ativo">---</h3><small>OPERADOR MAIS ATIVO</small></div>
+                <div id="card-mais-frequente" class="painel-vidro" style="text-align:center; color:#60a5fa;"><h3>---</h3><small>STATUS MAIS FREQUENTE</small></div>
+            </div>
+
+            <div class="painel-vidro" style="background:rgba(0,0,0,0.3); padding:0; overflow:hidden;">
+                <div style="max-height: 500px; overflow-y: auto;">
+                    <table style="width:100%; border-collapse:collapse; color:white; font-size:0.85rem;">
+                        <thead style="background:rgba(255,255,255,0.1); position: sticky; top:0;">
+                            <tr>
+                                <th style="padding:12px; text-align:left;">DATA/HORA</th>
+                                <th style="padding:12px; text-align:left;">PEDIDO</th>
+                                <th style="padding:12px; text-align:left;">UNIDADE</th>
+                                <th style="padding:12px; text-align:left;">USUÁRIO</th>
+                                <th style="padding:12px; text-align:left;">FLUXO (DE -> PARA)</th>
+                                <th style="padding:12px; text-align:left;">OBSERVAÇÃO</th>
+                            </tr>
+                        </thead>
+                        <tbody id="corpo-tabela-log"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    `;
+    carregarDadosLogStatus();
+}
+
+let dadosCacheLog = [];
+
+async function carregarDadosLogStatus() {
+    const inicio = document.getElementById('log_inicio').value;
+    const fim = document.getElementById('log_fim').value;
+    
+    const res = await fetch(`${API_URL}/admin/relatorios/log-status?inicio=${inicio}&fim=${fim}`, {
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+    const { registros, stats } = await res.json();
+    dadosCacheLog = registros;
+
+    // Atualizar Cards
+    document.getElementById('total-logs').innerText = stats.total;
+    
+    const usuarioAtivo = Object.entries(stats.porUsuario).sort((a,b) => b[1] - a[1])[0]?.[0] || 'N/A';
+    document.getElementById('usuario-mais-ativo').innerText = usuarioAtivo;
+
+    // Preencher Tabela
+    document.getElementById('corpo-tabela-log').innerHTML = registros.map(r => `
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+            <td style="padding:12px; white-space:nowrap;">${new Date(r.data_hora).toLocaleString('pt-BR')}</td>
+            <td style="padding:12px; font-weight:bold; color:#fbbf24;">#${r.pedido_id}</td>
+            <td style="padding:12px; font-size:0.75rem;">${r.unidade_destino}</td>
+            <td style="padding:12px;">${r.usuario_nome}</td>
+            <td style="padding:12px;">
+                <span style="opacity:0.5;">${r.status_anterior}</span> 
+                <span style="color:#4ade80;">➜</span> 
+                <strong>${r.status_novo}</strong>
+            </td>
+            <td style="padding:12px; font-size:0.75rem; opacity:0.8;">${r.observacao || '-'}</td>
+        </tr>
+    `).join('');
+}
+
+window.imprimirLogStatusPDF = function() {
+    if (dadosCacheLog.length === 0) return notificar("Sem dados para exportar.", "alerta");
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4' });
+
+    // Aplica o cabeçalho institucional (Prefeitura/SEMED/Logo)
+    aplicarCabecalhoPadrao(doc, 'l');
+
+    doc.setFontSize(14);
+    doc.text("RELATÓRIO DE AUDITORIA - MOVIMENTAÇÃO DE STATUS", 148, 45, { align: "center" });
+
+    doc.autoTable({
+        startY: 52,
+        head: [['DATA/HORA', 'PEDIDO', 'UNIDADE', 'OPERADOR', 'DE', 'PARA', 'OBSERVAÇÃO']],
+        body: dadosCacheLog.map(r => [
+            new Date(r.data_hora).toLocaleString('pt-BR'),
+            r.pedido_id,
+            r.unidade_destino,
+            r.usuario_nome,
+            r.status_anterior,
+            r.status_novo,
+            r.observacao
+        ]),
+        styles: { fontSize: 7, cellPadding: 2 },
+        headStyles: { fillColor: [31, 41, 55] },
+        columnStyles: {
+            6: { cellWidth: 60 } // Dá mais espaço para a observação
+        }
+    });
+
+    doc.save(`Auditoria_Status_${new Date().getTime()}.pdf`);
+};
+
+window.imprimirRelatorioPedidosPDF = function() {
+    if (cachePedidosRelatorio.length === 0) return notificar("Não há dados para exportar.", "alerta");
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4' });
+
+    // Aplica o cabeçalho mestre da prefeitura
+    aplicarCabecalhoPadrao(doc, 'l');
+
+    doc.setFontSize(14);
+    doc.text("RELATÓRIO GERENCIAL DE PEDIDOS POR PERÍODO", 148, 45, { align: "center" });
+
+    doc.autoTable({
+        startY: 52,
+        head: [['DATA', 'ID', 'UNIDADE DESTINO', 'SOLICITANTE', 'VOLUMES', 'STATUS']],
+        body: cachePedidosRelatorio.map(r => [
+            new Date(r.data_criacao).toLocaleDateString('pt-BR'),
+            `#${r.id}`,
+            r.unidade_nome.toUpperCase(),
+            r.solicitante_nome,
+            r.volumes || 0,
+            r.status
+        ]),
+        styles: { fontSize: 8, cellPadding: 3 },
+        headStyles: { fillColor: [30, 41, 59] },
+        columnStyles: {
+            2: { cellWidth: 80 } // Mais espaço para o nome da escola
+        }
+    });
+
+    doc.save(`Relatorio_Pedidos_${new Date().getTime()}.pdf`);
+};
+
+async function telaRelatorioPatrimonioLocal() {
+    const area = document.getElementById('app-content');
+    
+    // Busca a lista de locais para preencher o select
+    const resLocais = await fetch(`${API_URL}/locais`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+    const locais = await resLocais.json();
+
+    area.innerHTML = `
+        <div class="painel-vidro" style="max-width: 1300px; margin: auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                <h2 style="color:white; margin:0;">📋 INVENTÁRIO DE PATRIMÔNIO</h2>
+                <div style="display:flex; gap:10px;">
+                    <button onclick="imprimirPatrimonioPDF()" class="btn-vidro" style="background:#2563eb; font-size:0.7rem;">🖨️ PDF PAISAGEM</button>
+                    <button onclick="notificar('Exportação Excel em breve', 'alerta')" class="btn-vidro" style="background:#16a34a; font-size:0.7rem;">📊 EXCEL</button>
+                </div>
+            </div>
+            
+            <div style="display:flex; gap:15px; justify-content:center; background:rgba(255,255,255,0.05); padding:20px; border-radius:12px; margin-bottom:20px;">
+                <div style="flex:1; max-width:400px;">
+                    <label style="color:rgba(255,255,255,0.5); font-size:0.75rem; margin-left:5px;">SELECIONE A UNIDADE ESCOLAR / SETOR</label>
+                    <select id="pat_local_id" class="input-vidro" style="width:100%; margin-top:5px;">
+                        <option value="">-- Escolha um local para listar os bens --</option>
+                        ${locais.map(l => `<option value="${l.id}">${l.nome.toUpperCase()}</option>`).join('')}
+                    </select>
+                </div>
+                <button onclick="carregarDadosPatrimonioLocal()" class="btn-vidro" 
+                    style="background:#3b82f6; margin-top:22px; height:45px; width:150px; font-weight:bold;">
+                    VER BENS
+                </button>
+            </div>
+
+            <div class="grid-movel-celular" id="cards-patrimonio" style="display:grid; grid-template-columns: repeat(3, 1fr); gap:15px; margin-bottom:20px;">
+                <div class="painel-vidro" style="text-align:center;"><h3 id="stat-pat-total">0</h3><small>ITENS NO LOCAL</small></div>
+                <div class="painel-vidro" style="text-align:center; color:#4ade80;"><h3 id="stat-pat-bom">0</h3><small>EM BOM ESTADO</small></div>
+                <div class="painel-vidro" style="text-align:center; color:#fbbf24;"><h3 id="stat-pat-uso">0</h3><small>EM USO / ATIVOS</small></div>
+            </div>
+
+            <div class="painel-vidro" style="background:rgba(0,0,0,0.3); padding:0; overflow:hidden;">
+                <div style="max-height: 500px; overflow-y: auto;">
+                    <table style="width:100%; border-collapse:collapse; color:white; font-size:0.85rem;">
+                        <thead style="background:rgba(255,255,255,0.1); position: sticky; top:0; z-index:10;">
+                            <tr>
+                                <th style="padding:12px; text-align:left;">SETOR / SALA</th>
+                                <th style="padding:12px; text-align:left;">Nº PATRIMÔNIO</th>
+                                <th style="padding:12px; text-align:left;">DESCRIÇÃO DO BEM</th>
+                                <th style="padding:12px; text-align:left;">SÉRIE</th>
+                                <th style="padding:12px; text-align:center;">ESTADO</th>
+                                <th style="padding:12px; text-align:center;">NF</th>
+                            </tr>
+                        </thead>
+                        <tbody id="corpo-tabela-patrimonio">
+                            <tr><td colspan="6" style="padding:40px; text-align:center; opacity:0.5;">Selecione um local acima para carregar o inventário.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+let cachePatrimonioLocal = [];
+
+async function carregarDadosPatrimonioLocal() {
+    const localId = document.getElementById('pat_local_id').value;
+    if(!localId) return notificar("Selecione um local.", "alerta");
+
+    try {
+        const res = await fetch(`${API_URL}/admin/relatorios/patrimonio-local?localId=${localId}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const { registros, stats } = await res.json();
+        cachePatrimonioLocal = registros;
+
+        document.getElementById('stat-pat-total').innerText = stats.total;
+        document.getElementById('stat-pat-bom').innerText = stats.bomEstado;
+        document.getElementById('stat-pat-uso').innerText = stats.emUso;
+
+        document.getElementById('corpo-tabela-patrimonio').innerHTML = registros.map(r => `
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                <td style="padding:12px; color:#60a5fa; font-weight:bold;">${r.setor_nome || 'NÃO DEFINIDO'}</td>
+                <td style="padding:12px; font-family:monospace; color:#fbbf24;">${r.tag || 'S/N'}</td>
+                <td style="padding:12px;">${r.produto_nome}</td>
+                <td style="padding:12px; font-size:0.75rem;">${r.numero_serie || '-'}</td>
+                <td style="padding:12px; text-align:center;">
+                    <span style="color:${r.estado === 'BOM' ? '#4ade80' : '#f87171'}">${r.estado}</span>
+                </td>
+                <td style="padding:12px; text-align:center; font-size:0.7rem;">${r.nota_fiscal || '-'}</td>
+            </tr>
+        `).join('');
+    } catch (err) {
+        notificar("Erro ao carregar bens.", "erro");
+    }
+}
+
+window.imprimirPatrimonioPDF = function() {
+    if (cachePatrimonioLocal.length === 0) return notificar("Sem dados para exportar.", "alerta");
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4' });
+    const nomeLocal = document.getElementById('pat_local_id').options[document.getElementById('pat_local_id').selectedIndex].text;
+
+    aplicarCabecalhoPadrao(doc, 'l');
+
+    doc.setFontSize(14);
+    doc.text("INVENTÁRIO FÍSICO DE BENS PATRIMONIAIS", 148, 45, { align: "center" });
+    
+    doc.setFontSize(10);
+    doc.text(`Unidade: ${nomeLocal}`, 148, 50, { align: "center" });
+
+    doc.autoTable({
+        startY: 55,
+        head: [['SETOR/SALA', 'Nº PATRIMÔNIO', 'DESCRIÇÃO DO BEM', 'Nº SÉRIE', 'ESTADO', 'NOTA FISCAL']],
+        body: cachePatrimonioLocal.map(r => [
+            r.setor_nome || 'N/D',
+            r.tag || '-',
+            r.produto_nome.toUpperCase(),
+            r.numero_serie || '-',
+            r.estado,
+            r.nota_fiscal || '-'
+        ]),
+        styles: { fontSize: 7, cellPadding: 2 },
+        headStyles: { fillColor: [30, 41, 59] },
+        columnStyles: {
+            2: { cellWidth: 70 } // Espaço maior para a descrição do produto
+        },
+        // Agrupamento visual por setor (Opcional, mas ajuda na leitura)
+        didDrawPage: function (data) {
+            doc.setFontSize(8);
+            doc.text(`Página ${doc.internal.getNumberOfPages()}`, 280, 200);
+        }
+    });
+
+    doc.save(`Inventario_${nomeLocal.replace(/ /g, '_')}.pdf`);
+};
+
+async function telaRelatorioTransferenciasExternas() {
+    const area = document.getElementById('app-content');
+    const hoje = new Date().toISOString().split('T')[0];
+    const inicioMes = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
+
+    area.innerHTML = `
+        <div class="painel-vidro" style="max-width: 1350px; margin: auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                <h2 style="color:white; margin:0;">🚚 TRANSFERÊNCIAS ENTRE UNIDADES</h2>
+                <div style="display:flex; gap:10px;">
+                    <button onclick="imprimirTransferenciasPDF()" class="btn-vidro" style="background:#2563eb; font-size:0.7rem;">🖨️ PDF PAISAGEM</button>
+                    <button onclick="notificar('Exportação Excel em breve', 'alerta')" class="btn-vidro" style="background:#16a34a; font-size:0.7rem;">📊 EXCEL</button>
+                </div>
+            </div>
+            
+            <div style="display:flex; gap:15px; justify-content:center; background:rgba(255,255,255,0.05); padding:15px; border-radius:12px; margin-bottom:20px;">
+                <input type="date" id="trans_inicio" value="${inicioMes}" class="input-vidro" style="width:160px;">
+                <input type="date" id="trans_fim" value="${hoje}" class="input-vidro" style="width:160px;">
+                <button onclick="carregarDadosTransferencias()" class="btn-vidro" style="background:#3b82f6; font-weight:bold;">FILTRAR</button>
+            </div>
+
+            <div class="grid-movel-celular" style="display:grid; grid-template-columns: repeat(3, 1fr); gap:15px; margin-bottom:20px;">
+                <div class="painel-vidro" style="text-align:center;"><h3 id="stat-trans-total">0</h3><small>TOTAL DE MOVIMENTOS</small></div>
+                <div class="painel-vidro" style="text-align:center; color:#4ade80;"><h3 id="stat-trans-ok">0</h3><small>CONCLUÍDAS</small></div>
+                <div class="painel-vidro" style="text-align:center; color:#f87171;"><h3 id="stat-trans-erro">0</h3><small>RECUSADAS</small></div>
+            </div>
+
+            <div class="painel-vidro" style="background:rgba(0,0,0,0.3); padding:0; overflow:hidden;">
+                <div style="max-height: 500px; overflow-y: auto;">
+                    <table style="width:100%; border-collapse:collapse; color:white; font-size:0.8rem;">
+                        <thead style="background:rgba(255,255,255,0.1); position: sticky; top:0; z-index:10;">
+                            <tr>
+                                <th style="padding:12px; text-align:left;">DATA</th>
+                                <th style="padding:12px; text-align:left;">BEM / PATRIMÔNIO</th>
+                                <th style="padding:12px; text-align:left;">ORIGEM</th>
+                                <th style="padding:12px; text-align:left;">DESTINO</th>
+                                <th style="padding:12px; text-align:center;">STATUS</th>
+                                <th style="padding:12px; text-align:left;">MOTIVO / OBSERVAÇÃO</th>
+                            </tr>
+                        </thead>
+                        <tbody id="corpo-tabela-trans"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    `;
+    carregarDadosTransferencias();
+}
+
+let cacheTransferencias = [];
+
+async function carregarDadosTransferencias() {
+    const inicio = document.getElementById('trans_inicio').value;
+    const fim = document.getElementById('trans_fim').value;
+    
+    const res = await fetch(`${API_URL}/admin/relatorios/transferencias-externas?inicio=${inicio}&fim=${fim}`, {
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+    const { registros, stats } = await res.json();
+    cacheTransferencias = registros;
+
+    document.getElementById('stat-trans-total').innerText = stats.total;
+    document.getElementById('stat-trans-ok').innerText = stats.concluidas;
+    document.getElementById('stat-trans-erro').innerText = stats.recusadas;
+
+    document.getElementById('corpo-tabela-trans').innerHTML = registros.map(r => `
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+            <td style="padding:12px;">${new Date(r.data_movimentacao).toLocaleDateString()}</td>
+            <td style="padding:12px;">
+                <div style="font-weight:bold; color:#fbbf24;">${r.tag}</div>
+                <div style="font-size:0.7rem; opacity:0.7;">${r.produto}</div>
+            </td>
+            <td style="padding:12px; font-size:0.75rem;">${r.origem}</td>
+            <td style="padding:12px; font-size:0.75rem;">${r.destino}</td>
+            <td style="padding:12px; text-align:center;">
+                <span style="color:${r.status === 'RECUSADO' ? '#f87171' : '#4ade80'}; font-weight:bold;">${r.status}</span>
+            </td>
+            <td style="padding:12px; font-size:0.75rem; color:rgba(255,255,255,0.6); max-width:200px;">
+                ${r.motivo || '-'}
+            </td>
+        </tr>
+    `).join('');
+}
+
+window.imprimirTransferenciasPDF = function() {
+    if (cacheTransferencias.length === 0) return notificar("Sem dados para exportar.", "alerta");
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4' });
+
+    aplicarCabecalhoPadrao(doc, 'l');
+
+    doc.setFontSize(14);
+    doc.text("RELATÓRIO DE TRANSFERÊNCIAS EXTERNAS DE BENS", 148, 45, { align: "center" });
+
+    doc.autoTable({
+        startY: 52,
+        head: [['DATA', 'PATRIMÔNIO', 'PRODUTO', 'ORIGEM', 'DESTINO', 'STATUS', 'MOTIVO/OBSERVAÇÃO']],
+        body: cacheTransferencias.map(r => [
+            new Date(r.data_movimentacao).toLocaleDateString(),
+            r.tag,
+            r.produto.toUpperCase(),
+            r.origem,
+            r.destino,
+            r.status,
+            r.motivo || '-'
+        ]),
+        styles: { fontSize: 7, cellPadding: 2 },
+        headStyles: { fillColor: [30, 41, 59] },
+        columnStyles: {
+            2: { cellWidth: 40 },
+            6: { cellWidth: 50 }
+        }
+    });
+
+    doc.save(`Transferencias_Externas_${new Date().getTime()}.pdf`);
+};
+
+async function telaRelatorioColetaLiberada() {
+    const area = document.getElementById('app-content');
+    
+    area.innerHTML = `
+        <div class="painel-vidro" style="max-width: 1100px; margin: auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:25px;">
+                <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                <div style="text-align:center;">
+                    <h2 style="color:white; margin:0;">🚚 MAPA DE EXPEDIÇÃO</h2>
+                    <small style="color:#4ade80; font-weight:bold;">STATUS: COLETA LIBERADA</small>
+                </div>
+                <div style="display:flex; gap:10px;">
+                    <button onclick="imprimirColetaLiberadaPDF()" class="btn-vidro" style="background:#2563eb; font-size:0.7rem;">🖨️ IMPRIMIR LISTA</button>
+                    <button onclick="carregarDadosColetaLiberada()" class="btn-vidro" style="background:rgba(255,255,255,0.1); font-size:0.7rem;">🔄 ATUALIZAR</button>
+                </div>
+            </div>
+
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; margin-bottom:25px;">
+                <div class="painel-vidro" style="text-align:center; border-left: 5px solid #3b82f6;">
+                    <h3 id="exp-total-pedidos" style="font-size:2rem; margin:0;">0</h3>
+                    <small style="color:rgba(255,255,255,0.6);">PEDIDOS AGUARDANDO COLETA</small>
+                </div>
+                <div class="painel-vidro" style="text-align:center; border-left: 5px solid #fbbf24;">
+                    <h3 id="exp-total-volumes" style="font-size:2rem; margin:0;">0</h3>
+                    <small style="color:rgba(255,255,255,0.6);">TOTAL DE VOLUMES (CAIXAS/FARDOS)</small>
+                </div>
+            </div>
+
+            <div class="painel-vidro" style="background:rgba(0,0,0,0.3); padding:0; overflow:hidden;">
+                <table style="width:100%; border-collapse:collapse; color:white; font-size:0.9rem;">
+                    <thead style="background:rgba(255,255,255,0.05);">
+                        <tr>
+                            <th style="padding:15px; text-align:left;">ID PEDIDO</th>
+                            <th style="padding:15px; text-align:left;">DESTINO</th>
+                            <th style="padding:15px; text-align:left;">TIPO</th>
+                            <th style="padding:15px; text-align:center;">VOLUMES</th>
+                            <th style="padding:15px; text-align:left;">PRONTO DESDE</th>
+                        </tr>
+                    </thead>
+                    <tbody id="corpo-tabela-coleta">
+                        <tr><td colspan="5" style="padding:40px; text-align:center; opacity:0.5;">Verificando doca de expedição...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    `;
+    carregarDadosColetaLiberada();
+}
+
+let cacheColeta = [];
+
+async function carregarDadosColetaLiberada() {
+    try {
+        const res = await fetch(`${API_URL}/admin/relatorios/coleta-liberada`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const { registros, stats } = await res.json();
+        cacheColeta = registros;
+
+        document.getElementById('exp-total-pedidos').innerText = stats.totalPedidos;
+        document.getElementById('exp-total-volumes').innerText = stats.totalVolumes;
+
+        if (registros.length === 0) {
+            document.getElementById('corpo-tabela-coleta').innerHTML = `
+                <tr><td colspan="5" style="padding:40px; text-align:center; opacity:0.5;">✅ Tudo certo! Nenhuma carga pendente de coleta.</td></tr>`;
+            return;
+        }
+
+        document.getElementById('corpo-tabela-coleta').innerHTML = registros.map(r => `
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                <td style="padding:15px; font-weight:bold; color:#fbbf24;">#${r.id}</td>
+                <td style="padding:15px;">${r.unidade_destino.toUpperCase()}</td>
+                <td style="padding:15px; font-size:0.8rem;">${r.tipo_pedido || 'DIVERSOS'}</td>
+                <td style="padding:15px; text-align:center; font-weight:bold;">${r.volumes}</td>
+                <td style="padding:15px; font-size:0.8rem; opacity:0.7;">${new Date(r.data_separacao).toLocaleString('pt-BR')}</td>
+            </tr>
+        `).join('');
+    } catch (err) {
+        notificar("Erro ao carregar mapa de expedição.", "erro");
+    }
+}
+
+window.imprimirColetaLiberadaPDF = function() {
+    if (cacheColeta.length === 0) return notificar("Nada para imprimir.", "alerta");
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+
+    aplicarCabecalhoPadrao(doc, 'p');
+
+    doc.setFontSize(14);
+    doc.text("MAPA DE CARGAS PRONTAS PARA EXPEDIÇÃO", 105, 45, { align: "center" });
+    
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Emitido em: ${new Date().toLocaleString()}`, 105, 50, { align: "center" });
+
+    doc.autoTable({
+        startY: 55,
+        head: [['PEDIDO', 'DESTINO (UNIDADE ESCOLAR)', 'VOLS', 'DATA SEPARAÇÃO']],
+        body: cacheColeta.map(r => [
+            `#${r.id}`,
+            r.unidade_destino.toUpperCase(),
+            r.volumes,
+            new Date(r.data_separacao).toLocaleDateString()
+        ]),
+        theme: 'grid',
+        headStyles: { fillColor: [5, 150, 105] }, // Verde sucesso para indicar "Pronto"
+        columnStyles: {
+            2: { halign: 'center', fontStyle: 'bold' }
+        }
+    });
+
+    const totalVols = cacheColeta.reduce((a, b) => a + b.volumes, 0);
+    doc.setFont("helvetica", "bold");
+    doc.text(`TOTAL DE VOLUMES PARA CARREGAMENTO: ${totalVols}`, 14, doc.lastAutoTable.finalY + 15);
+
+    doc.save(`Mapa_Coleta_${new Date().getTime()}.pdf`);
+};
 
 // Isso garante que o onclick="funcao()" funcione sempre
 window.telaVisualizarEstoque = telaVisualizarEstoque;

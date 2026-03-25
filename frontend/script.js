@@ -432,9 +432,9 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('PEDIDOS')">
                 <i>📝</i><span>PEDIDOS</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="telaCadastrosBase()">
-                <i>⚙️</i><span>CADASTRAR NOVO LOCAL/CATEGORIA/PRODUTO</span>
-            </button>            
+// ---      <button class="btn-grande btn-vidro" onclick="telaCadastrosBase()">  ---
+// ---          <i>⚙️</i><span>CADASTRAR NOVO LOCAL/CATEGORIA/PRODUTO</span>     ---
+// ---      </button>                                                            ---  
             <button class="btn-grande btn-vidro" onclick="carregarConsultaEstoque()">
                 <i>🔎</i><span>CONSULTA ESTOQUE</span>
             </button>
@@ -469,9 +469,9 @@ if (perfil === 'estoque') {
                 <i>🏛️</i><span>PATRIMÔNIO</span>
             </button>
 
-            <button class="btn-grande btn-vidro" onclick="telaCadastrosBase()">
-                <i>⚙️</i><span>CADASTRAR NOVO LOCAL/CATEGORIA/PRODUTO</span>
-            </button>
+// ---      <button class="btn-grande btn-vidro" onclick="telaCadastrosBase()">  ---
+// ---          <i>⚙️</i><span>CADASTRAR NOVO LOCAL/CATEGORIA/PRODUTO</span>     ---
+// ---      </button>                                                            ---  
             <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('PEDIDOS')">
                 <i>📝</i><span>PEDIDOS</span>
             </button>

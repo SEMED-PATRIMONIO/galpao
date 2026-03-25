@@ -310,7 +310,9 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="telaSaidaTransferencia37()">
                 <i>🏛️</i><span>SOLICITAR AO PATRIMÔNIO</span>
             </button>
-            <button onclick="telaRelatorioColetaLiberada()" class="btn-vidro" style="color: #4ade80;">🚚 PEDIDOS LIBERADOS PARA ENTREGA</button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioColetaLiberada()">
+                <i>🚚</i><span>PEDIDOS LIBERADOS PARA ENTREGA</span>
+            </button>
             <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()">
                 <i>🔑</i><span>ALTERAR MINHA SENHA</span>
             </button>
@@ -406,11 +408,21 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="telaDevolucaoUniforme()">
                 <i>🔄</i><span>DEVOLVER UNIFORMES</span>
             </button> 
-            <button onclick="telaEscolaGestaoTurmas()" class="btn-vidro">🏫 GESTÃO DE TURMAS</button>
-            <button onclick="telaEscolaGestaoAlunos()" class="btn-vidro">👥 GESTÃO DE ALUNOS</button>
-            <button onclick="telaEscolaConsultaEstoque()" class="btn-vidro">📦 CONSULTAR MEU ESTOQUE</button>
-            <button onclick="telaEscolaEntregaMaterial()" class="btn-vidro" style="background: rgba(16, 185, 129, 0.2); border-color: #10b981;">🎁 ENTREGA DE UNIFORMES</button>
-            <button onclick="telaEscolaRelatorios()" class="btn-vidro" style="background: rgba(59, 130, 246, 0.2); border-color: #3b82f6;">📊 RELATÓRIOS ESCOLARES</button>               
+            <button class="btn-grande btn-vidro" onclick="telaEscolaGestaoTurmas()">
+                <i>🏫</i><span>GESTÃO DE TURMAS</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="telaEscolaGestaoAlunos()">
+                <i>👥</i><span>GESTÃO DE ALUNOS</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="telaEscolaConsultaEstoque()">
+                <i>📦</i><span>CONSULTAR MEU ESTOQUE</span>
+            </button>
+            <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaEscolaEntregaMaterial()">
+                <i>🎁</i><span>ENTREGA DE UNIFORMES</span>
+            </button>
+            <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaEscolaRelatorios()">
+                <i>📊</i><span>RELATÓRIOS ESCOLARES</span>
+            </button>               
         `; 
     }
 
@@ -531,10 +543,18 @@ function abrirSubmenuVitrificado(titulo) {
             `;
         } else if (titulo === 'RELATÓRIOS') {
             botoesExtra = `
-            <button onclick="telaRelatorioLogStatus()" class="btn-vidro">🕵️ AUDITORIA DE MOVIMENTAÇÕES</button>
-            <button onclick="telaRelatorioPedidosGeral()" class="btn-vidro">📦 RELATÓRIO DE PEDIDOS</button>
-            <button onclick="telaRelatorioPatrimonioLocal()" class="btn-vidro">📋 INVENTÁRIO POR LOCAL</button>
-            <button onclick="telaRelatorioTransferenciasExternas()" class="btn-vidro">🚚 TRANSFERÊNCIAS DE BENS ENTRE UNIDADES</button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioLogStatus()">
+                <i>🕵️</i><span>AUDITORIA DE MOVIMENTAÇÕES</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioPedidosGeral()">
+                <i>📦</i><span>RELATÓRIO DE PEDIDOS</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioPatrimonioLocal()">
+                <i>📋</i><span>INVENTÁRIO POR LOCAL</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioTransferenciasExternas()">
+                <i>🚚</i><span>TRANSFERÊNCIAS DE BENS ENTRE UNIDADES</span>
+            </button>
             `;
         }
     }
@@ -554,10 +574,12 @@ function abrirSubmenuVitrificado(titulo) {
             `;
         } else if (titulo === 'RELATÓRIOS') {
             botoesExtra = `
-            <button onclick="telaRelatorioLogStatus()" class="btn-vidro">🕵️ AUDITORIA DE MOVIMENTAÇÕES</button>
-            <button onclick="telaRelatorioPedidosGeral()" class="btn-vidro">📦 RELATÓRIO DE PEDIDOS</button>
-            <button onclick="telaRelatorioPatrimonioLocal()" class="btn-vidro">📋 INVENTÁRIO POR LOCAL</button>
-            <button onclick="telaRelatorioTransferenciasExternas()" class="btn-vidro">🚚 TRANSFERÊNCIAS DE BENS ENTRE UNIDADES</button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioLogStatus()">
+                <i>🕵️</i><span>AUDITORIA DE MOVIMENTAÇÕES</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioPedidosGeral()">
+                <i>📦</i><span>RELATÓRIO DE PEDIDOS</span>
+            </button>
             `;
         }
     }

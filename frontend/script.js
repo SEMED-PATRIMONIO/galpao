@@ -296,8 +296,8 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="telaGerenciarUsuarios()">
                 <i>👥</i><span>GERENCIAR USUÁRIOS</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="abrirPainelGerencial()">
-                <i>📈</i><span>PAINEL (em construção)</span>
+            <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()">
+                <i>📈</i><span>PAINEL DE PEDIDOS</span>
             </button>
             <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
                 <i>🔑</i><span>ALTERAR MINHA SENHA</span>
@@ -421,7 +421,7 @@ async function carregarDashboard() {
                 <i>🔎</i><span>CONSULTA ESTOQUE</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()">
-                <i>📈</i><span>PAINEL (em construção)</span>
+                <i>📈</i><span>PAINEL DE PEDIDOS</span>
             </button>
 
             <button class="btn-grande btn-vidro btn-breve" // ---onclick="abrirSubmenuVitrificado('RELATÓRIOS')">
@@ -465,8 +465,8 @@ if (perfil === 'estoque') {
                 <i>🔎</i><span>CONSULTA ESTOQUE</span>
             </button>
 
-            <button class="btn-grande btn-vidro" onclick="abrirPainelGerencial()">
-                <i>📈</i><span>PAINEL (em construção)</span>
+            <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()">
+                <i>📈</i><span>PAINEL DE PEDIDOS</span>
             </button>
             <button class="btn-grande btn-vidro btn-breve" // ---onclick="abrirSubmenuVitrificado('RELATÓRIOS')">
                 <i>📊</i><span>RELATÓRIOS</span>
@@ -9045,15 +9045,15 @@ async function efetivarInicioTransporte(remessaId) {
 
 async function telaEscolaConfirmarRecebimento() {
     const container = document.getElementById('app-content');
-    container.innerHTML = '<div style="padding:40px; text-align:center; color:white;">🔍 Localizando mercadorias...</div>';
+    container.innerHTML = '<div style="padding:40px; text-align:center; color:white;">🔍 Localizando mercadorias em trânsito...</div>';
 
     try {
-        // Chamando a nova rota cirúrgica
+        // Busca as remessas que estão com status 'EM_TRANSPORTE' para esta escola
         const res = await fetch(`${API_URL}/escola/painel-v2`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
 
-        if (!res.ok) throw new Error("Erro na comunicação com o servidor.");
+        if (!res.ok) throw new Error("Não foi possível carregar a lista de remessas.");
         const dados = await res.json();
 
         container.innerHTML = `
@@ -9065,40 +9065,40 @@ async function telaEscolaConfirmarRecebimento() {
 
                 ${dados.length === 0 ? `
                     <div class="glass-panel" style="padding:40px; text-align:center; color:rgba(255,255,255,0.6);">
-                        Nenhuma remessa a caminho para sua unidade.
+                        Não há cargas pendentes de recebimento para sua unidade.
                     </div>` : 
                     dados.map(r => `
-                    <div class="glass-panel" style="margin-bottom:20px; border-left: 6px solid #f59e0b;">
+                    <div class="glass-panel" style="margin-bottom:20px; border-left: 6px solid #fbbf24; background: rgba(255,255,255,0.05);">
                         <div style="padding:20px; display:flex; justify-content:space-between; align-items:center;">
                             <div>
-                                <div style="font-weight:bold; font-size:1.1rem; color:#f59e0b;">REMESSA #${r.remessa_id}</div>
-                                <div style="color:white; opacity:0.8; font-size:0.9rem;">Pedido #${r.pedido_id} | Destino: ${r.escola_nome}</div>
+                                <div style="font-weight:bold; font-size:1.1rem; color:#fbbf24;">REMESSA #${r.remessa_id}</div>
+                                <div style="color:white; opacity:0.8; font-size:0.9rem;">Pedido #${r.pedido_id} | Origem: Almoxarifado Central</div>
+                                <div style="color:rgba(255,255,255,0.5); font-size:0.75rem; margin-top:5px;">Enviado em: ${new Date(r.data_criacao).toLocaleString()}</div>
                             </div>
                             
                             <div style="display:flex; gap:10px;">
                                 <button onclick="visualizarDetalhesRemessa(${r.remessa_id}, ${r.pedido_id})" class="btn-vidro" style="padding:8px 15px; font-size:0.8rem;">
-                                    🔎 VER ITENS
+                                    🔎 CONFERIR ITENS
                                 </button>
-                                <button onclick="confirmarChegadaEscola(${r.remessa_id})" class="btn-vidro" style="background:#059669; border:none; padding:8px 15px;">
-                                    ✅ RECEBER
+                                <button onclick="confirmarChegadaEscola(${r.remessa_id})" class="btn-vidro" style="background:#10b981; border:none; padding:8px 15px; font-weight:bold;">
+                                    ✅ CONFIRMAR RECEBIMENTO
                                 </button>
                             </div>
                         </div>
-                        <div id="detalhes-remessa-${r.remessa_id}" style="display:none; background:rgba(0,0,0,0.2); padding:15px;"></div>
+                        <div id="detalhes-remessa-${r.remessa_id}" style="display:none; background:rgba(0,0,0,0.3); border-radius:0 0 10px 10px; padding:15px; border-top: 1px solid rgba(255,255,255,0.1);"></div>
                     </div>
                 `).join('')}
             </div>
         `;
     } catch (err) {
-        container.innerHTML = `<div class="glass-panel" style="color:#ef4444;">⚠️ Falha: ${err.message}</div>`;
+        container.innerHTML = `<div class="glass-panel" style="color:#ef4444; text-align:center; padding:30px;">⚠️ <strong>Erro:</strong> ${err.message}</div>`;
     }
 }
 
 async function confirmarChegadaEscola(remessaId) {
     const usuarioId = localStorage.getItem('usuario_id');
     
-    // Alerta estilizado para confirmação
-    if (!confirm("Deseja confirmar o recebimento físico desta carga? O saldo será adicionado ao estoque da sua unidade.")) return;
+    if (!confirm("⚠️ ATENÇÃO: Você confirma que todos os itens desta carga chegaram corretamente? Esta ação atualizará o estoque da unidade.")) return;
 
     try {
         const res = await fetch(`${API_URL}/escola/confirmar-recebimento`, {
@@ -9113,13 +9113,14 @@ async function confirmarChegadaEscola(remessaId) {
         const data = await res.json();
 
         if (res.ok) {
-            notificar("✨ Carga recebida com sucesso! Estoque local atualizado.", "sucesso");
-            telaEscolaConfirmarRecebimento(); // Recarrega a lista para remover o card
+            notificar("✅ SUCESSO: Carga recebida e estoque local atualizado!", "sucesso");
+            // Pequeno delay para o usuário ver a mensagem antes de atualizar a lista
+            setTimeout(() => telaEscolaConfirmarRecebimento(), 1000);
         } else {
-            throw new Error(data.error || "Erro ao processar recebimento.");
+            throw new Error(data.error || "Erro ao processar o recebimento no servidor.");
         }
     } catch (err) {
-        notificar(err.message, "erro");
+        notificar("❌ FALHA: " + err.message, "erro");
     }
 }
 
@@ -17013,7 +17014,7 @@ async function carregarConsultaEstoque() {
         
         <div class="abas-consulta" style="display: flex; gap: 15px; margin-bottom: 20px;">
             <button class="aba-item active" onclick="alternarVisualizacaoConsulta('estoque')">ESTOQUE ATUAL</button>
-            <button class="aba-item" onclick="alternarVisualizacaoConsulta('historico')">HISTÓRICO DE ENTRADAS</button>
+            <button class="aba-item" onclick="alternarVisualizacaoConsulta('historico')">HISTÓRICO (ENTRADA/SAÍDA))</button>
         </div>
 
         <div id="secao-estoque" class="aba-content">
@@ -17578,6 +17579,79 @@ window.abrirModalInvestigarItens = async function(pedidoId) {
         document.getElementById('conteudo-itens-modal').innerHTML = `<p style="color:#ef4444;">Erro: ${err.message}</p>`;
     }
 };
+
+async function telaEscolaConsultaEstoque() {
+    const container = document.getElementById('app-content');
+    const localId = localStorage.getItem('local_id');
+    
+    container.innerHTML = '<div class="spinner" style="margin: 50px auto;"></div>';
+
+    try {
+        const res = await fetch(`${API_URL}/escola/meu-estoque?localId=${localId}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const estoque = await res.json();
+
+        container.innerHTML = `
+            <div class="painel-vidro" style="max-width: 1000px; margin: auto; padding: 25px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                    <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                    <h2 style="color:white; margin:0; font-size:1.2rem;">📦 MEU ESTOQUE DISPONÍVEL</h2>
+                </div>
+
+                <div style="margin-bottom:20px;">
+                    <input type="text" id="busca-estoque-escola" placeholder="🔍 Digite o nome do produto ou lote..." 
+                           style="width:100%; padding:12px; border-radius:8px; border:1px solid rgba(255,255,255,0.2); background:rgba(0,0,0,0.2); color:white;"
+                           onkeyup="filtrarTabelaEstoque()">
+                </div>
+
+                <div style="background:rgba(0,0,0,0.2); border-radius:15px; overflow:hidden;">
+                    <table id="tabela-estoque-corpo" style="width:100%; border-collapse:collapse; color:white;">
+                        <thead>
+                            <tr style="background:rgba(255,255,255,0.05); text-align:left; font-size:0.8rem; color:rgba(255,255,255,0.5);">
+                                <th style="padding:15px;">PRODUTO</th>
+                                <th style="padding:15px;">IDENTIFICAÇÃO / LOTE</th>
+                                <th style="padding:15px;">DATA ENTRADA</th>
+                                <th style="padding:15px; text-align:center;">STATUS</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${estoque.length === 0 ? `<tr><td colspan="4" style="padding:40px; text-align:center; opacity:0.5;">Nenhum item em estoque no momento.</td></tr>` : 
+                            estoque.map(item => `
+                                <tr class="linha-estoque" style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                                    <td style="padding:15px; font-weight:bold;">${item.produto.toUpperCase()}</td>
+                                    <td style="padding:15px; font-family:monospace; color:#fbbf24;">${item.numero_serie}</td>
+                                    <td style="padding:15px; font-size:0.85rem;">${new Date(item.data_entrada).toLocaleDateString()}</td>
+                                    <td style="padding:15px; text-align:center;">
+                                        <span style="background:${item.status === 'DISPONIVEL' ? '#064e3b' : '#7f1d1d'}; 
+                                                     color:${item.status === 'DISPONIVEL' ? '#34d399' : '#f87171'}; 
+                                                     padding:4px 10px; border-radius:20px; font-size:0.7rem; font-weight:bold;">
+                                            ${item.status}
+                                        </span>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+    } catch (err) {
+        notificar("Erro ao carregar estoque: " + err.message, "erro");
+    }
+}
+
+// Função de filtro em tempo real (Sem refresh)
+function filtrarTabelaEstoque() {
+    const input = document.getElementById('busca-estoque-escola');
+    const filter = input.value.toUpperCase();
+    const rows = document.getElementsByClassName('linha-estoque');
+
+    for (let i = 0; i < rows.length; i++) {
+        const txtValue = rows[i].textContent || rows[i].innerText;
+        rows[i].style.display = txtValue.toUpperCase().indexOf(filter) > -1 ? "" : "none";
+    }
+}
 
 // Isso garante que o onclick="funcao()" funcione sempre
 window.telaVisualizarEstoque = telaVisualizarEstoque;

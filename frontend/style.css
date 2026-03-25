@@ -296,8 +296,6 @@ button:active { transform: scale(0.98); }
     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
 }
 
-
-
 /* Logo no canto superior esquerdo (Foto 2) */
 /* Fundo de tela estilo Pattern (Marca d'água) */
 body.login-body {

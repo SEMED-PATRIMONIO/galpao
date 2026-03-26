@@ -13155,39 +13155,39 @@ async function telaPatrimonioEscolaCatalogo() {
     modal.id = 'modal-catalogo-entrada';
     modal.className = 'alerta-vidro-overlay';
 
-    // 1. Buscamos os nomes já existentes no SEU local e os setores
-    // Alterado para a rota que filtra por local_id conforme discutimos
-    const [resNomes, resSetores] = await Promise.all([
-        fetch(`${API_URL}/patrimonio/meus-produtos-nomes`, { headers: { 'Authorization': `Bearer ${TOKEN}` } }),
-        fetch(`${API_URL}/patrimonio/setores/meus`, { headers: { 'Authorization': `Bearer ${TOKEN}` } })
+    // 1. Carregamento prévio dos dados
+    const [resSetores, resProdutos] = await Promise.all([
+        fetch(`${API_URL}/patrimonio/setores/meus`, { headers: { 'Authorization': `Bearer ${TOKEN}` } }),
+        fetch(`${API_URL}/patrimonio/listar-produtos-locais`, { headers: { 'Authorization': `Bearer ${TOKEN}` } })
     ]);
 
-    const nomesExistentes = await resNomes.json();
     const setores = await resSetores.json();
+    const produtosJaExistentes = await resProdutos.json();
 
     modal.innerHTML = `
         <div class="painel-vidro" style="width: 1150px; height: 620px; display: flex; gap: 20px; padding: 25px; border: 1px solid rgba(255,255,255,0.2); overflow: hidden;">
             <div style="flex: 1; display: flex; flex-direction: column; gap: 15px;">
-                <h2 style="color:white; margin:0 0 10px 0;">📝 NOVO BEM</h2>
+                <h2 style="color:white; margin:0 0 10px 0;">📝 NOVO REGISTRO DE BEM</h2>
                 
-                <div style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 12px; border: 1px solid rgba(59, 130, 246, 0.3);">
-                    <label style="color:#60a5fa; font-weight:bold; display:flex; align-items:center; gap:10px; cursor:pointer; font-size: 0.85rem;">
+                <div style="background: rgba(59, 130, 246, 0.1); padding: 12px; border-radius: 12px; border: 1px solid rgba(59, 130, 246, 0.3);">
+                    <label style="color:#60a5fa; font-weight:bold; display:flex; align-items:center; gap:10px; cursor:pointer;">
                         <input type="checkbox" id="check-2025" onchange="alternarLogica2025(this.checked)" style="transform: scale(1.3);">
-                        BEM ADQUIRIDO A PARTIR DE 01/01/2025?
+                        BEM ADQUIRIDO A PARTIR DE 2025?
                     </label>
                 </div>
 
                 <div style="overflow-y: auto; flex: 1; padding-right: 10px;">
-                    <div style="margin-bottom: 12px;">
-                        <label style="color:white; font-size:0.8rem;">NOME DO BEM (Selecione ou Digite):</label>
-                        <input type="text" id="cat-nome" list="lista-bens-sugestao" class="input-vidro" 
-                               placeholder="Ex: CADEIRA ERGOPLAX" 
-                               oninput="gerarNumeroSerieAutomatico()"
-                               autocomplete="off">
+                    <div style="margin-bottom: 15px;">
+                        <label style="color:white; font-size:0.8rem; font-weight:bold;">NOME DO BEM:</label>
                         
-                        <datalist id="lista-bens-sugestao">
-                            ${nomesExistentes.map(nome => `<option value="${nome}">`).join('')}
-                        </datalist>
+                        <select id="select-nome-existente" class="input-vidro" style="width: 100%; margin-bottom: 10px;" onchange="verificarNovoProduto(this.value)">
+                            <option value="">-- SELECIONE UM BEM EXISTENTE --</option>
+                            ${produtosJaExistentes.map(p => `<option value="${p.nome}" style="color:black;">${p.nome}</option>`).join('')}
+                            <option value="NOVO" style="color: #22c55e; font-weight:bold;">[+] CADASTRAR UM NOVO NOME / ITEM</option>
+                        </select>
+
+                        <input type="text" id="cat-nome" class="input-vidro" placeholder="Digite o nome do novo bem..." 
+                               style="display:none; border-color: #22c55e;" oninput="gerarNumeroSerieAutomatico()">
                     </div>
 
                     <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom: 12px;">
@@ -13213,19 +13213,19 @@ async function telaPatrimonioEscolaCatalogo() {
                             <input type="text" id="cat-patrimonio" class="input-vidro" placeholder="Pendente" readonly style="background: rgba(255,255,255,0.05); cursor: not-allowed; opacity: 0.6;">
                         </div>
                         <div>
-                            <label id="label-nf" style="color:white; font-size:0.8rem;">Nº NF ou CE:</label>
+                            <label style="color:white; font-size:0.8rem;">Nº NF ou CE:</label>
                             <input type="text" id="cat-nf" class="input-vidro">
                         </div>
                     </div>
 
                     <div id="container-arquivo-nf" style="display:none; margin-bottom: 12px;">
-                        <label style="color:white; font-size:0.8rem;">ANEXAR NF ou CE (PDF):</label>
-                        <input type="file" id="cat-file" accept="application/pdf" class="input-vidro" style="padding: 5px;">
+                        <label style="color:white; font-size:0.8rem;">ANEXAR NF (PDF):</label>
+                        <input type="file" id="cat-file" accept="application/pdf" class="input-vidro">
                     </div>
                 </div>
 
                 <div style="display:flex; gap:10px; margin-top: auto;">
-                    <button onclick="document.getElementById('modal-catalogo-entrada').remove()" class="btn-sair-vidro" style="flex:1;">FECHAR</button>
+                    <button onclick="document.getElementById('modal-catalogo-entrada').remove()" class="btn-sair-vidro" style="flex:1;">CANCELAR</button>
                     <button onclick="enviarCadastroComAnexo()" id="btn-salvar" style="flex:2; background:#3b82f6; color:white; border:none; border-radius:10px; font-weight:bold; cursor:pointer;">
                         SALVAR REGISTRO
                     </button>
@@ -13234,17 +13234,30 @@ async function telaPatrimonioEscolaCatalogo() {
 
             <div style="flex: 1.2; display: flex; flex-direction: column; background: rgba(0,0,0,0.2); border-radius: 15px; padding: 15px; border: 1px solid rgba(255,255,255,0.05);">
                 <h3 style="color:#aaa; font-size:0.9rem; margin:0 0 10px 0; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 5px;">
-                    BENS CADASTRADOS RECENTEMENTE
+                    ÚLTIMOS BENS CADASTRADOS
                 </h3>
                 <div id="lista-bens-recentes" style="flex: 1; overflow-y: auto;">
-                    <p style="color:gray; text-align:center; margin-top:50px;">Carregando bens...</p>
+                    <p style="color:gray; text-align:center;">Carregando...</p>
                 </div>
             </div>
         </div>
     `;
     document.body.appendChild(modal);
     carregarBensRecentesModal();
-}
+};
+
+window.verificarNovoProduto = function(valor) {
+    const inputNome = document.getElementById('cat-nome');
+    if (valor === 'NOVO') {
+        inputNome.value = "";
+        inputNome.style.display = "block";
+        inputNome.focus();
+    } else {
+        inputNome.value = valor; // Se escolheu um existente, o input oculto recebe o nome dele
+        inputNome.style.display = "none";
+        gerarNumeroSerieAutomatico();
+    }
+};
 
 // Lógica de Autopreenchimento do Número de Série
 async function gerarNumeroSerieAutomatico() {
@@ -13402,6 +13415,7 @@ async function carregarBensRecentesModal() {
         container.innerHTML = bens.map(b => `
             <div style="background: rgba(255,255,255,0.03); padding: 10px; border-radius: 8px; margin-bottom: 8px; border: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; align-items: center;">
                 <div style="text-align: left;">
+                    <input type="checkbox" class="check-patrimonio" value="${item.id}">
                     <strong style="color: white; font-size: 0.85rem; display: block;">${b.nome_produto}</strong>
                     <small style="color: #60a5fa; font-family: monospace;">${b.numero_serie}</small>
                 </div>
@@ -13416,6 +13430,81 @@ async function carregarBensRecentesModal() {
         container.innerHTML = '<p style="color:#ef4444; text-align:center;">Erro ao carregar lista.</p>';
     }
 }
+
+window.abrirModalVincularNF = function() {
+    const selecionados = Array.from(document.querySelectorAll('.check-patrimonio:checked')).map(cb => cb.value);
+    
+    if (selecionados.length === 0) {
+        return notificar("Selecione ao menos um bem para vincular a nota!", "alerta");
+    }
+
+    const modal = document.createElement('div');
+    modal.id = 'modal-vincular-nf';
+    modal.className = 'alerta-vidro-overlay';
+    modal.innerHTML = `
+        <div class="painel-vidro" style="width: 400px; padding: 25px; text-align: center;">
+            <h3 style="color: white;">📄 VINCULAR NOTA FISCAL</h3>
+            <p style="color: #ccc; font-size: 0.8rem;">Você está vinculando a nota a <b>${selecionados.length}</b> itens selecionados.</p>
+            
+            <input type="text" id="vinc-numero-nf" class="input-vidro" placeholder="Número da NF ou CE" style="margin-bottom: 15px; width: 100%;">
+            <input type="file" id="vinc-arquivo-nf" accept="application/pdf" class="input-vidro" style="margin-bottom: 20px; width: 100%;">
+
+            <div style="display: flex; gap: 10px;">
+                <button onclick="document.getElementById('modal-vincular-nf').remove()" class="btn-sair-vidro" style="flex:1;">CANCELAR</button>
+                <button onclick="executarVinculoMassa([${selecionados}])" class="btn-vidro" style="flex:1; background: #22c55e;">VINCULAR ✅</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+};
+
+window.executarVinculoMassa = async function(idsArray) {
+    const numero = document.getElementById('vinc-numero-nf').value;
+    const arquivo = document.getElementById('vinc-arquivo-nf').files[0];
+
+    if (!numero || !arquivo) return notificar("Preencha o número e anexe o PDF!", "erro");
+
+    const formData = new FormData();
+    formData.append('patrimoniosIds', idsArray.join(','));
+    formData.append('numeroNF', numero);
+    formData.append('arquivo_nf', arquivo);
+
+    try {
+        const res = await fetch(`${API_URL}/patrimonio/vincular-nf-massa`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${TOKEN}` },
+            body: formData
+        });
+
+        if (res.ok) {
+            notificar("Bens atualizados com sucesso!", "sucesso");
+            document.getElementById('modal-vincular-nf').remove();
+            carregarBensRecentesModal(); // Atualiza a lista
+        }
+    } catch (err) {
+        notificar("Erro ao vincular arquivo.", "erro");
+    }
+};
+
+window.visualizarNF = async function(patrimonioId) {
+    try {
+        const res = await fetch(`${API_URL}/patrimonio/obter-nf/${patrimonioId}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+
+        const data = await res.json();
+
+        if (res.ok && data.url) {
+            // Abre o PDF numa nova aba
+            // Nota: Se usares caminhos relativos no servidor, pode ser necessário prefixar a URL
+            window.open(data.url, '_blank');
+        } else {
+            notificar(data.error || "Nota Fiscal não disponível.", "alerta");
+        }
+    } catch (err) {
+        notificar("Erro ao abrir o documento.", "erro");
+    }
+};
 
 // LÓGICA DE INTERFACE
 window.alternarLogica2025 = (marcado) => {
@@ -13448,57 +13537,41 @@ window.alternarLogica2025 = (marcado) => {
     }
 };
 
-async function enviarCadastroComAnexo() {
-    const btn = document.getElementById('btn-salvar');
-    const nome = document.getElementById('cat-nome').value.trim();
-    const qtd = document.getElementById('cat-qtd').value;
-    const serie = document.getElementById('cat-serie').value;
-    const setor = document.getElementById('cat-setor').value;
-    const nf = document.getElementById('cat-nf').value;
-    const check2025 = document.getElementById('check-2025').checked;
-    const arquivo = document.getElementById('cat-file').files[0];
+window.enviarCadastroComAnexo = async function() {
+    const selectNome = document.getElementById('select-nome-existente').value;
+    const inputNome = document.getElementById('cat-nome').value;
+    
+    // Define qual nome usar (o do select ou o digitado)
+    const nomeFinal = (selectNome === 'NOVO' || selectNome === '') ? inputNome : selectNome;
 
-    if (!nome || !serie) return notificar("Nome e Série são obrigatórios!", "erro");
-
-    btn.disabled = true;
-    btn.innerHTML = "💾 SALVANDO...";
+    if (!nomeFinal) return notificar("Por favor, informe o nome do bem!", "erro");
 
     const formData = new FormData();
-    formData.append('nome_produto', nome);
-    formData.append('quantidade', qtd);
-    formData.append('serie_base', serie);
-    formData.append('setor_id', setor);
-    formData.append('local_id', localStorage.getItem('local_id'));
-    formData.append('nota_fiscal', nf);
-    formData.append('adquirido_pos_2025', check2025);
-    if (arquivo) formData.append('arquivo', arquivo);
+    formData.append('nome', nomeFinal);
+    formData.append('setor_id', document.getElementById('cat-setor').value);
+    formData.append('quantidade', document.getElementById('cat-qtd').value);
+    formData.append('numero_nf', document.getElementById('cat-nf').value);
+    formData.append('adquirido_2025', document.getElementById('check-2025').checked);
+
+    const arquivo = document.getElementById('cat-file').files[0];
+    if (arquivo) formData.append('arquivo_nf', arquivo);
 
     try {
-        const res = await fetch(`${API_URL}/patrimonio/cadastrar`, {
+        const res = await fetch(`${API_URL}/patrimonio/cadastrar-completo`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${TOKEN}` },
             body: formData
         });
 
         if (res.ok) {
-            notificar("✅ Cadastro concluído!");
-            // Limpa para o próximo item
-            document.getElementById('cat-nome').value = '';
-            document.getElementById('cat-serie').value = '';
-            
-            // Atualiza a lista lateral no modal imediatamente
-            carregarBensRecentesModal();
-        } else {
-            const erro = await res.json();
-            notificar("Erro: " + erro.error, "erro");
+            notificar("Bem cadastrado com sucesso!", "sucesso");
+            document.getElementById('modal-catalogo-entrada').remove();
+            // Se tiver uma função de atualizar a lista principal, chame-a aqui
         }
     } catch (err) {
-        notificar("Erro de conexão", "erro");
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = "SALVAR REGISTRO";
+        notificar("Erro ao salvar cadastro.", "erro");
     }
-}
+};
 
 async function carregarTabelaInventario() {
     const filtroSetor = document.getElementById('filtro-setor-patrimonio');

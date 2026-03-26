@@ -451,7 +451,7 @@ async function carregarDashboard() {
     // --- 5. PERFIL: ESTOQUE (NOVA INTERFACE) --- [cite: 37]
 if (perfil === 'estoque') {
         html += `
-            <button class="btn-grande btn-vidro" style="position: relative;" onclick="telaPendentesInfra()">
+            <button class="btn-grande btn-vidro" style="position: relative;" onclick="infra_telaPendentes()">
                 <div id="badge-infra-count" style="display: none; position: absolute; top: -10px; right: -10px; 
                     background: #ef4444; color: white; min-width: 26px; height: 26px; border-radius: 50%; 
                     display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 900; 
@@ -459,7 +459,7 @@ if (perfil === 'estoque') {
                     animation: pulse-vermelho 2s infinite; z-index: 10;">
                     0
                 </div>
-                <i>🚚</i><span>SOLICITADO PELA INFRA</span>
+                <i>🏗️</i><span>SOLICITADO PELA INFRA</span>
             </button>
 
             <button class="btn-grande btn-vidro" onclick="abrirMenuPatrimonioAlmoxarifado()">
@@ -9119,7 +9119,10 @@ async function telaEscolaConfirmarRecebimento() {
 async function confirmarChegadaEscola(remessaId) {
     const usuarioId = localStorage.getItem('usuario_id');
     
-    if (!confirm("⚠️ ATENÇÃO: Você confirma que todos os itens desta carga chegaram corretamente? Esta ação atualizará o estoque da unidade.")) return;
+    // Alerta de segurança dinâmico
+    const confirmacao = confirm("⚠️ ATENÇÃO: Você confirma que todos os itens desta carga chegaram corretamente?\n\n- Bens de Património serão alocados à sua unidade.\n- Uniformes serão somados ao seu saldo de estoque.");
+    
+    if (!confirmacao) return;
 
     try {
         const res = await fetch(`${API_URL}/escola/confirmar-recebimento`, {
@@ -9134,57 +9137,71 @@ async function confirmarChegadaEscola(remessaId) {
         const data = await res.json();
 
         if (res.ok) {
-            notificar("✅ SUCESSO: Carga recebida e estoque local atualizado!", "sucesso");
-            // Pequeno delay para o usuário ver a mensagem antes de atualizar a lista
-            setTimeout(() => telaEscolaConfirmarRecebimento(), 1000);
+            notificar("✅ SUCESSO: Recebimento confirmado! Os bens e produtos já constam na sua unidade.", "sucesso");
+            
+            // Pequeno delay para a notificação aparecer antes de atualizar a tela
+            setTimeout(() => {
+                telaEscolaConfirmarRecebimento(); // Recarrega a lista de pendentes
+                divDetalhes.innerHTML = ""; // Limpa a área de detalhes
+            }, 1500);
         } else {
-            throw new Error(data.error || "Erro ao processar o recebimento no servidor.");
+            throw new Error(data.error || "Erro ao processar o recebimento.");
         }
     } catch (err) {
-        notificar("❌ FALHA: " + err.message, "erro");
+        console.error("Erro no recebimento:", err);
+        notificar("❌ ERRO: " + err.message, "erro");
     }
 }
 
 // Função para buscar e exibir os itens da remessa
-async function visualizarDetalhesRemessa(remessaId, pedidoId) {
-    const divDetalhes = document.getElementById(`detalhes-remessa-${remessaId}`);
-    
-    // Se já estiver aberto, fecha
-    if (divDetalhes.style.display === 'block') {
-        divDetalhes.style.display = 'none';
-        return;
-    }
-
-    divDetalhes.style.display = 'block';
+async function visualizarDetalhesRemessa(remessaId) {
+    const divDetalhes = document.getElementById('detalhes-remessa-escolhida');
+    divDetalhes.innerHTML = '<div class="spinner"></div>';
 
     try {
-        const res = await fetch(`${API_URL}/pedidos/detalhes-estoque/${pedidoId}`, { 
-            headers: { 'Authorization': `Bearer ${TOKEN}` } 
+        const res = await fetch(`${API_URL}/escola/detalhes-remessa/${remessaId}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
-        const itens = await res.json();
+        const data = await res.json();
+
+        // Verificamos o tipo de pedido para mudar o título da tabela
+        const ePatrimonio = data.tipo_pedido === 'INFRA_PATRIMONIO';
 
         divDetalhes.innerHTML = `
-            <table style="width:100%; border-collapse:collapse; color:white; font-size:0.9rem;">
-                <thead>
-                    <tr style="border-bottom:1px solid rgba(255,255,255,0.2); text-align:left;">
-                        <th style="padding:10px;">PRODUTO</th>
-                        <th style="padding:10px; text-align:center;">TAMANHO</th>
-                        <th style="padding:10px; text-align:center;">QTD ENVIADA</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${itens.map(i => `
-                        <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                            <td style="padding:10px;">${i.produto}</td>
-                            <td style="padding:10px; text-align:center;">${i.tamanho || '-'}</td>
-                            <td style="padding:10px; text-align:center; font-weight:bold; color:#00d4ff;">${i.solicitado}</td>
+            <div style="margin-top:20px; padding:20px; background:rgba(0,0,0,0.2); border-radius:10px;">
+                <h4 style="color:#fbbf24;">📦 ITENS NA REMESSA #${remessaId}</h4>
+                <p style="color:white; font-size:0.8rem;">Tipo: <b>${data.tipo_pedido}</b></p>
+                
+                <table style="width:100%; color:white; font-size:0.85rem; border-collapse:collapse;">
+                    <thead>
+                        <tr style="border-bottom:1px solid rgba(255,255,255,0.1);">
+                            <th style="text-align:left; padding:10px;">PRODUTO</th>
+                            ${!ePatrimonio ? '<th style="text-align:center;">TAMANHO</th>' : '<th style="text-align:center;">ETIQUETA/TAG</th>'}
+                            <th style="text-align:center; padding:10px;">QUANTIDADE</th>
                         </tr>
-                    `).join('')}
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        ${data.itens.map(i => `
+                            <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                                <td style="padding:10px;">${i.nome}</td>
+                                <td style="padding:10px; text-align:center; color:#60a5fa;">${ePatrimonio ? (i.patrimonio || '---') : (i.tamanho || 'Geral')}</td>
+                                <td style="padding:10px; text-align:center; font-weight:bold;">${i.quantidade_enviada}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+
+                <div style="margin-top:25px; text-align:right;">
+                    <button onclick="confirmarChegadaEscola(${remessaId})" 
+                            class="btn-vidro" 
+                            style="background:#10b981; border:none; padding:12px 25px; font-weight:bold;">
+                        CONFIRMAR RECEBIMENTO ✅
+                    </button>
+                </div>
+            </div>
         `;
     } catch (err) {
-        divDetalhes.innerHTML = `<p style="color:#ff4d4d;">Erro ao carregar itens.</p>`;
+        divDetalhes.innerHTML = `<p style="color:#ff4d4d;">Erro ao carregar detalhes da remessa.</p>`;
     }
 }
 
@@ -18754,6 +18771,85 @@ window.imprimirColetaLiberadaPDF = function() {
     doc.text(`TOTAL DE VOLUMES PARA CARREGAMENTO: ${totalVols}`, 14, doc.lastAutoTable.finalY + 15);
 
     doc.save(`Mapa_Coleta_${new Date().getTime()}.pdf`);
+};
+
+// 1. Tela principal de pendências
+window.infra_telaPendentes = async function() {
+    const container = document.getElementById('app-content');
+    container.innerHTML = '<div class="painel-vidro"><h2>🏗️ INFRAESTRUTURA: PENDENTES</h2><div id="infra-lista">Buscando...</div></div>';
+
+    try {
+        const res = await fetch(`${API_URL}/infra/solicitacoes`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+        const dados = await res.json();
+        
+        document.getElementById('infra-lista').innerHTML = dados.map(s => `
+            <div class="item-setor-global" onclick="infra_abrirAcao(${JSON.stringify(s).replace(/"/g, '&quot;')})" 
+                 style="display:flex; justify-content:space-between; padding:20px; margin-bottom:10px; cursor:pointer;">
+                <div>
+                    <strong>${s.produto_nome}</strong>
+                    <p>📍 Destino: ${s.destino_nome}</p>
+                </div>
+                <div style="background:#3b82f6; padding:10px; border-radius:8px;">${s.quantidade} UN</div>
+            </div>
+        `).join('');
+    } catch (e) { notificar("Erro ao carregar infra.", "erro"); }
+};
+
+// 2. Modal de Decisão (Foco forçado)
+window.infra_abrirAcao = function(s) {
+    const modal = document.createElement('div');
+    modal.id = 'modal-infra';
+    modal.style = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:9999; display:flex; align-items:center; justify-content:center; backdrop-filter:blur(5px);";
+    modal.innerHTML = `
+        <div class="painel-vidro" style="width:400px; padding:30px; text-align:center;">
+            <h3>GESTÃO DE SOLICITAÇÃO</h3>
+            <p>Deseja processar o envio de ${s.quantidade} ${s.produto_nome} para ${s.destino_nome}?</p>
+            <div style="display:flex; gap:10px; margin-top:20px;">
+                <button onclick="this.closest('#modal-infra').remove()" class="btn-voltar-vidro">VOLTAR</button>
+                <button onclick="infra_telaSelecaoTags(${s.id}, ${s.produto_id}, ${s.local_destino_id}, ${s.quantidade}, '${s.produto_nome}')" 
+                        class="btn-vidro" style="background:#22c55e;">ACEITAR ✅</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+};
+
+// 3. Seleção de Patrimônios Específicos
+window.infra_telaSelecaoTags = async function(solId, prodId, destId, qtd, nome) {
+    document.getElementById('modal-infra').remove();
+    const app = document.getElementById('app-content');
+    app.innerHTML = `
+        <div class="painel-vidro">
+            <h2>🏷️ SELECIONAR PATRIMÔNIOS (${nome})</h2>
+            <p>Selecione exatamente <b>${qtd}</b> etiquetas para envio.</p>
+            <div id="grid-tags" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:10px; margin:20px 0;"></div>
+            <button id="btn-infra-fim" class="btn-vidro" style="width:100%; display:none; background:#3b82f6;" 
+                    onclick="infra_finalizarEnvio(${solId}, ${prodId}, ${destId}, ${qtd})">FINALIZAR E GERAR REMESSA 📤</button>
+        </div>
+    `;
+
+    const res = await fetch(`${API_URL}/infra/tags-disponiveis?prodId=${prodId}`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+    const tags = await res.json();
+    document.getElementById('grid-tags').innerHTML = tags.map(t => `
+        <label style="background:rgba(255,255,255,0.1); padding:10px; border-radius:8px; display:flex; gap:10px;">
+            <input type="checkbox" name="tag_infra" value="${t.id}" onchange="infra_contar(${qtd})"> ${t.patrimonio}
+        </label>
+    `).join('');
+};
+
+window.infra_contar = function(qtd) {
+    const sel = document.querySelectorAll('input[name="tag_infra"]:checked').length;
+    document.getElementById('btn-infra-fim').style.display = (sel === qtd) ? 'block' : 'none';
+};
+
+window.infra_finalizarEnvio = async function(solId, prodId, destId, qtd) {
+    const ids = Array.from(document.querySelectorAll('input[name="tag_infra"]:checked')).map(i => i.value);
+    const res = await fetch(`${API_URL}/infra/processar-envio`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+        body: JSON.stringify({ solicitacaoId: solId, patrimoniosIds: ids, localDestinoId: destId, produtoId: prodId })
+    });
+    if(res.ok) { notificar("Carga liberada para coleta!", "sucesso"); infra_telaPendentes(); }
 };
 
 // Isso garante que o onclick="funcao()" funcione sempre

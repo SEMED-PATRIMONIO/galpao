@@ -13155,10 +13155,14 @@ async function telaPatrimonioEscolaCatalogo() {
     modal.id = 'modal-catalogo-entrada';
     modal.className = 'alerta-vidro-overlay';
 
-    const resSetores = await fetch(`${API_URL}/patrimonio/setores/meus`, {
-        headers: { 'Authorization': `Bearer ${TOKEN}` }
-    });
+    // Buscamos os setores e os bens já existentes em paralelo para ganhar tempo
+    const [resSetores, resBens] = await Promise.all([
+        fetch(`${API_URL}/patrimonio/setores/meus`, { headers: { 'Authorization': `Bearer ${TOKEN}` } }),
+        fetch(`${API_URL}/patrimonio/meus-produtos-unicos`, { headers: { 'Authorization': `Bearer ${TOKEN}` } }) 
+    ]);
+
     const setores = await resSetores.json();
+    const bensExistentes = await resBens.json(); // Lista de nomes únicos: ["PROJETOR EPSON", "NOTEBOOK DELL", ...]
 
     modal.innerHTML = `
         <div class="painel-vidro" style="width: 1150px; height: 620px; display: flex; gap: 20px; padding: 25px; border: 1px solid rgba(255,255,255,0.2); overflow: hidden;">
@@ -13174,8 +13178,14 @@ async function telaPatrimonioEscolaCatalogo() {
 
                 <div style="overflow-y: auto; flex: 1; padding-right: 10px;">
                     <div style="margin-bottom: 12px;">
-                        <label style="color:white; font-size:0.8rem;">NOME DO BEM:</label>
-                        <input type="text" id="cat-nome" class="input-vidro" placeholder="Ex: PROJETOR EPSON" oninput="gerarNumeroSerieAutomatico()">
+                        <label style="color:white; font-size:0.8rem;">NOME DO BEM (Digite ou selecione existente):</label>
+                        <input type="text" id="cat-nome" list="lista-sugestao-bens" class="input-vidro" 
+                               placeholder="Comece a digitar o nome do bem..." 
+                               oninput="gerarNumeroSerieAutomatico()">
+                        
+                        <datalist id="lista-sugestao-bens">
+                            ${bensExistentes.map(nome => `<option value="${nome}">`).join('')}
+                        </datalist>
                     </div>
 
                     <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom: 12px;">

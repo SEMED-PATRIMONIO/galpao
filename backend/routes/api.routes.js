@@ -7319,17 +7319,25 @@ router.post('/infra/finalizar-envio', verificarToken, async (req, res) => {
 });
 
 router.get('/patrimonio/listar-produtos-locais', verificarToken, async (req, res) => {
-    const localId = req.user.local_id; // Pegará o seu ID 26 do login
+    // Pegamos o local_id diretamente do token do usuário logado
+    const localId = req.user.local_id; 
+
     try {
         const sql = `
             SELECT id, nome 
             FROM produtos 
-            WHERE local_id = $1 AND tipo = 'PATRIMONIO' 
+            WHERE local_id = $1 
+              AND tipo = 'PATRIMONIO' 
             ORDER BY nome ASC
         `;
         const { rows } = await db.query(sql, [localId]);
+        
+        // Log de depuração: veja isso no seu terminal do VS Code/Servidor
+        console.log(`Buscando patrimônios para o local ${localId}. Encontrados: ${rows.length}`);
+        
         res.json(rows);
     } catch (err) {
+        console.error("ERRO SQL:", err.message);
         res.status(500).json({ error: err.message });
     }
 });

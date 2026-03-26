@@ -7203,6 +7203,24 @@ router.post('/infra/finalizar-envio', verificarToken, async (req, res) => {
     }
 });
 
+router.get('/patrimonio/meus-produtos-unicos', verificarToken, async (req, res) => {
+    const localId = req.user.local_id;
+    try {
+        const sql = `
+            SELECT DISTINCT p.nome 
+            FROM patrimonios pa
+            JOIN produtos p ON pa.produto_id = p.id
+            WHERE pa.local_id = $1
+            ORDER BY p.nome ASC;
+        `;
+        const { rows } = await db.query(sql, [localId]);
+        // Retornamos apenas um array de strings para facilitar o .map() no frontend
+        res.json(rows.map(r => r.nome));
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // 2. Listar solicitações aguardando separação de tags
 router.get('/infra/pendentes', verificarToken, async (req, res) => {
     try {

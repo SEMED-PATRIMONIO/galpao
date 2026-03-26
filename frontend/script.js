@@ -13155,96 +13155,102 @@ async function telaPatrimonioEscolaCatalogo() {
     modal.id = 'modal-catalogo-entrada';
     modal.className = 'alerta-vidro-overlay';
 
-    // 1. Carregamento prévio dos dados
-    const [resSetores, resProdutos] = await Promise.all([
-        fetch(`${API_URL}/patrimonio/setores/meus`, { headers: { 'Authorization': `Bearer ${TOKEN}` } }),
-        fetch(`${API_URL}/patrimonio/listar-produtos-locais`, { headers: { 'Authorization': `Bearer ${TOKEN}` } })
-    ]);
+    try {
+        // 1. Carregamento simultâneo
+        const [resSetores, resProdutos] = await Promise.all([
+            fetch(`${API_URL}/patrimonio/setores/meus`, { headers: { 'Authorization': `Bearer ${TOKEN}` } }),
+            fetch(`${API_URL}/patrimonio/listar-produtos-locais`, { headers: { 'Authorization': `Bearer ${TOKEN}` } })
+        ]);
 
-    const setores = await resSetores.json();
-    const produtosJaExistentes = await resProdutos.json();
+        const setores = await resSetores.json();
+        const produtosJaExistentes = await resProdutos.json();
 
-    modal.innerHTML = `
-        <div class="painel-vidro" style="width: 1150px; height: 620px; display: flex; gap: 20px; padding: 25px; border: 1px solid rgba(255,255,255,0.2); overflow: hidden;">
-            <div style="flex: 1; display: flex; flex-direction: column; gap: 15px;">
-                <h2 style="color:white; margin:0 0 10px 0;">📝 NOVO REGISTRO DE BEM</h2>
-                
-                <div style="background: rgba(59, 130, 246, 0.1); padding: 12px; border-radius: 12px; border: 1px solid rgba(59, 130, 246, 0.3);">
-                    <label style="color:#60a5fa; font-weight:bold; display:flex; align-items:center; gap:10px; cursor:pointer;">
-                        <input type="checkbox" id="check-2025" onchange="alternarLogica2025(this.checked)" style="transform: scale(1.3);">
-                        BEM ADQUIRIDO A PARTIR DE 2025?
-                    </label>
-                </div>
-
-                <div style="overflow-y: auto; flex: 1; padding-right: 10px;">
-                    <div style="margin-bottom: 15px;">
-                        <label style="color:white; font-size:0.8rem; font-weight:bold;">NOME DO BEM:</label>
-                        
-                        <select id="select-nome-existente" class="input-vidro" style="width: 100%; margin-bottom: 10px;" onchange="verificarNovoProduto(this.value)">
-                            <option value="">-- SELECIONE UM BEM EXISTENTE --</option>
-                            ${produtosJaExistentes.map(p => `<option value="${p.nome}" style="color:black;">${p.nome}</option>`).join('')}
-                            <option value="NOVO" style="color: #22c55e; font-weight:bold;">[+] CADASTRAR UM NOVO NOME / ITEM</option>
-                        </select>
-
-                        <input type="text" id="cat-nome" class="input-vidro" placeholder="Digite o nome do novo bem..." 
-                               style="display:none; border-color: #22c55e;" oninput="gerarNumeroSerieAutomatico()">
+        modal.innerHTML = `
+            <div class="painel-vidro" style="width: 1150px; height: 620px; display: flex; gap: 20px; padding: 25px; border: 1px solid rgba(255,255,255,0.2); overflow: hidden;">
+                <div style="flex: 1; display: flex; flex-direction: column; gap: 15px;">
+                    <h2 style="color:white; margin:0 0 10px 0;">📝 NOVO REGISTRO DE BEM</h2>
+                    
+                    <div style="background: rgba(59, 130, 246, 0.1); padding: 12px; border-radius: 12px; border: 1px solid rgba(59, 130, 246, 0.3);">
+                        <label style="color:#60a5fa; font-weight:bold; display:flex; align-items:center; gap:10px; cursor:pointer;">
+                            <input type="checkbox" id="check-2025" onchange="alternarLogica2025(this.checked)" style="transform: scale(1.3);">
+                            BEM ADQUIRIDO A PARTIR DE 2025?
+                        </label>
                     </div>
 
-                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom: 12px;">
-                        <div>
-                            <label style="color:white; font-size:0.8rem;">SETOR:</label>
-                            <select id="cat-setor" class="input-vidro">
-                                ${setores.map(s => `<option value="${s.id}" style="color:black;">${s.nome}</option>`).join('')}
+                    <div style="overflow-y: auto; flex: 1; padding-right: 10px;">
+                        <div style="margin-bottom: 15px;">
+                            <label style="color:white; font-size:0.8rem; font-weight:bold;">SELECIONE O BEM (Já cadastrado no seu local):</label>
+                            
+                            <select id="select-nome-existente" class="input-vidro" style="width: 100%; margin-bottom: 10px;" onchange="verificarNovoProduto(this.value)">
+                                <option value="">-- SELECIONE UM BEM EXISTENTE --</option>
+                                ${produtosJaExistentes.map(p => `<option value="${p.nome}" style="color:black;">${p.nome}</option>`).join('')}
+                                <option value="NOVO" style="color: #22c55e; font-weight:bold;">[+] CADASTRAR UM NOVO NOME / ITEM</option>
                             </select>
+
+                            <input type="text" id="cat-nome" class="input-vidro" placeholder="Digite o nome do novo bem..." 
+                                   style="display:none; border-color: #22c55e;" oninput="gerarNumeroSerieAutomatico()">
                         </div>
-                        <div>
-                            <label style="color:white; font-size:0.8rem;">QUANTIDADE:</label>
-                            <input type="number" id="cat-qtd" value="1" min="1" class="input-vidro" oninput="gerarNumeroSerieAutomatico()">
+
+                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom: 12px;">
+                            <div>
+                                <label style="color:white; font-size:0.8rem;">SETOR:</label>
+                                <select id="cat-setor" class="input-vidro">
+                                    ${setores.map(s => `<option value="${s.id}" style="color:black;">${s.nome}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div>
+                                <label style="color:white; font-size:0.8rem;">QUANTIDADE:</label>
+                                <input type="number" id="cat-qtd" value="1" min="1" class="input-vidro" oninput="gerarNumeroSerieAutomatico()">
+                            </div>
+                        </div>
+
+                        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:12px; margin-bottom: 12px;">
+                            <div>
+                                <label id="label-serie" style="color:white; font-size:0.8rem;">Nº PATRIMÔNIO:</label>
+                                <input type="text" id="cat-serie" class="input-vidro" placeholder="Auto-gerado" readonly style="background: rgba(255,255,255,0.05); cursor: not-allowed;">
+                            </div>
+                            <div>
+                                <label style="color:white; font-size:0.8rem;">Nº RGP:</label>
+                                <input type="text" id="cat-patrimonio" class="input-vidro" placeholder="Pendente" readonly style="background: rgba(255,255,255,0.05); cursor: not-allowed; opacity: 0.6;">
+                            </div>
+                            <div>
+                                <label style="color:white; font-size:0.8rem;">Nº NF ou CE:</label>
+                                <input type="text" id="cat-nf" class="input-vidro">
+                            </div>
+                        </div>
+
+                        <div id="container-arquivo-nf" style="display:none; margin-bottom: 12px;">
+                            <label style="color:white; font-size:0.8rem;">ANEXAR NF (PDF):</label>
+                            <input type="file" id="cat-file" accept="application/pdf" class="input-vidro">
                         </div>
                     </div>
 
-                    <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:12px; margin-bottom: 12px;">
-                        <div>
-                            <label id="label-serie" style="color:white; font-size:0.8rem;">Nº PATRIMÔNIO:</label>
-                            <input type="text" id="cat-serie" class="input-vidro" placeholder="Auto-gerado" readonly style="background: rgba(255,255,255,0.05); cursor: not-allowed;">
-                        </div>
-                        <div>
-                            <label style="color:white; font-size:0.8rem;">Nº RGP:</label>
-                            <input type="text" id="cat-patrimonio" class="input-vidro" placeholder="Pendente" readonly style="background: rgba(255,255,255,0.05); cursor: not-allowed; opacity: 0.6;">
-                        </div>
-                        <div>
-                            <label style="color:white; font-size:0.8rem;">Nº NF ou CE:</label>
-                            <input type="text" id="cat-nf" class="input-vidro">
-                        </div>
-                    </div>
-
-                    <div id="container-arquivo-nf" style="display:none; margin-bottom: 12px;">
-                        <label style="color:white; font-size:0.8rem;">ANEXAR NF (PDF):</label>
-                        <input type="file" id="cat-file" accept="application/pdf" class="input-vidro">
+                    <div style="display:flex; gap:10px; margin-top: auto;">
+                        <button onclick="document.getElementById('modal-catalogo-entrada').remove()" class="btn-sair-vidro" style="flex:1;">CANCELAR</button>
+                        <button onclick="enviarCadastroComAnexo()" id="btn-salvar" style="flex:2; background:#3b82f6; color:white; border:none; border-radius:10px; font-weight:bold; cursor:pointer;">
+                            SALVAR REGISTRO
+                        </button>
                     </div>
                 </div>
 
-                <div style="display:flex; gap:10px; margin-top: auto;">
-                    <button onclick="document.getElementById('modal-catalogo-entrada').remove()" class="btn-sair-vidro" style="flex:1;">CANCELAR</button>
-                    <button onclick="enviarCadastroComAnexo()" id="btn-salvar" style="flex:2; background:#3b82f6; color:white; border:none; border-radius:10px; font-weight:bold; cursor:pointer;">
-                        SALVAR REGISTRO
-                    </button>
+                <div style="flex: 1.2; display: flex; flex-direction: column; background: rgba(0,0,0,0.2); border-radius: 15px; padding: 15px; border: 1px solid rgba(255,255,255,0.05);">
+                    <h3 style="color:#aaa; font-size:0.9rem; margin:0 0 10px 0; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 5px;">
+                        ÚLTIMOS BENS CADASTRADOS
+                    </h3>
+                    <div id="lista-bens-recentes" style="flex: 1; overflow-y: auto;">
+                        <p style="color:gray; text-align:center;">Carregando...</p>
+                    </div>
                 </div>
             </div>
+        `;
+        document.body.appendChild(modal);
+        carregarBensRecentesModal();
 
-            <div style="flex: 1.2; display: flex; flex-direction: column; background: rgba(0,0,0,0.2); border-radius: 15px; padding: 15px; border: 1px solid rgba(255,255,255,0.05);">
-                <h3 style="color:#aaa; font-size:0.9rem; margin:0 0 10px 0; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 5px;">
-                    ÚLTIMOS BENS CADASTRADOS
-                </h3>
-                <div id="lista-bens-recentes" style="flex: 1; overflow-y: auto;">
-                    <p style="color:gray; text-align:center;">Carregando...</p>
-                </div>
-            </div>
-        </div>
-    `;
-    document.body.appendChild(modal);
-    carregarBensRecentesModal();
-};
+    } catch (err) {
+        console.error("Erro ao carregar modal:", err);
+        notificar("Erro ao carregar dados do catálogo.", "erro");
+    }
+}
 
 window.verificarNovoProduto = function(valor) {
     const inputNome = document.getElementById('cat-nome');
@@ -13415,7 +13421,7 @@ async function carregarBensRecentesModal() {
         container.innerHTML = bens.map(b => `
             <div style="background: rgba(255,255,255,0.03); padding: 10px; border-radius: 8px; margin-bottom: 8px; border: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; align-items: center;">
                 <div style="text-align: left;">
-                    <input type="checkbox" class="check-patrimonio" value="${item.id}">
+                    <input type="checkbox" class="check-patrimonio" value="${b.id}">
                     <strong style="color: white; font-size: 0.85rem; display: block;">${b.nome_produto}</strong>
                     <small style="color: #60a5fa; font-family: monospace;">${b.numero_serie}</small>
                 </div>

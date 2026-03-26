@@ -7417,9 +7417,8 @@ router.get('/patrimonio/obter-nf/:id', verificarToken, async (req, res) => {
 
 router.post('/patrimonio/cadastrar-completo', verificarToken, upload.single('arquivo_nf'), async (req, res) => {
     const { nome, setor_id, quantidade, numero_nf, adquirido_2025 } = req.body;
-    const localId = req.user.local_id;
+    const localId = req.user.local_id; 
     const usuarioId = req.user.id;
-    const arquivo = req.file;
     const qtdNum = parseInt(quantidade);
 
     const client = await db.pool.connect();
@@ -7427,59 +7426,59 @@ router.post('/patrimonio/cadastrar-completo', verificarToken, upload.single('arq
     try {
         await client.query('BEGIN');
 
-        // 1. VERIFICAÇÃO/ATUALIZAÇÃO NA TABELA 'produtos'
+        // 1. Verificar se o produto já existe para este local (Evita duplicidade em 'produtos')
         let resProd = await client.query(
-            "SELECT id, quantidade_estoque FROM produtos WHERE UPPER(nome) = UPPER($1) AND local_id = $2 AND tipo = 'PATRIMONIO'",
-            [nome.trim(), localId]
+            "SELECT id FROM produtos WHERE UPPER(nome) = $1 AND local_id = $2 AND tipo = 'PATRIMONIO'",
+            [nome.trim().toUpperCase(), localId]
         );
 
         let produtoId;
-
         if (resProd.rows.length > 0) {
-            // SE JÁ EXISTE: Adiciona a nova quantidade ao saldo atual
             produtoId = resProd.rows[0].id;
+            // Atualiza o saldo global do produto
             await client.query(
                 "UPDATE produtos SET quantidade_estoque = quantidade_estoque + $1 WHERE id = $2",
                 [qtdNum, produtoId]
             );
         } else {
-            // SE NÃO EXISTE: Cria o registro do produto com a quantidade inicial
+            // Cria o produto se não existir
             const newProd = await client.query(
-                `INSERT INTO produtos (nome, tipo, local_id, quantidade_estoque, alerta_minimo) 
-                 VALUES ($1, 'PATRIMONIO', $2, $3, 0) RETURNING id`,
+                "INSERT INTO produtos (nome, tipo, local_id, quantidade_estoque) VALUES ($1, 'PATRIMONIO', $2, $3) RETURNING id",
                 [nome.trim().toUpperCase(), localId, qtdNum]
             );
             produtoId = newProd.rows[0].id;
         }
 
-        // 2. GESTÃO DE DOCUMENTO (NF)
-        let documentoId = null;
-        if (arquivo) {
-            const resDoc = await client.query(
-                "INSERT INTO documentos_fiscais (numero, url, usuario_id, data_upload) VALUES ($1, $2, $3, NOW()) RETURNING id",
-                [numero_nf, arquivo.path, usuarioId]
-            );
-            documentoId = resDoc.rows[0].id;
-        }
-
-        // 3. CRIAÇÃO DOS ITENS INDIVIDUAIS NA TABELA 'patrimonios'
-        // Criamos uma linha para cada unidade informada na quantidade
+        // 2. Criar os registros individuais na tabela 'patrimonios'
         for (let i = 0; i < qtdNum; i++) {
+            // Lógica de geração de número de série (pode ajustar conforme sua regra)
+            const countRes = await client.query("SELECT COUNT(*) FROM patrimonios WHERE local_id = $1", [localId]);
+            const totalLocal = parseInt(countRes.rows[0].count) + 1;
+            const serieGerada = `MP-${localId}-${String(totalLocal).padStart(4, '0')}`;
+
             await client.query(
                 `INSERT INTO patrimonios 
-                (produto_id, local_id, setor_id, estado, adquirido_pos_2025, nota_fiscal, documento_id, status) 
-                VALUES ($1, $2, $3, 'BOM', $4, $5, $6, 'ESTOQUE')`,
-                [produtoId, localId, setor_id, adquirido_2025 === 'true', numero_nf, documentoId]
+                (produto_id, numero_serie, local_id, setor_id, status, nota_fiscal, estado, adquirido_pos_2025, url_nota_fiscal, data_atualizacao) 
+                VALUES ($1, $2, $3, $4, 'ESTOQUE', $5, 'BOM', $6, $7, NOW())`,
+                [
+                    produtoId, 
+                    serieGerada, 
+                    localId, 
+                    setor_id, 
+                    numero_nf, 
+                    adquirido_2025 === 'true', 
+                    req.file ? req.file.path : null
+                ]
             );
         }
 
         await client.query('COMMIT');
-        res.json({ success: true, message: `Sucesso! ${qtdNum} unidades de "${nome}" registradas e saldo atualizado.` });
+        res.json({ success: true, message: "Cadastro e saldo atualizados com sucesso!" });
 
     } catch (err) {
         await client.query('ROLLBACK');
-        console.error("Erro no cadastro de patrimônio:", err.message);
-        res.status(500).json({ error: "Falha ao processar cadastro: " + err.message });
+        console.error(err);
+        res.status(500).json({ error: "Erro ao salvar: " + err.message });
     } finally {
         client.release();
     }

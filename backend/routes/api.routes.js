@@ -7221,6 +7221,25 @@ router.get('/patrimonio/meus-produtos-unicos', verificarToken, async (req, res) 
     }
 });
 
+router.get('/patrimonio/meus-produtos-nomes', verificarToken, async (req, res) => {
+    // O seu middleware de token deve injetar o local_id do usuário no req.user
+    const localId = req.user.local_id; 
+
+    try {
+        const sql = `
+            SELECT DISTINCT nome 
+            FROM produtos 
+            WHERE local_id = $1 AND tipo = 'PATRIMONIO' 
+            ORDER BY nome ASC;
+        `;
+        const { rows } = await db.query(sql, [localId]);
+        // Retorna apenas um array simples de strings para o frontend
+        res.json(rows.map(r => r.nome));
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 router.get('/patrimonio/nomes-existentes', verificarToken, async (req, res) => {
     const localId = req.user.local_id; // Pega o ID do local do usuário logado
     try {

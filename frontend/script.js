@@ -13259,60 +13259,55 @@ async function gerarNumeroSerieAutomatico() {
     const btnSalvar = document.getElementById('btn-salvar');
     const qtd = parseInt(document.getElementById('cat-qtd').value) || 1;
     
-    if (nomeInput.trim().length > 0) {
-        // Recuperamos os dados do local logado
-        const localId = localStorage.getItem('local_id') || 26; 
-        const prefixo = PREFIXOS_LOCAIS[localId] || "MP";
-        const anoAtual = new Date().getFullYear().toString().slice(-2);
+    // 1. Garantia do Local e do Ano (4 dígitos agora)
+    const localId = localStorage.getItem('local_id') || 26;
+    const anoAtual = new Date().getFullYear(); // Retorna 2026 completo
+    const prefixo = "MP"; // Prefixo padrão conforme sua tabela
 
+    if (nomeInput.trim().length > 0) {
         try {
-            // 1. Pedimos o próximo número real baseado no MAX do banco
+            // 2. Chama o backend enviando o ano de 4 dígitos
             const res = await fetch(`${API_URL}/patrimonio/proximo-numero/${prefixo}/${anoAtual}`, {
                 headers: { 'Authorization': `Bearer ${TOKEN}` }
             });
             const data = await res.json();
             const inicio = data.proximo;
 
-            // 2. Formata a visualização (ex: MP-26-26-0001 ou intervalo se for lote)
-            let numeroSugerido = "";
+            // 3. Formatação da string para exibição no campo
+            let serieFinal = "";
             if (qtd <= 1) {
-                numeroSugerido = `${prefixo}-${anoAtual}-${String(inicio).padStart(4, '0')}`;
+                // Formato: MP-2026-0001
+                serieFinal = `${prefixo}-${anoAtual}-${String(inicio).padStart(4, '0')}`;
             } else {
+                // Formato para lote: MP-2026-0001 a 0010
                 const fim = inicio + (qtd - 1);
-                numeroSugerido = `${prefixo}-${anoAtual}-${String(inicio).padStart(4, '0')} a ${String(fim).padStart(4, '0')}`;
+                serieFinal = `${prefixo}-${anoAtual}-${String(inicio).padStart(4, '0')} a ${String(fim).padStart(4, '0')}`;
             }
 
-            serieInput.value = numeroSugerido;
+            serieInput.value = serieFinal;
 
-            // 3. DUPLA VERIFICAÇÃO: Checa se este número exato está livre
-            // Usamos o primeiro número da sequência para validar o lote
-            const checkRes = await fetch(`${API_URL}/patrimonio/checar-disponibilidade/${numeroSugerido.split(' ')[0]}`, {
+            // 4. Validação visual (Verde se livre, Vermelho se ocupado)
+            const checkRes = await fetch(`${API_URL}/patrimonio/checar-disponibilidade/${serieFinal.split(' ')[0]}`, {
                 headers: { 'Authorization': `Bearer ${TOKEN}` }
             });
             const checkData = await checkRes.json();
 
             if (!checkData.disponivel) {
-                // BLOQUEIO DE SEGURANÇA
-                serieInput.style.backgroundColor = "rgba(239, 68, 68, 0.2)";
                 serieInput.style.borderColor = "#ef4444";
                 btnSalvar.disabled = true;
-                btnSalvar.innerText = "NÚMERO DUPLICADO ❌";
-                notificar("Atenção: A sequência sugerida já existe no banco!", "erro");
+                btnSalvar.innerText = "NÚMERO JÁ EXISTE ❌";
             } else {
-                // TUDO OK
-                serieInput.style.backgroundColor = "rgba(34, 197, 94, 0.1)";
                 serieInput.style.borderColor = "#22c55e";
                 btnSalvar.disabled = false;
                 btnSalvar.innerText = "SALVAR REGISTRO ✅";
             }
 
         } catch (err) {
-            console.error("Erro na geração de série:", err);
+            console.error("Erro na geração da etiqueta:", err);
         }
     } else {
         serieInput.value = "";
         serieInput.style.borderColor = "rgba(255,255,255,0.1)";
-        serieInput.style.backgroundColor = "transparent";
     }
 }
 

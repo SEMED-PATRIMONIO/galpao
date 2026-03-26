@@ -7416,21 +7416,21 @@ router.get('/patrimonio/obter-nf/:id', verificarToken, async (req, res) => {
 });
 
 router.post('/patrimonio/cadastrar-completo', verificarToken, upload.single('arquivo_nf'), async (req, res) => {
-    // Pegamos o local_id do token OU do body enviado pelo frontend
     const { nome, setor_id, quantidade, numero_nf, adquirido_2025, local_id_manual } = req.body;
-    const localId = req.user.local_id || local_id_manual; 
+    
+    // 1. GARANTIA DO LOCAL_ID: Pega do token ou do que veio do frontend
+    const localId = req.user.local_id || local_id_manual || 26; 
     const usuarioId = req.user.id;
     const qtdNum = parseInt(quantidade);
 
-    if (!localId) {
-        return res.status(400).json({ error: "Local não identificado. Refaça o login." });
-    }
+    // 2. ANO CORRENTE COM 4 DÍGITOS
+    const anoAtual = new Date().getFullYear(); // Retorna 2026
 
     const client = await db.pool.connect();
     try {
         await client.query('BEGIN');
 
-        // 1. Tabela PRODUTOS: Garantindo o local_id
+        // Lógica para Tabela PRODUTOS
         let resProd = await client.query(
             "SELECT id FROM produtos WHERE UPPER(nome) = $1 AND local_id = $2",
             [nome.trim().toUpperCase(), localId]
@@ -7448,26 +7448,40 @@ router.post('/patrimonio/cadastrar-completo', verificarToken, upload.single('arq
             produtoId = newProd.rows[0].id;
         }
 
-        // 2. Tabela PATRIMONIOS: Gerando os itens com local_id
+        // --- LÓGICA DO NÚMERO DE SÉRIE ---
+        // Buscamos o último número deste ano para este local
+        const lastRes = await client.query(
+            `SELECT numero_serie FROM patrimonios 
+             WHERE numero_serie LIKE $1 
+             ORDER BY id DESC LIMIT 1`, 
+            [`MP-${anoAtual}-%`]
+        );
+
+        let ultimoNum = 0;
+        if (lastRes.rows.length > 0) {
+            const partes = lastRes.rows[0].numero_serie.split('-');
+            ultimoNum = parseInt(partes[partes.length - 1]) || 0;
+        }
+
+        // 3. Loop de inserção corrigindo o local_id e o ano
         for (let i = 0; i < qtdNum; i++) {
-            const lastRes = await client.query(
-                "SELECT numero_serie FROM patrimonios WHERE local_id = $1 ORDER BY id DESC LIMIT 1", 
-                [localId]
-            );
-
-            let ultimoNum = 0;
-            if (lastRes.rows.length > 0) {
-                const partes = lastRes.rows[0].numero_serie.split('-');
-                ultimoNum = parseInt(partes[partes.length - 1]) || 0;
-            }
-
-            const novaSerie = `MP-${localId}-${String(ultimoNum + (i + 1)).padStart(4, '0')}`;
+            ultimoNum++;
+            // Montagem: MP - 2026 - 0001
+            const novaSerie = `MP-${anoAtual}-${String(ultimoNum).padStart(4, '0')}`;
 
             await client.query(
                 `INSERT INTO patrimonios 
-                (produto_id, numero_serie, local_id, setor_id, status, nota_fiscal, estado, adquirido_pos_2025, url_nota_fiscal, em_transito) 
-                VALUES ($1, $2, $3, $4, 'ESTOQUE', $5, 'BOM', $6, $7, false)`,
-                [produtoId, novaSerie, localId, setor_id, numero_nf, adquirido_2025 === 'true', req.file ? req.file.path : null]
+                (produto_id, numero_serie, local_id, setor_id, status, nota_fiscal, estado, adquirido_pos_2025, url_nota_fiscal, em_transito, data_atualizacao) 
+                VALUES ($1, $2, $3, $4, 'ESTOQUE', $5, 'BOM', $6, $7, false, NOW())`,
+                [
+                    produtoId, 
+                    novaSerie, 
+                    localId,    // Agora salvando o local_id que estava vindo nulo
+                    setor_id, 
+                    numero_nf, 
+                    adquirido_2025 === 'true', 
+                    req.file ? req.file.path : null
+                ]
             );
         }
 
@@ -7475,6 +7489,7 @@ router.post('/patrimonio/cadastrar-completo', verificarToken, upload.single('arq
         res.json({ success: true });
     } catch (err) {
         await client.query('ROLLBACK');
+        console.error(err);
         res.status(500).json({ error: err.message });
     } finally {
         client.release();

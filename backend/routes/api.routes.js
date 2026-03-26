@@ -7416,16 +7416,21 @@ router.get('/patrimonio/obter-nf/:id', verificarToken, async (req, res) => {
 });
 
 router.post('/patrimonio/cadastrar-completo', verificarToken, upload.single('arquivo_nf'), async (req, res) => {
-    const { nome, setor_id, quantidade, numero_nf, adquirido_2025 } = req.body;
-    const localId = req.user.local_id;
+    // Pegamos o local_id do token OU do body enviado pelo frontend
+    const { nome, setor_id, quantidade, numero_nf, adquirido_2025, local_id_manual } = req.body;
+    const localId = req.user.local_id || local_id_manual; 
+    const usuarioId = req.user.id;
     const qtdNum = parseInt(quantidade);
 
-    const client = await db.pool.connect();
+    if (!localId) {
+        return res.status(400).json({ error: "Local não identificado. Refaça o login." });
+    }
 
+    const client = await db.pool.connect();
     try {
         await client.query('BEGIN');
 
-        // 1. Busca ou cria o produto
+        // 1. Tabela PRODUTOS: Garantindo o local_id
         let resProd = await client.query(
             "SELECT id FROM produtos WHERE UPPER(nome) = $1 AND local_id = $2",
             [nome.trim().toUpperCase(), localId]
@@ -7443,51 +7448,34 @@ router.post('/patrimonio/cadastrar-completo', verificarToken, upload.single('arq
             produtoId = newProd.rows[0].id;
         }
 
-        // --- LÓGICA DE SÉRIE CORRIGIDA ---
-        // 2. Buscamos o ÚLTIMO número usado neste local para evitar duplicidade
-        // Vamos extrair apenas a parte numérica final do campo numero_serie
-        const lastRes = await client.query(
-            `SELECT numero_serie FROM patrimonios 
-             WHERE local_id = $1 
-             ORDER BY id DESC LIMIT 1`, 
-            [localId]
-        );
-
-        let ultimoNumero = 0;
-        if (lastRes.rows.length > 0) {
-            // Se o formato é MP-26-0005, pegamos o "0005" e convertemos para número
-            const partes = lastRes.rows[0].numero_serie.split('-');
-            ultimoNumero = parseInt(partes[partes.length - 1]) || 0;
-        }
-
-        // 3. Loop de inserção incrementando o número na memória
+        // 2. Tabela PATRIMONIOS: Gerando os itens com local_id
         for (let i = 0; i < qtdNum; i++) {
-            ultimoNumero++; // Incrementa o número para cada novo item
-            const novaSerie = `MP-${localId}-${String(ultimoNumero).padStart(4, '0')}`;
+            const lastRes = await client.query(
+                "SELECT numero_serie FROM patrimonios WHERE local_id = $1 ORDER BY id DESC LIMIT 1", 
+                [localId]
+            );
+
+            let ultimoNum = 0;
+            if (lastRes.rows.length > 0) {
+                const partes = lastRes.rows[0].numero_serie.split('-');
+                ultimoNum = parseInt(partes[partes.length - 1]) || 0;
+            }
+
+            const novaSerie = `MP-${localId}-${String(ultimoNum + (i + 1)).padStart(4, '0')}`;
 
             await client.query(
                 `INSERT INTO patrimonios 
                 (produto_id, numero_serie, local_id, setor_id, status, nota_fiscal, estado, adquirido_pos_2025, url_nota_fiscal, em_transito) 
                 VALUES ($1, $2, $3, $4, 'ESTOQUE', $5, 'BOM', $6, $7, false)`,
-                [
-                    produtoId, 
-                    novaSerie, 
-                    localId, 
-                    setor_id, 
-                    numero_nf, 
-                    adquirido_2025 === 'true', 
-                    req.file ? req.file.path : null
-                ]
+                [produtoId, novaSerie, localId, setor_id, numero_nf, adquirido_2025 === 'true', req.file ? req.file.path : null]
             );
         }
 
         await client.query('COMMIT');
         res.json({ success: true });
-
     } catch (err) {
         await client.query('ROLLBACK');
-        console.error("Erro detalhado:", err);
-        res.status(500).json({ error: "Erro ao salvar: " + err.message });
+        res.status(500).json({ error: err.message });
     } finally {
         client.release();
     }

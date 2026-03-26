@@ -7417,8 +7417,7 @@ router.get('/patrimonio/obter-nf/:id', verificarToken, async (req, res) => {
 
 router.post('/patrimonio/cadastrar-completo', verificarToken, upload.single('arquivo_nf'), async (req, res) => {
     const { nome, setor_id, quantidade, numero_nf, adquirido_2025 } = req.body;
-    const localId = req.user.local_id; 
-    const usuarioId = req.user.id;
+    const localId = req.user.local_id;
     const qtdNum = parseInt(quantidade);
 
     const client = await db.pool.connect();
@@ -7426,22 +7425,17 @@ router.post('/patrimonio/cadastrar-completo', verificarToken, upload.single('arq
     try {
         await client.query('BEGIN');
 
-        // 1. Verificar se o produto já existe para este local (Evita duplicidade em 'produtos')
+        // 1. Busca ou cria o produto
         let resProd = await client.query(
-            "SELECT id FROM produtos WHERE UPPER(nome) = $1 AND local_id = $2 AND tipo = 'PATRIMONIO'",
+            "SELECT id FROM produtos WHERE UPPER(nome) = $1 AND local_id = $2",
             [nome.trim().toUpperCase(), localId]
         );
 
         let produtoId;
         if (resProd.rows.length > 0) {
             produtoId = resProd.rows[0].id;
-            // Atualiza o saldo global do produto
-            await client.query(
-                "UPDATE produtos SET quantidade_estoque = quantidade_estoque + $1 WHERE id = $2",
-                [qtdNum, produtoId]
-            );
+            await client.query("UPDATE produtos SET quantidade_estoque = quantidade_estoque + $1 WHERE id = $2", [qtdNum, produtoId]);
         } else {
-            // Cria o produto se não existir
             const newProd = await client.query(
                 "INSERT INTO produtos (nome, tipo, local_id, quantidade_estoque) VALUES ($1, 'PATRIMONIO', $2, $3) RETURNING id",
                 [nome.trim().toUpperCase(), localId, qtdNum]
@@ -7449,20 +7443,35 @@ router.post('/patrimonio/cadastrar-completo', verificarToken, upload.single('arq
             produtoId = newProd.rows[0].id;
         }
 
-        // 2. Criar os registros individuais na tabela 'patrimonios'
+        // --- LÓGICA DE SÉRIE CORRIGIDA ---
+        // 2. Buscamos o ÚLTIMO número usado neste local para evitar duplicidade
+        // Vamos extrair apenas a parte numérica final do campo numero_serie
+        const lastRes = await client.query(
+            `SELECT numero_serie FROM patrimonios 
+             WHERE local_id = $1 
+             ORDER BY id DESC LIMIT 1`, 
+            [localId]
+        );
+
+        let ultimoNumero = 0;
+        if (lastRes.rows.length > 0) {
+            // Se o formato é MP-26-0005, pegamos o "0005" e convertemos para número
+            const partes = lastRes.rows[0].numero_serie.split('-');
+            ultimoNumero = parseInt(partes[partes.length - 1]) || 0;
+        }
+
+        // 3. Loop de inserção incrementando o número na memória
         for (let i = 0; i < qtdNum; i++) {
-            // Lógica de geração de número de série (pode ajustar conforme sua regra)
-            const countRes = await client.query("SELECT COUNT(*) FROM patrimonios WHERE local_id = $1", [localId]);
-            const totalLocal = parseInt(countRes.rows[0].count) + 1;
-            const serieGerada = `MP-${localId}-${String(totalLocal).padStart(4, '0')}`;
+            ultimoNumero++; // Incrementa o número para cada novo item
+            const novaSerie = `MP-${localId}-${String(ultimoNumero).padStart(4, '0')}`;
 
             await client.query(
                 `INSERT INTO patrimonios 
-                (produto_id, numero_serie, local_id, setor_id, status, nota_fiscal, estado, adquirido_pos_2025, url_nota_fiscal, data_atualizacao) 
-                VALUES ($1, $2, $3, $4, 'ESTOQUE', $5, 'BOM', $6, $7, NOW())`,
+                (produto_id, numero_serie, local_id, setor_id, status, nota_fiscal, estado, adquirido_pos_2025, url_nota_fiscal, em_transito) 
+                VALUES ($1, $2, $3, $4, 'ESTOQUE', $5, 'BOM', $6, $7, false)`,
                 [
                     produtoId, 
-                    serieGerada, 
+                    novaSerie, 
                     localId, 
                     setor_id, 
                     numero_nf, 
@@ -7473,14 +7482,51 @@ router.post('/patrimonio/cadastrar-completo', verificarToken, upload.single('arq
         }
 
         await client.query('COMMIT');
-        res.json({ success: true, message: "Cadastro e saldo atualizados com sucesso!" });
+        res.json({ success: true });
 
     } catch (err) {
         await client.query('ROLLBACK');
-        console.error(err);
+        console.error("Erro detalhado:", err);
         res.status(500).json({ error: "Erro ao salvar: " + err.message });
     } finally {
         client.release();
+    }
+});
+
+router.get('/patrimonio/checar-disponibilidade/:serie', verificarToken, async (req, res) => {
+    const { serie } = req.params;
+    try {
+        const sql = "SELECT id FROM patrimonios WHERE numero_serie = $1 OR patrimonio = $1 LIMIT 1";
+        const { rows } = await db.query(sql, [serie]);
+        
+        // Retorna true se estiver disponível (não encontrou ninguém com esse número)
+        res.json({ disponivel: rows.length === 0 });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.get('/patrimonio/proximo-numero/:prefixo/:ano', verificarToken, async (req, res) => {
+    const { prefixo, ano } = req.params;
+    const padrao = `${prefixo}-${ano}-%`;
+
+    try {
+        // Esta query procura o maior número final na sequência, ignorando buracos de deleção
+        const sql = `
+            SELECT MAX(CAST(substring(numero_serie from '-([0-9]+)$') AS INTEGER)) as maximo
+            FROM patrimonios
+            WHERE numero_serie LIKE $1
+        `;
+        
+        const { rows } = await db.query(sql, [padrao]);
+        
+        // Se não houver nenhum, começa em 1. Se houver, soma 1 ao maior encontrado.
+        const proximo = (rows[0].maximo || 0) + 1;
+        
+        res.json({ proximo });
+    } catch (err) {
+        console.error("Erro ao calcular próximo número:", err);
+        res.status(500).json({ error: "Erro ao calcular sequência." });
     }
 });
 

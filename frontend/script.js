@@ -8631,8 +8631,8 @@ async function telaLogisticaEntregas() {
                                 </div>
                                 
                                 <button class="btn-coletar-remessa" 
-                                        data-remessa-id="${r.remessa_id}" 
-                                        style="background:#1e40af; color:white; border:none; padding:12px 25px; border-radius:6px; cursor:pointer; font-weight:bold; transition: background 0.3s;">
+                                        onclick="processarSaidaRemessa(${r.remessa_id}, '${r.tipo_pedido}')" 
+                                        style="background:#1e40af; color:white; border:none; padding:12px 25px; border-radius:6px; cursor:pointer; font-weight:bold;">
                                     🚚 LIBERAR SAÍDA
                                 </button>
                             </div>
@@ -8644,6 +8644,43 @@ async function telaLogisticaEntregas() {
     } catch (err) {
         console.error(err);
         container.innerHTML = `<div style="padding:20px; color:red;">Erro ao carregar logística: ${err.message}</div>`;
+    }
+}
+
+async function processarSaidaRemessa(remessaId, tipoPedido) {
+    if (!confirm("Confirmar a saída desta remessa para transporte?")) return;
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/logistica/confirmar-saida`, {
+            method: 'POST',
+            headers: { 
+                'Authorization': `Bearer ${TOKEN}`,
+                'Content-Type': 'application/json' 
+            },
+            body: JSON.stringify({ remessaId, tipoPedido })
+        });
+
+        const dados = await res.json();
+
+        if (res.ok) {
+            notificar("Saída liberada com sucesso!", "sucesso");
+
+            // DIFERENCIAÇÃO DE RELATÓRIO
+            if (tipoPedido === 'INFRA_PATRIMONIO') {
+                // Abre o romaneio que lista as etiquetas/patrimônios
+                window.open(`${API_URL}/relatorios/romaneio-infra/${remessaId}`, '_blank');
+            } else {
+                // Abre o romaneio padrão de Uniformes/Outros
+                window.open(`${API_URL}/relatorios/romaneio-padrao/${remessaId}`, '_blank');
+            }
+
+            // Atualiza a tela para sumir o que já saiu
+            telaLogisticaEntregas();
+        } else {
+            notificar(dados.error, "erro");
+        }
+    } catch (err) {
+        notificar("Erro ao processar saída.", "erro");
     }
 }
 
@@ -9159,53 +9196,49 @@ async function confirmarChegadaEscola(remessaId) {
 
 // Função para buscar e exibir os itens da remessa
 async function visualizarDetalhesRemessa(remessaId) {
-    const divDetalhes = document.getElementById('detalhes-remessa-escolhida');
-    divDetalhes.innerHTML = '<div class="spinner"></div>';
+    // Busca a div específica desta remessa que você criou no map
+    const divDetalhes = document.getElementById(`detalhes-remessa-${remessaId}`);
+    
+    // Toggle (se já estiver aberto, fecha)
+    if (divDetalhes.style.display === 'block') {
+        divDetalhes.style.display = 'none';
+        return;
+    }
+
+    divDetalhes.innerHTML = '<div style="color:white; font-size:0.8rem;">⌛ Carregando itens...</div>';
+    divDetalhes.style.display = 'block';
 
     try {
         const res = await fetch(`${API_URL}/escola/detalhes-remessa/${remessaId}`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
         const data = await res.json();
-
-        // Verificamos o tipo de pedido para mudar o título da tabela
         const ePatrimonio = data.tipo_pedido === 'INFRA_PATRIMONIO';
 
         divDetalhes.innerHTML = `
-            <div style="margin-top:20px; padding:20px; background:rgba(0,0,0,0.2); border-radius:10px;">
-                <h4 style="color:#fbbf24;">📦 ITENS NA REMESSA #${remessaId}</h4>
-                <p style="color:white; font-size:0.8rem;">Tipo: <b>${data.tipo_pedido}</b></p>
-                
+            <div style="padding:15px; background:rgba(255,255,255,0.05); border-radius:8px;">
                 <table style="width:100%; color:white; font-size:0.85rem; border-collapse:collapse;">
                     <thead>
-                        <tr style="border-bottom:1px solid rgba(255,255,255,0.1);">
-                            <th style="text-align:left; padding:10px;">PRODUTO</th>
-                            ${!ePatrimonio ? '<th style="text-align:center;">TAMANHO</th>' : '<th style="text-align:center;">ETIQUETA/TAG</th>'}
-                            <th style="text-align:center; padding:10px;">QUANTIDADE</th>
+                        <tr style="border-bottom:1px solid rgba(255,255,255,0.1); color:#fbbf24;">
+                            <th style="text-align:left; padding:8px;">PRODUTO</th>
+                            <th style="text-align:center; padding:8px;">${ePatrimonio ? 'ETIQUETA' : 'TAMANHO'}</th>
+                            <th style="text-align:center; padding:8px;">QTD</th>
                         </tr>
                     </thead>
                     <tbody>
                         ${data.itens.map(i => `
                             <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                                <td style="padding:10px;">${i.nome}</td>
-                                <td style="padding:10px; text-align:center; color:#60a5fa;">${ePatrimonio ? (i.patrimonio || '---') : (i.tamanho || 'Geral')}</td>
-                                <td style="padding:10px; text-align:center; font-weight:bold;">${i.quantidade_enviada}</td>
+                                <td style="padding:8px;">${i.nome}</td>
+                                <td style="padding:8px; text-align:center; color:#60a5fa;">${ePatrimonio ? (i.numero_serie || '---') : (i.tamanho || 'Geral')}</td>
+                                <td style="padding:8px; text-align:center;">${i.quantidade_enviada}</td>
                             </tr>
                         `).join('')}
                     </tbody>
                 </table>
-
-                <div style="margin-top:25px; text-align:right;">
-                    <button onclick="confirmarChegadaEscola(${remessaId})" 
-                            class="btn-vidro" 
-                            style="background:#10b981; border:none; padding:12px 25px; font-weight:bold;">
-                        CONFIRMAR RECEBIMENTO ✅
-                    </button>
-                </div>
             </div>
         `;
     } catch (err) {
-        divDetalhes.innerHTML = `<p style="color:#ff4d4d;">Erro ao carregar detalhes da remessa.</p>`;
+        divDetalhes.innerHTML = '<p style="color:#ef4444;">Erro ao carregar detalhes.</p>';
     }
 }
 
@@ -18981,81 +19014,71 @@ window.infra_contar = function(qtd) {
     document.getElementById('btn-infra-fim').style.display = (sel === qtd) ? 'block' : 'none';
 };
 
-window.infra_finalizarEnvio = async function(pedidoId, localDestId, qtd, prodId) {
-    // 1. Coleta os IDs dos patrimônios que foram marcados no grid
-    const checkboxes = document.querySelectorAll('input[name="tag_infra_check"]:checked');
-    const patrimoniosIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
+window.infra_finalizarEnvio = async function(pedidoId, destId, qtd, prodId) {
+    const selecionados = Array.from(document.querySelectorAll('input[name="tag_infra_check"]:checked')).map(cb => parseInt(cb.value));
 
-    // 2. Validação de segurança (caso o usuário tente burlar o botão via console)
-    if (patrimoniosIds.length !== qtd) {
-        return notificar(`Erro: Selecione exatamente ${qtd} etiquetas.`, "erro");
+    if (selecionados.length !== qtd) {
+        return notificar(`Selecione exatamente ${qtd} itens!`, "alerta");
     }
 
-    if (!confirm(`Deseja finalizar a separação de ${qtd} itens e liberar para coleta?`)) return;
+    // Bloqueia o botão para evitar cliques duplos
+    const btn = document.getElementById('btn-infra-finalizar');
+    btn.disabled = true;
+    btn.innerText = "PROCESSANDO...";
 
     try {
-        // Bloqueia o botão para evitar cliques duplos
-        const btn = document.getElementById('btn-infra-finalizar');
-        if(btn) {
-            btn.disabled = true;
-            btn.innerText = "PROCESSANDO REMESSA... ⏳";
-        }
-
-        // 3. Chamada para a rota mestre que criamos no api.routes.js
         const res = await fetch(`${API_URL}/infra/finalizar-envio`, {
             method: 'POST',
             headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${TOKEN}` 
+                'Authorization': `Bearer ${TOKEN}`,
+                'Content-Type': 'application/json' 
             },
-            body: JSON.stringify({ 
-                pedidoId: pedidoId, 
-                patrimoniosIds: patrimoniosIds, 
-                localDestinoId: localDestId,
-                produtoId: prodId 
+            body: JSON.stringify({
+                pedidoId: pedidoId,
+                tagsIds: selecionados,
+                localDestinoId: destId
             })
         });
 
-        const data = await res.json();
+        const dados = await res.json();
 
         if (res.ok) {
-            notificar("🚀 SUCESSO: Remessa gerada! O status agora é COLETA LIBERADA.", "sucesso");
+            notificar("Solicitação autorizada! Gerando Romaneio...", "sucesso");
             
-            // 4. Retorna para a tela de pendências para continuar o trabalho
-            setTimeout(() => {
-                infra_telaPendentes();
-            }, 1500);
-            
-        } else {
-            throw new Error(data.error || "Erro ao finalizar envio.");
-        }
+            // DISPARO AUTOMÁTICO DO PDF (Sem burocracia)
+            // Abre o romaneio em uma nova aba imediatamente
+            window.open(`${API_URL}/relatorios/romaneio-infra/${dados.romaneioId}`, '_blank');
 
-    } catch (err) {
-        console.error("Erro infra_finalizarEnvio:", err);
-        notificar("❌ ERRO: " + err.message, "erro");
-        
-        // Reativa o botão em caso de erro
-        const btn = document.getElementById('btn-infra-finalizar');
-        if(btn) {
+            // Volta para a lista de pendentes já atualizada
+            infra_telaPendentes();
+        } else {
+            notificar(dados.error, "erro");
             btn.disabled = false;
             btn.innerText = "GERAR REMESSA E LIBERAR COLETA 📤";
         }
+    } catch (err) {
+        notificar("Erro ao finalizar processo.", "erro");
+        btn.disabled = false;
     }
 };
 
 window.infra_abrirModalAcao = function(p) {
     const modal = document.createElement('div');
     modal.id = 'modal-decisao-infra';
-    modal.style = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:9999; display:flex; align-items:center; justify-content:center; backdrop-filter:blur(8px);";
+    modal.className = 'alerta-vidro-overlay'; // Reutilizando sua classe de overlay
     
     modal.innerHTML = `
         <div class="painel-vidro animar-entrada" style="width:450px; padding:30px; text-align:center;">
-            <h3 style="color:white;">PROCESSO DE ENVIO</h3>
-            <p style="color:#ccc;">Pedido <b>#${p.id}</b>: Enviar ${p.quantidade} ${p.produto_nome}?</p>
+            <h3 style="color:white; margin-bottom:15px;">🚀 LIBERAR PARA ENVIO</h3>
+            <p style="color:#ccc; font-size:1.1rem;">Item: <b>${p.produto_nome}</b></p>
+            <p style="color:#60a5fa;">Quantidade: ${p.quantidade} UN</p>
+            
             <div style="display:flex; gap:10px; margin-top:30px;">
                 <button onclick="document.getElementById('modal-decisao-infra').remove()" class="btn-sair-vidro" style="flex:1;">CANCELAR</button>
                 <button onclick="infra_irParaTags(${JSON.stringify(p).replace(/"/g, '&quot;')})" 
-                        style="flex:1; background:#22c55e; color:white; border:none; border-radius:10px; font-weight:bold; cursor:pointer;">ACEITAR E ESCOLHER TAGS</button>
+                        style="flex:1.5; background:#22c55e; color:white; border:none; border-radius:10px; font-weight:bold; cursor:pointer; font-size:0.9rem;">
+                    SELECIONAR TAGS E FINALIZAR
+                </button>
             </div>
         </div>`;
     document.body.appendChild(modal);

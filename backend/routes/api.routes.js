@@ -7221,6 +7221,20 @@ router.get('/patrimonio/meus-produtos-unicos', verificarToken, async (req, res) 
     }
 });
 
+router.get('/patrimonio/nomes-existentes', verificarToken, async (req, res) => {
+    const localId = req.user.local_id; // Pega o ID do local do usuário logado
+    try {
+        const result = await db.query(
+            "SELECT DISTINCT nome FROM produtos WHERE local_id = $1 AND tipo = 'PATRIMONIO' ORDER BY nome ASC",
+            [localId]
+        );
+        // Retorna apenas a lista de nomes: ["CADEIRA ERGOPLAX", "MESA PE PAINEL", ...]
+        res.json(result.rows.map(r => r.nome));
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // 2. Listar solicitações aguardando separação de tags
 router.get('/infra/pendentes', verificarToken, async (req, res) => {
     try {

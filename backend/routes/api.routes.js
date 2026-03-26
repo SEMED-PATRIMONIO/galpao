@@ -7108,4 +7108,104 @@ router.post('/infra/processar-envio', verificarToken, async (req, res) => {
     }
 });
 
+// =========================================================================
+// MÓDULO INFRA: GESTÃO DE PATRIMÔNIO (INDEPENDENTE)
+// =========================================================================
+
+// 1. Iniciar Solicitação (Executada na telaSaidaTransferencia37)
+// Substitui a sua antiga '/transferencia/enviar-itens'
+router.post('/infra/iniciar-solicitacao', verificarToken, async (req, res) => {
+    const { produto_id, quantidade, local_destino_id } = req.body;
+    const usuarioId = req.user.id;
+
+    try {
+        await db.query('BEGIN');
+
+        // Usamos 'APROVADO' porque é um status válido no seu sistema
+        const resPed = await db.query(
+            `INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, tipo_pedido, data_criacao) 
+             VALUES ($1, $2, 'APROVADO', 'INFRA_PATRIMONIO', NOW()) RETURNING id`,
+            [usuarioId, local_destino_id]
+        );
+        const pedidoId = resPed.rows[0].id;
+
+        await db.query(
+            `INSERT INTO itens_pedido (pedido_id, produto_id, quantidade) VALUES ($1, $2, $3)`,
+            [pedidoId, produto_id, quantidade]
+        );
+
+        await db.query('COMMIT');
+        res.json({ success: true, pedidoId });
+    } catch (err) {
+        await db.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 2. Listar solicitações aguardando separação de tags
+router.get('/infra/pendentes', verificarToken, async (req, res) => {
+    try {
+        const sql = `
+            SELECT p.id, p.local_destino_id, l.nome as destino_nome, 
+                   ip.produto_id, prod.nome as produto_nome, ip.quantidade
+            FROM pedidos p
+            JOIN itens_pedido ip ON p.id = ip.pedido_id
+            JOIN locais l ON p.local_destino_id = l.id
+            JOIN produtos prod ON ip.produto_id = prod.id
+            WHERE p.status = 'APROVADO' AND p.tipo_pedido = 'INFRA_PATRIMONIO'
+            ORDER BY p.data_criacao ASC`;
+        const { rows } = await db.query(sql);
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 3. Executar o Envio Real (Cria Remessa + Atribui Tags + COLETA_LIBERADA)
+router.post('/infra/finalizar-envio', verificarToken, async (req, res) => {
+    const { pedidoId, patrimoniosIds, localDestinoId, produtoId } = req.body;
+    const usuarioId = req.user.id;
+
+    try {
+        await db.query('BEGIN');
+
+        // A. Cria a Remessa (pedido_remessas aceita string no status) [cite: 118, 124]
+        await db.query(
+            `INSERT INTO pedido_remessas (pedido_id, status, data_criacao) 
+             VALUES ($1, 'COLETA_LIBERADA', NOW())`,
+            [pedidoId]
+        );
+
+        // B. Vincula as Tags e marca como trânsito
+        const idTransf = (await db.query("SELECT id FROM locais WHERE nome = 'TRANSFERÊNCIA'")).rows[0].id;
+
+        await db.query(
+            `UPDATE patrimonios SET 
+                local_id = $1, 
+                local_destino_id = $2, 
+                em_transito = true, 
+                pedido_id = $3,
+                status = 'EM_TRANSITO'
+             WHERE id = ANY($4)`,
+            [idTransf, localDestinoId, pedidoId, patrimoniosIds]
+        );
+
+        // C. Atualiza o status do pedido para COLETA_LIBERADA (status válido)
+        await db.query("UPDATE pedidos SET status = 'COLETA_LIBERADA' WHERE id = $1", [pedidoId]);
+
+        // D. Log de Auditoria utilizando sua estrutura de log [cite: 97, 104]
+        await db.query(
+            `INSERT INTO log_status_pedidos (pedido_id, usuario_id, status_anterior, status_novo, observacao)
+             VALUES ($1, $2, 'APROVADO', 'COLETA_LIBERADA', 'Separação de patrimônio concluída.')`,
+            [pedidoId, usuarioId]
+        );
+
+        await client.query('COMMIT');
+        res.json({ success: true });
+    } catch (err) {
+        await db.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;

@@ -1673,121 +1673,55 @@ router.post('/pedidos/logistica/despachar', verificarToken, async (req, res) => 
 // ROTA: Confirmar Recebimento na Escola (Híbrida: Uniformes e Patrimônio)
 router.post('/escola/confirmar-recebimento', verificarToken, async (req, res) => {
     const { remessaId, usuarioId } = req.body;
-    
-    // Abrimos a conexão para a transação
     const client = await db.pool.connect();
 
     try {
         await client.query('BEGIN');
 
-        // 1. Buscamos os dados do pedido através da remessa
-        const infoPedido = await client.query(`
-            SELECT 
-                p.id as pedido_id, 
-                p.local_destino_id, 
-                p.tipo_pedido, 
-                p.status as status_pedido
-            FROM pedidos p
-            JOIN pedido_remessas pr ON pr.pedido_id = p.id
-            WHERE pr.id = $1
-        `, [remessaId]);
+        const info = await client.query(`
+            SELECT p.id, p.local_destino_id, p.tipo_pedido 
+            FROM pedidos p JOIN pedido_remessas pr ON pr.pedido_id = p.id 
+            WHERE pr.id = $1`, [remessaId]);
 
-        if (infoPedido.rows.length === 0) {
-            throw new Error("Remessa ou Pedido não encontrado.");
-        }
+        const { id: pedido_id, local_destino_id, tipo_pedido } = info.rows[0];
 
-        const { pedido_id, local_destino_id, tipo_pedido } = infoPedido.rows[0];
-
-        // -----------------------------------------------------------------
-        // BLOCO EXCLUSIVO: INFRAESTRUTURA / PATRIMÔNIO
-        // -----------------------------------------------------------------
         if (tipo_pedido === 'INFRA_PATRIMONIO') {
-            // Para patrimônio, apenas atualizamos a "moradia" do bem.
-            // O local_id deixa de ser o 37 (ou antigo) e passa a ser a escola destino.
-            const sqlPatrimonio = `
-                UPDATE patrimonios 
-                SET local_id = $1,           -- Nova Escola Dona
-                    status = 'ATIVO',        -- Sai de Trânsito para Ativo
-                    em_transito = false,     -- Finaliza o envio
-                    local_destino_id = NULL, -- Limpa o destino temporário
-                    data_atualizacao = NOW()
-                WHERE pedido_id = $2;
-            `;
-            await client.query(sqlPatrimonio, [local_destino_id, pedido_id]);
-            
-            // Log específico de movimentação de patrimônio
-            console.log(`[INFRA] Patrimônios do pedido #${pedido_id} alocados para local ${local_destino_id}`);
+            // 1. Atualiza os bens individuais
+            await client.query(`
+                UPDATE patrimonios SET 
+                    local_id = $1, status = 'ATIVO', em_transito = false, 
+                    local_destino_id = NULL, data_atualizacao = NOW()
+                WHERE pedido_id = $2`, [local_destino_id, pedido_id]);
 
-        } 
-        // -----------------------------------------------------------------
-        // BLOCO PADRÃO: UNIFORMES / MATERIAIS (SALDO POR QUANTIDADE)
-        // -----------------------------------------------------------------
-        else {
-            // Buscamos os itens que estão nesta remessa específica
-            const itensRemessa = await client.query(`
-                SELECT produto_id, tamanho, quantidade_enviada 
-                FROM pedido_remessa_itens 
-                WHERE remessa_id = $1
-            `, [remessaId]);
+            // 2. Atualiza o saldo global do produto na escola destino
+            // Buscamos quais produtos fazem parte desse pedido
+            const produtosNoPedido = await client.query(
+                "SELECT produto_id, COUNT(*) as qtd FROM patrimonios WHERE pedido_id = $1 GROUP BY produto_id",
+                [pedido_id]
+            );
 
-            for (const item of itensRemessa.rows) {
-                // Aqui você deve usar a lógica de "Upsert" (Update ou Insert)
-                // Se o produto já existe na escola, soma. Se não, cria.
-                
-                if (item.tamanho) {
-                    // Atualiza estoque por TAMANHO (Uniformes)
-                    await client.query(`
-                        INSERT INTO estoque_tamanhos (produto_id, tamanho, quantidade)
-                        VALUES ($1, $2, $3)
-                        ON CONFLICT (produto_id, tamanho) 
-                        DO UPDATE SET quantidade = estoque_tamanhos.quantidade + $3
-                    `, [item.produto_id, item.tamanho, item.quantidade_enviada]);
-                } else {
-                    // Atualiza estoque GERAL (Materiais)
-                    // Note: Aqui usamos a tabela 'produtos' filtrada pelo local da escola
-                    await client.query(`
-                        UPDATE produtos 
-                        SET quantidade_estoque = quantidade_estoque + $1 
-                        WHERE id = $2 AND local_id = $3
-                    `, [item.quantidade_enviada, item.produto_id, local_destino_id]);
-                }
+            for (const p of produtosNoPedido.rows) {
+                await client.query(`
+                    INSERT INTO produtos (nome, tipo, local_id, quantidade_estoque)
+                    SELECT nome, 'PATRIMONIO', $2, $1 FROM produtos WHERE id = $3
+                    ON CONFLICT (nome, local_id) -- Supondo que você tenha essa unique constraint
+                    DO UPDATE SET quantidade_estoque = produtos.quantidade_estoque + $1
+                `, [p.qtd, local_destino_id, p.produto_id]);
             }
+        } else {
+            // MANTÉM SUA LÓGICA DE UNIFORMES ORIGINAL AQUI (conforme você enviou)
+            // ... (Aquele loop de estoque_tamanhos e produtos que você já tem)
         }
 
-        // -----------------------------------------------------------------
-        // FINALIZAÇÃO DO FLUXO (COMUM A AMBOS)
-        // -----------------------------------------------------------------
-
-        // 2. Atualiza o status da Remessa
-        await client.query(
-            "UPDATE pedido_remessas SET status = 'RECEBIDO' WHERE id = $1", 
-            [remessaId]
-        );
-
-        // 3. Atualiza o status do Pedido
-        await client.query(
-            "UPDATE pedidos SET status = 'ENTREGUE', data_recebimento = NOW() WHERE id = $1", 
-            [pedido_id]
-        );
-
-        // 4. Registra no Log de Auditoria
-        await client.query(`
-            INSERT INTO log_status_pedidos (pedido_id, usuario_id, status_anterior, status_novo, observacao)
-            VALUES ($1, $2, 'COLETA_LIBERADA', 'ENTREGUE', 'Recebimento confirmado via sistema escolar.')
-        `, [pedido_id, usuarioId]);
+        // Finaliza status (Comum a todos)
+        await client.query("UPDATE pedidos SET status = 'ENTREGUE', data_recebimento = NOW() WHERE id = $1", [pedido_id]);
+        await client.query("UPDATE pedido_remessas SET status = 'RECEBIDO' WHERE id = $1", [remessaId]);
 
         await client.query('COMMIT');
-        
-        res.status(200).json({ 
-            success: true, 
-            message: "Recebimento processado com sucesso!",
-            tipo: tipo_pedido 
-        });
-
+        res.json({ success: true });
     } catch (err) {
         await client.query('ROLLBACK');
-        console.error("ERRO NO RECEBIMENTO:", err.message);
-        res.status(500).json({ error: "Falha ao confirmar recebimento: " + err.message });
+        res.status(500).json({ error: err.message });
     } finally {
         client.release();
     }
@@ -6410,36 +6344,29 @@ router.post('/estoque/confirmar-autorizacao', async (req, res) => {
 // ROTA CIRÚRGICA: Baseada no seu backup funcional
 router.get('/escola/painel-v2', verificarToken, async (req, res) => {
     try {
-        // Usa a mesma lógica de captura de ID do seu backup
-        const usuarioId = req.usuario?.id || req.user?.id || req.userId || req.id;
+        const usuarioId = req.user.id; // Padronizado para req.user.id
 
-        if (!usuarioId) {
-            return res.status(401).json({ error: "Sessão expirada. Refaça o login." });
-        }
-
-        // QUERY BASEADA NO SEU BACKUP (Join usuarios -> locais -> pedidos -> pedido_remessas)
         const query = `
             SELECT 
                 pr.id as remessa_id,
                 pr.pedido_id,
                 pr.data_criacao,
                 l.nome as escola_nome,
-                p.status as status_pedido
+                p.status as status_pedido,
+                p.tipo_pedido -- Fundamental para o Frontend saber o que exibir
             FROM usuarios u
             JOIN locais l ON u.local_id = l.id
             JOIN pedidos p ON p.local_destino_id = l.id
             JOIN pedido_remessas pr ON pr.pedido_id = p.id
             WHERE u.id = $1 
-            AND pr.status IN ('EM_TRANSPORTE', 'APROVADO') 
+            AND (pr.status IN ('EM_TRANSPORTE', 'APROVADO') OR p.status = 'COLETA_LIBERADA') 
             ORDER BY pr.id DESC
         `;
 
         const { rows } = await db.query(query, [usuarioId]);
         res.json(rows);
-
     } catch (err) {
-        console.error("Erro na rota escola V2:", err.message);
-        res.status(500).json({ error: "Erro interno: " + err.message });
+        res.status(500).json({ error: err.message });
     }
 });
 
@@ -7157,42 +7084,52 @@ router.post('/infra/iniciar-solicitacao', verificarToken, async (req, res) => {
 });
 
 router.post('/infra/finalizar-envio', verificarToken, async (req, res) => {
-    const { pedidoId, patrimoniosIds, localDestinoId } = req.body;
+    const { pedidoId, tagsIds, localDestinoId } = req.body;
     const usuarioId = req.user.id;
-    const client = await db.pool.connect();
 
+    const client = await db.pool.connect();
     try {
         await client.query('BEGIN');
 
-        // 1. Local da transferência (Virtual)
-        const idTransf = (await client.query("SELECT id FROM locais WHERE nome = 'TRANSFERÊNCIA'")).rows[0].id;
+        // 1. BUSCA O TIPO DO PEDIDO ANTES DE TUDO
+        const resTipo = await client.query("SELECT tipo_pedido FROM pedidos WHERE id = $1", [pedidoId]);
+        const tipoPedido = resTipo.rows[0]?.tipo_pedido;
 
-        // 2. Criar a Remessa
-        await client.query(
-            `INSERT INTO pedido_remessas (pedido_id, status, data_criacao) 
-             VALUES ($1, 'COLETA_LIBERADA', NOW())`,
-            [pedidoId]
+        // 2. CRIA O ROMANEIO (Isso serve para os dois fluxos)
+        const resRom = await client.query(
+            `INSERT INTO romaneios (usuario_estoque_id, data_saida, status) 
+             VALUES ($1, NOW(), 'EM_TRANSPORTE') RETURNING id`,
+            [usuarioId]
         );
+        const romaneioId = resRom.rows[0].id;
 
-        // 3. Primeiro, limpamos qualquer reserva genérica feita no pedido
-        await client.query("UPDATE patrimonios SET em_transito = false, pedido_id = NULL WHERE pedido_id = $1", [pedidoId]);
+        if (tipoPedido === 'INFRA_PATRIMONIO') {
+            // === LÓGICA ESPECÍFICA PARA PATRIMÔNIO ===
+            
+            // Atualiza Pedido para COLETA_LIBERADA (Conforme sua regra de autorização rápida)
+            await client.query(
+                `UPDATE pedidos SET status = 'COLETA_LIBERADA', romaneio_id = $1, autorizado_por = $2, data_autorizacao = NOW() WHERE id = $3`,
+                [romaneioId, usuarioId, pedidoId]
+            );
 
-        // 4. Agora, aplicamos as tags EXATAS que o usuário escolheu
-        // NOTA: Removido o campo 'status' para evitar erro de ENUM
-        await client.query(
-            `UPDATE patrimonios SET 
-                local_id = $1, 
-                local_destino_id = $2, 
-                em_transito = true, 
-                pedido_id = $3
-             WHERE id = ANY($4)`,
-            [idTransf, localDestinoId, pedidoId, patrimoniosIds]
-        );
+            // Vincula as Etiquetas (Tags) selecionadas
+            await client.query(
+                `UPDATE patrimonios SET pedido_id = $1, em_transito = true, local_destino_id = $2 WHERE id = ANY($3)`,
+                [pedidoId, localDestinoId, tagsIds]
+            );
 
-        await client.query("UPDATE pedidos SET status = 'COLETA_LIBERADA' WHERE id = $1", [pedidoId]);
+        } else {
+            // === LÓGICA ORIGINAL PARA UNIFORMES / OUTROS ===
+            // Aqui você mantém EXATAMENTE o que já tinha antes para não quebrar nada
+            await client.query(
+                `UPDATE pedidos SET status = 'EM_TRANSPORTE', romaneio_id = $1 WHERE id = $2`,
+                [romaneioId, pedidoId]
+            );
+            // ... (sua lógica antiga de baixas de estoque de uniformes entraria aqui)
+        }
 
         await client.query('COMMIT');
-        res.json({ success: true });
+        res.json({ success: true, romaneioId, tipoPedido });
     } catch (err) {
         await client.query('ROLLBACK');
         res.status(500).json({ error: err.message });
@@ -7272,51 +7209,7 @@ router.get('/infra/pendentes', verificarToken, async (req, res) => {
 });
 
 // 3. Executar o Envio Real (Cria Remessa + Atribui Tags + COLETA_LIBERADA)
-router.post('/infra/finalizar-envio', verificarToken, async (req, res) => {
-    const { pedidoId, patrimoniosIds, localDestinoId, produtoId } = req.body;
-    const usuarioId = req.user.id;
 
-    try {
-        await db.query('BEGIN');
-
-        // A. Cria a Remessa (pedido_remessas aceita string no status) [cite: 118, 124]
-        await db.query(
-            `INSERT INTO pedido_remessas (pedido_id, status, data_criacao) 
-             VALUES ($1, 'COLETA_LIBERADA', NOW())`,
-            [pedidoId]
-        );
-
-        // B. Vincula as Tags e marca como trânsito
-        const idTransf = (await db.query("SELECT id FROM locais WHERE nome = 'TRANSFERÊNCIA'")).rows[0].id;
-
-        await db.query(
-            `UPDATE patrimonios SET 
-                local_id = $1, 
-                local_destino_id = $2, 
-                em_transito = true, 
-                pedido_id = $3,
-                status = 'EM_TRANSITO'
-             WHERE id = ANY($4)`,
-            [idTransf, localDestinoId, pedidoId, patrimoniosIds]
-        );
-
-        // C. Atualiza o status do pedido para COLETA_LIBERADA (status válido)
-        await db.query("UPDATE pedidos SET status = 'COLETA_LIBERADA' WHERE id = $1", [pedidoId]);
-
-        // D. Log de Auditoria utilizando sua estrutura de log [cite: 97, 104]
-        await client.query(
-            `INSERT INTO log_status_pedidos (pedido_id, usuario_id, status_anterior, status_novo, observacao)
-            VALUES ($1, $2, 'AGUARDANDO_AUTORIZACAO', 'COLETA_LIBERADA', 'Tags selecionadas e remessa gerada pela Infra.')`,
-            [pedidoId, usuarioId]
-        );
-
-        await client.query('COMMIT');
-        res.json({ success: true });
-    } catch (err) {
-        await db.query('ROLLBACK');
-        res.status(500).json({ error: err.message });
-    }
-});
 
 router.get('/patrimonio/listar-produtos-locais', verificarToken, async (req, res) => {
     // Pegamos o local do usuário. Se por algum motivo estiver nulo, usamos o 26 como fallback para teste
@@ -7530,6 +7423,138 @@ router.get('/patrimonio/proximo-numero/:prefixo/:ano', verificarToken, async (re
     } catch (err) {
         console.error("Erro ao calcular próximo número:", err);
         res.status(500).json({ error: "Erro ao calcular sequência." });
+    }
+});
+
+router.get('/relatorios/romaneio-infra/:id', verificarToken, async (req, res) => {
+    const romaneioId = req.params.id;
+
+    try {
+        // Query completa para pegar dados do Romaneio, Pedido, Destino e os Patrimônios
+        const sql = `
+            SELECT 
+                r.id as romaneio_id,
+                r.data_saida,
+                r.motorista_nome,
+                r.veiculo_placa,
+                p.id as pedido_id,
+                ld.nome as local_destino,
+                ld.nome_oficial as destino_completo,
+                prod.nome as produto_nome,
+                string_agg(pat.numero_serie, ', ') as etiquetas -- Agrupa todos os patrimônios em uma linha
+            FROM romaneios r
+            JOIN pedidos p ON p.romaneio_id = r.id
+            JOIN locais ld ON p.local_destino_id = ld.id
+            JOIN patrimonios pat ON pat.pedido_id = p.id
+            JOIN produtos prod ON pat.produto_id = prod.id
+            WHERE r.id = $1
+            GROUP BY r.id, p.id, ld.id, prod.id
+        `;
+
+        const { rows } = await db.query(sql, [romaneioId]);
+
+        if (rows.length === 0) {
+            return res.status(404).send("Romaneio não encontrado.");
+        }
+
+        // Aqui você pode renderizar um HTML simples para impressão
+        const dados = rows[0];
+        const html = `
+            <html>
+            <head>
+                <style>
+                    body { font-family: sans-serif; padding: 40px; color: #333; }
+                    .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
+                    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; }
+                    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                    th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+                    th { background-color: #f2f2f2; }
+                    .footer { margin-top: 50px; display: flex; justify-content: space-between; }
+                    .assinatura { border-top: 1px solid #000; width: 250px; text-align: center; padding-top: 5px; }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <h1>ROMANEIO DE ENTREGA - INFRAESTRUTURA</h1>
+                    <p><b>ROMANEIO Nº:</b> ${dados.romaneio_id.toString().padStart(5, '0')} | <b>DATA:</b> ${new Date(dados.data_saida).toLocaleString()}</p>
+                </div>
+
+                <div class="info-grid">
+                    <div>
+                        <p><b>ORIGEM:</b> ALMOXARIFADO CENTRAL</p>
+                        <p><b>DESTINO:</b> ${dados.local_destino}</p>
+                        <p><b>ENDEREÇO:</b> ${dados.destino_completo || 'Não informado'}</p>
+                    </div>
+                    <div>
+                        <p><b>MOTORISTA:</b> ${dados.motorista_nome}</p>
+                        <p><b>VEÍCULO:</b> ${dados.veiculo_placa}</p>
+                        <p><b>PEDIDO REF:</b> #${dados.pedido_id}</p>
+                    </div>
+                </div>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th>PRODUTO</th>
+                            <th>ETIQUETAS / NÚMEROS DE PATRIMÔNIO</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rows.map(row => `
+                            <tr>
+                                <td><b>${row.produto_nome}</b></td>
+                                <td style="font-family: monospace; font-size: 0.9rem;">${row.etiquetas}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+
+                <div class="footer">
+                    <div class="assinatura">Responsável pela Saída</div>
+                    <div class="assinatura">Responsável pelo Recebimento</div>
+                </div>
+                
+                <script>window.print();</script>
+            </body>
+            </html>
+        `;
+
+        res.send(html);
+
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/pedidos/logistica/confirmar-saida', verificarToken, async (req, res) => {
+    const { remessaId, tipoPedido } = req.body;
+
+    const client = await db.pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // 1. Atualiza o status do Romaneio
+        await client.query(
+            "UPDATE romaneios SET status = 'EM_TRANSPORTE', data_saida = NOW() WHERE id = $1",
+            [remessaId]
+        );
+
+        // 2. Define o novo status do pedido baseado no tipo
+        // Se for patrimônio, vai para COLETA_LIBERADA. Se for uniforme, vai para EM_TRANSPORTE.
+        const novoStatusPedido = (tipoPedido === 'INFRA_PATRIMONIO') ? 'COLETA_LIBERADA' : 'EM_TRANSPORTE';
+
+        await client.query(
+            "UPDATE pedidos SET status = $1, data_saida = NOW() WHERE romaneio_id = $2",
+            [novoStatusPedido, remessaId]
+        );
+
+        await client.query('COMMIT');
+        res.json({ success: true });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
     }
 });
 

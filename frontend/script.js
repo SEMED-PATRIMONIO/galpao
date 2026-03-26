@@ -18887,18 +18887,29 @@ window.infra_finalizarEnvio = async function(pedidoId, localDestId, qtd, prodId)
 
 window.infra_abrirModalAcao = function(p) {
     const modal = document.createElement('div');
+    modal.id = 'modal-decisao-infra';
     modal.style = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:9999; display:flex; align-items:center; justify-content:center; backdrop-filter:blur(8px);";
+    
     modal.innerHTML = `
-        <div class="painel-vidro" style="width:450px; padding:30px; text-align:center;">
-            <h3 style="color:white;">INICIAR SEPARAÇÃO</h3>
-            <p style="color:#ccc;">Deseja selecionar as tags para o pedido <br><b>#${p.id} - ${p.produto_nome}</b>?</p>
+        <div class="painel-vidro animar-entrada" style="width:450px; padding:30px; text-align:center;">
+            <h3 style="color:white;">PROCESSO DE ENVIO</h3>
+            <p style="color:#ccc;">Pedido <b>#${p.id}</b>: Enviar ${p.quantidade} ${p.produto_nome}?</p>
             <div style="display:flex; gap:10px; margin-top:30px;">
-                <button onclick="this.closest('div').parentElement.parentElement.remove()" class="btn-sair-vidro" style="flex:1;">VOLTAR</button>
-                <button onclick="infra_telaSelecaoTags(${p.id}, ${p.produto_id}, ${p.local_destino_id}, ${p.quantidade}, '${p.produto_nome}')" 
-                        style="flex:1; background:#22c55e; color:white; border:none; border-radius:10px; font-weight:bold; cursor:pointer;">SELECIONAR TAGS ✅</button>
+                <button onclick="document.getElementById('modal-decisao-infra').remove()" class="btn-sair-vidro" style="flex:1;">CANCELAR</button>
+                <button onclick="infra_irParaTags(${JSON.stringify(p).replace(/"/g, '&quot;')})" 
+                        style="flex:1; background:#22c55e; color:white; border:none; border-radius:10px; font-weight:bold; cursor:pointer;">ACEITAR E ESCOLHER TAGS</button>
             </div>
         </div>`;
     document.body.appendChild(modal);
+};
+
+// Nova função intermediária para garantir a transição limpa
+window.infra_irParaTags = function(p) {
+    const modal = document.getElementById('modal-decisao-infra');
+    if(modal) modal.remove();
+    
+    // Chama a tela de tags diretamente
+    infra_telaSelecaoTags(p.id, p.produto_id, p.local_destino_id, p.quantidade, p.produto_nome);
 };
 
 // FUNÇÃO: Abre a grade de seleção de etiquetas (Patrimônios)

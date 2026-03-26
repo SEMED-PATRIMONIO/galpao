@@ -13151,18 +13151,19 @@ async function carregarChamadosPendentesEscola(localId) {
 }
 
 async function telaPatrimonioEscolaCatalogo() {
-    // 1. Buscamos os nomes já existentes e os setores ao mesmo tempo
+    const modal = document.createElement('div');
+    modal.id = 'modal-catalogo-entrada';
+    modal.className = 'alerta-vidro-overlay';
+
+    // 1. Buscamos os nomes já existentes no SEU local e os setores
+    // Alterado para a rota que filtra por local_id conforme discutimos
     const [resNomes, resSetores] = await Promise.all([
-        fetch(`${API_URL}/patrimonio/nomes-existentes`, { headers: { 'Authorization': `Bearer ${TOKEN}` } }),
+        fetch(`${API_URL}/patrimonio/meus-produtos-nomes`, { headers: { 'Authorization': `Bearer ${TOKEN}` } }),
         fetch(`${API_URL}/patrimonio/setores/meus`, { headers: { 'Authorization': `Bearer ${TOKEN}` } })
     ]);
 
     const nomesExistentes = await resNomes.json();
     const setores = await resSetores.json();
-
-    const modal = document.createElement('div');
-    modal.id = 'modal-catalogo-entrada';
-    modal.className = 'alerta-vidro-overlay';
 
     modal.innerHTML = `
         <div class="painel-vidro" style="width: 1150px; height: 620px; display: flex; gap: 20px; padding: 25px; border: 1px solid rgba(255,255,255,0.2); overflow: hidden;">
@@ -13282,14 +13283,21 @@ async function telaPatrimonioEscolaCatalogo2() {
     modal.id = 'modal-catalogo-entrada';
     modal.className = 'alerta-vidro-overlay';
 
-    // BUSCA CIRÚRGICA: Carrega setores e nomes de produtos existentes em paralelo
-    const [resSetores, resNomes] = await Promise.all([
-        fetch(`${API_URL}/patrimonio/setores/meus`, { headers: { 'Authorization': `Bearer ${TOKEN}` } }),
-        fetch(`${API_URL}/patrimonio/nomes-existentes`, { headers: { 'Authorization': `Bearer ${TOKEN}` } })
-    ]);
+    // 1. Buscamos os setores e os nomes dos bens do seu local em paralelo
+    let setores = [];
+    let nomesExistentes = [];
 
-    const setores = await resSetores.json();
-    const nomesExistentes = await resNomes.json(); // Espera um array de strings: ["ARMARIO", "CADEIRA", ...]
+    try {
+        const [resSetores, resNomes] = await Promise.all([
+            fetch(`${API_URL}/patrimonio/setores/meus`, { headers: { 'Authorization': `Bearer ${TOKEN}` } }),
+            fetch(`${API_URL}/patrimonio/meus-produtos-nomes`, { headers: { 'Authorization': `Bearer ${TOKEN}` } })
+        ]);
+
+        setores = await resSetores.json();
+        nomesExistentes = await resNomes.json();
+    } catch (err) {
+        console.error("Erro ao carregar dados do catálogo:", err);
+    }
 
     modal.innerHTML = `
         <div class="painel-vidro" style="width: 1150px; height: 620px; display: flex; gap: 20px; padding: 25px; border: 1px solid rgba(255,255,255,0.2); overflow: hidden;">
@@ -13305,10 +13313,11 @@ async function telaPatrimonioEscolaCatalogo2() {
 
                 <div style="overflow-y: auto; flex: 1; padding-right: 10px;">
                     <div style="margin-bottom: 12px;">
-                        <label style="color:white; font-size:0.8rem;">NOME DO BEM:</label>
-                        <input type="text" id="cat-nome" list="lista-sugestao-bens" class="input-vidro" placeholder="Ex: PROJETOR EPSON" oninput="gerarNumeroSerieAutomatico()" autocomplete="off">
+                        <label style="color:white; font-size:0.8rem;">NOME DO BEM (Digite ou Selecione):</label>
+                        <input type="text" id="cat-nome" list="lista-sugestao-bens-escola" class="input-vidro" 
+                               placeholder="Ex: PROJETOR EPSON" oninput="gerarNumeroSerieAutomatico()" autocomplete="off">
                         
-                        <datalist id="lista-sugestao-bens">
+                        <datalist id="lista-sugestao-bens-escola">
                             ${nomesExistentes.map(nome => `<option value="${nome}">`).join('')}
                         </datalist>
                     </div>

@@ -13404,38 +13404,56 @@ async function carregarBensRecentesModal() {
     const container = document.getElementById('lista-bens-recentes');
     if (!container) return;
 
-    // Mostra um mini-spinner ou texto de carregando
+    // Feedback visual enquanto carrega
     container.innerHTML = '<p style="color:gray; text-align:center; margin-top:20px; font-size:0.8rem;">Atualizando lista...</p>';
 
     try {
-        const localId = localStorage.getItem('local_id');
-        // Rota que busca os últimos itens do local logado
+        // Garantimos que o local_id existe. Se não existir no localStorage, tenta pegar do objeto TOKEN decodificado ou usa 26 como padrão
+        const localId = localStorage.getItem('local_id') || 26; 
+
         const res = await fetch(`${API_URL}/patrimonio/recentes/${localId}`, {
-            headers: { 'Authorization': `Bearer ${TOKEN}` }
+            headers: { 
+                'Authorization': `Bearer ${TOKEN}`,
+                'Content-Type': 'application/json'
+            }
         });
         
         const bens = await res.json();
 
-        if (bens.length === 0) {
-            container.innerHTML = '<p style="color:gray; text-align:center; margin-top:50px;">Nenhum bem cadastrado ainda.</p>';
+        // Se o backend retornar erro ou a lista vier vazia
+        if (!res.ok || !Array.isArray(bens) || bens.length === 0) {
+            container.innerHTML = '<p style="color:gray; text-align:center; margin-top:50px; font-size:0.85rem;">Nenhum bem cadastrado recentemente.</p>';
             return;
         }
 
+        // Montagem da lista usando a variável 'b' do map de forma consistente
         container.innerHTML = bens.map(b => `
-            <div style="background: rgba(255,255,255,0.03); padding: 10px; border-radius: 8px; margin-bottom: 8px; border: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; align-items: center;">
-                <div style="text-align: left;">
-                    <strong style="color: white; font-size: 0.85rem; display: block;">${b.nome_produto}</strong>
-                    <small style="color: #60a5fa; font-family: monospace;">${b.numero_serie}</small>
+            <div style="background: rgba(255,255,255,0.03); padding: 12px; border-radius: 10px; margin-bottom: 8px; border: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; align-items: center; transition: 0.3s;">
+                <div style="text-align: left; display: flex; align-items: center; gap: 12px;">
+                    <input type="checkbox" class="check-patrimonio" value="${b.id}" style="cursor:pointer; transform: scale(1.1);">
+                    <div>
+                        <strong style="color: white; font-size: 0.85rem; display: block; margin-bottom: 2px;">
+                            ${b.nome_produto || 'Produto sem nome'}
+                        </strong>
+                        <small style="color: #60a5fa; font-family: 'Courier New', monospace; font-weight: bold;">
+                            ${b.numero_serie}
+                        </small>
+                    </div>
                 </div>
-                <div style="text-align: right;">
-                    <span style="font-size: 0.7rem; color: #aaa;">${new Date(b.data_atualizacao).toLocaleDateString()}</span>
+                <div style="text-align: right; display: flex; flex-direction: column; gap: 4px;">
+                    <span style="font-size: 0.65rem; color: #888; font-weight: bold;">
+                        ${b.data_atualizacao ? new Date(b.data_atualizacao).toLocaleDateString('pt-BR') : '--/--/--'}
+                    </span>
+                    <span style="font-size: 0.6rem; color: #22c55e; background: rgba(34, 197, 94, 0.1); padding: 2px 6px; border-radius: 4px; text-align: center;">
+                        ${b.status || 'ESTOQUE'}
+                    </span>
                 </div>
             </div>
         `).join('');
 
     } catch (err) {
         console.error("Erro ao carregar recentes:", err);
-        container.innerHTML = '<p style="color:#ef4444; text-align:center;">Erro ao carregar lista.</p>';
+        container.innerHTML = '<p style="color:#ef4444; text-align:center; font-size:0.8rem; margin-top:20px;">⚠️ Erro ao atualizar lista lateral.</p>';
     }
 }
 
@@ -13546,32 +13564,38 @@ window.alternarLogica2025 = (marcado) => {
 };
 
 window.enviarCadastroComAnexo = async function() {
-    // 1. Captura segura dos elementos
+    // 1. Captura dos elementos
     const elNome = document.getElementById('cat-nome');
     const elSetor = document.getElementById('cat-setor');
     const elQtd = document.getElementById('cat-qtd');
     const elNF = document.getElementById('cat-nf');
     const elCheck = document.getElementById('check-2025');
     const elFile = document.getElementById('cat-file');
+    
+    // 2. Local ID (Pegando do sistema para garantir que não vá nulo)
+    const localId = localStorage.getItem('local_id') || 26;
 
-    // Validação de existência para evitar o erro de "Value of null"
-    if (!elNome || !elSetor || !elQtd) {
-        return notificar("Erro interno: Campos obrigatórios não encontrados.", "erro");
+    if (!elNome || !elNome.value.trim()) {
+        return notificar("O nome do bem é obrigatório!", "alerta");
     }
 
-    const nome = elNome.value.trim();
-    if (!nome) return notificar("O nome do bem é obrigatório!", "erro");
-
+    // 3. Preparação do envio
     const formData = new FormData();
-    formData.append('nome', nome);
+    formData.append('nome', elNome.value.trim().toUpperCase());
     formData.append('setor_id', elSetor.value);
     formData.append('quantidade', elQtd.value);
+    formData.append('local_id_manual', localId); // Garantia para o backend
     formData.append('numero_nf', elNF ? elNF.value : "");
     formData.append('adquirido_2025', elCheck ? elCheck.checked : false);
 
     if (elFile && elFile.files[0]) {
         formData.append('arquivo_nf', elFile.files[0]);
     }
+
+    // Desabilita o botão para evitar cliques duplos
+    const btnSalvar = document.getElementById('btn-salvar');
+    btnSalvar.disabled = true;
+    btnSalvar.innerText = "Processando...";
 
     try {
         const res = await fetch(`${API_URL}/patrimonio/cadastrar-completo`, {
@@ -13581,16 +13605,33 @@ window.enviarCadastroComAnexo = async function() {
         });
 
         if (res.ok) {
-            notificar("Patrimônio registrado e estoque atualizado!", "sucesso");
-            document.getElementById('modal-catalogo-entrada').remove();
-            // Recarrega a lista se a função existir
-            if (typeof carregarBensRecentesModal === "function") carregarBensRecentesModal();
+            notificar("Patrimônio registrado com sucesso!", "sucesso");
+
+            // --- A MÁGICA DA ATUALIZAÇÃO ---
+            // 1. Limpa os campos para o próximo cadastro
+            elNome.value = "";
+            elQtd.value = "1";
+            if (elNF) elNF.value = "";
+            if (elFile) elFile.value = "";
+            
+            // 2. ATUALIZA A LISTA LATERAL SEM FECHAR O MODAL
+            // Note o 'await' para garantir que ele busque os dados novos
+            await carregarBensRecentesModal();
+
+            // 3. Coloca o foco de volta no nome para o próximo item
+            elNome.focus();
+
         } else {
             const erro = await res.json();
-            notificar(erro.error, "erro");
+            notificar(erro.error || "Erro ao salvar.", "erro");
         }
     } catch (err) {
-        notificar("Erro ao conectar com o servidor.", "erro");
+        console.error(err);
+        notificar("Erro de comunicação com o servidor.", "erro");
+    } finally {
+        // Reabilita o botão
+        btnSalvar.disabled = false;
+        btnSalvar.innerText = "SALVAR REGISTRO ✅";
     }
 };
 

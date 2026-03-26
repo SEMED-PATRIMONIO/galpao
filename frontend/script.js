@@ -13513,57 +13513,54 @@ window.alternarLogica2025 = (marcado) => {
     }
 };
 
-async function enviarCadastroComAnexo() {
-    const btn = document.getElementById('btn-salvar');
-    const nome = document.getElementById('cat-nome').value.trim();
-    const qtd = document.getElementById('cat-qtd').value;
-    const serie = document.getElementById('cat-serie').value;
-    const setor = document.getElementById('cat-setor').value;
-    const nf = document.getElementById('cat-nf').value;
-    const check2025 = document.getElementById('check-2025').checked;
-    const arquivo = document.getElementById('cat-file').files[0];
+window.enviarCadastroComAnexo = async function() {
+    // 1. Captura segura dos elementos
+    const elNome = document.getElementById('cat-nome');
+    const elSetor = document.getElementById('cat-setor');
+    const elQtd = document.getElementById('cat-qtd');
+    const elNF = document.getElementById('cat-nf');
+    const elCheck = document.getElementById('check-2025');
+    const elFile = document.getElementById('cat-file');
 
-    if (!nome || !serie) return notificar("Nome e Série são obrigatórios!", "erro");
+    // Validação de existência para evitar o erro de "Value of null"
+    if (!elNome || !elSetor || !elQtd) {
+        return notificar("Erro interno: Campos obrigatórios não encontrados.", "erro");
+    }
 
-    btn.disabled = true;
-    btn.innerHTML = "💾 SALVANDO...";
+    const nome = elNome.value.trim();
+    if (!nome) return notificar("O nome do bem é obrigatório!", "erro");
 
     const formData = new FormData();
-    formData.append('nome_produto', nome);
-    formData.append('quantidade', qtd);
-    formData.append('serie_base', serie);
-    formData.append('setor_id', setor);
-    formData.append('local_id', localStorage.getItem('local_id'));
-    formData.append('nota_fiscal', nf);
-    formData.append('adquirido_pos_2025', check2025);
-    if (arquivo) formData.append('arquivo', arquivo);
+    formData.append('nome', nome);
+    formData.append('setor_id', elSetor.value);
+    formData.append('quantidade', elQtd.value);
+    formData.append('numero_nf', elNF ? elNF.value : "");
+    formData.append('adquirido_2025', elCheck ? elCheck.checked : false);
+
+    if (elFile && elFile.files[0]) {
+        formData.append('arquivo_nf', elFile.files[0]);
+    }
 
     try {
-        const res = await fetch(`${API_URL}/patrimonio/cadastrar`, {
+        const res = await fetch(`${API_URL}/patrimonio/cadastrar-completo`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${TOKEN}` },
             body: formData
         });
 
         if (res.ok) {
-            notificar("✅ Cadastro concluído!");
-            // Limpa para o próximo item
-            document.getElementById('cat-nome').value = '';
-            document.getElementById('cat-serie').value = '';
-            
-            // Atualiza a lista lateral no modal imediatamente
-            carregarBensRecentesModal();
+            notificar("Patrimônio registrado e estoque atualizado!", "sucesso");
+            document.getElementById('modal-catalogo-entrada').remove();
+            // Recarrega a lista se a função existir
+            if (typeof carregarBensRecentesModal === "function") carregarBensRecentesModal();
         } else {
             const erro = await res.json();
-            notificar("Erro: " + erro.error, "erro");
+            notificar(erro.error, "erro");
         }
     } catch (err) {
-        notificar("Erro de conexão", "erro");
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = "SALVAR REGISTRO";
+        notificar("Erro ao conectar com o servidor.", "erro");
     }
-}
+};
 
 async function carregarTabelaInventario() {
     const filtroSetor = document.getElementById('filtro-setor-patrimonio');

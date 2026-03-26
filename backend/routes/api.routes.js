@@ -1670,72 +1670,124 @@ router.post('/pedidos/logistica/despachar', verificarToken, async (req, res) => 
     res.json({ message: "Carga em transporte!" });
 });
 
+// ROTA: Confirmar Recebimento na Escola (Híbrida: Uniformes e Patrimônio)
 router.post('/escola/confirmar-recebimento', verificarToken, async (req, res) => {
     const { remessaId, usuarioId } = req.body;
+    
+    // Abrimos a conexão para a transação
     const client = await db.pool.connect();
 
     try {
         await client.query('BEGIN');
 
-        // 1. CORREÇÃO: Busca na tabela pedido_remessas (que é a que contém os dados de trânsito)
-        const resRem = await client.query('SELECT pedido_id FROM pedido_remessas WHERE id = $1', [remessaId]);
-        
-        if (resRem.rows.length === 0) {
-            throw new Error("Remessa #" + remessaId + " não localizada na tabela de remessas ativas.");
+        // 1. Buscamos os dados do pedido através da remessa
+        const infoPedido = await client.query(`
+            SELECT 
+                p.id as pedido_id, 
+                p.local_destino_id, 
+                p.tipo_pedido, 
+                p.status as status_pedido
+            FROM pedidos p
+            JOIN pedido_remessas pr ON pr.pedido_id = p.id
+            WHERE pr.id = $1
+        `, [remessaId]);
+
+        if (infoPedido.rows.length === 0) {
+            throw new Error("Remessa ou Pedido não encontrado.");
         }
-        const pedidoId = resRem.rows[0].pedido_id;
 
-        // 2. Obter local de destino e status atual do pedido
-        const resPed = await client.query('SELECT status, local_destino_id FROM pedidos WHERE id = $1', [pedidoId]);
-        if (resPed.rows.length === 0) throw new Error("Pedido vinculado à remessa não encontrado.");
-        
-        const { status: statusAnterior, local_destino_id: localId } = resPed.rows[0];
+        const { pedido_id, local_destino_id, tipo_pedido } = infoPedido.rows[0];
 
-        // 3. Atualizar o Pedido para ENTREGUE
-        await client.query(
-            "UPDATE pedidos SET status = 'ENTREGUE', data_recebimento = NOW() WHERE id = $1",
-            [pedidoId]
-        );
-
-        // 4. Registrar no Log de Status (Auditoria)
-        await client.query(
-            `INSERT INTO log_status_pedidos (pedido_id, usuario_id, status_anterior, status_novo, observacao) 
-             VALUES ($1, $2, $3, 'ENTREGUE', 'Carga recebida e conferida pela unidade escolar via painel digital.')`,
-            [pedidoId, usuarioId, statusAnterior]
-        );
-
-        // 5. Transferir saldo para o Estoque da Escola
-        // Buscamos os itens que foram solicitados neste pedido
-        const resItens = await client.query(
-            "SELECT produto_id, tamanho, quantidade FROM itens_pedido WHERE pedido_id = $1",
-            [pedidoId]
-        );
-
-        for (const item of resItens.rows) {
-            /* NOTA IMPORTANTE: 
-               Como sua tabela 'estoque_individual' exige 'numero_serie', 
-               estamos gerando um identificador de lote para uniformes/consumo.
-            */
-            const loteInfo = `LOTE-PED-${pedidoId}-${item.tamanho || 'UNICA'}`;
-
-            await client.query(`
-                INSERT INTO estoque_individual (local_id, produto_id, numero_serie, status, data_entrada)
-                VALUES ($1, $2, $3, 'DISPONIVEL', NOW())
-                ON CONFLICT (numero_serie) 
-                DO UPDATE SET status = 'DISPONIVEL'
-            `, [localId, item.produto_id, loteInfo]);
+        // -----------------------------------------------------------------
+        // BLOCO EXCLUSIVO: INFRAESTRUTURA / PATRIMÔNIO
+        // -----------------------------------------------------------------
+        if (tipo_pedido === 'INFRA_PATRIMONIO') {
+            // Para patrimônio, apenas atualizamos a "moradia" do bem.
+            // O local_id deixa de ser o 37 (ou antigo) e passa a ser a escola destino.
+            const sqlPatrimonio = `
+                UPDATE patrimonios 
+                SET local_id = $1,           -- Nova Escola Dona
+                    status = 'ATIVO',        -- Sai de Trânsito para Ativo
+                    em_transito = false,     -- Finaliza o envio
+                    local_destino_id = NULL, -- Limpa o destino temporário
+                    data_atualizacao = NOW()
+                WHERE pedido_id = $2;
+            `;
+            await client.query(sqlPatrimonio, [local_destino_id, pedido_id]);
             
-            // Se você tiver uma tabela de 'estoque_unidades' (quantidade), adicione a soma aqui.
-            // Se usar apenas a 'estoque_individual' por número de série, o insert acima resolve o registro.
+            // Log específico de movimentação de patrimônio
+            console.log(`[INFRA] Patrimônios do pedido #${pedido_id} alocados para local ${local_destino_id}`);
+
+        } 
+        // -----------------------------------------------------------------
+        // BLOCO PADRÃO: UNIFORMES / MATERIAIS (SALDO POR QUANTIDADE)
+        // -----------------------------------------------------------------
+        else {
+            // Buscamos os itens que estão nesta remessa específica
+            const itensRemessa = await client.query(`
+                SELECT produto_id, tamanho, quantidade_enviada 
+                FROM pedido_remessa_itens 
+                WHERE remessa_id = $1
+            `, [remessaId]);
+
+            for (const item of itensRemessa.rows) {
+                // Aqui você deve usar a lógica de "Upsert" (Update ou Insert)
+                // Se o produto já existe na escola, soma. Se não, cria.
+                
+                if (item.tamanho) {
+                    // Atualiza estoque por TAMANHO (Uniformes)
+                    await client.query(`
+                        INSERT INTO estoque_tamanhos (produto_id, tamanho, quantidade)
+                        VALUES ($1, $2, $3)
+                        ON CONFLICT (produto_id, tamanho) 
+                        DO UPDATE SET quantidade = estoque_tamanhos.quantidade + $3
+                    `, [item.produto_id, item.tamanho, item.quantidade_enviada]);
+                } else {
+                    // Atualiza estoque GERAL (Materiais)
+                    // Note: Aqui usamos a tabela 'produtos' filtrada pelo local da escola
+                    await client.query(`
+                        UPDATE produtos 
+                        SET quantidade_estoque = quantidade_estoque + $1 
+                        WHERE id = $2 AND local_id = $3
+                    `, [item.quantidade_enviada, item.produto_id, local_destino_id]);
+                }
+            }
         }
+
+        // -----------------------------------------------------------------
+        // FINALIZAÇÃO DO FLUXO (COMUM A AMBOS)
+        // -----------------------------------------------------------------
+
+        // 2. Atualiza o status da Remessa
+        await client.query(
+            "UPDATE pedido_remessas SET status = 'RECEBIDO' WHERE id = $1", 
+            [remessaId]
+        );
+
+        // 3. Atualiza o status do Pedido
+        await client.query(
+            "UPDATE pedidos SET status = 'ENTREGUE', data_recebimento = NOW() WHERE id = $1", 
+            [pedido_id]
+        );
+
+        // 4. Registra no Log de Auditoria
+        await client.query(`
+            INSERT INTO log_status_pedidos (pedido_id, usuario_id, status_anterior, status_novo, observacao)
+            VALUES ($1, $2, 'COLETA_LIBERADA', 'ENTREGUE', 'Recebimento confirmado via sistema escolar.')
+        `, [pedido_id, usuarioId]);
 
         await client.query('COMMIT');
-        res.json({ success: true, message: "Recebimento confirmado com sucesso!" });
+        
+        res.status(200).json({ 
+            success: true, 
+            message: "Recebimento processado com sucesso!",
+            tipo: tipo_pedido 
+        });
 
     } catch (err) {
         await client.query('ROLLBACK');
-        console.error("ERRO NO PROCESSAMENTO DE RECEBIMENTO:", err.message);
-        res.status(500).json({ error: "Falha na transação: " + err.message });
+        console.error("ERRO NO RECEBIMENTO:", err.message);
+        res.status(500).json({ error: "Falha ao confirmar recebimento: " + err.message });
     } finally {
         client.release();
     }
@@ -6959,6 +7011,100 @@ router.get('/admin/relatorios/coleta-liberada', verificarToken, async (req, res)
         res.json({ registros: rows, stats });
     } catch (err) {
         res.status(500).json({ error: "Erro ao carregar mapa de coleta: " + err.message });
+    }
+});
+
+// 1. ROTA: Listar solicitações pendentes (Exclusiva)
+router.get('/infra/solicitacoes', verificarToken, async (req, res) => {
+    try {
+        // Assume-se que você tenha uma tabela 'solicitacoes_infra' ou similar
+        // que o perfil logistica preenche.
+        const sql = `
+            SELECT s.*, p.nome as produto_nome, l.nome as destino_nome
+            FROM solicitacoes_infra s
+            JOIN produtos p ON s.produto_id = p.id
+            JOIN locais l ON s.local_destino_id = l.id
+            WHERE s.status = 'PENDENTE'
+            ORDER BY s.data_solicitacao ASC;
+        `;
+        const { rows } = await db.query(sql);
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao buscar solicitações: " + err.message });
+    }
+});
+
+// 2. ROTA: Buscar Tags (Patrimônios) disponíveis no Local 37
+router.get('/infra/tags-disponiveis', verificarToken, async (req, res) => {
+    const { prodId } = req.query;
+    try {
+        const sql = `
+            SELECT id, patrimonio 
+            FROM patrimonios 
+            WHERE produto_id = $1 AND local_id = 37 
+              AND em_transito = false AND status = 'ESTOQUE'
+            ORDER BY patrimonio ASC;
+        `;
+        const { rows } = await db.query(sql, [prodId]);
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 3. ROTA MESTRE: Processar Envio (Cria Pedido + Remessa + Coleta Liberada)
+router.post('/infra/processar-envio', verificarToken, async (req, res) => {
+    const { solicitacaoId, patrimoniosIds, localDestinoId, produtoId } = req.body;
+    const usuarioId = req.user.id;
+    const client = await db.pool.connect();
+
+    try {
+        await client.query('BEGIN');
+
+        // A. Criar o Pedido direto em COLETA_LIBERADA
+        const resPed = await client.query(
+            `INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, tipo_pedido, data_criacao) 
+             VALUES ($1, $2, 'COLETA_LIBERADA', 'INFRA_PATRIMONIO', NOW()) RETURNING id`,
+            [usuarioId, localDestinoId]
+        );
+        const pedidoId = resPed.rows[0].id;
+
+        // B. Criar a Remessa vinculada (Status COLETA_LIBERADA)
+        const resRem = await client.query(
+            `INSERT INTO pedido_remessas (pedido_id, status, data_criacao) 
+             VALUES ($1, 'COLETA_LIBERADA', NOW()) RETURNING id`,
+            [pedidoId]
+        );
+        const remessaId = resRem.rows[0].id;
+
+        // C. Atualizar os Patrimônios (Bloqueio e Vínculo)
+        await client.query(
+            `UPDATE patrimonios 
+             SET em_transito = true, 
+                 local_destino_id = $1, 
+                 pedido_id = $2,
+                 status = 'EM_TRANSITO'
+             WHERE id = ANY($3)`,
+            [localDestinoId, pedidoId, patrimoniosIds]
+        );
+
+        // D. Atualizar status da solicitação original
+        await client.query("UPDATE solicitacoes_infra SET status = 'PROCESSADO' WHERE id = $1", [solicitacaoId]);
+
+        // E. Log de Auditoria
+        await client.query(
+            `INSERT INTO log_status_pedidos (pedido_id, usuario_id, status_anterior, status_novo, observacao)
+             VALUES ($1, $2, 'SOLICITACAO', 'COLETA_LIBERADA', 'Envio de patrimônio via Módulo Infra')`,
+            [pedidoId, usuarioId]
+        );
+
+        await client.query('COMMIT');
+        res.json({ success: true, pedidoId });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ error: "Falha na transação infra: " + err.message });
+    } finally {
+        client.release();
     }
 });
 

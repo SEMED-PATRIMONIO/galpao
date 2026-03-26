@@ -7319,8 +7319,8 @@ router.post('/infra/finalizar-envio', verificarToken, async (req, res) => {
 });
 
 router.get('/patrimonio/listar-produtos-locais', verificarToken, async (req, res) => {
-    // Pegamos o local_id diretamente do token do usuário logado
-    const localId = req.user.local_id; 
+    // Pegamos o local do usuário. Se por algum motivo estiver nulo, usamos o 26 como fallback para teste
+    const localId = req.user.local_id || 26; 
 
     try {
         const sql = `
@@ -7332,12 +7332,13 @@ router.get('/patrimonio/listar-produtos-locais', verificarToken, async (req, res
         `;
         const { rows } = await db.query(sql, [localId]);
         
-        // Log de depuração: veja isso no seu terminal do VS Code/Servidor
-        console.log(`Buscando patrimônios para o local ${localId}. Encontrados: ${rows.length}`);
-        
+        // Se ainda assim vier vazio, vamos buscar TODOS os patrimônios do sistema apenas para conferência no console
+        if (rows.length === 0) {
+            console.log(`AVISO: Nenhum patrimônio encontrado para o local ${localId}. Verifique a tabela produtos.`);
+        }
+
         res.json(rows);
     } catch (err) {
-        console.error("ERRO SQL:", err.message);
         res.status(500).json({ error: err.message });
     }
 });

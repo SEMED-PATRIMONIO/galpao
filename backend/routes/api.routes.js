@@ -7122,31 +7122,29 @@ router.post('/infra/iniciar-solicitacao', verificarToken, async (req, res) => {
     try {
         await client.query('BEGIN');
 
-        // 1. Criar o Pedido
+        // 1. Criar o Pedido com o status correto do seu ENUM
         const resPed = await client.query(
             `INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, tipo_pedido, data_criacao) 
-             VALUES ($1, $2, 'APROVADO', 'INFRA_PATRIMONIO', NOW()) RETURNING id`,
+             VALUES ($1, $2, 'AGUARDANDO_AUTORIZACAO', 'INFRA_PATRIMONIO', NOW()) RETURNING id`,
             [usuarioId, local_destino_id]
         );
         const pedidoId = resPed.rows[0].id;
 
-        // 2. RESERVA IMEDIATA: Marcar a quantidade solicitada como em trânsito
-        // Isso faz com que eles sumam da lista de "disponíveis" instantaneamente
-        const resReserva = await client.query(`
-            UPDATE patrimonios 
-            SET em_transito = true, 
-                local_destino_id = $1, 
-                pedido_id = $2 
+        // 2. Registrar o item solicitado
+        await client.query(
+            `INSERT INTO itens_pedido (pedido_id, produto_id, quantidade) VALUES ($1, $2, $3)`,
+            [pedidoId, produto_id, quantidade]
+        );
+
+        // 3. Reserva os primeiros itens encontrados (para que sumam do estoque fonte)
+        await client.query(`
+            UPDATE patrimonios SET em_transito = true, local_destino_id = $1, pedido_id = $2 
             WHERE id IN (
                 SELECT id FROM patrimonios 
                 WHERE produto_id = $3 AND local_id = 37 AND em_transito = false 
                 LIMIT $4
             )
         `, [local_destino_id, pedidoId, produto_id, quantidade]);
-
-        if (resReserva.rowCount < quantidade) {
-            throw new Error("Estoque insuficiente no momento da reserva.");
-        }
 
         await client.query('COMMIT');
         res.json({ success: true, pedidoId });
@@ -7264,7 +7262,7 @@ router.get('/infra/pendentes', verificarToken, async (req, res) => {
             JOIN itens_pedido ip ON p.id = ip.pedido_id
             JOIN locais l ON p.local_destino_id = l.id
             JOIN produtos prod ON ip.produto_id = prod.id
-            WHERE p.status = 'APROVADO' AND p.tipo_pedido = 'INFRA_PATRIMONIO'
+            WHERE p.status = 'AGUARDANDO_AUTORIZACAO' AND p.tipo_pedido = 'INFRA_PATRIMONIO'
             ORDER BY p.data_criacao ASC`;
         const { rows } = await db.query(sql);
         res.json(rows);
@@ -7306,9 +7304,9 @@ router.post('/infra/finalizar-envio', verificarToken, async (req, res) => {
         await db.query("UPDATE pedidos SET status = 'COLETA_LIBERADA' WHERE id = $1", [pedidoId]);
 
         // D. Log de Auditoria utilizando sua estrutura de log [cite: 97, 104]
-        await db.query(
+        await client.query(
             `INSERT INTO log_status_pedidos (pedido_id, usuario_id, status_anterior, status_novo, observacao)
-             VALUES ($1, $2, 'APROVADO', 'COLETA_LIBERADA', 'Separação de patrimônio concluída.')`,
+            VALUES ($1, $2, 'AGUARDANDO_AUTORIZACAO', 'COLETA_LIBERADA', 'Tags selecionadas e remessa gerada pela Infra.')`,
             [pedidoId, usuarioId]
         );
 
@@ -7317,6 +7315,164 @@ router.post('/infra/finalizar-envio', verificarToken, async (req, res) => {
     } catch (err) {
         await db.query('ROLLBACK');
         res.status(500).json({ error: err.message });
+    }
+});
+
+router.get('/patrimonio/listar-produtos-locais', verificarToken, async (req, res) => {
+    const localId = req.user.local_id; // Pegará o seu ID 26 do login
+    try {
+        const sql = `
+            SELECT id, nome 
+            FROM produtos 
+            WHERE local_id = $1 AND tipo = 'PATRIMONIO' 
+            ORDER BY nome ASC
+        `;
+        const { rows } = await db.query(sql, [localId]);
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/patrimonio/vincular-nf-massa', verificarToken, upload.single('arquivo_nf'), async (req, res) => {
+    const { patrimoniosIds, numeroNF } = req.body; // patrimoniosIds vem como string "1,2,3"
+    const idsArray = patrimoniosIds.split(',').map(Number);
+    const arquivo = req.file;
+    const usuarioId = req.user.id;
+
+    const client = await db.pool.connect();
+
+    try {
+        await client.query('BEGIN');
+
+        // 1. Salva o documento uma única vez
+        const resDoc = await client.query(
+            `INSERT INTO documentos_fiscais (numero, url, usuario_id, data_upload) 
+             VALUES ($1, $2, $3, NOW()) RETURNING id`,
+            [numeroNF, arquivo.path, usuarioId]
+        );
+        const documentoId = resDoc.rows[0].id;
+
+        // 2. Faz o "apontamento" de todos os bens selecionados para este ID
+        await client.query(
+            `UPDATE patrimonios 
+             SET documento_id = $1, 
+                 nota_fiscal = $2 
+             WHERE id = ANY($3)`,
+            [documentoId, numeroNF, idsArray]
+        );
+
+        await client.query('COMMIT');
+        res.json({ success: true, message: "Documento vinculado com sucesso a todos os itens!" });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
+router.get('/patrimonio/obter-nf/:id', verificarToken, async (req, res) => {
+    const patrimonioId = req.params.id;
+
+    try {
+        // Query "inteligente": busca o documento vinculado ou a URL direta
+        const sql = `
+            SELECT 
+                p.url_nota_fiscal as url_direta,
+                d.url as url_compartilhada
+            FROM patrimonios p
+            LEFT JOIN documentos_fiscais d ON p.documento_id = d.id
+            WHERE p.id = $1
+        `;
+        
+        const { rows } = await db.query(sql, [patrimonioId]);
+
+        if (rows.length === 0) {
+            return res.status(404).json({ error: "Registo não encontrado." });
+        }
+
+        // Prioridade para a URL compartilhada (nova lógica), depois a direta (antiga)
+        const urlFinal = rows[0].url_compartilhada || rows[0].url_direta;
+
+        if (!urlFinal) {
+            return res.status(404).json({ error: "Este bem não possui Nota Fiscal anexada." });
+        }
+
+        res.json({ url: urlFinal });
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao recuperar documento: " + err.message });
+    }
+});
+
+router.post('/patrimonio/cadastrar-completo', verificarToken, upload.single('arquivo_nf'), async (req, res) => {
+    const { nome, setor_id, quantidade, numero_nf, adquirido_2025 } = req.body;
+    const localId = req.user.local_id;
+    const usuarioId = req.user.id;
+    const arquivo = req.file;
+    const qtdNum = parseInt(quantidade);
+
+    const client = await db.pool.connect();
+
+    try {
+        await client.query('BEGIN');
+
+        // 1. VERIFICAÇÃO/ATUALIZAÇÃO NA TABELA 'produtos'
+        let resProd = await client.query(
+            "SELECT id, quantidade_estoque FROM produtos WHERE UPPER(nome) = UPPER($1) AND local_id = $2 AND tipo = 'PATRIMONIO'",
+            [nome.trim(), localId]
+        );
+
+        let produtoId;
+
+        if (resProd.rows.length > 0) {
+            // SE JÁ EXISTE: Adiciona a nova quantidade ao saldo atual
+            produtoId = resProd.rows[0].id;
+            await client.query(
+                "UPDATE produtos SET quantidade_estoque = quantidade_estoque + $1 WHERE id = $2",
+                [qtdNum, produtoId]
+            );
+        } else {
+            // SE NÃO EXISTE: Cria o registro do produto com a quantidade inicial
+            const newProd = await client.query(
+                `INSERT INTO produtos (nome, tipo, local_id, quantidade_estoque, alerta_minimo) 
+                 VALUES ($1, 'PATRIMONIO', $2, $3, 0) RETURNING id`,
+                [nome.trim().toUpperCase(), localId, qtdNum]
+            );
+            produtoId = newProd.rows[0].id;
+        }
+
+        // 2. GESTÃO DE DOCUMENTO (NF)
+        let documentoId = null;
+        if (arquivo) {
+            const resDoc = await client.query(
+                "INSERT INTO documentos_fiscais (numero, url, usuario_id, data_upload) VALUES ($1, $2, $3, NOW()) RETURNING id",
+                [numero_nf, arquivo.path, usuarioId]
+            );
+            documentoId = resDoc.rows[0].id;
+        }
+
+        // 3. CRIAÇÃO DOS ITENS INDIVIDUAIS NA TABELA 'patrimonios'
+        // Criamos uma linha para cada unidade informada na quantidade
+        for (let i = 0; i < qtdNum; i++) {
+            await client.query(
+                `INSERT INTO patrimonios 
+                (produto_id, local_id, setor_id, estado, adquirido_pos_2025, nota_fiscal, documento_id, status) 
+                VALUES ($1, $2, $3, 'BOM', $4, $5, $6, 'ESTOQUE')`,
+                [produtoId, localId, setor_id, adquirido_2025 === 'true', numero_nf, documentoId]
+            );
+        }
+
+        await client.query('COMMIT');
+        res.json({ success: true, message: `Sucesso! ${qtdNum} unidades de "${nome}" registradas e saldo atualizado.` });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error("Erro no cadastro de patrimônio:", err.message);
+        res.status(500).json({ error: "Falha ao processar cadastro: " + err.message });
+    } finally {
+        client.release();
     }
 });
 

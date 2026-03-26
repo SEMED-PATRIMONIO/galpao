@@ -461,7 +461,6 @@ if (perfil === 'estoque') {
                 </div>
                 <i>🏗️</i><span>SOLICITADO PELA INFRA</span>
             </button>
-
             <button class="btn-grande btn-vidro" onclick="abrirMenuPatrimonioAlmoxarifado()">
                 <i>🏛️</i><span>PATRIMÔNIO</span>
             </button>
@@ -472,6 +471,9 @@ if (perfil === 'estoque') {
                 <i>📈</i><span>PAINEL DE PEDIDOS</span>
             </button>
 
+            <button class="btn-grande btn-vidro" onclick="telaCadastrosBase()">
+                <i>💻</i><span>INCLUIR NOVO LOCAL/PRODUTO</span>
+            </button>
             <button class="btn-grande btn-vidro" onclick="abrirTelaEntrada()">
                 <i>📥</i><span>LANÇAR ENTRADA NO ESTOQUE</span>
             </button>
@@ -481,6 +483,8 @@ if (perfil === 'estoque') {
             <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('RELATÓRIOS')">
                 <i>📊</i><span>RELATÓRIOS</span>
             </button>
+
+
             <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()">
                 <i>🔑</i><span>ALTERAR MINHA SENHA</span>
             </button>
@@ -13151,39 +13155,47 @@ async function carregarChamadosPendentesEscola(localId) {
 }
 
 async function telaPatrimonioEscolaCatalogo() {
+    // 1. Criação da estrutura base do modal
     const modal = document.createElement('div');
     modal.id = 'modal-catalogo-entrada';
     modal.className = 'alerta-vidro-overlay';
 
     try {
-        // 1. Carregamento simultâneo
+        // 2. Carregamento prévio e simultâneo dos dados do servidor
+        // A rota 'listar-produtos-locais' deve filtrar por local_id no backend
         const [resSetores, resProdutos] = await Promise.all([
             fetch(`${API_URL}/patrimonio/setores/meus`, { headers: { 'Authorization': `Bearer ${TOKEN}` } }),
             fetch(`${API_URL}/patrimonio/listar-produtos-locais`, { headers: { 'Authorization': `Bearer ${TOKEN}` } })
         ]);
 
+        if (!resSetores.ok || !resProdutos.ok) {
+            throw new Error("Não foi possível carregar os dados do servidor.");
+        }
+
         const setores = await resSetores.json();
         const produtosJaExistentes = await resProdutos.json();
 
         modal.innerHTML = `
-            <div class="painel-vidro" style="width: 1150px; height: 620px; display: flex; gap: 20px; padding: 25px; border: 1px solid rgba(255,255,255,0.2); overflow: hidden;">
+            <div class="painel-vidro animar-entrada" style="width: 1150px; height: 620px; display: flex; gap: 20px; padding: 25px; border: 1px solid rgba(255,255,255,0.2); overflow: hidden;">
+                
                 <div style="flex: 1; display: flex; flex-direction: column; gap: 15px;">
                     <h2 style="color:white; margin:0 0 10px 0;">📝 NOVO REGISTRO DE BEM</h2>
                     
                     <div style="background: rgba(59, 130, 246, 0.1); padding: 12px; border-radius: 12px; border: 1px solid rgba(59, 130, 246, 0.3);">
-                        <label style="color:#60a5fa; font-weight:bold; display:flex; align-items:center; gap:10px; cursor:pointer;">
+                        <label style="color:#60a5fa; font-weight:bold; display:flex; align-items:center; gap:10px; cursor:pointer; font-size: 0.85rem;">
                             <input type="checkbox" id="check-2025" onchange="alternarLogica2025(this.checked)" style="transform: scale(1.3);">
                             BEM ADQUIRIDO A PARTIR DE 2025?
                         </label>
                     </div>
 
                     <div style="overflow-y: auto; flex: 1; padding-right: 10px;">
+                        
                         <div style="margin-bottom: 15px;">
-                            <label style="color:white; font-size:0.8rem; font-weight:bold;">SELECIONE O BEM (Já cadastrado no seu local):</label>
+                            <label style="color:white; font-size:0.8rem; font-weight:bold; display:block; margin-bottom:5px;">NOME DO BEM:</label>
                             
                             <select id="select-nome-existente" class="input-vidro" style="width: 100%; margin-bottom: 10px;" onchange="verificarNovoProduto(this.value)">
                                 <option value="">-- SELECIONE UM BEM EXISTENTE --</option>
-                                ${produtosJaExistentes.map(p => `<option value="${p.nome}" style="color:black;">${p.nome}</option>`).join('')}
+                                ${produtosJaExistentes.map(p => `<option value="${p.nome}" style="color:black;">${p.nome.toUpperCase()}</option>`).join('')}
                                 <option value="NOVO" style="color: #22c55e; font-weight:bold;">[+] CADASTRAR UM NOVO NOME / ITEM</option>
                             </select>
 
@@ -13193,7 +13205,7 @@ async function telaPatrimonioEscolaCatalogo() {
 
                         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom: 12px;">
                             <div>
-                                <label style="color:white; font-size:0.8rem;">SETOR:</label>
+                                <label style="color:white; font-size:0.8rem;">SETOR DESTINO:</label>
                                 <select id="cat-setor" class="input-vidro">
                                     ${setores.map(s => `<option value="${s.id}" style="color:black;">${s.nome}</option>`).join('')}
                                 </select>
@@ -13206,44 +13218,47 @@ async function telaPatrimonioEscolaCatalogo() {
 
                         <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:12px; margin-bottom: 12px;">
                             <div>
-                                <label id="label-serie" style="color:white; font-size:0.8rem;">Nº PATRIMÔNIO:</label>
+                                <label id="label-serie" style="color:white; font-size:0.8rem;">PATRIMÔNIO VIRTUAL:</label>
                                 <input type="text" id="cat-serie" class="input-vidro" placeholder="Auto-gerado" readonly style="background: rgba(255,255,255,0.05); cursor: not-allowed;">
                             </div>
                             <div>
-                                <label style="color:white; font-size:0.8rem;">Nº RGP:</label>
+                                <label style="color:white; font-size:0.8rem;">PATRIMÔNIO OFICIAL:</label>
                                 <input type="text" id="cat-patrimonio" class="input-vidro" placeholder="Pendente" readonly style="background: rgba(255,255,255,0.05); cursor: not-allowed; opacity: 0.6;">
                             </div>
                             <div>
-                                <label style="color:white; font-size:0.8rem;">Nº NF ou CE:</label>
-                                <input type="text" id="cat-nf" class="input-vidro">
+                                <label id="label-nf" style="color:white; font-size:0.8rem;">Nº NF ou CE:</label>
+                                <input type="text" id="cat-nf" class="input-vidro" placeholder="Opcional">
                             </div>
                         </div>
 
                         <div id="container-arquivo-nf" style="display:none; margin-bottom: 12px;">
-                            <label style="color:white; font-size:0.8rem;">ANEXAR NF (PDF):</label>
-                            <input type="file" id="cat-file" accept="application/pdf" class="input-vidro">
+                            <label style="color:white; font-size:0.8rem;">ANEXAR NOTA FISCAL (PDF):</label>
+                            <input type="file" id="cat-file" accept="application/pdf" class="input-vidro" style="padding: 5px;">
                         </div>
                     </div>
 
                     <div style="display:flex; gap:10px; margin-top: auto;">
                         <button onclick="document.getElementById('modal-catalogo-entrada').remove()" class="btn-sair-vidro" style="flex:1;">CANCELAR</button>
                         <button onclick="enviarCadastroComAnexo()" id="btn-salvar" style="flex:2; background:#3b82f6; color:white; border:none; border-radius:10px; font-weight:bold; cursor:pointer;">
-                            SALVAR REGISTRO
+                            SALVAR REGISTRO ✅
                         </button>
                     </div>
                 </div>
 
                 <div style="flex: 1.2; display: flex; flex-direction: column; background: rgba(0,0,0,0.2); border-radius: 15px; padding: 15px; border: 1px solid rgba(255,255,255,0.05);">
-                    <h3 style="color:#aaa; font-size:0.9rem; margin:0 0 10px 0; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 5px;">
-                        ÚLTIMOS BENS CADASTRADOS
+                    <h3 style="color:#aaa; font-size:0.9rem; margin:0 0 10px 0; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 5px; display: flex; justify-content: space-between;">
+                        <span>ÚLTIMOS BENS CADASTRADOS</span>
+                        <button onclick="abrirModalVincularNF()" style="background:none; border:none; color:#60a5fa; cursor:pointer; font-size:0.75rem;">Vincular em Massa 🔗</button>
                     </h3>
                     <div id="lista-bens-recentes" style="flex: 1; overflow-y: auto;">
-                        <p style="color:gray; text-align:center;">Carregando...</p>
+                        <p style="color:gray; text-align:center; margin-top:50px;">Carregando...</p>
                     </div>
                 </div>
             </div>
         `;
         document.body.appendChild(modal);
+        
+        // Inicializa a lista lateral
         carregarBensRecentesModal();
 
     } catch (err) {
@@ -13252,6 +13267,7 @@ async function telaPatrimonioEscolaCatalogo() {
     }
 }
 
+// FUNÇÃO AUXILIAR: Gerencia a visibilidade do campo de texto
 window.verificarNovoProduto = function(valor) {
     const inputNome = document.getElementById('cat-nome');
     if (valor === 'NOVO') {
@@ -13259,7 +13275,7 @@ window.verificarNovoProduto = function(valor) {
         inputNome.style.display = "block";
         inputNome.focus();
     } else {
-        inputNome.value = valor; // Se escolheu um existente, o input oculto recebe o nome dele
+        inputNome.value = valor; // O input oculto guarda o nome vindo do select
         inputNome.style.display = "none";
         gerarNumeroSerieAutomatico();
     }
@@ -13401,12 +13417,8 @@ async function carregarBensRecentesModal() {
     const container = document.getElementById('lista-bens-recentes');
     if (!container) return;
 
-    // Mostra um mini-spinner ou texto de carregando
-    container.innerHTML = '<p style="color:gray; text-align:center; margin-top:20px; font-size:0.8rem;">Atualizando lista...</p>';
-
     try {
         const localId = localStorage.getItem('local_id');
-        // Rota que busca os últimos itens do local logado
         const res = await fetch(`${API_URL}/patrimonio/recentes/${localId}`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
@@ -13414,16 +13426,18 @@ async function carregarBensRecentesModal() {
         const bens = await res.json();
 
         if (bens.length === 0) {
-            container.innerHTML = '<p style="color:gray; text-align:center; margin-top:50px;">Nenhum bem cadastrado ainda.</p>';
+            container.innerHTML = '<p style="color:gray; text-align:center; margin-top:50px;">Nenhum bem cadastrado.</p>';
             return;
         }
 
         container.innerHTML = bens.map(b => `
             <div style="background: rgba(255,255,255,0.03); padding: 10px; border-radius: 8px; margin-bottom: 8px; border: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; align-items: center;">
-                <div style="text-align: left;">
-                    <input type="checkbox" class="check-patrimonio" value="${b.id}">
-                    <strong style="color: white; font-size: 0.85rem; display: block;">${b.nome_produto}</strong>
-                    <small style="color: #60a5fa; font-family: monospace;">${b.numero_serie}</small>
+                <div style="text-align: left; display: flex; align-items: center; gap: 10px;">
+                    <input type="checkbox" class="check-patrimonio" value="${b.id}" style="cursor:pointer;">
+                    <div>
+                        <strong style="color: white; font-size: 0.85rem; display: block;">${b.nome_produto}</strong>
+                        <small style="color: #60a5fa; font-family: monospace;">${b.numero_serie}</small>
+                    </div>
                 </div>
                 <div style="text-align: right;">
                     <span style="font-size: 0.7rem; color: #aaa;">${new Date(b.data_atualizacao).toLocaleDateString()}</span>
@@ -13432,7 +13446,6 @@ async function carregarBensRecentesModal() {
         `).join('');
 
     } catch (err) {
-        console.error("Erro ao carregar recentes:", err);
         container.innerHTML = '<p style="color:#ef4444; text-align:center;">Erro ao carregar lista.</p>';
     }
 }

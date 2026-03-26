@@ -16387,28 +16387,22 @@ window.processarEnvioTransferencia = async function(produtoId, maxQtd) {
     const localDestino = document.getElementById('select-destino-local').value;
     const qtd = parseInt(document.getElementById('input-qtd-transferir').value);
 
-    if (qtd <= 0 || qtd > maxQtd) {
-        return notificar("Quantidade inválida ou superior ao estoque!", "erro");
-    }
+    if (qtd <= 0 || qtd > maxQtd) return notificar("Quantidade inválida!", "erro");
 
     try {
-        const res = await fetch(`${API_URL}/transferencia/enviar-itens`, {
+        // Chamada para a nova rota que cria o pedido pendente
+        const res = await fetch(`${API_URL}/infra/iniciar-solicitacao`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
             body: JSON.stringify({ produto_id: produtoId, quantidade: qtd, local_destino_id: localDestino })
         });
 
         if (res.ok) {
-            notificar("Itens enviados para o local de TRANSFERÊNCIA!");
+            notificar("Solicitação enviada para separação de tags!");
             document.getElementById('modal-destino-transferencia').remove();
-            telaSaidaTransferencia37(); // Recarrega a lista
-        } else {
-            const erro = await res.json();
-            notificar(erro.error, "erro");
+            telaSaidaTransferencia37(); 
         }
-    } catch (err) {
-        notificar("Erro ao processar envio.", "erro");
-    }
+    } catch (err) { notificar("Erro no envio.", "erro"); }
 };
 
 window.telaPendentesInfra = async function() {
@@ -18776,23 +18770,30 @@ window.imprimirColetaLiberadaPDF = function() {
 // 1. Tela principal de pendências
 window.infra_telaPendentes = async function() {
     const container = document.getElementById('app-content');
-    container.innerHTML = '<div class="painel-vidro"><h2>🏗️ INFRAESTRUTURA: PENDENTES</h2><div id="infra-lista">Buscando...</div></div>';
-
-    try {
-        const res = await fetch(`${API_URL}/infra/solicitacoes`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
-        const dados = await res.json();
-        
-        document.getElementById('infra-lista').innerHTML = dados.map(s => `
-            <div class="item-setor-global" onclick="infra_abrirAcao(${JSON.stringify(s).replace(/"/g, '&quot;')})" 
-                 style="display:flex; justify-content:space-between; padding:20px; margin-bottom:10px; cursor:pointer;">
-                <div>
-                    <strong>${s.produto_nome}</strong>
-                    <p>📍 Destino: ${s.destino_nome}</p>
-                </div>
-                <div style="background:#3b82f6; padding:10px; border-radius:8px;">${s.quantidade} UN</div>
+    container.innerHTML = `
+        <div class="painel-vidro animar-entrada" style="padding:30px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:30px;">
+                <button onclick="carregarDashboard()" class="btn-sair-vidro">⬅ VOLTAR</button>
+                <h2 style="color:white; margin:0;">🏗️ SEPARAÇÃO DE PATRIMÔNIO</h2>
             </div>
-        `).join('');
-    } catch (e) { notificar("Erro ao carregar infra.", "erro"); }
+            <div id="lista-infra-pendente" style="display:grid; gap:15px;">🔍 Buscando solicitações...</div>
+        </div>`;
+
+    const res = await fetch(`${API_URL}/infra/pendentes`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+    const dados = await res.json();
+    
+    document.getElementById('lista-infra-pendente').innerHTML = dados.map(p => `
+        <div class="item-setor-global" onclick="infra_abrirModalAcao(${JSON.stringify(p).replace(/"/g, '&quot;')})" 
+             style="display:flex; justify-content:space-between; padding:20px; cursor:pointer; background:rgba(255,255,255,0.02); border-radius:12px;">
+            <div>
+                <strong style="color:white; font-size:1.1rem;">${p.produto_nome}</strong>
+                <p style="color:#60a5fa; margin:5px 0 0 0;">📍 DESTINO: ${p.destino_nome}</p>
+            </div>
+            <div style="background:#3b82f6; color:white; padding:10px 20px; border-radius:8px; font-weight:900;">
+                ${p.quantidade} UN
+            </div>
+        </div>
+    `).join('') || '<p style="color:gray; text-align:center;">Nenhuma solicitação aguardando separação.</p>';
 };
 
 // 2. Modal de Decisão (Foco forçado)
@@ -18815,41 +18816,177 @@ window.infra_abrirAcao = function(s) {
 };
 
 // 3. Seleção de Patrimônios Específicos
-window.infra_telaSelecaoTags = async function(solId, prodId, destId, qtd, nome) {
-    document.getElementById('modal-infra').remove();
-    const app = document.getElementById('app-content');
-    app.innerHTML = `
-        <div class="painel-vidro">
-            <h2>🏷️ SELECIONAR PATRIMÔNIOS (${nome})</h2>
-            <p>Selecione exatamente <b>${qtd}</b> etiquetas para envio.</p>
-            <div id="grid-tags" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:10px; margin:20px 0;"></div>
-            <button id="btn-infra-fim" class="btn-vidro" style="width:100%; display:none; background:#3b82f6;" 
-                    onclick="infra_finalizarEnvio(${solId}, ${prodId}, ${destId}, ${qtd})">FINALIZAR E GERAR REMESSA 📤</button>
-        </div>
-    `;
 
-    const res = await fetch(`${API_URL}/infra/tags-disponiveis?prodId=${prodId}`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
-    const tags = await res.json();
-    document.getElementById('grid-tags').innerHTML = tags.map(t => `
-        <label style="background:rgba(255,255,255,0.1); padding:10px; border-radius:8px; display:flex; gap:10px;">
-            <input type="checkbox" name="tag_infra" value="${t.id}" onchange="infra_contar(${qtd})"> ${t.patrimonio}
-        </label>
-    `).join('');
-};
 
 window.infra_contar = function(qtd) {
     const sel = document.querySelectorAll('input[name="tag_infra"]:checked').length;
     document.getElementById('btn-infra-fim').style.display = (sel === qtd) ? 'block' : 'none';
 };
 
-window.infra_finalizarEnvio = async function(solId, prodId, destId, qtd) {
-    const ids = Array.from(document.querySelectorAll('input[name="tag_infra"]:checked')).map(i => i.value);
-    const res = await fetch(`${API_URL}/infra/processar-envio`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
-        body: JSON.stringify({ solicitacaoId: solId, patrimoniosIds: ids, localDestinoId: destId, produtoId: prodId })
-    });
-    if(res.ok) { notificar("Carga liberada para coleta!", "sucesso"); infra_telaPendentes(); }
+window.infra_finalizarEnvio = async function(pedidoId, localDestId, qtd, prodId) {
+    // 1. Coleta os IDs dos patrimônios que foram marcados no grid
+    const checkboxes = document.querySelectorAll('input[name="tag_infra_check"]:checked');
+    const patrimoniosIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
+
+    // 2. Validação de segurança (caso o usuário tente burlar o botão via console)
+    if (patrimoniosIds.length !== qtd) {
+        return notificar(`Erro: Selecione exatamente ${qtd} etiquetas.`, "erro");
+    }
+
+    if (!confirm(`Deseja finalizar a separação de ${qtd} itens e liberar para coleta?`)) return;
+
+    try {
+        // Bloqueia o botão para evitar cliques duplos
+        const btn = document.getElementById('btn-infra-finalizar');
+        if(btn) {
+            btn.disabled = true;
+            btn.innerText = "PROCESSANDO REMESSA... ⏳";
+        }
+
+        // 3. Chamada para a rota mestre que criamos no api.routes.js
+        const res = await fetch(`${API_URL}/infra/finalizar-envio`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${TOKEN}` 
+            },
+            body: JSON.stringify({ 
+                pedidoId: pedidoId, 
+                patrimoniosIds: patrimoniosIds, 
+                localDestinoId: localDestId,
+                produtoId: prodId 
+            })
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+            notificar("🚀 SUCESSO: Remessa gerada! O status agora é COLETA LIBERADA.", "sucesso");
+            
+            // 4. Retorna para a tela de pendências para continuar o trabalho
+            setTimeout(() => {
+                infra_telaPendentes();
+            }, 1500);
+            
+        } else {
+            throw new Error(data.error || "Erro ao finalizar envio.");
+        }
+
+    } catch (err) {
+        console.error("Erro infra_finalizarEnvio:", err);
+        notificar("❌ ERRO: " + err.message, "erro");
+        
+        // Reativa o botão em caso de erro
+        const btn = document.getElementById('btn-infra-finalizar');
+        if(btn) {
+            btn.disabled = false;
+            btn.innerText = "GERAR REMESSA E LIBERAR COLETA 📤";
+        }
+    }
+};
+
+window.infra_abrirModalAcao = function(p) {
+    const modal = document.createElement('div');
+    modal.style = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:9999; display:flex; align-items:center; justify-content:center; backdrop-filter:blur(8px);";
+    modal.innerHTML = `
+        <div class="painel-vidro" style="width:450px; padding:30px; text-align:center;">
+            <h3 style="color:white;">INICIAR SEPARAÇÃO</h3>
+            <p style="color:#ccc;">Deseja selecionar as tags para o pedido <br><b>#${p.id} - ${p.produto_nome}</b>?</p>
+            <div style="display:flex; gap:10px; margin-top:30px;">
+                <button onclick="this.closest('div').parentElement.parentElement.remove()" class="btn-sair-vidro" style="flex:1;">VOLTAR</button>
+                <button onclick="infra_telaSelecaoTags(${p.id}, ${p.produto_id}, ${p.local_destino_id}, ${p.quantidade}, '${p.produto_nome}')" 
+                        style="flex:1; background:#22c55e; color:white; border:none; border-radius:10px; font-weight:bold; cursor:pointer;">SELECIONAR TAGS ✅</button>
+            </div>
+        </div>`;
+    document.body.appendChild(modal);
+};
+
+// FUNÇÃO: Abre a grade de seleção de etiquetas (Patrimônios)
+window.infra_telaSelecaoTags = async function(pedidoId, prodId, destId, qtdNecessaria, nomeProduto) {
+    // 1. Remove o modal de decisão para limpar a tela
+    const modalAcao = document.querySelector('#modal-infra') || document.querySelector('.alerta-vidro-overlay');
+    if (modalAcao) modalAcao.remove();
+
+    const container = document.getElementById('app-content');
+    
+    // 2. Desenha a interface de seleção
+    container.innerHTML = `
+        <div class="painel-vidro animar-entrada" style="padding: 30px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <button onclick="infra_telaPendentes()" class="btn-sair-vidro">⬅ VOLTAR</button>
+                <div style="text-align:right;">
+                    <h2 style="color: white; margin:0; font-size:1.2rem;">🏷️ SELEÇÃO DE ETIQUETAS</h2>
+                    <p style="color:#60a5fa; margin:0; font-weight:bold;">${nomeProduto}</p>
+                </div>
+            </div>
+
+            <div style="background:rgba(255,255,255,0.05); padding:15px; border-radius:10px; margin-bottom:20px; text-align:center;">
+                <span style="color:white; font-size:0.9rem;">Selecione exatamente </span>
+                <b style="color:#fbbf24; font-size:1.1rem;">${qtdNecessaria}</b> 
+                <span style="color:white; font-size:0.9rem;"> itens para o pedido #${pedidoId}</span>
+                <div id="contador-tags" style="margin-top:10px; font-weight:900; color:#4ade80; font-size:1.2rem;">0 / ${qtdNecessaria}</div>
+            </div>
+
+            <div id="grid-tags-infra" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; max-height: 400px; overflow-y: auto; padding: 10px;">
+                <p style="color:white; text-align:center; grid-column:1/-1;">🔍 Buscando etiquetas no Almoxarifado Central...</p>
+            </div>
+
+            <div style="margin-top:30px;">
+                <button id="btn-infra-finalizar" class="btn-vidro" 
+                        style="width:100%; background:#22c55e; display:none; height:50px; font-size:1rem; font-weight:bold;"
+                        onclick="infra_finalizarEnvio(${pedidoId}, ${destId}, ${qtdNecessaria}, ${prodId})">
+                    GERAR REMESSA E LIBERAR COLETA 📤
+                </button>
+            </div>
+        </div>
+    `;
+
+    try {
+        // 3. Busca as tags disponíveis no Local 37 para este produto
+        const res = await fetch(`${API_URL}/infra/tags-disponiveis?prodId=${prodId}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const tags = await res.json();
+        const grid = document.getElementById('grid-tags-infra');
+
+        if (!tags || tags.length === 0) {
+            grid.innerHTML = '<p style="color:#ef4444; text-align:center; grid-column:1/-1;">Nenhum patrimônio deste item encontrado no Local 37.</p>';
+            return;
+        }
+
+        // 4. Renderiza as etiquetas com checkboxes
+        grid.innerHTML = tags.map(t => `
+            <label class="tag-selector" style="cursor:pointer; display:flex; align-items:center; gap:10px; background:rgba(255,255,255,0.03); padding:12px; border-radius:8px; border:1px solid rgba(255,255,255,0.1); transition:0.2s;">
+                <input type="checkbox" name="tag_infra_check" value="${t.id}" style="width:18px; height:18px; cursor:pointer;" 
+                       onchange="infra_validarQuantidade(${qtdNecessaria})">
+                <span style="color:white; font-family:monospace; font-size:1rem;">${t.patrimonio}</span>
+            </label>
+        `).join('');
+
+    } catch (err) {
+        notificar("Erro ao carregar etiquetas.", "erro");
+    }
+};
+
+// FUNÇÃO: Valida se a quantidade marcada é a correta
+window.infra_validarQuantidade = function(max) {
+    const selecionados = document.querySelectorAll('input[name="tag_infra_check"]:checked');
+    const contador = document.getElementById('contador-tags');
+    const btn = document.getElementById('btn-infra-finalizar');
+
+    contador.innerText = `${selecionados.length} / ${max}`;
+
+    if (selecionados.length === max) {
+        contador.style.color = "#4ade80"; // Verde se estiver correto
+        btn.style.display = "block";
+    } else if (selecionados.length > max) {
+        contador.style.color = "#ef4444"; // Vermelho se passar
+        btn.style.display = "none";
+        notificar(`Você só pode selecionar ${max} itens!`, "alerta");
+    } else {
+        contador.style.color = "#fbbf24"; // Amarelo enquanto falta
+        btn.style.display = "none";
+    }
 };
 
 // Isso garante que o onclick="funcao()" funcione sempre

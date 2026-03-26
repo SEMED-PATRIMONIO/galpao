@@ -7117,28 +7117,89 @@ router.post('/infra/processar-envio', verificarToken, async (req, res) => {
 router.post('/infra/iniciar-solicitacao', verificarToken, async (req, res) => {
     const { produto_id, quantidade, local_destino_id } = req.body;
     const usuarioId = req.user.id;
+    const client = await db.pool.connect();
 
     try {
-        await db.query('BEGIN');
+        await client.query('BEGIN');
 
-        // Usamos 'APROVADO' porque é um status válido no seu sistema
-        const resPed = await db.query(
+        // 1. Criar o Pedido
+        const resPed = await client.query(
             `INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, tipo_pedido, data_criacao) 
              VALUES ($1, $2, 'APROVADO', 'INFRA_PATRIMONIO', NOW()) RETURNING id`,
             [usuarioId, local_destino_id]
         );
         const pedidoId = resPed.rows[0].id;
 
-        await db.query(
-            `INSERT INTO itens_pedido (pedido_id, produto_id, quantidade) VALUES ($1, $2, $3)`,
-            [pedidoId, produto_id, quantidade]
-        );
+        // 2. RESERVA IMEDIATA: Marcar a quantidade solicitada como em trânsito
+        // Isso faz com que eles sumam da lista de "disponíveis" instantaneamente
+        const resReserva = await client.query(`
+            UPDATE patrimonios 
+            SET em_transito = true, 
+                local_destino_id = $1, 
+                pedido_id = $2 
+            WHERE id IN (
+                SELECT id FROM patrimonios 
+                WHERE produto_id = $3 AND local_id = 37 AND em_transito = false 
+                LIMIT $4
+            )
+        `, [local_destino_id, pedidoId, produto_id, quantidade]);
 
-        await db.query('COMMIT');
+        if (resReserva.rowCount < quantidade) {
+            throw new Error("Estoque insuficiente no momento da reserva.");
+        }
+
+        await client.query('COMMIT');
         res.json({ success: true, pedidoId });
     } catch (err) {
-        await db.query('ROLLBACK');
+        await client.query('ROLLBACK');
         res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
+router.post('/infra/finalizar-envio', verificarToken, async (req, res) => {
+    const { pedidoId, patrimoniosIds, localDestinoId } = req.body;
+    const usuarioId = req.user.id;
+    const client = await db.pool.connect();
+
+    try {
+        await client.query('BEGIN');
+
+        // 1. Local da transferência (Virtual)
+        const idTransf = (await client.query("SELECT id FROM locais WHERE nome = 'TRANSFERÊNCIA'")).rows[0].id;
+
+        // 2. Criar a Remessa
+        await client.query(
+            `INSERT INTO pedido_remessas (pedido_id, status, data_criacao) 
+             VALUES ($1, 'COLETA_LIBERADA', NOW())`,
+            [pedidoId]
+        );
+
+        // 3. Primeiro, limpamos qualquer reserva genérica feita no pedido
+        await client.query("UPDATE patrimonios SET em_transito = false, pedido_id = NULL WHERE pedido_id = $1", [pedidoId]);
+
+        // 4. Agora, aplicamos as tags EXATAS que o usuário escolheu
+        // NOTA: Removido o campo 'status' para evitar erro de ENUM
+        await client.query(
+            `UPDATE patrimonios SET 
+                local_id = $1, 
+                local_destino_id = $2, 
+                em_transito = true, 
+                pedido_id = $3
+             WHERE id = ANY($4)`,
+            [idTransf, localDestinoId, pedidoId, patrimoniosIds]
+        );
+
+        await client.query("UPDATE pedidos SET status = 'COLETA_LIBERADA' WHERE id = $1", [pedidoId]);
+
+        await client.query('COMMIT');
+        res.json({ success: true });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
     }
 });
 

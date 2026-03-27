@@ -9493,7 +9493,7 @@ window.confirmarRecebimento = async function(remessaId) {
     if (!confirm(`Confirma que todos os itens da Remessa #${remessaId} foram entregues na unidade?`)) return;
 
     try {
-        const res = await fetch(`${API_URL}/pedidos/remessa/${remessaId}/confirmar-recebimento`, {
+        const res = await fetch(`${API_URL}/pedidos/remessa2/${remessaId}/confirmar-recebimento`, {
             method: 'PATCH',
             headers: { 
                 'Content-Type': 'application/json',
@@ -9546,7 +9546,7 @@ document.addEventListener('click', async (event) => {
         if (!confirm(`Confirma que a Remessa #${id} chegou na escola?`)) return;
 
         try {
-            const res = await fetch(`${API_URL}/escola/confirmar-recebimento/${id}`, {
+            const res = await fetch(`${API_URL}/escola/confirmar-recebimento2/${id}`, {
                 method: 'PATCH',
                 headers: { 'Authorization': `Bearer ${TOKEN}` }
             });

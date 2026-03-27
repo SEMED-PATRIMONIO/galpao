@@ -7625,28 +7625,33 @@ router.get('/relatorios/romaneio-infra/:id', verificarToken, async (req, res) =>
 });
 
 router.post('/pedidos/logistica/confirmar-saida', verificarToken, async (req, res) => {
-    const { remessaId, tipoPedido } = req.body;
+    const { remessaId } = req.body;
     const client = await db.pool.connect();
 
     try {
         await client.query('BEGIN');
 
-        // 1. Atualiza a remessa específica
+        // 1. Atualiza a Remessa para 'EM_TRANSPORTE'
         await client.query("UPDATE pedido_remessas SET status = 'EM_TRANSPORTE' WHERE id = $1", [remessaId]);
 
-        // 2. Define o status conforme a sua regra
-        // Património vai para COLETA_LIBERADA. Uniformes vai para EM_TRANSPORTE.
-        const novoStatus = (tipoPedido === 'INFRA_PATRIMONIO') ? 'COLETA_LIBERADA' : 'EM_TRANSPORTE';
+        // 2. CORREÇÃO: Atualiza o Pedido vinculado a essa remessa específica
+        // Usamos um subquery para achar o pedido_id correto
+        const updatePedido = await client.query(`
+            UPDATE pedidos 
+            SET status = 'EM_TRANSPORTE', data_saida = NOW() 
+            WHERE id = (SELECT pedido_id FROM pedido_remessas WHERE id = $1)
+        `, [remessaId]);
 
-        await client.query(
-            "UPDATE pedidos SET status = $1, data_saida = NOW() WHERE romaneio_id = $2",
-            [novoStatus, remessaId]
-        );
+        if (updatePedido.rowCount === 0) {
+            throw new Error("Nenhum pedido encontrado para esta remessa.");
+        }
 
         await client.query('COMMIT');
         res.json({ success: true });
+
     } catch (err) {
         await client.query('ROLLBACK');
+        console.error("ERRO NA SAÍDA:", err.message);
         res.status(500).json({ error: err.message });
     } finally {
         client.release();

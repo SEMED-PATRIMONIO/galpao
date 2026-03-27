@@ -1,19 +1,24 @@
 const jwt = require('jsonwebtoken');
+// Mantive exatamente a sua chave secreta original
 const SECRET = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxpZ25kZmhqeGdiamlzd2Vta2t1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1OTU5MTcsImV4cCI6MjA3OTE3MTkxN30';
 
 const verificarToken = (req, res, next) => {
-    // 1. Tenta pegar do Header (Bearer) ou da Query String (?token=...)
+    // 1. Tenta pegar o token do cabeçalho ou da URL (para o PDF)
     const authHeader = req.headers['authorization'];
-    const tokenHeader = authHeader ? authHeader.replace('Bearer ', '') : null;
     const tokenQuery = req.query.token;
 
-    const token = tokenHeader || tokenQuery;
+    // Se não encontrar nada, barra o acesso
+    if (!authHeader && !tokenQuery) {
+        return res.status(403).send('Token não fornecido');
+    }
 
-    if (!token) return res.status(403).send('Token não fornecido');
+    // 2. Extrai o token bruto (remove "Bearer " se vier do header)
+    const token = authHeader ? authHeader.replace('Bearer ', '') : tokenQuery;
 
     jwt.verify(token, SECRET, (err, decoded) => {
         if (err) return res.status(500).send('Falha na autenticação');
 
+        // 3. Injeta os dados necessários para o restante do sistema
         req.userId = decoded.id;
         req.perfil = decoded.perfil;
         req.user = {
@@ -26,4 +31,15 @@ const verificarToken = (req, res, next) => {
     });
 };
 
-module.exports = { verificarToken };
+// ESTA É A FUNÇÃO QUE EU HAVIA ESQUECIDO (E QUE CAUSOU O ERRO):
+const verificarPerfil = (perfisPermitidos) => {
+    return (req, res, next) => {
+        if (!perfisPermitidos.includes(req.perfil)) {
+            return res.status(403).send('Acesso negado: perfil sem permissão');
+        }
+        next();
+    };
+};
+
+// Exportando ambas as funções para o seu server.js e rotas funcionarem
+module.exports = { verificarToken, verificarPerfil };

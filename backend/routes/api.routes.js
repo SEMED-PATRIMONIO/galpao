@@ -1424,45 +1424,43 @@ router.post('/produtos/cadastrar', verificarToken, async (req, res) => {
 router.post('/cadastros/produtos', verificarToken, async (req, res) => {
     const { nome, tipo, categoria_id, alerta_minimo } = req.body;
     
-    // Pega o local_id do usuário logado (vindo do Token)
-    // DICA: Se no login você salvou como localId, mude aqui para req.user.localId
+    // Pega o local_id que você já injetou no login/middleware
     const local_id = req.user.local_id; 
 
-    const catId = (categoria_id && !isNaN(categoria_id)) ? categoria_id : null;
-    const client = await db.pool.connect(); // Usar o client para transação estrita
+    if (!local_id) {
+        return res.status(400).json({ error: "Erro: Seu usuário não possui um LOCAL_ID vinculado no banco de dados." });
+    }
 
+    const client = await db.pool.connect();
     try {
         await client.query('BEGIN');
 
-        // INSERT com todas as colunas necessárias
         const resProd = await client.query(
             `INSERT INTO produtos (nome, tipo, categoria_id, alerta_minimo, quantidade_estoque, local_id) 
              VALUES ($1, $2, $3, $4, 0, $5) RETURNING id`,
-            [nome.toUpperCase().trim(), tipo, catId, parseInt(alerta_minimo) || 0, local_id]
+            [nome.toUpperCase().trim(), tipo, categoria_id || null, parseInt(alerta_minimo) || 0, local_id]
         );
         
         const produto_id = resProd.rows[0].id;
 
+        // Se for uniforme, cria a grade zerada (a Trigger vai cuidar de somar depois)
         if (tipo === 'UNIFORMES') {
             const grade = (nome.includes('TENIS') || nome.includes('TÊNIS')) 
                 ? ['22','23','24','25','26','27','28','29','30','31','32','33','34','35','36','37','38','39','40','41','42','43']
                 : ['2','4','6','8','10','12','14','16','PP','P','M','G','GG','EGG'];
 
             for (let tam of grade) {
-                await client.query("INSERT INTO estoque_grades (produto_id, tamanho, quantidade) VALUES ($1, $2, 0)", [produto_id, tam]);
                 await client.query("INSERT INTO estoque_tamanhos (produto_id, tamanho, quantidade) VALUES ($1, $2, 0)", [produto_id, tam]);
             }
         }
 
         await client.query('COMMIT');
-        res.json({ message: "Cadastro realizado com sucesso!", id: produto_id });
-
+        res.json({ message: "Produto cadastrado com sucesso!", id: produto_id });
     } catch (err) {
         await client.query('ROLLBACK');
-        console.error("ERRO NO CADASTRO:", err.message);
-        res.status(500).json({ error: "Erro interno: " + err.message });
+        res.status(500).json({ error: err.message });
     } finally {
-        client.release(); // Libera a conexão de volta para o pool
+        client.release();
     }
 });
 

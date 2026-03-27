@@ -1424,32 +1424,30 @@ router.post('/produtos/cadastrar', verificarToken, async (req, res) => {
 router.post('/cadastros/produtos', verificarToken, async (req, res) => {
     const { nome, tipo, categoria_id, alerta_minimo } = req.body;
     
-    // Tratamento crucial: se a categoria for inválida ou vazia, vira NULL para o Postgres
+    // CORREÇÃO: Captura o local_id do usuário que está autenticado pelo token
+    const local_id = req.user.local_id; 
+
     const catId = (categoria_id && !isNaN(categoria_id)) ? categoria_id : null;
 
     try {
         await db.query('BEGIN');
 
-        // 1. Inserção na tabela produtos (quantidade_estoque inicia em 0 conforme solicitado)
+        // CORREÇÃO: Adicionado 'local_id' nas colunas e o parâmetro '$5' nos valores
         const resProd = await db.query(
-            `INSERT INTO produtos (nome, tipo, categoria_id, alerta_minimo, quantidade_estoque) 
-             VALUES ($1, $2, $3, $4, 0) RETURNING id`,
-            [nome.toUpperCase(), tipo, catId, alerta_minimo || 0]
+            `INSERT INTO produtos (nome, tipo, categoria_id, alerta_minimo, quantidade_estoque, local_id) 
+             VALUES ($1, $2, $3, $4, 0, $5) RETURNING id`,
+            [nome.toUpperCase(), tipo, catId, alerta_minimo || 0, local_id]
         );
         const produto_id = resProd.rows[0].id;
 
-        // 2. Geração da Grade Estrita para UNIFORMES
         if (tipo === 'UNIFORMES') {
             let grade = [];
-            
-            // Lógica para TENIS (Grade 22-43) ou Outros (Grade 2-EGG)
             if (nome.includes('TENIS') || nome.includes('TÊNIS')) {
                 grade = ['22','23','24','25','26','27','28','29','30','31','32','33','34','35','36','37','38','39','40','41','42','43'];
             } else {
                 grade = ['2','4','6','8','10','12','14','16','PP','P','M','G','GG','EGG'];
             }
 
-            // Gravação em ambas as tabelas de grade que você utiliza
             for (let tam of grade) {
                 await db.query(
                     "INSERT INTO estoque_grades (produto_id, tamanho, quantidade) VALUES ($1, $2, 0)",
@@ -1467,7 +1465,7 @@ router.post('/cadastros/produtos', verificarToken, async (req, res) => {
 
     } catch (err) {
         await db.query('ROLLBACK');
-        console.error("ERRO NO BANCO:", err.message); // Verifique isso no terminal do seu servidor
+        console.error("ERRO NO BANCO:", err.message);
         res.status(500).json({ error: "Erro interno: " + err.message });
     }
 });

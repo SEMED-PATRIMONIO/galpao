@@ -6,14 +6,14 @@ const verificarToken = (req, res, next) => {
     // 1. Tenta pegar o token do cabeçalho ou da URL (para o PDF)
     const authHeader = req.headers['authorization'];
     const tokenQuery = req.query.token;
+    
+    const tokenRaw = authHeader || tokenQuery;
 
-    // Se não encontrar nada, barra o acesso
-    if (!authHeader && !tokenQuery) {
-        return res.status(403).send('Token não fornecido');
-    }
+
+    if (!tokenRaw) return res.status(403).send('Token não fornecido');
 
     // 2. Extrai o token bruto (remove "Bearer " se vier do header)
-    const token = authHeader ? authHeader.replace('Bearer ', '') : tokenQuery;
+    const token = tokenRaw.startsWith('Bearer ') ? tokenRaw.replace('Bearer ', '') : tokenRaw;
 
     jwt.verify(token, SECRET, (err, decoded) => {
         if (err) return res.status(500).send('Falha na autenticação');

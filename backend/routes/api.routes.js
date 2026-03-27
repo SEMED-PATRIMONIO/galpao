@@ -1424,49 +1424,45 @@ router.post('/produtos/cadastrar', verificarToken, async (req, res) => {
 router.post('/cadastros/produtos', verificarToken, async (req, res) => {
     const { nome, tipo, categoria_id, alerta_minimo } = req.body;
     
-    // CORREÇÃO: Captura o local_id do usuário que está autenticado pelo token
+    // Pega o local_id do usuário logado (vindo do Token)
+    // DICA: Se no login você salvou como localId, mude aqui para req.user.localId
     const local_id = req.user.local_id; 
 
     const catId = (categoria_id && !isNaN(categoria_id)) ? categoria_id : null;
+    const client = await db.pool.connect(); // Usar o client para transação estrita
 
     try {
-        await db.query('BEGIN');
+        await client.query('BEGIN');
 
-        // CORREÇÃO: Adicionado 'local_id' nas colunas e o parâmetro '$5' nos valores
-        const resProd = await db.query(
+        // INSERT com todas as colunas necessárias
+        const resProd = await client.query(
             `INSERT INTO produtos (nome, tipo, categoria_id, alerta_minimo, quantidade_estoque, local_id) 
              VALUES ($1, $2, $3, $4, 0, $5) RETURNING id`,
-            [nome.toUpperCase(), tipo, catId, alerta_minimo || 0, local_id]
+            [nome.toUpperCase().trim(), tipo, catId, parseInt(alerta_minimo) || 0, local_id]
         );
+        
         const produto_id = resProd.rows[0].id;
 
         if (tipo === 'UNIFORMES') {
-            let grade = [];
-            if (nome.includes('TENIS') || nome.includes('TÊNIS')) {
-                grade = ['22','23','24','25','26','27','28','29','30','31','32','33','34','35','36','37','38','39','40','41','42','43'];
-            } else {
-                grade = ['2','4','6','8','10','12','14','16','PP','P','M','G','GG','EGG'];
-            }
+            const grade = (nome.includes('TENIS') || nome.includes('TÊNIS')) 
+                ? ['22','23','24','25','26','27','28','29','30','31','32','33','34','35','36','37','38','39','40','41','42','43']
+                : ['2','4','6','8','10','12','14','16','PP','P','M','G','GG','EGG'];
 
             for (let tam of grade) {
-                await db.query(
-                    "INSERT INTO estoque_grades (produto_id, tamanho, quantidade) VALUES ($1, $2, 0)",
-                    [produto_id, tam]
-                );
-                await db.query(
-                    "INSERT INTO estoque_tamanhos (produto_id, tamanho, quantidade) VALUES ($1, $2, 0)",
-                    [produto_id, tam]
-                );
+                await client.query("INSERT INTO estoque_grades (produto_id, tamanho, quantidade) VALUES ($1, $2, 0)", [produto_id, tam]);
+                await client.query("INSERT INTO estoque_tamanhos (produto_id, tamanho, quantidade) VALUES ($1, $2, 0)", [produto_id, tam]);
             }
         }
 
-        await db.query('COMMIT');
+        await client.query('COMMIT');
         res.json({ message: "Cadastro realizado com sucesso!", id: produto_id });
 
     } catch (err) {
-        await db.query('ROLLBACK');
-        console.error("ERRO NO BANCO:", err.message);
+        await client.query('ROLLBACK');
+        console.error("ERRO NO CADASTRO:", err.message);
         res.status(500).json({ error: "Erro interno: " + err.message });
+    } finally {
+        client.release(); // Libera a conexão de volta para o pool
     }
 });
 
@@ -7496,6 +7492,7 @@ router.get('/relatorios/romaneio-infra/:id', verificarToken, async (req, res) =>
         const sql = `
             SELECT 
                 r.id as romaneio_num,
+                p.id as pedido_id,
                 r.data_saida,
                 ld.nome as destino_nome,
                 ld.nome_oficial as destino_endereco,
@@ -7769,6 +7766,99 @@ router.get('/escola/detalhes-remessa/:remessaId', verificarToken, async (req, re
     } catch (err) {
         console.error("Erro ao buscar detalhes:", err);
         res.status(500).json({ error: "Erro interno ao carregar itens." });
+    }
+});
+
+router.get('/relatorios/romaneio-padrao/:remessaId', verificarToken, async (req, res) => {
+    const { remessaId } = req.params;
+
+    try {
+        const sql = `
+            SELECT 
+                pr.id as remessa_num,
+                pr.data_criacao as data_saida,
+                l.nome as destino_nome,
+                l.nome_oficial as destino_endereco,
+                p.id as pedido_id,
+                prod.nome as produto_nome,
+                pri.tamanho,
+                pri.quantidade
+            FROM pedido_remessas pr
+            JOIN pedidos p ON pr.pedido_id = p.id
+            JOIN locais l ON p.local_destino_id = l.id
+            JOIN pedido_remessa_itens pri ON pri.remessa_id = pr.id
+            JOIN produtos prod ON pri.produto_id = prod.id
+            WHERE pr.id = $1
+        `;
+
+        const { rows } = await db.query(sql, [remessaId]);
+        if (rows.length === 0) return res.status(404).send("Remessa não encontrada.");
+
+        const d = rows[0];
+        const dataHoje = new Date();
+        const meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+
+        const html = `
+        <!DOCTYPE html>
+        <html lang="pt-br">
+        <head>
+            <meta charset="UTF-8">
+            <style>
+                @page { size: portrait; margin: 1cm; }
+                body { font-family: sans-serif; color: #333; }
+                .header { display: flex; align-items: center; gap: 15px; border-bottom: 1px solid #000; padding-bottom: 10px; }
+                .logo { width: 60px; }
+                h1 { text-align: center; font-size: 18px; text-transform: uppercase; margin: 30px 0; }
+                table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                th, td { border: 1px solid #000; padding: 8px; text-align: left; font-size: 12px; }
+                th { background: #eee; }
+                .footer { margin-top: 50px; font-size: 14px; }
+                .assinaturas { display: flex; justify-content: space-between; margin-top: 60px; }
+                .linha { border-top: 1px solid #000; width: 250px; text-align: center; font-size: 12px; padding-top: 5px; }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <img src="/assets/img/braque.png" class="logo">
+                <div><b>PREFEITURA DE QUEIMADOS / SEMED</b></div>
+            </div>
+            <h1>Romaneio de Entrega - Materiais/Uniformes</h1>
+            <p><b>REMESSA Nº:</b> ${d.remessa_num.toString().padStart(6, '0')} | <b>PEDIDO:</b> #${d.pedido_id}</p>
+            <p><b>DESTINO:</b> ${d.destino_nome}</p>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th>PRODUTO</th>
+                        <th style="text-align:center;">TAMANHO</th>
+                        <th style="text-align:center;">QTD</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${rows.map(r => `
+                        <tr>
+                            <td>${r.produto_nome}</td>
+                            <td style="text-align:center;">${r.tamanho || '---'}</td>
+                            <td style="text-align:center;">${r.quantidade}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+
+            <div class="footer">
+                Queimados/RJ, ${dataHoje.getDate()} de ${meses[dataHoje.getMonth()]} de ${dataHoje.getFullYear()}.
+                <div class="assinaturas">
+                    <div class="linha">Expedição</div>
+                    <div class="linha">Recebido por (Nome/Matrícula)</div>
+                </div>
+            </div>
+            <script>window.onload = () => window.print();</script>
+        </body>
+        </html>`;
+
+        res.send(html);
+    } catch (err) {
+        res.status(500).send("Erro ao gerar romaneio padrão.");
     }
 });
 

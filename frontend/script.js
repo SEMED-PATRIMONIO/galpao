@@ -2611,9 +2611,9 @@ async function salvarProdutoNovo() {
     const payload = {
         nome: nome,
         tipo: tipo,
-        // Envia null se não houver categoria selecionada
         categoria_id: categoria_id ? parseInt(categoria_id) : null,
-        notificara_minimo: parseInt(notificara_minimo) || 0
+        // CORREÇÃO: Alterado de notificara_minimo para alerta_minimo
+        alerta_minimo: parseInt(notificara_minimo) || 0 
     };
 
     try {
@@ -2628,7 +2628,7 @@ async function salvarProdutoNovo() {
 
         if (res.ok) {
             notificar("✅ Cadastro realizado com sucesso!");
-            formProduto(); // Limpa a tela
+            formProduto(); 
         } else {
             const erro = await res.json();
             notificar("❌ Erro no Servidor: " + erro.error);

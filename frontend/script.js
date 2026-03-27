@@ -8643,7 +8643,7 @@ async function telaLogisticaEntregas() {
                                         </div>
                                         
                                         <button class="btn-coletar-remessa" 
-                                                onclick="processarSaidaRemessa(${idValido}, '${r.tipo_pedido}')"
+                                                onclick="processarSaidaRemessa(${idValido}, '${r.tipo_pedido}', event)"
                                                 style="padding:10px 20px; background:#8b5cf6; color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer;">
                                             🚚 LIBERAR SAÍDA
                                         </button>
@@ -8661,6 +8661,7 @@ async function telaLogisticaEntregas() {
 }
 
 window.processarSaidaRemessa = async function(remessaId, tipoPedido) {
+    if (event) event.stopPropagation();
     if (!remessaId || remessaId === "null") {
         return notificar("Erro: ID da remessa inválido.", "erro");
     }

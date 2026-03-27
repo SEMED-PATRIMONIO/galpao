@@ -2602,18 +2602,16 @@ async function formProduto() {
 async function salvarProdutoNovo() {
     const nome = document.getElementById('prod_nome').value.toUpperCase().trim();
     const tipo = document.getElementById('prod_tipo').value;
-    const categoriaSelect = document.getElementById('prod_categoria');
-    const categoria_id = categoriaSelect.value;
+    const categoria_id = document.getElementById('prod_categoria').value;
     const notificara_minimo = document.getElementById('prod_notificara').value;
 
-    if (!nome) return notificar("O nome do produto é obrigatório!");
+    if (!nome) return notificar("O nome do produto é obrigatório!", "alerta");
 
     const payload = {
         nome: nome,
         tipo: tipo,
         categoria_id: categoria_id ? parseInt(categoria_id) : null,
-        // CORREÇÃO: Alterado de notificara_minimo para alerta_minimo
-        alerta_minimo: parseInt(notificara_minimo) || 0 
+        alerta_minimo: parseInt(notificara_minimo) || 0 // Nome exato esperado no backend
     };
 
     try {

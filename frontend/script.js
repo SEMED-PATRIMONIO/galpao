@@ -8664,10 +8664,10 @@ async function telaLogisticaEntregas() {
 
 window.processarSaidaRemessa = async function(remessaId, tipoPedido) {
     if (!remessaId || remessaId === "null") {
-        return notificar("Erro: ID da remessa não localizado.", "erro");
+        return notificar("Erro: ID da remessa inválido.", "erro");
     }
 
-    if (!confirm("Confirmar a saída desta carga para transporte?")) return;
+    if (!confirm(`Confirmar o início do transporte para a Remessa #${remessaId}?`)) return;
 
     try {
         const res = await fetch(`${API_URL}/pedidos/logistica/confirmar-saida`, {
@@ -8679,23 +8679,23 @@ window.processarSaidaRemessa = async function(remessaId, tipoPedido) {
             body: JSON.stringify({ remessaId, tipoPedido })
         });
 
+        const dados = await res.json();
+
         if (res.ok) {
-            notificar("Saída registada! A gerar documento...", "sucesso");
+            notificar("Saída registrada com sucesso!", "sucesso");
+            
+            // Abre o PDF correto
+            const rotaPdf = (tipoPedido === 'INFRA_PATRIMONIO') ? 'romaneio-infra' : 'romaneio-padrao';
+            window.open(`${API_URL}/relatorios/${rotaPdf}/${remessaId}`, '_blank');
 
-            // DIFERENCIAÇÃO AUTOMÁTICA DE PDF
-            if (tipoPedido === 'INFRA_PATRIMONIO') {
-                window.open(`${API_URL}/relatorios/romaneio-infra/${remessaId}`, '_blank');
-            } else {
-                window.open(`${API_URL}/relatorios/romaneio-padrao/${remessaId}`, '_blank');
-            }
-
-            telaLogisticaEntregas(); // Recarrega a lista sem fechar nada
+            telaLogisticaEntregas(); 
         } else {
-            const erro = await res.json();
-            notificar(erro.error || "Erro ao processar saída.", "erro");
+            // Se der erro, avisa o usuário sem deslogar
+            notificar("Erro no servidor: " + (dados.error || "Tente novamente"), "erro");
         }
     } catch (err) {
-        notificar("Erro de ligação com o servidor.", "erro");
+        console.error("Erro no fetch:", err);
+        notificar("Falha na comunicação com o servidor.", "erro");
     }
 };
 

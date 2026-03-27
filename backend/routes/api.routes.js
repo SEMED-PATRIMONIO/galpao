@@ -1679,68 +1679,58 @@ router.post('/escola/confirmar-recebimento', verificarToken, async (req, res) =>
         if (info.rows.length === 0) throw new Error("Remessa não localizada.");
         const { pedido_id, local_destino_id, tipo_pedido } = info.rows[0];
 
-        // --- BLOCO A: PATRIMÔNIO (INFRA) ---
         if (tipo_pedido === 'INFRA_PATRIMONIO') {
-            await client.query(`
-                UPDATE patrimonios SET 
-                    local_id = $1, status = 'ALOCADO', em_transito = false, 
-                    local_destino_id = NULL, data_atualizacao = NOW()
-                WHERE pedido_id = $2`, [local_destino_id, pedido_id]);
+            // Lógica de Patrimônio (Já validada)
+            await client.query(`UPDATE patrimonios SET local_id = $1, status = 'ALOCADO', em_transito = false WHERE pedido_id = $2`, [local_destino_id, pedido_id]);
+            
+            const produtosPat = await client.query(`
+                SELECT prod.nome, prod.tipo, COUNT(*) as qtd FROM patrimonios pat
+                JOIN produtos prod ON pat.produto_id = prod.id WHERE pat.pedido_id = $1 GROUP BY prod.nome, prod.tipo`, [pedido_id]);
 
-            const produtosNoPedido = await client.query(`
-                SELECT prod.nome, prod.tipo, COUNT(*) as qtd 
-                FROM patrimonios pat
-                JOIN produtos prod ON pat.produto_id = prod.id
-                WHERE pat.pedido_id = $1 
-                GROUP BY prod.nome, prod.tipo`, [pedido_id]);
-
-            for (const p of produtosNoPedido.rows) {
+            for (const p of produtosPat.rows) {
                 await client.query(`
-                    INSERT INTO produtos (nome, tipo, local_id, quantidade_estoque)
-                    VALUES ($1, $2, $3, $4)
-                    ON CONFLICT (nome, local_id) 
-                    DO UPDATE SET quantidade_estoque = produtos.quantidade_estoque + $4
+                    INSERT INTO produtos (nome, tipo, local_id, quantidade_estoque) VALUES ($1, $2, $3, $4)
+                    ON CONFLICT (nome, local_id) DO UPDATE SET quantidade_estoque = produtos.quantidade_estoque + $4
                 `, [p.nome, p.tipo, local_destino_id, parseInt(p.qtd)]);
             }
 
-        // --- BLOCO B: MATERIAIS / UNIFORMES (CORREÇÃO DE COLUNA AQUI) ---
         } else {
-            const itensRemessa = await client.query(`
-                SELECT produto_id, tamanho, quantidade 
-                FROM pedido_remessa_itens 
-                WHERE remessa_id = $1`, [remessaId]);
+            // Lógica para MATERIAL e UNIFORMES
+            const itensRemessa = await client.query(`SELECT produto_id, tamanho, quantidade FROM pedido_remessa_itens WHERE remessa_id = $1`, [remessaId]);
 
             for (const item of itensRemessa.rows) {
-                // Criar o produto na escola destino se não existir
+                // 1. Busca o tipo do produto original (MATERIAL ou UNIFORME)
+                const prodOriginal = await client.query(`SELECT nome, tipo, categoria_id FROM produtos WHERE id = $1`, [item.produto_id]);
+                const pBase = prodOriginal.rows[0];
+
+                // 2. Garante que o produto existe na unidade destino (usando quantidade_estoque)
                 await client.query(`
                     INSERT INTO produtos (nome, tipo, categoria_id, local_id, quantidade_estoque)
-                    SELECT nome, tipo, categoria_id, $2, 0 
-                    FROM produtos WHERE id = $1
+                    VALUES ($1, $2, $3, $4, 0)
                     ON CONFLICT (nome, local_id) DO NOTHING
-                `, [item.produto_id, local_destino_id]);
+                `, [pBase.nome, pBase.tipo, pBase.categoria_id, local_destino_id]);
 
-                // Achar o ID do produto criado no local destino
-                const resProdLocal = await client.query(`
-                    SELECT id FROM produtos 
-                    WHERE nome = (SELECT nome FROM produtos WHERE id = $1) 
-                    AND local_id = $2`, [item.produto_id, local_destino_id]);
-                
+                const resProdLocal = await client.query(`SELECT id FROM produtos WHERE nome = $1 AND local_id = $2`, [pBase.nome, local_destino_id]);
                 const novoProdutoId = resProdLocal.rows[0].id;
 
-                // Atualizar estoque_tamanhos (aqui a coluna é 'quantidade')
-                await client.query(`
-                    INSERT INTO estoque_tamanhos (produto_id, tamanho, quantidade)
-                    VALUES ($1, $2, $3)
-                    ON CONFLICT (produto_id, tamanho) 
-                    DO UPDATE SET quantidade = estoque_tamanhos.quantidade + $3
-                `, [novoProdutoId, item.tamanho, item.quantidade]);
+                if (pBase.tipo === 'UNIFORMES') {
+                    // Atualiza grade de tamanhos
+                    await client.query(`
+                        INSERT INTO estoque_tamanhos (produto_id, tamanho, quantidade) VALUES ($1, $2, $3)
+                        ON CONFLICT (produto_id, tamanho) DO UPDATE SET quantidade = estoque_tamanhos.quantidade + $3
+                    `, [novoProdutoId, item.tamanho, item.quantidade]);
 
-                // ATUALIZAR SALDO TOTAL (Corrigido para 'quantidade_estoque')
-                await client.query(`
-                    UPDATE produtos 
-                    SET quantidade_estoque = (SELECT COALESCE(SUM(quantidade), 0) FROM estoque_tamanhos WHERE produto_id = $1)
-                    WHERE id = $1
-                `, [novoProdutoId]);
+                    // Sincroniza o total (quantidade_estoque)
+                    await client.query(`
+                        UPDATE produtos SET quantidade_estoque = (SELECT SUM(quantidade) FROM estoque_tamanhos WHERE produto_id = $1)
+                        WHERE id = $1
+                    `, [novoProdutoId]);
+                } else {
+                    // Se for MATERIAL, atualiza direto na tabela produtos (quantidade_estoque)
+                    await client.query(`
+                        UPDATE produtos SET quantidade_estoque = quantidade_estoque + $1 WHERE id = $2
+                    `, [item.quantidade, novoProdutoId]);
+                }
             }
         }
 
@@ -1748,11 +1738,9 @@ router.post('/escola/confirmar-recebimento', verificarToken, async (req, res) =>
         await client.query("UPDATE pedido_remessas SET status = 'RECEBIDO' WHERE id = $1", [remessaId]);
 
         await client.query('COMMIT');
-        res.json({ success: true, message: "Recebimento concluído!" });
-
+        res.json({ success: true });
     } catch (err) {
         await client.query('ROLLBACK');
-        console.error("ERRO NO RECEBIMENTO:", err.message);
         res.status(500).json({ error: "Erro ao confirmar recebimento: " + err.message });
     } finally {
         client.release();
@@ -7741,37 +7729,47 @@ router.post('/infra/aprovar-e-gerar-romaneio', verificarToken, async (req, res) 
 
 router.get('/escola/detalhes-remessa/:remessaId', verificarToken, async (req, res) => {
     const { remessaId } = req.params;
+    
     try {
-        const info = await db.query(`
+        const infoRemessa = await db.query(`
             SELECT p.id as pedido_id, p.tipo_pedido 
             FROM pedido_remessas pr
             JOIN pedidos p ON pr.pedido_id = p.id
-            WHERE pr.id = $1`, [remessaId]);
+            WHERE pr.id = $1
+        `, [remessaId]);
 
-        if (info.rows.length === 0) return res.status(404).json({ error: "Não encontrado" });
-        const { pedido_id, tipo_pedido } = info.rows[0];
+        if (infoRemessa.rows.length === 0) return res.status(404).json({ error: "Remessa não encontrada." });
 
+        const { pedido_id, tipo_pedido } = infoRemessa.rows[0];
         let itens = [];
+
+        // Se for Patrimônio (INFRA), busca pela tabela de patrimônios
         if (tipo_pedido === 'INFRA_PATRIMONIO') {
             const resItens = await db.query(`
                 SELECT prod.nome, pat.numero_serie, 1 as quantidade_enviada
                 FROM patrimonios pat
                 JOIN produtos prod ON pat.produto_id = prod.id
-                WHERE pat.pedido_id = $1`, [pedido_id]);
+                WHERE pat.pedido_id = $1
+            `, [pedido_id]);
             itens = resItens.rows;
         } else {
-            // CORREÇÃO: JOIN garantido com a tabela produtos para pegar o nome
+            // Para MATERIAL ou UNIFORMES, busca na tabela de itens da remessa
             const resItens = await db.query(`
-                SELECT prod.nome, pri.tamanho, pri.quantidade as quantidade_enviada
-                FROM pedido_remessa_itens pri
+                SELECT 
+                    prod.nome, 
+                    COALESCE(pri.tamanho, 'GERAL') as tamanho, 
+                    pri.quantidade as quantidade_enviada
+                FROM pedido_remessas pr
+                JOIN pedido_remessa_itens pri ON pri.remessa_id = pr.id
                 JOIN produtos prod ON pri.produto_id = prod.id
-                WHERE pri.remessa_id = $1`, [remessaId]);
+                WHERE pr.id = $1
+            `, [remessaId]);
             itens = resItens.rows;
         }
-        res.json({ tipo_pedido: tipo_pedido, itens: itens });
+
+        res.json({ tipo_pedido, itens });
     } catch (err) {
-        console.error("ERRO DETALHES:", err.message);
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: "Erro ao carregar detalhes: " + err.message });
     }
 });
 

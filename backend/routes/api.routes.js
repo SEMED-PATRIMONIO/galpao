@@ -7713,4 +7713,63 @@ router.post('/infra/aprovar-e-gerar-romaneio', verificarToken, async (req, res) 
     }
 });
 
+router.get('/escola/detalhes-remessa/:remessaId', verificarToken, async (req, res) => {
+    const { remessaId } = req.params;
+    
+    try {
+        // 1. Busca o tipo do pedido para saber como listar os itens
+        const infoRemessa = await db.query(`
+            SELECT p.tipo_pedido 
+            FROM pedido_remessas pr
+            JOIN pedidos p ON pr.pedido_id = p.id
+            WHERE pr.id = $1
+        `, [remessaId]);
+
+        if (infoRemessa.rows.length === 0) {
+            return res.status(404).json({ error: "Remessa não encontrada." });
+        }
+
+        const tipoPedido = infoRemessa.rows[0].tipo_pedido;
+        let itens = [];
+
+        if (tipoPedido === 'INFRA_PATRIMONIO') {
+            // Se for Infra, buscamos os patrimônios vinculados (etiquetas/números de série)
+            const resItens = await db.query(`
+                SELECT 
+                    prod.nome, 
+                    ei.numero_serie,
+                    1 as quantidade_enviada
+                FROM pedido_remessas pr
+                JOIN pedidos p ON pr.pedido_id = p.id
+                JOIN patrimonios pat ON p.id = pat.pedido_id
+                JOIN estoque_individual ei ON pat.estoque_id = ei.id
+                JOIN produtos prod ON ei.produto_id = prod.id
+                WHERE pr.id = $1
+            `, [remessaId]);
+            itens = resItens.rows;
+        } else {
+            // Se for Material/Uniforme, buscamos na tabela de itens da remessa
+            const resItens = await db.query(`
+                SELECT 
+                    prod.nome, 
+                    pri.tamanho, 
+                    pri.quantidade as quantidade_enviada
+                FROM pedido_remessa_itens pri
+                JOIN produtos prod ON pri.produto_id = prod.id
+                WHERE pri.remessa_id = $1
+            `, [remessaId]);
+            itens = resItens.rows;
+        }
+
+        res.json({
+            tipo_pedido: tipoPedido,
+            itens: itens
+        });
+
+    } catch (err) {
+        console.error("Erro ao buscar detalhes:", err);
+        res.status(500).json({ error: "Erro interno ao carregar itens." });
+    }
+});
+
 module.exports = router;

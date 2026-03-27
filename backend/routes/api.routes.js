@@ -1670,7 +1670,6 @@ router.post('/escola/confirmar-recebimento', verificarToken, async (req, res) =>
     try {
         await client.query('BEGIN');
 
-        // 1. Busca dados do pedido e destino
         const info = await client.query(`
             SELECT p.id as pedido_id, p.local_destino_id, p.tipo_pedido 
             FROM pedidos p 
@@ -1682,14 +1681,12 @@ router.post('/escola/confirmar-recebimento', verificarToken, async (req, res) =>
 
         // --- BLOCO A: PATRIMÔNIO (INFRA) ---
         if (tipo_pedido === 'INFRA_PATRIMONIO') {
-            // Atualiza status dos bens para ALOCADO na nova unidade
             await client.query(`
                 UPDATE patrimonios SET 
                     local_id = $1, status = 'ALOCADO', em_transito = false, 
                     local_destino_id = NULL, data_atualizacao = NOW()
                 WHERE pedido_id = $2`, [local_destino_id, pedido_id]);
 
-            // Soma no saldo global da tabela 'produtos' (quantidade_estoque)
             const produtosNoPedido = await client.query(`
                 SELECT prod.nome, prod.tipo, COUNT(*) as qtd 
                 FROM patrimonios pat
@@ -1706,17 +1703,15 @@ router.post('/escola/confirmar-recebimento', verificarToken, async (req, res) =>
                 `, [p.nome, p.tipo, local_destino_id, parseInt(p.qtd)]);
             }
 
-        // --- BLOCO B: MATERIAIS / UNIFORMES (O TRECHO QUE FALTAVA) ---
+        // --- BLOCO B: MATERIAIS / UNIFORMES (CORREÇÃO DE COLUNA AQUI) ---
         } else {
-            // Busca os itens que estão nesta remessa específica
             const itensRemessa = await client.query(`
                 SELECT produto_id, tamanho, quantidade 
                 FROM pedido_remessa_itens 
                 WHERE remessa_id = $1`, [remessaId]);
 
             for (const item of itensRemessa.rows) {
-                // 1. Garante que o produto existe no estoque da unidade de destino
-                // Se não existir, cria baseado no nome do produto original
+                // Criar o produto na escola destino se não existir
                 await client.query(`
                     INSERT INTO produtos (nome, tipo, categoria_id, local_id, quantidade_estoque)
                     SELECT nome, tipo, categoria_id, $2, 0 
@@ -1724,7 +1719,7 @@ router.post('/escola/confirmar-recebimento', verificarToken, async (req, res) =>
                     ON CONFLICT (nome, local_id) DO NOTHING
                 `, [item.produto_id, local_destino_id]);
 
-                // 2. Busca o ID do produto específico daquela unidade (escola)
+                // Achar o ID do produto criado no local destino
                 const resProdLocal = await client.query(`
                     SELECT id FROM produtos 
                     WHERE nome = (SELECT nome FROM produtos WHERE id = $1) 
@@ -1732,7 +1727,7 @@ router.post('/escola/confirmar-recebimento', verificarToken, async (req, res) =>
                 
                 const novoProdutoId = resProdLocal.rows[0].id;
 
-                // 3. Atualiza ou insere o saldo por tamanho (estoque_tamanhos usa 'quantidade')
+                // Atualizar estoque_tamanhos (aqui a coluna é 'quantidade')
                 await client.query(`
                     INSERT INTO estoque_tamanhos (produto_id, tamanho, quantidade)
                     VALUES ($1, $2, $3)
@@ -1740,25 +1735,24 @@ router.post('/escola/confirmar-recebimento', verificarToken, async (req, res) =>
                     DO UPDATE SET quantidade = estoque_tamanhos.quantidade + $3
                 `, [novoProdutoId, item.tamanho, item.quantidade]);
 
-                // 4. Sincroniza o total global do produto (quantidade_estoque)
+                // ATUALIZAR SALDO TOTAL (Corrigido para 'quantidade_estoque')
                 await client.query(`
                     UPDATE produtos 
-                    SET quantidade_estoque = (SELECT SUM(quantidade) FROM estoque_tamanhos WHERE produto_id = $1)
+                    SET quantidade_estoque = (SELECT COALESCE(SUM(quantidade), 0) FROM estoque_tamanhos WHERE produto_id = $1)
                     WHERE id = $1
                 `, [novoProdutoId]);
             }
         }
 
-        // --- FINALIZAÇÃO ---
         await client.query("UPDATE pedidos SET status = 'ENTREGUE', data_recebimento = NOW() WHERE id = $1", [pedido_id]);
         await client.query("UPDATE pedido_remessas SET status = 'RECEBIDO' WHERE id = $1", [remessaId]);
 
         await client.query('COMMIT');
-        res.json({ success: true, message: "Recebimento confirmado e estoque atualizado!" });
+        res.json({ success: true, message: "Recebimento concluído!" });
 
     } catch (err) {
         await client.query('ROLLBACK');
-        console.error("ERRO RECEBIMENTO:", err.message);
+        console.error("ERRO NO RECEBIMENTO:", err.message);
         res.status(500).json({ error: "Erro ao confirmar recebimento: " + err.message });
     } finally {
         client.release();
@@ -7766,6 +7760,7 @@ router.get('/escola/detalhes-remessa/:remessaId', verificarToken, async (req, re
                 WHERE pat.pedido_id = $1`, [pedido_id]);
             itens = resItens.rows;
         } else {
+            // CORREÇÃO: JOIN garantido com a tabela produtos para pegar o nome
             const resItens = await db.query(`
                 SELECT prod.nome, pri.tamanho, pri.quantidade as quantidade_enviada
                 FROM pedido_remessa_itens pri
@@ -7775,6 +7770,7 @@ router.get('/escola/detalhes-remessa/:remessaId', verificarToken, async (req, re
         }
         res.json({ tipo_pedido: tipo_pedido, itens: itens });
     } catch (err) {
+        console.error("ERRO DETALHES:", err.message);
         res.status(500).json({ error: err.message });
     }
 });

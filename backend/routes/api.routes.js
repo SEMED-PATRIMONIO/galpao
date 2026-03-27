@@ -1912,7 +1912,8 @@ router.get('/pedidos/logistica/remessas-pendentes', verificarToken, async (req, 
                 p.id AS pedido_id,
                 l.nome AS escola_nome,
                 pr.data_criacao AS data_remessa,
-                p.status AS status_pedido
+                p.status AS status_pedido,
+                p.tipo_pedido -- <--- O "CÉREBRO" PARA NÃO DAR NULL
             FROM pedido_remessas pr
             JOIN pedidos p ON pr.pedido_id = p.id
             JOIN locais l ON p.local_destino_id = l.id
@@ -1921,7 +1922,7 @@ router.get('/pedidos/logistica/remessas-pendentes', verificarToken, async (req, 
         `);
         res.json(result.rows);
     } catch (err) {
-        res.status(500).json({ error: "Erro ao buscar remessas para transporte." });
+        res.status(500).json({ error: "Erro ao buscar remessas pendentes." });
     }
 });
 
@@ -1937,6 +1938,60 @@ router.post('/pedidos/logistica/iniciar-transporte', verificarToken, async (req,
 
         res.json({ message: "Transporte iniciado!" });
     } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/infra/aprovar-automatico', verificarToken, async (req, res) => {
+    const { pedidoId } = req.body;
+    const usuarioId = req.user.id;
+
+    const client = await db.pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // 1. Pega os dados do pedido
+        const pedidoRes = await client.query(`
+            SELECT p.id, p.local_destino_id, ip.produto_id, ip.quantidade 
+            FROM pedidos p 
+            JOIN itens_pedido ip ON p.id = ip.pedido_id 
+            WHERE p.id = $1`, [pedidoId]);
+        
+        const { local_destino_id, produto_id, quantidade } = pedidoRes.rows[0];
+
+        // 2. SELEÇÃO AUTOMÁTICA: Pega os primeiros 'X' itens disponíveis no Central (37)
+        const bensRes = await client.query(`
+            SELECT id FROM patrimonios 
+            WHERE produto_id = $1 AND local_id = 37 AND status = 'ESTOQUE' 
+            LIMIT $2`, [produto_id, quantidade]);
+
+        if (bensRes.rows.length < quantidade) {
+            throw new Error(`Estoque insuficiente no Central. Disponível: ${bensRes.rows.length}`);
+        }
+
+        const idsBens = bensRes.rows.map(b => b.id);
+
+        // 3. CRIA O ROMANEIO AUTOMATICAMENTE
+        const romRes = await client.query(
+            "INSERT INTO romaneios (usuario_estoque_id, status) VALUES ($1, 'EM_TRANSPORTE') RETURNING id",
+            [usuarioId]
+        );
+        const romaneioId = romRes.rows[0].id;
+
+        // 4. VINCULA OS BENS E ATUALIZA PEDIDO/REMESSA
+        await client.query("UPDATE patrimonios SET pedido_id = $1, em_transito = true, local_destino_id = $2 WHERE id = ANY($3)", [pedidoId, local_destino_id, idsBens]);
+        
+        await client.query("UPDATE pedidos SET status = 'COLETA_LIBERADA', romaneio_id = $1, data_autorizacao = NOW(), autorizado_por = $2 WHERE id = $3", [romaneioId, usuarioId, pedidoId]);
+
+        // Cria ou atualiza a remessa na pedido_remessas para 'PRONTO'
+        await client.query("INSERT INTO pedido_remessas (pedido_id, status) VALUES ($1, 'PRONTO') ON CONFLICT (id) DO UPDATE SET status = 'PRONTO'", [pedidoId]);
+
+        await client.query('COMMIT');
+        res.json({ success: true, romaneioId });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
 });
 
 router.get('/pedidos/logistica/entregas-pendentes', verificarToken, async (req, res) => {
@@ -5997,15 +6052,16 @@ router.post('/entrada', async (req, res) => {
 router.post('/estoque/entrada-lote', async (req, res) => {
     const { itens, usuario_id, observacoes } = req.body;
     
-    // Agora usamos db.pool.connect() pois exportamos o pool no db.js
+    // Conexão via pool para garantir alta performance
     const client = await db.pool.connect(); 
 
     try {
         await client.query('BEGIN');
 
-        const totalGeral = itens.reduce((acc, item) => acc + item.qtd_total, 0);
+        // Calcula o total geral somando todos os itens do lote
+        const totalGeral = itens.reduce((acc, item) => acc + (parseInt(item.qtd_total) || 0), 0);
 
-        // 1. Registro no histórico (MESTRE)
+        // 1. Registro no histórico MESTRE
         const resMaster = await client.query(
             `INSERT INTO historico (usuario_id, acao, quantidade_total, observacoes, local_id, tipo) 
              VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
@@ -6014,29 +6070,32 @@ router.post('/estoque/entrada-lote', async (req, res) => {
         const historicoId = resMaster.rows[0].id;
 
         for (const item of itens) {
-            // 2. Atualiza saldo na tabela produtos
+            // 2. Atualiza saldo geral na tabela de produtos (comum para Material e Uniforme)
             await client.query(
                 `UPDATE produtos SET quantidade_estoque = quantidade_estoque + $1 WHERE id = $2`,
                 [item.qtd_total, item.produto_id]
             );
 
-            // 3. Registra os detalhes
+            // 3. Processamento específico por tipo
             if (item.tipo === 'MATERIAL') {
+                // Registro direto no detalhe sem tamanho
                 await client.query(
-                    `INSERT INTO historico_detalhes (historico_id, produto_id, quantidade, tipo_produto) 
-                     VALUES ($1, $2, $3, $4)`,
+                    `INSERT INTO historico_detalhes (historico_id, produto_id, quantidade, tipo_produto, tamanho) 
+                     VALUES ($1, $2, $3, $4, NULL)`,
                     [historicoId, item.produto_id, item.qtd_total, 'MATERIAL']
                 );
-            } else {
+            } else if (item.tipo === 'UNIFORMES') {
+                // Itera sobre a grade de tamanhos do uniforme
                 for (const [tamanho, qtd] of Object.entries(item.grade)) {
                     if (qtd > 0) {
+                        // Registra no detalhe do histórico com o tamanho
                         await client.query(
                             `INSERT INTO historico_detalhes (historico_id, produto_id, quantidade, tamanho, tipo_produto) 
                              VALUES ($1, $2, $3, $4, $5)`,
                             [historicoId, item.produto_id, qtd, tamanho, 'UNIFORMES']
                         );
                         
-                        // 4. Atualiza grade de tamanhos
+                        // 4. Atualiza ou Insere na tabela de grade de tamanhos
                         await client.query(
                             `INSERT INTO estoque_tamanhos (produto_id, tamanho, quantidade)
                              VALUES ($1, $2, $3)
@@ -6054,8 +6113,8 @@ router.post('/estoque/entrada-lote', async (req, res) => {
 
     } catch (err) {
         await client.query('ROLLBACK');
-        console.error("ERRO NO BANCO:", err.message);
-        res.status(500).json({ success: false, error: err.message });
+        console.error("ERRO CRÍTICO NA ENTRADA EM LOTE:", err.message);
+        res.status(500).json({ success: false, error: "Erro ao processar entrada no banco de dados." });
     } finally {
         client.release();
     }
@@ -6110,10 +6169,15 @@ router.get('/estoque/consulta-exclusiva', async (req, res) => {
                 ) AS grade
             FROM produtos p
             WHERE p.local_id = 37
-            ORDER BY p.tipo DESC, p.nome ASC;
+            ORDER BY 
+                CASE 
+                    WHEN p.tipo = 'MATERIAL' THEN 1 
+                    WHEN p.tipo = 'UNIFORMES' THEN 2 
+                    ELSE 3 
+                END ASC, 
+                p.nome ASC;
         `;
 
-        // Usando a sua variável 'db' conforme confirmado
         const { rows } = await db.query(sql); 
         res.json(rows);
     } catch (err) {
@@ -7430,18 +7494,15 @@ router.get('/relatorios/romaneio-infra/:id', verificarToken, async (req, res) =>
     const romaneioId = req.params.id;
 
     try {
-        // Query completa para pegar dados do Romaneio, Pedido, Destino e os Patrimônios
+        // 1. Busca os dados consolidados do romaneio e patrimônios
         const sql = `
             SELECT 
-                r.id as romaneio_id,
+                r.id as romaneio_num,
                 r.data_saida,
-                r.motorista_nome,
-                r.veiculo_placa,
-                p.id as pedido_id,
-                ld.nome as local_destino,
-                ld.nome_oficial as destino_completo,
+                ld.nome as destino_nome,
+                ld.nome_oficial as destino_endereco,
                 prod.nome as produto_nome,
-                string_agg(pat.numero_serie, ', ') as etiquetas -- Agrupa todos os patrimônios em uma linha
+                string_agg(pat.numero_serie, ', ') as lista_etiquetas
             FROM romaneios r
             JOIN pedidos p ON p.romaneio_id = r.id
             JOIN locais ld ON p.local_destino_id = ld.id
@@ -7452,104 +7513,195 @@ router.get('/relatorios/romaneio-infra/:id', verificarToken, async (req, res) =>
         `;
 
         const { rows } = await db.query(sql, [romaneioId]);
+        if (rows.length === 0) return res.status(404).send("Romaneio não encontrado.");
 
-        if (rows.length === 0) {
-            return res.status(404).send("Romaneio não encontrado.");
-        }
+        const d = rows[0]; // Dados do cabeçalho
+        const dataHoje = new Date();
+        const meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
-        // Aqui você pode renderizar um HTML simples para impressão
-        const dados = rows[0];
+        // 2. Montagem do HTML/CSS (Onde inserir a estrutura que te passei)
         const html = `
-            <html>
-            <head>
-                <style>
-                    body { font-family: sans-serif; padding: 40px; color: #333; }
-                    .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
-                    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; }
-                    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-                    th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
-                    th { background-color: #f2f2f2; }
-                    .footer { margin-top: 50px; display: flex; justify-content: space-between; }
-                    .assinatura { border-top: 1px solid #000; width: 250px; text-align: center; padding-top: 5px; }
-                </style>
-            </head>
-            <body>
-                <div class="header">
-                    <h1>ROMANEIO DE ENTREGA - INFRAESTRUTURA</h1>
-                    <p><b>ROMANEIO Nº:</b> ${dados.romaneio_id.toString().padStart(5, '0')} | <b>DATA:</b> ${new Date(dados.data_saida).toLocaleString()}</p>
-                </div>
-
-                <div class="info-grid">
-                    <div>
-                        <p><b>ORIGEM:</b> ALMOXARIFADO CENTRAL</p>
-                        <p><b>DESTINO:</b> ${dados.local_destino}</p>
-                        <p><b>ENDEREÇO:</b> ${dados.destino_completo || 'Não informado'}</p>
-                    </div>
-                    <div>
-                        <p><b>MOTORISTA:</b> ${dados.motorista_nome}</p>
-                        <p><b>VEÍCULO:</b> ${dados.veiculo_placa}</p>
-                        <p><b>PEDIDO REF:</b> #${dados.pedido_id}</p>
-                    </div>
-                </div>
-
-                <table>
-                    <thead>
-                        <tr>
-                            <th>PRODUTO</th>
-                            <th>ETIQUETAS / NÚMEROS DE PATRIMÔNIO</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${rows.map(row => `
-                            <tr>
-                                <td><b>${row.produto_nome}</b></td>
-                                <td style="font-family: monospace; font-size: 0.9rem;">${row.etiquetas}</td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-
-                <div class="footer">
-                    <div class="assinatura">Responsável pela Saída</div>
-                    <div class="assinatura">Responsável pelo Recebimento</div>
-                </div>
+        <!DOCTYPE html>
+        <html lang="pt-br">
+        <head>
+            <meta charset="UTF-8">
+            <style>
+                @page { size: portrait; margin: 1cm; }
+                body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; margin: 0; padding: 0; }
                 
-                <script>window.print();</script>
-            </body>
-            </html>
-        `;
+                /* Marca d'água SEMED */
+                .watermark {
+                    position: fixed; top: 50%; left: 50%;
+                    transform: translate(-50%, -50%) rotate(-45deg);
+                    font-size: 120px; color: rgba(0, 0, 0, 0.03);
+                    font-weight: bold; z-index: -1; pointer-events: none;
+                }
+
+                /* Cabeçalho conforme solicitado */
+                .header { display: flex; align-items: center; gap: 15px; border-bottom: 1px solid #000; padding-bottom: 10px; }
+                .logo { width: 60px; height: auto; }
+                .header-txt { font-weight: bold; font-size: 13px; line-height: 1.2; }
+
+                h1 { text-align: center; font-size: 18px; margin: 30px 0; text-transform: uppercase; text-decoration: underline; }
+
+                .info-entrega { margin-bottom: 20px; font-size: 14px; line-height: 1.6; }
+                
+                table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                th, td { border: 1px solid #000; padding: 10px; text-align: left; font-size: 12px; }
+                th { background: #f2f2f2; text-transform: uppercase; }
+
+                .footer-container { margin-top: 50px; font-size: 14px; }
+                .assinaturas { display: flex; justify-content: space-between; margin-top: 60px; }
+                .linha-assinatura { border-top: 1px solid #000; width: 300px; text-align: center; padding-top: 5px; font-size: 12px; }
+            </style>
+        </head>
+        <body>
+            <div class="watermark">SEMED</div>
+
+            <div class="header">
+                <img src="/assets/img/braque.png" class="logo">
+                <div class="header-txt">
+                    PREFEITURA MUNICIPAL DE QUEIMADOS<br>
+                    SECRETARIA MUNICIPAL DE EDUCAÇÃO
+                </div>
+            </div>
+
+            <h1>Romaneio de Entrega de Patrimônio</h1>
+
+            <div class="info-entrega">
+                <b>ROMANEIO Nº:</b> ${d.romaneio_num.toString().padStart(6, '0')}<br>
+                <b>DESTINO:</b> ${d.destino_nome}<br>
+                <b>ENDEREÇO:</b> ${d.destino_endereco || 'Não informado'}<br>
+                <b>PEDIDO ORIGEM:</b> #${d.pedido_id || ''}
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 30%;">PRODUTO</th>
+                        <th>NÚMEROS DE PATRIMÔNIO (ETIQUETAS)</th>
+                        <th style="width: 10%; text-align: center;">QTD</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${rows.map(row => `
+                        <tr>
+                            <td><b>${row.produto_nome}</b></td>
+                            <td style="font-family: monospace; word-break: break-all;">${row.lista_etiquetas}</td>
+                            <td style="text-align: center;">${row.lista_etiquetas.split(',').length}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+
+            <div class="footer-container">
+                Queimados/RJ, ${dataHoje.getDate()} de ${meses[dataHoje.getMonth()]} de ${dataHoje.getFullYear()}.
+                
+                <div class="assinaturas">
+                    <div class="linha-assinatura">Responsável pela Expedição</div>
+                    <div class="linha-assinatura">
+                        Recebido por (Nome e Matrícula)<br>
+                        Data: ____/____/_______
+                    </div>
+                </div>
+            </div>
+
+            <script>
+                window.onload = () => { 
+                    window.print(); 
+                    // Opcional: fechar a aba após imprimir
+                    // window.onafterprint = () => window.close(); 
+                };
+            </script>
+        </body>
+        </html>`;
 
         res.send(html);
 
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        console.error(err);
+        res.status(500).send("Erro ao gerar o documento.");
     }
 });
 
 router.post('/pedidos/logistica/confirmar-saida', verificarToken, async (req, res) => {
     const { remessaId, tipoPedido } = req.body;
+    const client = await db.pool.connect();
+
+    try {
+        await client.query('BEGIN');
+
+        // 1. Atualiza a remessa específica
+        await client.query("UPDATE pedido_remessas SET status = 'EM_TRANSPORTE' WHERE id = $1", [remessaId]);
+
+        // 2. Define o status conforme a sua regra
+        // Património vai para COLETA_LIBERADA. Uniformes vai para EM_TRANSPORTE.
+        const novoStatus = (tipoPedido === 'INFRA_PATRIMONIO') ? 'COLETA_LIBERADA' : 'EM_TRANSPORTE';
+
+        await client.query(
+            "UPDATE pedidos SET status = $1, data_saida = NOW() WHERE romaneio_id = $2",
+            [novoStatus, remessaId]
+        );
+
+        await client.query('COMMIT');
+        res.json({ success: true });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
+router.post('/infra/aprovar-e-gerar-romaneio', verificarToken, async (req, res) => {
+    const { pedidoId } = req.body;
+    const usuarioId = req.user.id; // [cite: 143]
 
     const client = await db.pool.connect();
     try {
         await client.query('BEGIN');
 
-        // 1. Atualiza o status do Romaneio
+        // 1. Busca detalhes do pedido e quantidade solicitada [cite: 153, 208]
+        const pedido = await client.query(`
+            SELECT p.id, p.local_destino_id, ip.produto_id, ip.quantidade 
+            FROM pedidos p 
+            JOIN itens_pedido ip ON p.id = ip.pedido_id 
+            WHERE p.id = $1`, [pedidoId]);
+
+        const { local_destino_id, produto_id, quantidade } = pedido.rows[0];
+
+        // 2. SELEÇÃO VIRTUAL: Busca os primeiros 'N' itens disponíveis no Almoxarifado Central (37) 
+        const itensDisponiveis = await client.query(`
+            SELECT id FROM patrimonios 
+            WHERE produto_id = $1 AND local_id = 37 AND status = 'ESTOQUE' 
+            LIMIT $2 FOR UPDATE`, [produto_id, quantidade]);
+
+        if (itensDisponiveis.rows.length < quantidade) {
+            throw new Error(`Estoque insuficiente no Central. Disponível: ${itensDisponiveis.rows.length}`);
+        }
+
+        const idsParaVincular = itensDisponiveis.rows.map(r => r.id);
+
+        // 3. CRIA O ROMANEIO [cite: 152]
+        const resRom = await client.query(
+            "INSERT INTO romaneios (usuario_estoque_id, status) VALUES ($1, 'EM_TRANSPORTE') RETURNING id",
+            [usuarioId]
+        );
+        const romaneioId = resRom.rows[0].id;
+
+        // 4. VINCULA PATRIMÔNIOS E MUDA STATUS DO PEDIDO [cite: 153, 176]
         await client.query(
-            "UPDATE romaneios SET status = 'EM_TRANSPORTE', data_saida = NOW() WHERE id = $1",
-            [remessaId]
+            "UPDATE patrimonios SET pedido_id = $1, em_transito = true, local_destino_id = $2 WHERE id = ANY($3)",
+            [pedidoId, local_destino_id, idsParaVincular]
         );
 
-        // 2. Define o novo status do pedido baseado no tipo
-        // Se for patrimônio, vai para COLETA_LIBERADA. Se for uniforme, vai para EM_TRANSPORTE.
-        const novoStatusPedido = (tipoPedido === 'INFRA_PATRIMONIO') ? 'COLETA_LIBERADA' : 'EM_TRANSPORTE';
-
         await client.query(
-            "UPDATE pedidos SET status = $1, data_saida = NOW() WHERE romaneio_id = $2",
-            [novoStatusPedido, remessaId]
+            "UPDATE pedidos SET status = 'COLETA_LIBERADA', romaneio_id = $1, data_autorizacao = NOW(), autorizado_por = $2 WHERE id = $3",
+            [romaneioId, usuarioId, pedidoId]
         );
 
         await client.query('COMMIT');
-        res.json({ success: true });
+        res.json({ success: true, romaneioId });
     } catch (err) {
         await client.query('ROLLBACK');
         res.status(500).json({ error: err.message });

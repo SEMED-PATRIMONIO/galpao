@@ -1683,7 +1683,7 @@ router.post('/escola/confirmar-recebimento', verificarToken, async (req, res) =>
             // 1. Atualiza os bens individuais
             await client.query(`
                 UPDATE patrimonios SET 
-                    local_id = $1, status = 'ATIVO', em_transito = false, 
+                    local_id = $1, status = 'ALOCADO', em_transito = false, 
                     local_destino_id = NULL, data_atualizacao = NOW()
                 WHERE pedido_id = $2`, [local_destino_id, pedido_id]);
 
@@ -7485,10 +7485,10 @@ router.get('/patrimonio/proximo-numero/:prefixo/:ano', verificarToken, async (re
 });
 
 router.get('/relatorios/romaneio-infra/:id', verificarToken, async (req, res) => {
-    const romaneioId = req.params.id;
+    const remessaId = req.params.id;
 
     try {
-        // 1. Busca os dados consolidados do romaneio e patrimônios
+        // SQL Corrigido: Adicionado JOIN com romaneios e filtro por pr.id (remessa)
         const sql = `
             SELECT 
                 r.id as romaneio_num,
@@ -7498,23 +7498,26 @@ router.get('/relatorios/romaneio-infra/:id', verificarToken, async (req, res) =>
                 ld.nome_oficial as destino_endereco,
                 prod.nome as produto_nome,
                 string_agg(pat.numero_serie, ', ') as lista_etiquetas
-            FROM romaneios r
-            JOIN pedidos p ON p.romaneio_id = r.id
+            FROM pedido_remessas pr
+            JOIN pedidos p ON pr.pedido_id = p.id
+            JOIN romaneios r ON p.romaneio_id = r.id
             JOIN locais ld ON p.local_destino_id = ld.id
             JOIN patrimonios pat ON pat.pedido_id = p.id
             JOIN produtos prod ON pat.produto_id = prod.id
-            WHERE r.id = $1
+            WHERE pr.id = $1
             GROUP BY r.id, p.id, ld.id, prod.id
         `;
 
-        const { rows } = await db.query(sql, [romaneioId]);
-        if (rows.length === 0) return res.status(404).send("Romaneio não encontrado.");
+        const { rows } = await db.query(sql, [remessaId]);
+        
+        if (rows.length === 0) {
+            return res.status(404).send("Romaneio/Remessa não localizado no sistema.");
+        }
 
-        const d = rows[0]; // Dados do cabeçalho
+        const d = rows[0]; 
         const dataHoje = new Date();
         const meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
-        // 2. Montagem do HTML/CSS (Onde inserir a estrutura que te passei)
         const html = `
         <!DOCTYPE html>
         <html lang="pt-br">
@@ -7523,28 +7526,20 @@ router.get('/relatorios/romaneio-infra/:id', verificarToken, async (req, res) =>
             <style>
                 @page { size: portrait; margin: 1cm; }
                 body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; margin: 0; padding: 0; }
-                
-                /* Marca d'água SEMED */
                 .watermark {
                     position: fixed; top: 50%; left: 50%;
                     transform: translate(-50%, -50%) rotate(-45deg);
                     font-size: 120px; color: rgba(0, 0, 0, 0.03);
                     font-weight: bold; z-index: -1; pointer-events: none;
                 }
-
-                /* Cabeçalho conforme solicitado */
                 .header { display: flex; align-items: center; gap: 15px; border-bottom: 1px solid #000; padding-bottom: 10px; }
                 .logo { width: 60px; height: auto; }
                 .header-txt { font-weight: bold; font-size: 13px; line-height: 1.2; }
-
                 h1 { text-align: center; font-size: 18px; margin: 30px 0; text-transform: uppercase; text-decoration: underline; }
-
                 .info-entrega { margin-bottom: 20px; font-size: 14px; line-height: 1.6; }
-                
                 table { width: 100%; border-collapse: collapse; margin-top: 20px; }
                 th, td { border: 1px solid #000; padding: 10px; text-align: left; font-size: 12px; }
                 th { background: #f2f2f2; text-transform: uppercase; }
-
                 .footer-container { margin-top: 50px; font-size: 14px; }
                 .assinaturas { display: flex; justify-content: space-between; margin-top: 60px; }
                 .linha-assinatura { border-top: 1px solid #000; width: 300px; text-align: center; padding-top: 5px; font-size: 12px; }
@@ -7561,10 +7556,10 @@ router.get('/relatorios/romaneio-infra/:id', verificarToken, async (req, res) =>
                 </div>
             </div>
 
-            <h1>Romaneio de Entrega de Patrimônio</h1>
+            <h1>Romaneio de Entrega de Património</h1>
 
             <div class="info-entrega">
-                <b>ROMANEIO Nº:</b> ${d.romaneio_num.toString().padStart(6, '0')}<br>
+                <b>ROMANEIO Nº:</b> ${(d.romaneio_num || 0).toString().padStart(6, '0')}<br>
                 <b>DESTINO:</b> ${d.destino_nome}<br>
                 <b>ENDEREÇO:</b> ${d.destino_endereco || 'Não informado'}<br>
                 <b>PEDIDO ORIGEM:</b> #${d.pedido_id || ''}
@@ -7574,7 +7569,7 @@ router.get('/relatorios/romaneio-infra/:id', verificarToken, async (req, res) =>
                 <thead>
                     <tr>
                         <th style="width: 30%;">PRODUTO</th>
-                        <th>NÚMEROS DE PATRIMÔNIO (ETIQUETAS)</th>
+                        <th>NÚMEROS DE PATRIMÓNIO (ETIQUETAS)</th>
                         <th style="width: 10%; text-align: center;">QTD</th>
                     </tr>
                 </thead>
@@ -7583,7 +7578,7 @@ router.get('/relatorios/romaneio-infra/:id', verificarToken, async (req, res) =>
                         <tr>
                             <td><b>${row.produto_nome}</b></td>
                             <td style="font-family: monospace; word-break: break-all;">${row.lista_etiquetas}</td>
-                            <td style="text-align: center;">${row.lista_etiquetas.split(',').length}</td>
+                            <td style="text-align: center;">${(row.lista_etiquetas || "").split(',').length}</td>
                         </tr>
                     `).join('')}
                 </tbody>
@@ -7602,11 +7597,7 @@ router.get('/relatorios/romaneio-infra/:id', verificarToken, async (req, res) =>
             </div>
 
             <script>
-                window.onload = () => { 
-                    window.print(); 
-                    // Opcional: fechar a aba após imprimir
-                    // window.onafterprint = () => window.close(); 
-                };
+                window.onload = () => { window.print(); };
             </script>
         </body>
         </html>`;
@@ -7614,8 +7605,8 @@ router.get('/relatorios/romaneio-infra/:id', verificarToken, async (req, res) =>
         res.send(html);
 
     } catch (err) {
-        console.error(err);
-        res.status(500).send("Erro ao gerar o documento.");
+        console.error("Erro ao gerar PDF Infra:", err);
+        res.status(500).send("Erro interno ao gerar o documento.");
     }
 });
 
@@ -7751,9 +7742,9 @@ router.get('/escola/detalhes-remessa/:remessaId', verificarToken, async (req, re
                     prod.nome, 
                     pri.tamanho, 
                     pri.quantidade as quantidade_enviada
-                FROM pedido_remessa_itens pri
-                JOIN produtos prod ON pri.produto_id = prod.id
-                WHERE pri.remessa_id = $1
+                FROM pedido_remessas pr
+                LEFT JOIN pedido_remessa_itens pri ON pri.remessa_id = pr.id
+                WHERE pr.id = $1
             `, [remessaId]);
             itens = resItens.rows;
         }
@@ -7786,15 +7777,24 @@ router.get('/relatorios/romaneio-padrao/:remessaId', verificarToken, async (req,
             FROM pedido_remessas pr
             JOIN pedidos p ON pr.pedido_id = p.id
             JOIN locais l ON p.local_destino_id = l.id
-            JOIN pedido_remessa_itens pri ON pri.remessa_id = pr.id
-            JOIN produtos prod ON pri.produto_id = prod.id
+            LEFT JOIN pedido_remessa_itens pri ON pri.remessa_id = pr.id
+            LEFT JOIN produtos prod ON pri.produto_id = prod.id
             WHERE pr.id = $1
         `;
 
         const { rows } = await db.query(sql, [remessaId]);
-        if (rows.length === 0) return res.status(404).send("Remessa não encontrada.");
+        
+        // Proteção contra remessa inexistente
+        if (!rows || rows.length === 0) {
+            return res.status(404).send("Nenhum item encontrado para esta remessa.");
+        }
 
         const d = rows[0];
+        
+        // --- FORMATAÇÃO SEGURA: Define a variável antes de montar o HTML ---
+        // Se remessa_num for nulo, usa 0 e preenche com zeros à esquerda
+        const remessaFormatada = (d.remessa_num || 0).toString().padStart(6, '0');
+        
         const dataHoje = new Date();
         const meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
@@ -7823,8 +7823,12 @@ router.get('/relatorios/romaneio-padrao/:remessaId', verificarToken, async (req,
                 <div><b>PREFEITURA DE QUEIMADOS / SEMED</b></div>
             </div>
             <h1>Romaneio de Entrega - Materiais/Uniformes</h1>
-            <p><b>REMESSA Nº:</b> ${d.remessa_num.toString().padStart(6, '0')} | <b>PEDIDO:</b> #${d.pedido_id}</p>
-            <p><b>DESTINO:</b> ${d.destino_nome}</p>
+            
+            <p>
+                <b>REMESSA Nº:</b> ${remessaFormatada} | 
+                <b>PEDIDO:</b> #${d.pedido_id || '---'}
+            </p>
+            <p><b>DESTINO:</b> ${d.destino_nome || 'Não informado'}</p>
             
             <table>
                 <thead>
@@ -7837,9 +7841,9 @@ router.get('/relatorios/romaneio-padrao/:remessaId', verificarToken, async (req,
                 <tbody>
                     ${rows.map(r => `
                         <tr>
-                            <td>${r.produto_nome}</td>
+                            <td>${r.produto_nome || '---'}</td>
                             <td style="text-align:center;">${r.tamanho || '---'}</td>
-                            <td style="text-align:center;">${r.quantidade}</td>
+                            <td style="text-align:center;">${r.quantidade || 0}</td>
                         </tr>
                     `).join('')}
                 </tbody>
@@ -7852,13 +7856,17 @@ router.get('/relatorios/romaneio-padrao/:remessaId', verificarToken, async (req,
                     <div class="linha">Recebido por (Nome/Matrícula)</div>
                 </div>
             </div>
-            <script>window.onload = () => window.print();</script>
+            <script>
+                window.onload = () => { window.print(); };
+            </script>
         </body>
         </html>`;
 
         res.send(html);
     } catch (err) {
-        res.status(500).send("Erro ao gerar romaneio padrão.");
+        console.error("ERRO NO PDF:", err);
+        // Retorna a mensagem de erro para ajudar no diagnóstico se a tela ficar branca
+        res.status(500).send("Erro ao gerar romaneio padrão: " + err.message);
     }
 });
 

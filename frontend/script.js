@@ -8686,8 +8686,7 @@ window.processarSaidaRemessa = async function(remessaId, tipoPedido) {
             
             // Abre o PDF correto
             const rotaPdf = (tipoPedido === 'INFRA_PATRIMONIO') ? 'romaneio-infra' : 'romaneio-padrao';
-            window.open(`${API_URL}/relatorios/${rotaPdf}/${remessaId}`, '_blank');
-
+            window.open(`${API_URL}/relatorios/${rotaPdf}/${remessaId}?token=${TOKEN}`, '_blank');
             telaLogisticaEntregas(); 
         } else {
             // Se der erro, avisa o usuário sem deslogar
@@ -9154,7 +9153,7 @@ async function telaEscolaConfirmarRecebimento() {
                             </div>
                             
                             <div style="display:flex; gap:10px;">
-                                <button onclick="visualizarDetalhesRemessa(${r.remessa_id}, ${r.pedido_id})" class="btn-vidro" style="padding:8px 15px; font-size:0.8rem;">
+                                <button onclick="visualizarDetalhesRemessa(${r.remessa_id})" class="btn-vidro" style="padding:8px 15px; font-size:0.8rem;">
                                     🔎 CONFERIR ITENS
                                 </button>
                                 <button onclick="confirmarChegadaEscola(${r.remessa_id})" class="btn-vidro" style="background:#10b981; border:none; padding:8px 15px; font-weight:bold;">
@@ -17683,19 +17682,29 @@ async function processarSaidaPedido() {
 }
 
 function verificarToken(req, res, next) {
+    // 1. Tenta pegar o token do cabeçalho 'Authorization' (padrão do fetch)
     const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
+    const tokenHeader = authHeader && authHeader.split(' ')[1];
 
-    if (!token) return res.status(401).json({ error: "Token não fornecido" });
+    // 2. Tenta pegar o token da Query String (padrão usado no window.open)
+    const tokenQuery = req.query.token;
+
+    // 3. Define o token final: se houver no header, usa ele; se não, usa o da query
+    const token = tokenHeader || tokenQuery;
+
+    if (!token) {
+        return res.status(401).json({ error: "Token não fornecido" });
+    }
 
     jwt.verify(token, SECRET, (err, decoded) => {
-        if (err) return res.status(403).json({ error: "Token inválido ou expirado" });
+        if (err) {
+            return res.status(403).json({ error: "Token inválido ou expirado" });
+        }
 
-        // IMPORTANTE: Aqui injetamos os dados no req.user
-        // Como no login você salvou { id, perfil, local_id }, tudo estará aqui
+        // Injeta os dados no req.user para uso nas rotas
         req.user = decoded; 
         
-        // Mantemos req.userId para compatibilidade com sua rota 'quem-sou-eu'
+        // Mantém req.userId para compatibilidade com rotas existentes
         req.userId = decoded.id; 
         
         next();

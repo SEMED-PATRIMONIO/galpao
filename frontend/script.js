@@ -64,6 +64,7 @@ function inicializarFundo() {
     }
     bg.innerHTML = htmlContent;
 }
+
 // Forçar maiúsculas sem acentos APENAS em campos de texto
 document.addEventListener('input', (e) => {
     // A regra && e.target.id !== 'senha' é fundamental aqui
@@ -248,7 +249,7 @@ async function carregarDashboard() {
     let carrinhoAdmin = [];
     let carrinhoEntrada = [];
     let chartTecnicos = null; 
-    
+    let cacheColeta = [];
     await inicializarSessaoUsuario();
 
     // 1. Recuperação de dados da sessão
@@ -333,7 +334,7 @@ async function carregarDashboard() {
         `;
     }
 
-    // --- PERFIL: DTI --- [cite: 16]
+    // --- PERFIL: DTI --- 
     if (perfil === 'dti') {
         html += `
             <button class="btn-grande btn-vidro" onclick="telaListarChamadosPC_DTI()">
@@ -360,10 +361,10 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()">
                 <i>🔑</i><span>ALTERAR MINHA SENHA</span>
             </button>                        
-        `; // [cite: 17, 18, 19, 20]
+        `; //
     }
 
-    // --- PERFIL: IMPRES --- [cite: 21]
+    // --- PERFIL: IMPRES --- 
     if (perfil === 'impres') {
         html += `
             <button class="btn-grande btn-vidro" onclick="telaListarChamadosAbertos()">
@@ -378,10 +379,9 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()">
                 <i>🔑</i><span>ALTERAR MINHA SENHA</span>
             </button> 
-        `; // [cite: 22, 23, 24]
-    }
-
-    // --- 3. PERFIL: ESCOLA --- [cite: 25]
+        `; 
+    }  
+    // --- 3. PERFIL: ESCOLA --- 
     if (perfil === 'escola') {
         html += `
             <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaSolicitarServicoImpressora('recarga')">
@@ -426,7 +426,7 @@ async function carregarDashboard() {
         `; 
     }
 
-    // --- 4. PERFIL: ADMIN (NOVA INTERFACE) --- [cite: 32]
+    // --- 4. PERFIL: ADMIN (NOVA INTERFACE) ---
     if (perfil === 'admin') {
         html += `
             <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('PEDIDOS')">
@@ -448,8 +448,8 @@ async function carregarDashboard() {
         `; 
     }
 
-    // --- 5. PERFIL: ESTOQUE (NOVA INTERFACE) --- [cite: 37]
-if (perfil === 'estoque') {
+    // --- 5. PERFIL: ESTOQUE (NOVA INTERFACE) --- 
+    if (perfil === 'estoque') {
         html += `
             <button class="btn-grande btn-vidro" style="position: relative;" onclick="infra_telaPendentes()">
                 <div id="badge-infra-count" style="display: none; position: absolute; top: -10px; right: -10px; 
@@ -1583,7 +1583,7 @@ function logout() {
     window.location.reload();
 }
 
-// Função para Admin autorizar pedido ou recusar com motivo [cite: 10, 24]
+// Função para Admin autorizar pedido ou recusar com motivo 
 async function processarSolicitacaoANTIGO(pedidoId, acao) {
     let motivo = '';
     let status = acao === 'AUTORIZA' ? 'PEDIDO AUTORIZADO' : 'RECUSADO';
@@ -1608,7 +1608,7 @@ async function processarSolicitacaoANTIGO(pedidoId, acao) {
     }
 }
 
-// Função para Escola confirmar recebimento [cite: 16, 51, 52]
+// Função para Escola confirmar recebimento 
 async function confirmarRecebimentoantigo(pedidoId) {
     if (!confirm("CONFIRMA O RECEBIMENTO DESTE PEDIDO?")) return;
 
@@ -1627,7 +1627,7 @@ async function confirmarRecebimentoantigo(pedidoId) {
     }
 }
 
-// Função para Estoque definir volumes e liberar [cite: 18, 20, 21]
+// Função para Estoque definir volumes e liberar 
 async function liberarParaLogistica(pedidoId) {
     const volumes = document.getElementById(`volumes_${pedidoId}`).value;
     if (!volumes) return notificar("INFORME A QTD DE VOLUMES");
@@ -1647,7 +1647,7 @@ async function liberarParaLogistica(pedidoId) {
     }
 }
 
-// Função para Gerar Relatório PDF (jsPDF) [cite: 6, 38, 39, 40]
+// Função para Gerar Relatório PDF (jsPDF) 
 function imprimirRelatorioEstoque(dados) {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
@@ -6875,8 +6875,6 @@ async function salvarAbastecimento(produtoId) {
         }
     } catch (err) { notificar("Erro ao salvar"); }
 }
-
-let carrinhoAdmin = [];
 
 async function telaAdminCriarPedido() {
     const container = document.getElementById('app-content');
@@ -16271,7 +16269,7 @@ async function telaAuditoriaAcessos() {
                                 ${(data.logs || []).map(log => {
                                     const corResultado = log.resultado === 'SUCESSO' ? '#4ade80' : (log.resultado === 'FALHA' ? '#ef4444' : '#60a5fa');
                                     
-                                    // AJUSTE: Anonimização do CPF (Apenas 6 primeiros dígitos) [cite: 10]
+                                    // AJUSTE: Anonimização do CPF (Apenas 6 primeiros dígitos)  10]
                                     const cpfOrigem = log.cpf_tentativa || '';
                                     const cpfMascarado = cpfOrigem.length >= 6 
                                         ? cpfOrigem.substring(0, 6) + '*****' 
@@ -17308,8 +17306,8 @@ async function carregarConsultaEstoque() {
         }
 
         listaHtml.innerHTML = produtosParaExibir.map(p => {
-            const isUniforme = p.tipo === 'UNIFORMES'[cite: 64, 65];
-            const nivelBaixo = p.quantidade_estoque <= p.alerta_minimo[cite: 67, 68, 69];
+            const isUniforme = p.tipo === 'UNIFORMES';
+            const nivelBaixo = p.quantidade_estoque <= p.alerta_minimo;
             const corTag = p.tipo === 'MATERIAL' ? '#10b981' : '#00d4ff';
 
             return `
@@ -17321,14 +17319,14 @@ async function carregarConsultaEstoque() {
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                         <div>
                             <span style="font-size: 0.7rem; background: ${nivelBaixo ? '#ef4444' : corTag}; padding: 3px 8px; border-radius: 5px; color: white; font-weight: bold;">
-                                ${p.tipo [cite: 64, 65]}
+                                ${p.tipo }
                             </span>
-                            <p style="margin: 8px 0 0 0; font-weight: bold; font-size: 1.1rem;">${p.nome [cite: 63, 64]}</p>
+                            <p style="margin: 8px 0 0 0; font-weight: bold; font-size: 1.1rem;">${p.nome }</p>
                         </div>
                         <div style="text-align: right;">
                             <small style="display: block; font-size: 0.65rem; opacity: 0.6;">SALDO</small>
                             <span style="font-size: 1.5rem; font-weight: 900; color: ${nivelBaixo ? '#ff4d4d' : corTag};">
-                                ${p.quantidade_estoque [cite: 67]}
+                                ${p.quantidade_estoque }
                             </span>
                         </div>
                     </div>
@@ -17338,8 +17336,8 @@ async function carregarConsultaEstoque() {
                             <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(55px, 1fr)); gap: 10px;">
                                 ${p.grade.map(g => `
                                     <div style="background: rgba(0,0,0,0.3); padding: 6px; border-radius: 8px; text-align: center;">
-                                        <small style="display: block; font-size: 0.6rem; color: #00d4ff;">${g.tamanho [cite: 94]}</small>
-                                        <strong style="font-size: 0.9rem;">${g.quantidade [cite: 95]}</strong>
+                                        <small style="display: block; font-size: 0.6rem; color: #00d4ff;">${g.tamanho }</small>
+                                        <strong style="font-size: 0.9rem;">${g.quantidade}</strong>
                                     </div>
                                 `).join('')}
                             </div>
@@ -17457,11 +17455,9 @@ async function carregarHistoricoEntradas() {
                         <span>📅 ${data}</span>
                         <span>ID #${reg.id}</span>
                     </div>
-                    
                     <div style="color: white; font-weight: bold; margin-bottom: 8px;">
                         👤 Usuário: ${reg.nome_usuario || 'Sistema'}
                     </div>
-                    
                     <div class="lista-itens-hist" style="background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px;">
                         ${itensHtml}
                     </div>
@@ -18962,8 +18958,6 @@ async function telaRelatorioColetaLiberada() {
     carregarDadosColetaLiberada();
 }
 
-let cacheColeta = [];
-
 async function carregarDadosColetaLiberada() {
     try {
         const res = await fetch(`${API_URL}/admin/relatorios/coleta-liberada`, {
@@ -19062,7 +19056,6 @@ window.infra_telaPendentes = async function() {
     `).join('') || '<p style="color:gray; text-align:center;">Nenhuma solicitação aguardando separação.</p>';
 };
 
-// 2. Modal de Decisão (Foco forçado)
 window.infra_abrirAcao = function(s) {
     const modal = document.createElement('div');
     modal.id = 'modal-infra';
@@ -19080,9 +19073,6 @@ window.infra_abrirAcao = function(s) {
     `;
     document.body.appendChild(modal);
 };
-
-// 3. Seleção de Patrimônios Específicos
-
 
 window.infra_contar = function(qtd) {
     const sel = document.querySelectorAll('input[name="tag_infra"]:checked').length;
@@ -19174,7 +19164,6 @@ async function processarAprovacaoDireta(pedidoId) {
         if (res.ok) {
             document.getElementById('modal-decisao-infra').remove();
             notificar("Aprovado! Abrindo Romaneio...", "sucesso");
-            // Abre o PDF automático da SEMED
             window.open(`${API_URL}/relatorios/romaneio-infra/${dados.romaneioId}`, '_blank');
             infra_telaPendentes();
         } else {
@@ -19225,7 +19214,6 @@ window.infra_irParaTags = function(p) {
     infra_telaSelecaoTags(p.id, p.produto_id, p.local_destino_id, p.quantidade, p.produto_nome);
 };
 
-// FUNÇÃO: Abre a grade de seleção de etiquetas (Patrimônios)
 window.infra_telaSelecaoTags = async function(pedidoId, prodId, destId, qtdNecessaria, nomeProduto) {
     // 1. Remove o modal de decisão para limpar a tela
     const modalAcao = document.querySelector('#modal-infra') || document.querySelector('.alerta-vidro-overlay');
@@ -19266,7 +19254,6 @@ window.infra_telaSelecaoTags = async function(pedidoId, prodId, destId, qtdNeces
     `;
 
     try {
-        // 3. Busca as tags disponíveis no Local 37 para este produto
         const res = await fetch(`${API_URL}/infra/tags-disponiveis?prodId=${prodId}`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
@@ -19313,7 +19300,7 @@ window.infra_validarQuantidade = function(max) {
     }
 };
 
-// Isso garante que o onclick="funcao()" funcione sempre
+
 window.telaVisualizarEstoque = telaVisualizarEstoque;
 window.telaAbastecerEstoque = telaAbastecerEstoque;
 window.telaAdminGerenciarSolicitacoes = telaAdminGerenciarSolicitacoes;

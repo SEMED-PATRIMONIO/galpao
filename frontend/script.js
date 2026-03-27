@@ -8627,27 +8627,32 @@ async function telaLogisticaEntregas() {
                         <div style="background:#f1f5f9; padding:40px; text-align:center; border-radius:10px; color:#64748b;">
                             Nenhuma remessa aguardando coleta no momento.
                         </div>` : 
-                        remessas.map(r => `
-                        <div style="background:white; padding:20px; border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,0.1); border-left:8px solid #8b5cf6;">
-                            <div style="display:flex; justify-content:space-between; align-items:center;">
-                                <div>
-                                    <div style="font-weight:bold; font-size:1.1rem; color:#1e293b;">${r.escola_nome}</div>
-                                    <div style="color:#64748b; font-size:0.9rem;">
-                                        Remessa: <strong>#${r.remessa_id}</strong> (Pedido #${r.pedido_id})
-                                    </div>
-                                    <div style="margin-top:5px; font-size:0.8rem; color:#94a3b8;">
-                                        Pronta desde: ${new Date(r.data_remessa).toLocaleString('pt-BR')}
+                        remessas.map(r => {
+                            // CORREÇÃO: A lógica fica aqui dentro, antes do return da string
+                            const idValido = r.remessa_id || r.id; 
+                            
+                            return `
+                                <div style="background:white; padding:20px; border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,0.1); border-left:8px solid #8b5cf6;">
+                                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                                        <div>
+                                            <div style="font-weight:bold; font-size:1.1rem; color:#1e293b;">${r.escola_nome}</div>
+                                            <div style="color:#64748b; font-size:0.9rem;">
+                                                Remessa: <strong>#${idValido}</strong> (Pedido #${r.pedido_id})
+                                            </div>
+                                            <div style="margin-top:5px; font-size:0.8rem; color:#94a3b8;">
+                                                Pronta desde: ${new Date(r.data_remessa).toLocaleString('pt-BR')}
+                                            </div>
+                                        </div>
+                                        
+                                        <button class="btn-coletar-remessa" 
+                                                onclick="processarSaidaRemessa(${idValido}, '${r.tipo_pedido}')"
+                                                style="padding:10px 20px; background:#8b5cf6; color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer;">
+                                            🚚 LIBERAR SAÍDA
+                                        </button>
                                     </div>
                                 </div>
-                                
-                                <button class="btn-coletar-remessa" 
-                                        onclick="processarSaidaRemessa(${r.remessa_id}, '${r.tipo_pedido}')" 
-                                        style="background:#1e40af; color:white; ...">
-                                    🚚 LIBERAR SAÍDA
-                                </button>
-                            </div>
-                        </div>
-                    `).join('')}
+                            `;
+                        }).join('')}
                 </div>
             </div>
         `;

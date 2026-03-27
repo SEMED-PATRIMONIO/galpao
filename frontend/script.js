@@ -3000,7 +3000,7 @@ function adicionarLinhaEntrada() {
 }
 
 async function processarEntradaEstoque() {
-    // Captura o ID que seu script já salva no login
+    // Captura o ID do usuário salvo no login
     const usuarioId = localStorage.getItem('usuario_id'); 
 
     if (!usuarioId) {
@@ -3029,17 +3029,25 @@ async function processarEntradaEstoque() {
         }
 
         mapaItens[id].qtd_total += qtd;
+        
+        // Só adiciona na grade se for Uniforme e tiver tamanho definido
         if (tipo === 'UNIFORMES' && tamanho) {
-            mapaItens[id].grade[tamanho] = qtd;
+            mapaItens[id].grade[tamanho] = (mapaItens[id].grade[tamanho] || 0) + qtd;
         }
     });
 
     const itensParaEnviar = Object.values(mapaItens);
 
     if (itensParaEnviar.length === 0) {
-        alert("Informe ao menos uma quantidade válida.");
+        alert("⚠️ Informe ao menos uma quantidade válida para realizar a entrada.");
         return;
     }
+
+    // Feedback visual de carregamento
+    const btn = document.querySelector('.btn-confirmar-entrada');
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> PROCESSANDO...';
 
     try {
         const res = await fetch(`${API_URL}/estoque/entrada-lote`, {
@@ -3056,14 +3064,18 @@ async function processarEntradaEstoque() {
         });
 
         const resultado = await res.json();
+        
         if (resultado.success) {
             alert("✅ Estoque atualizado com sucesso!");
-            carregarDashboard();
+            carregarDashboard(); // Ou carregarConsultaEstoque() se preferir voltar para a lista
         } else {
-            throw new Error(resultado.error);
+            throw new Error(resultado.error || "Erro desconhecido no servidor");
         }
     } catch (err) {
-        alert("Erro na operação: " + err.message);
+        alert("❌ Erro na operação: " + err.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
     }
 }
 
@@ -8632,7 +8644,7 @@ async function telaLogisticaEntregas() {
                                 
                                 <button class="btn-coletar-remessa" 
                                         onclick="processarSaidaRemessa(${r.remessa_id}, '${r.tipo_pedido}')" 
-                                        style="background:#1e40af; color:white; border:none; padding:12px 25px; border-radius:6px; cursor:pointer; font-weight:bold;">
+                                        style="background:#1e40af; color:white; ...">
                                     🚚 LIBERAR SAÍDA
                                 </button>
                             </div>
@@ -8647,8 +8659,12 @@ async function telaLogisticaEntregas() {
     }
 }
 
-async function processarSaidaRemessa(remessaId, tipoPedido) {
-    if (!confirm("Confirmar a saída desta remessa para transporte?")) return;
+window.processarSaidaRemessa = async function(remessaId, tipoPedido) {
+    if (!remessaId || remessaId === "null") {
+        return notificar("Erro: ID da remessa não localizado.", "erro");
+    }
+
+    if (!confirm("Confirmar a saída desta carga para transporte?")) return;
 
     try {
         const res = await fetch(`${API_URL}/pedidos/logistica/confirmar-saida`, {
@@ -8660,29 +8676,25 @@ async function processarSaidaRemessa(remessaId, tipoPedido) {
             body: JSON.stringify({ remessaId, tipoPedido })
         });
 
-        const dados = await res.json();
-
         if (res.ok) {
-            notificar("Saída liberada com sucesso!", "sucesso");
+            notificar("Saída registada! A gerar documento...", "sucesso");
 
-            // DIFERENCIAÇÃO DE RELATÓRIO
+            // DIFERENCIAÇÃO AUTOMÁTICA DE PDF
             if (tipoPedido === 'INFRA_PATRIMONIO') {
-                // Abre o romaneio que lista as etiquetas/patrimônios
                 window.open(`${API_URL}/relatorios/romaneio-infra/${remessaId}`, '_blank');
             } else {
-                // Abre o romaneio padrão de Uniformes/Outros
                 window.open(`${API_URL}/relatorios/romaneio-padrao/${remessaId}`, '_blank');
             }
 
-            // Atualiza a tela para sumir o que já saiu
-            telaLogisticaEntregas();
+            telaLogisticaEntregas(); // Recarrega a lista sem fechar nada
         } else {
-            notificar(dados.error, "erro");
+            const erro = await res.json();
+            notificar(erro.error || "Erro ao processar saída.", "erro");
         }
     } catch (err) {
-        notificar("Erro ao processar saída.", "erro");
+        notificar("Erro de ligação com o servidor.", "erro");
     }
-}
+};
 
 window.detalharFase = async function(fase) {
     const area = document.getElementById('detalhes-fase');
@@ -16968,7 +16980,6 @@ async function abrirTelaEntrada() {
     const app = document.getElementById('app-content');
     if (!app) return;
 
-    // 1. Monta a estrutura inicial (Evita o erro de 'null')
     app.innerHTML = `
         <div class="header-entrada animate__animated animate__fadeIn">
             <button class="btn-voltar-vidro" onclick="carregarDashboard()" style="margin-bottom: 20px;">
@@ -16999,39 +17010,42 @@ async function abrirTelaEntrada() {
         const listaHtml = document.getElementById('lista-entrada-produtos');
         listaHtml.innerHTML = '';
 
-        // Ordenar: Uniformes primeiro, depois Material
+        // Garantir ordenação: MATERIAL primeiro, depois UNIFORMES (mesma lógica do SQL)
         const listaOrdenada = produtos.sort((a, b) => {
-            if (a.tipo === 'UNIFORMES' && b.tipo !== 'UNIFORMES') return -1;
-            if (a.tipo !== 'UNIFORMES' && b.tipo === 'UNIFORMES') return 1;
+            if (a.tipo === 'MATERIAL' && b.tipo !== 'MATERIAL') return -1;
+            if (a.tipo !== 'MATERIAL' && b.tipo === 'MATERIAL') return 1;
             return a.nome.localeCompare(b.nome);
         });
 
         listaOrdenada.forEach(p => {
             const isUniforme = p.tipo === 'UNIFORMES';
+            const corTag = p.tipo === 'MATERIAL' ? '#10b981' : '#00d4ff'; // Verde para Material, Azul para Uniforme
             
             listaHtml.innerHTML += `
-                <div class="card-entrada glass-panel" 
+                <div class="card-entrada glass-panel animate__animated animate__fadeInUp" 
                      style="background: rgba(255,255,255,0.05); margin-bottom: 12px; padding: 18px; border-radius: 15px; color: white; border: 1px solid rgba(255,255,255,0.1);">
                     
                     <div style="display: flex; justify-content: space-between; align-items: center;" 
                          ${isUniforme ? `onclick="toggleGrade(${p.id})"` : ''}>
-                        <div>
-                            <span style="font-size: 0.7rem; background: #00d4ff; padding: 3px 8px; border-radius: 5px; color: #001a2c; font-weight: bold;">
+                        <div style="cursor: ${isUniforme ? 'pointer' : 'default'}">
+                            <span style="font-size: 0.7rem; background: ${corTag}; padding: 3px 8px; border-radius: 5px; color: #001a2c; font-weight: bold;">
                                 ${p.tipo}
                             </span>
                             <p style="margin: 8px 0 0 0; font-weight: bold; font-size: 1.1rem;">${p.nome}</p>
+                            <small style="opacity: 0.5;">Estoque atual: ${p.quantidade_estoque}</small>
                         </div>
 
                         ${!isUniforme ? `
                             <div style="text-align: right;">
                                 <small style="display: block; font-size: 0.65rem; opacity: 0.6; margin-bottom: 5px;">QTD ENTRADA</small>
                                 <input type="number" class="input-entrada-qtd" data-id="${p.id}" data-tipo="MATERIAL"
-                                       style="width: 80px; background: rgba(0,0,0,0.3); border: 1px solid #00d4ff; color: white; padding: 8px; border-radius: 8px; text-align: center;"
+                                       style="width: 100px; background: rgba(0,0,0,0.3); border: 1px solid #10b981; color: white; padding: 8px; border-radius: 8px; text-align: center;"
                                        placeholder="0" min="0">
                             </div>
                         ` : `
-                            <div style="color: #00d4ff; font-size: 0.8rem;">
-                                Clique para abrir tamanhos <i class="fas fa-chevron-down"></i>
+                            <div style="color: #00d4ff; font-size: 0.8rem; cursor: pointer; text-align: right;">
+                                Clique para abrir grade <i class="fas fa-chevron-down"></i>
+                                <br><small style="opacity:0.6">Total atual: ${p.quantidade_estoque}</small>
                             </div>
                         `}
                     </div>
@@ -17046,6 +17060,7 @@ async function abrirTelaEntrada() {
                                                data-id="${p.id}" data-tipo="UNIFORMES" data-tamanho="${g.tamanho}"
                                                style="width: 100%; background: transparent; border: none; border-bottom: 1px solid #00d4ff; color: white; text-align: center;"
                                                placeholder="0" min="0">
+                                        <small style="display: block; font-size: 0.55rem; opacity: 0.4; margin-top: 4px;">Atual: ${g.quantidade}</small>
                                     </div>
                                 `).join('')}
                             </div>
@@ -17056,6 +17071,7 @@ async function abrirTelaEntrada() {
         });
     } catch (err) {
         console.error("Erro ao carregar tela de entrada:", err);
+        document.getElementById('lista-entrada-produtos').innerHTML = `<p style="color: #ff4d4d; padding: 20px;">❌ Erro ao carregar dados.</p>`;
     }
 }
 
@@ -17242,23 +17258,32 @@ async function compartilharRelatorio() {
 }
 
 // --- BLOCO DE CONSULTA DE ESTOQUE (LOCAL 37) ---
-
 async function carregarConsultaEstoque() {
     const app = document.getElementById('app-content');
     if (!app) return;
 
-    // Monta a estrutura inicial
+    // Variável para armazenar os produtos globalmente nesta função e permitir o filtro
+    let todosProdutos = [];
+
     app.innerHTML = `
         <div class="header-consulta animate__animated animate__fadeIn">
             <button class="btn-voltar-vidro" onclick="carregarDashboard()" style="margin-bottom: 20px;">
                 <i class="fas fa-arrow-left"></i> VOLTAR
             </button>
-            <h2 class="titulo-sessao" style="color: white; margin-bottom: 20px;">CONSULTA DE ESTOQUE</h2>
+            <h2 class="titulo-sessao" style="color: white; margin-bottom: 10px;">CONSULTA DE ESTOQUE</h2>
         </div>
         
         <div class="abas-consulta" style="display: flex; gap: 15px; margin-bottom: 20px;">
             <button class="aba-item active" onclick="alternarVisualizacaoConsulta('estoque')">ESTOQUE ATUAL</button>
-            <button class="aba-item" onclick="alternarVisualizacaoConsulta('historico')">HISTÓRICO (ENTRADA/SAÍDA))</button>
+            <button class="aba-item" onclick="alternarVisualizacaoConsulta('historico')">HISTÓRICO (ENTRADA/SAÍDA)</button>
+        </div>
+
+        <div id="container-busca" style="margin-bottom: 20px;">
+            <div style="position: relative; display: flex; align-items: center;">
+                <i class="fas fa-search" style="position: absolute; left: 15px; color: rgba(255,255,255,0.5);"></i>
+                <input type="text" id="input-busca-estoque" placeholder="Buscar por nome do produto..." 
+                    style="width: 100%; padding: 12px 12px 12px 45px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.1); color: white; outline: none; transition: 0.3s;">
+            </div>
         </div>
 
         <div id="secao-estoque" class="aba-content">
@@ -17272,49 +17297,49 @@ async function carregarConsultaEstoque() {
         </div>
     `;
 
-    try {
-        const res = await fetch(`${API_URL}/estoque/consulta-exclusiva`, {
-            headers: { 'Authorization': `Bearer ${TOKEN}` }
-        });
-
-        if (!res.ok) throw new Error(`Erro HTTP: ${res.status}`);
-        
-        const produtos = await res.json();
+    // Função interna para renderizar a lista filtrada
+    const renderizarLista = (produtosParaExibir) => {
         const listaHtml = document.getElementById('lista-estoque-unificada');
-        listaHtml.innerHTML = ''; 
+        if (!listaHtml) return;
 
-        produtos.forEach(p => {
-            const isUniforme = p.tipo === 'UNIFORMES';
-            const nivelBaixo = p.quantidade_estoque <= p.alerta_minimo;
-            
-            listaHtml.innerHTML += `
-                <div class="card-consulta glass-panel" 
-                     style="background: rgba(255,255,255,0.1); margin-bottom: 12px; padding: 18px; border-radius: 15px; color: white; border: 1px solid ${nivelBaixo ? '#ff4d4d' : 'rgba(255,255,255,0.1)'}; cursor: pointer;"
+        if (produtosParaExibir.length === 0) {
+            listaHtml.innerHTML = '<p style="color: rgba(255,255,255,0.6); padding: 20px; text-align: center;">Nenhum produto encontrado.</p>';
+            return;
+        }
+
+        listaHtml.innerHTML = produtosParaExibir.map(p => {
+            const isUniforme = p.tipo === 'UNIFORMES'[cite: 64, 65];
+            const nivelBaixo = p.quantidade_estoque <= p.alerta_minimo[cite: 67, 68, 69];
+            const corTag = p.tipo === 'MATERIAL' ? '#10b981' : '#00d4ff';
+
+            return `
+                <div class="card-consulta glass-panel animate__animated animate__fadeInUp" 
+                     style="background: rgba(255,255,255,0.1); margin-bottom: 12px; padding: 18px; border-radius: 15px; color: white; border: 1px solid ${nivelBaixo ? '#ff4d4d' : 'rgba(255,255,255,0.1)'}; cursor: ${isUniforme ? 'pointer' : 'default'};"
                      id="card-${p.id}" 
                      ${isUniforme ? `onclick="toggleGrade(${p.id})"` : ''}>
                     
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                         <div>
-                            <span style="font-size: 0.7rem; background: ${nivelBaixo ? '#ef4444' : '#00d4ff'}; padding: 3px 8px; border-radius: 5px; color: white; font-weight: bold;">
-                                ${p.tipo}
+                            <span style="font-size: 0.7rem; background: ${nivelBaixo ? '#ef4444' : corTag}; padding: 3px 8px; border-radius: 5px; color: white; font-weight: bold;">
+                                ${p.tipo [cite: 64, 65]}
                             </span>
-                            <p style="margin: 8px 0 0 0; font-weight: bold; font-size: 1.1rem;">${p.nome}</p>
+                            <p style="margin: 8px 0 0 0; font-weight: bold; font-size: 1.1rem;">${p.nome [cite: 63, 64]}</p>
                         </div>
                         <div style="text-align: right;">
                             <small style="display: block; font-size: 0.65rem; opacity: 0.6;">SALDO</small>
-                            <span style="font-size: 1.5rem; font-weight: 900; color: ${nivelBaixo ? '#ff4d4d' : '#00d4ff'};">
-                                ${p.quantidade_estoque}
+                            <span style="font-size: 1.5rem; font-weight: 900; color: ${nivelBaixo ? '#ff4d4d' : corTag};">
+                                ${p.quantidade_estoque [cite: 67]}
                             </span>
                         </div>
                     </div>
 
-                    ${isUniforme ? `
+                    ${isUniforme && p.grade && p.grade.length > 0 ? `
                         <div id="grade-${p.id}" class="grade-expansivel" style="display:none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);">
                             <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(55px, 1fr)); gap: 10px;">
                                 ${p.grade.map(g => `
                                     <div style="background: rgba(0,0,0,0.3); padding: 6px; border-radius: 8px; text-align: center;">
-                                        <small style="display: block; font-size: 0.6rem; color: #00d4ff;">${g.tamanho}</small>
-                                        <strong style="font-size: 0.9rem;">${g.quantidade}</strong>
+                                        <small style="display: block; font-size: 0.6rem; color: #00d4ff;">${g.tamanho [cite: 94]}</small>
+                                        <strong style="font-size: 0.9rem;">${g.quantidade [cite: 95]}</strong>
                                     </div>
                                 `).join('')}
                             </div>
@@ -17322,7 +17347,40 @@ async function carregarConsultaEstoque() {
                     ` : ''}
                 </div>
             `;
+        }).join('');
+    };
+
+    try {
+        const res = await fetch(`${API_URL}/estoque/consulta-exclusiva`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
+
+        if (!res.ok) throw new Error(`Erro HTTP: ${res.status}`);
+        
+        todosProdutos = await res.json();
+        renderizarLista(todosProdutos);
+
+        // Lógica de Busca em Tempo Real
+        const inputBusca = document.getElementById('input-busca-estoque');
+        inputBusca.addEventListener('input', (e) => {
+            const termo = e.target.value.toLowerCase();
+            const filtrados = todosProdutos.filter(p => 
+                p.nome.toLowerCase().includes(termo) || 
+                p.tipo.toLowerCase().includes(termo)
+            );
+            renderizarLista(filtrados);
+        });
+
+        // Efeito visual no focus do input
+        inputBusca.addEventListener('focus', () => {
+            inputBusca.style.borderColor = '#00d4ff';
+            inputBusca.style.boxShadow = '0 0 10px rgba(0, 212, 255, 0.2)';
+        });
+        inputBusca.addEventListener('blur', () => {
+            inputBusca.style.borderColor = 'rgba(255,255,255,0.2)';
+            inputBusca.style.boxShadow = 'none';
+        });
+
     } catch (err) {
         console.error("Erro na consulta:", err);
         document.getElementById('lista-estoque-unificada').innerHTML = `<p style="color: #ff4d4d; padding: 20px;">❌ Erro: ${err.message}</p>`;
@@ -17356,7 +17414,6 @@ function toggleGrade(id) {
 }
 
 // Carrega o histórico (Necessário para a aba funcionar)
-
 async function carregarHistoricoEntradas() {
     const timeline = document.getElementById('timeline-historico');
     if (!timeline) return;
@@ -17364,7 +17421,6 @@ async function carregarHistoricoEntradas() {
     timeline.innerHTML = '<p style="color: white; padding: 20px; text-align: center; opacity: 0.6;">⏳ Carregando registros...</p>';
 
     try {
-        // Removido o /api/ para bater com app.use('/', apiRoutes) do seu server.js
         const res = await fetch(`${API_URL}/estoque/historico-completo`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
@@ -17372,36 +17428,55 @@ async function carregarHistoricoEntradas() {
         if (!res.ok) throw new Error("Falha na requisição");
 
         const registros = await res.json();
-        timeline.innerHTML = '';
-
+        
         if (!registros || registros.length === 0) {
             timeline.innerHTML = '<p style="color: white; padding: 40px; text-align: center; opacity: 0.5;">Nenhuma entrada encontrada.</p>';
             return;
         }
 
-        registros.forEach(reg => {
-            const data = new Date(reg.data_hora).toLocaleString();
+        // Usamos um array para montar o HTML e depois inserimos de uma vez (melhor performance)
+        const htmlFinal = registros.map(reg => {
+            const data = new Date(reg.data_hora).toLocaleString('pt-BR');
             
-            timeline.innerHTML += `
-                <div class="card-historico glass-panel" style="background: rgba(255,255,255,0.05); padding: 15px; margin-bottom: 12px; border-radius: 12px; border-left: 4px solid #00d4ff;">
+            // Gerar o HTML dos itens separadamente para evitar confusão de crases
+            const itensHtml = (reg.itens || []).map(item => {
+                const infoTamanho = item.tamanho ? `(Tam: ${item.tamanho})` : '';
+                return `
+                    <div style="display: flex; justify-content: space-between; color: white; font-size: 0.85rem; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                        <span>${item.nome_produto} ${infoTamanho}</span>
+                        <span style="font-weight: bold; color: #00d4ff;">+${item.quantidade}</span>
+                    </div>
+                `;
+            }).join('');
+
+            return `
+                <div class="card-historico glass-panel animate__animated animate__fadeIn" 
+                     style="background: rgba(255,255,255,0.05); padding: 15px; margin-bottom: 12px; border-radius: 12px; border-left: 4px solid #00d4ff;">
+                    
                     <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: #00d4ff; margin-bottom: 10px;">
                         <span>📅 ${data}</span>
                         <span>ID #${reg.id}</span>
                     </div>
-                    <div style="color: white; font-weight: bold; margin-bottom: 8px;">👤 Usuário: ${reg.nome_usuario}</div>
+                    
+                    <div style="color: white; font-weight: bold; margin-bottom: 8px;">
+                        👤 Usuário: ${reg.nome_usuario || 'Sistema'}
+                    </div>
                     
                     <div class="lista-itens-hist" style="background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px;">
-                        ${reg.itens.map(item => `
-                            <div style="display: flex; justify-content: space-between; color: white; font-size: 0.85rem; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
-                                <span>${item.nome_produto} ${item.tamanho ? `(Tam: ${item.tamanho})` : ''}</span>
-                                <span style="font-weight: bold; color: #00d4ff;">+${item.quantidade}</span>
-                            </div>
-                        `).join('')}
+                        ${itensHtml}
                     </div>
-                    ${reg.observacoes ? `<div style="margin-top:10px; font-size:0.8rem; color:rgba(255,255,255,0.6); font-style: italic;">" ${reg.observacoes} "</div>` : ''}
+
+                    ${reg.observacoes ? `
+                        <div style="margin-top:10px; font-size:0.8rem; color:rgba(255,255,255,0.6); font-style: italic;">
+                            " ${reg.observacoes} "
+                        </div>
+                    ` : ''}
                 </div>
             `;
-        });
+        }).join('');
+
+        timeline.innerHTML = htmlFinal;
+
     } catch (err) {
         console.error("Erro no Histórico:", err);
         timeline.innerHTML = '<p style="color: #ff4d4d; padding: 20px;">❌ Erro ao carregar histórico.</p>';
@@ -19065,23 +19140,80 @@ window.infra_finalizarEnvio = async function(pedidoId, destId, qtd, prodId) {
 window.infra_abrirModalAcao = function(p) {
     const modal = document.createElement('div');
     modal.id = 'modal-decisao-infra';
-    modal.className = 'alerta-vidro-overlay'; // Reutilizando sua classe de overlay
+    modal.className = 'alerta-vidro-overlay';
     
     modal.innerHTML = `
         <div class="painel-vidro animar-entrada" style="width:450px; padding:30px; text-align:center;">
-            <h3 style="color:white; margin-bottom:15px;">🚀 LIBERAR PARA ENVIO</h3>
-            <p style="color:#ccc; font-size:1.1rem;">Item: <b>${p.produto_nome}</b></p>
-            <p style="color:#60a5fa;">Quantidade: ${p.quantidade} UN</p>
-            
+            <h3 style="color:white; margin-bottom:20px;">AUTORIZAR SAÍDA</h3>
+            <p style="color:#ccc;">Enviar <b>${p.quantidade} ${p.produto_nome}</b> para <b>${p.destino_nome}</b>?</p>
             <div style="display:flex; gap:10px; margin-top:30px;">
                 <button onclick="document.getElementById('modal-decisao-infra').remove()" class="btn-sair-vidro" style="flex:1;">CANCELAR</button>
-                <button onclick="infra_irParaTags(${JSON.stringify(p).replace(/"/g, '&quot;')})" 
-                        style="flex:1.5; background:#22c55e; color:white; border:none; border-radius:10px; font-weight:bold; cursor:pointer; font-size:0.9rem;">
-                    SELECIONAR TAGS E FINALIZAR
+                <button onclick="processarAprovacaoDireta(${p.id})" 
+                        id="btn-confirmar-infra"
+                        style="flex:2; background:#22c55e; color:white; border:none; border-radius:10px; font-weight:bold; cursor:pointer;">
+                    CONFIRMAR E GERAR ROMANEIO
                 </button>
             </div>
         </div>`;
     document.body.appendChild(modal);
+};
+
+async function processarAprovacaoDireta(pedidoId) {
+    const btn = document.getElementById('btn-confirmar-infra');
+    btn.disabled = true;
+    btn.innerText = "PROCESSANDO...";
+
+    try {
+        const res = await fetch(`${API_URL}/infra/aprovar-automatico`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pedidoId })
+        });
+        const dados = await res.json();
+
+        if (res.ok) {
+            document.getElementById('modal-decisao-infra').remove();
+            notificar("Aprovado! Abrindo Romaneio...", "sucesso");
+            // Abre o PDF automático da SEMED
+            window.open(`${API_URL}/relatorios/romaneio-infra/${dados.romaneioId}`, '_blank');
+            infra_telaPendentes();
+        } else {
+            notificar(dados.error, "erro");
+            btn.disabled = false;
+        }
+    } catch (err) {
+        notificar("Erro ao aprovar.", "erro");
+        btn.disabled = false;
+    }
+}
+
+window.infra_aprovarDireto = async function(pedidoId) {
+    const btn = document.getElementById('btn-confirmar-infra');
+    btn.disabled = true;
+    btn.innerText = "PROCESSANDO...";
+
+    try {
+        const res = await fetch(`${API_URL}/infra/aprovar-e-gerar-romaneio`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pedidoId })
+        });
+        const dados = await res.json();
+
+        if (res.ok) {
+            document.getElementById('modal-decisao-infra').remove();
+            notificar("Solicitação autorizada com sucesso!", "sucesso");
+            // Abre o PDF automático conforme seu padrão
+            window.open(`${API_URL}/relatorios/romaneio-infra/${dados.romaneioId}`, '_blank');
+            infra_telaPendentes();
+        } else {
+            notificar(dados.error, "erro");
+            btn.disabled = false;
+        }
+    } catch (err) {
+        notificar("Erro ao processar aprovação.", "erro");
+        btn.disabled = false;
+    }
 };
 
 // Nova função intermediária para garantir a transição limpa

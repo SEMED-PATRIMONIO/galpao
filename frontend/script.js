@@ -17006,12 +17006,13 @@ async function abrirTelaEntrada() {
         const res = await fetch(`${API_URL}/estoque/consulta-exclusiva`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
-        const produtos = await res.json();
+        const dadosBrutos = await res.json();
+        const produtos = dadosBrutos.filter(p => p.tipo !== 'PATRIMONIO');
         
         const listaHtml = document.getElementById('lista-entrada-produtos');
         listaHtml.innerHTML = '';
 
-        // Garantir ordenação: MATERIAL primeiro, depois UNIFORMES (mesma lógica do SQL)
+        // Segue a lógica de ordenação que você já usa [cite: 110]
         const listaOrdenada = produtos.sort((a, b) => {
             if (a.tipo === 'MATERIAL' && b.tipo !== 'MATERIAL') return -1;
             if (a.tipo !== 'MATERIAL' && b.tipo === 'MATERIAL') return 1;

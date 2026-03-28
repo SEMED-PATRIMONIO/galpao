@@ -1680,7 +1680,7 @@ router.post('/escola/confirmar-recebimento', verificarToken, async (req, res) =>
         const { pedido_id, local_destino_id, tipo_pedido } = info.rows[0];
 
         if (tipo_pedido === 'INFRA_PATRIMONIO') {
-            // Lógica de Patrimônio (Já validada)
+            // Lógica de Patrimônio
             await client.query(`UPDATE patrimonios SET local_id = $1, status = 'ALOCADO', em_transito = false WHERE pedido_id = $2`, [local_destino_id, pedido_id]);
             
             const produtosPat = await client.query(`
@@ -1693,17 +1693,14 @@ router.post('/escola/confirmar-recebimento', verificarToken, async (req, res) =>
                     ON CONFLICT (nome, local_id) DO UPDATE SET quantidade_estoque = produtos.quantidade_estoque + $4
                 `, [p.nome, p.tipo, local_destino_id, parseInt(p.qtd)]);
             }
-
         } else {
             // Lógica para MATERIAL e UNIFORMES
             const itensRemessa = await client.query(`SELECT produto_id, tamanho, quantidade FROM pedido_remessa_itens WHERE remessa_id = $1`, [remessaId]);
 
             for (const item of itensRemessa.rows) {
-                // 1. Busca o tipo do produto original (MATERIAL ou UNIFORME)
                 const prodOriginal = await client.query(`SELECT nome, tipo, categoria_id FROM produtos WHERE id = $1`, [item.produto_id]);
                 const pBase = prodOriginal.rows[0];
 
-                // 2. Garante que o produto existe na unidade destino (usando quantidade_estoque)
                 await client.query(`
                     INSERT INTO produtos (nome, tipo, categoria_id, local_id, quantidade_estoque)
                     VALUES ($1, $2, $3, $4, 0)
@@ -1714,19 +1711,17 @@ router.post('/escola/confirmar-recebimento', verificarToken, async (req, res) =>
                 const novoProdutoId = resProdLocal.rows[0].id;
 
                 if (pBase.tipo === 'UNIFORMES') {
-                    // Atualiza grade de tamanhos
                     await client.query(`
                         INSERT INTO estoque_tamanhos (produto_id, tamanho, quantidade) VALUES ($1, $2, $3)
                         ON CONFLICT (produto_id, tamanho) DO UPDATE SET quantidade = estoque_tamanhos.quantidade + $3
                     `, [novoProdutoId, item.tamanho, item.quantidade]);
 
-                    // Sincroniza o total (quantidade_estoque)
                     await client.query(`
                         UPDATE produtos SET quantidade_estoque = (SELECT SUM(quantidade) FROM estoque_tamanhos WHERE produto_id = $1)
                         WHERE id = $1
                     `, [novoProdutoId]);
                 } else {
-                    // Se for MATERIAL, atualiza direto na tabela produtos (quantidade_estoque)
+                    // MATERIAL: Atualiza coluna quantidade_estoque diretamente
                     await client.query(`
                         UPDATE produtos SET quantidade_estoque = quantidade_estoque + $1 WHERE id = $2
                     `, [item.quantidade, novoProdutoId]);
@@ -7729,47 +7724,36 @@ router.post('/infra/aprovar-e-gerar-romaneio', verificarToken, async (req, res) 
 
 router.get('/escola/detalhes-remessa/:remessaId', verificarToken, async (req, res) => {
     const { remessaId } = req.params;
-    
     try {
-        const infoRemessa = await db.query(`
+        const info = await db.query(`
             SELECT p.id as pedido_id, p.tipo_pedido 
             FROM pedido_remessas pr
             JOIN pedidos p ON pr.pedido_id = p.id
-            WHERE pr.id = $1
-        `, [remessaId]);
+            WHERE pr.id = $1`, [remessaId]);
 
-        if (infoRemessa.rows.length === 0) return res.status(404).json({ error: "Remessa não encontrada." });
+        if (info.rows.length === 0) return res.status(404).json({ error: "Não encontrado" });
+        const { pedido_id, tipo_pedido } = info.rows[0];
 
-        const { pedido_id, tipo_pedido } = infoRemessa.rows[0];
         let itens = [];
-
-        // Se for Patrimônio (INFRA), busca pela tabela de patrimônios
         if (tipo_pedido === 'INFRA_PATRIMONIO') {
             const resItens = await db.query(`
                 SELECT prod.nome, pat.numero_serie, 1 as quantidade_enviada
                 FROM patrimonios pat
                 JOIN produtos prod ON pat.produto_id = prod.id
-                WHERE pat.pedido_id = $1
-            `, [pedido_id]);
+                WHERE pat.pedido_id = $1`, [pedido_id]);
             itens = resItens.rows;
         } else {
-            // Para MATERIAL ou UNIFORMES, busca na tabela de itens da remessa
+            // CORREÇÃO: Adicionado JOIN com produtos para materiais e uniformes
             const resItens = await db.query(`
-                SELECT 
-                    prod.nome, 
-                    COALESCE(pri.tamanho, 'GERAL') as tamanho, 
-                    pri.quantidade as quantidade_enviada
-                FROM pedido_remessas pr
-                JOIN pedido_remessa_itens pri ON pri.remessa_id = pr.id
+                SELECT prod.nome, COALESCE(pri.tamanho, 'GERAL') as tamanho, pri.quantidade as quantidade_enviada
+                FROM pedido_remessa_itens pri
                 JOIN produtos prod ON pri.produto_id = prod.id
-                WHERE pr.id = $1
-            `, [remessaId]);
+                WHERE pri.remessa_id = $1`, [remessaId]);
             itens = resItens.rows;
         }
-
         res.json({ tipo_pedido, itens });
     } catch (err) {
-        res.status(500).json({ error: "Erro ao carregar detalhes: " + err.message });
+        res.status(500).json({ error: err.message });
     }
 });
 
@@ -7786,28 +7770,23 @@ router.get('/relatorios/romaneio-padrao/:remessaId', verificarToken, async (req,
                 p.id as pedido_id,
                 prod.nome as produto_nome,
                 pri.tamanho,
-                pri.quantidade
+                pri.quantidade  -- << SE DER ERRO AQUI, TROQUE POR pri.quantidade_estoque ou pri.qtd
             FROM pedido_remessas pr
             JOIN pedidos p ON pr.pedido_id = p.id
             JOIN locais l ON p.local_destino_id = l.id
-            LEFT JOIN pedido_remessa_itens pri ON pri.remessa_id = pr.id
-            LEFT JOIN produtos prod ON pri.produto_id = prod.id
+            JOIN pedido_remessa_itens pri ON pri.remessa_id = pr.id
+            JOIN produtos prod ON pri.produto_id = prod.id
             WHERE pr.id = $1
         `;
 
         const { rows } = await db.query(sql, [remessaId]);
         
-        // Proteção contra remessa inexistente
         if (!rows || rows.length === 0) {
-            return res.status(404).send("Nenhum item encontrado para esta remessa.");
+            return res.status(404).send("Nenhum item encontrado para gerar o romaneio.");
         }
 
         const d = rows[0];
-        
-        // --- FORMATAÇÃO SEGURA: Define a variável antes de montar o HTML ---
-        // Se remessa_num for nulo, usa 0 e preenche com zeros à esquerda
         const remessaFormatada = (d.remessa_num || 0).toString().padStart(6, '0');
-        
         const dataHoje = new Date();
         const meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
@@ -7836,12 +7815,8 @@ router.get('/relatorios/romaneio-padrao/:remessaId', verificarToken, async (req,
                 <div><b>PREFEITURA DE QUEIMADOS / SEMED</b></div>
             </div>
             <h1>Romaneio de Entrega - Materiais/Uniformes</h1>
-            
-            <p>
-                <b>REMESSA Nº:</b> ${remessaFormatada} | 
-                <b>PEDIDO:</b> #${d.pedido_id || '---'}
-            </p>
-            <p><b>DESTINO:</b> ${d.destino_nome || 'Não informado'}</p>
+            <p><b>REMESSA Nº:</b> ${remessaFormatada} | <b>PEDIDO:</b> #${d.pedido_id}</p>
+            <p><b>DESTINO:</b> ${d.destino_nome}</p>
             
             <table>
                 <thead>
@@ -7855,8 +7830,8 @@ router.get('/relatorios/romaneio-padrao/:remessaId', verificarToken, async (req,
                     ${rows.map(r => `
                         <tr>
                             <td>${r.produto_nome || '---'}</td>
-                            <td style="text-align:center;">${r.tamanho || '---'}</td>
-                            <td style="text-align:center;">${r.quantidade || 0}</td>
+                            <td style="text-align:center;">${r.tamanho || 'Geral'}</td>
+                            <td style="text-align:center;">${r.quantidade || r.quantidade_estoque || 0}</td>
                         </tr>
                     `).join('')}
                 </tbody>
@@ -7869,16 +7844,13 @@ router.get('/relatorios/romaneio-padrao/:remessaId', verificarToken, async (req,
                     <div class="linha">Recebido por (Nome/Matrícula)</div>
                 </div>
             </div>
-            <script>
-                window.onload = () => { window.print(); };
-            </script>
+            <script>window.onload = () => window.print();</script>
         </body>
         </html>`;
 
         res.send(html);
     } catch (err) {
-        console.error("ERRO NO PDF:", err);
-        // Retorna a mensagem de erro para ajudar no diagnóstico se a tela ficar branca
+        console.error("ERRO NO PDF PADRÃO:", err);
         res.status(500).send("Erro ao gerar romaneio padrão: " + err.message);
     }
 });

@@ -1424,14 +1424,14 @@ router.post('/produtos/cadastrar', verificarToken, async (req, res) => {
 router.post('/cadastros/produtos', verificarToken, async (req, res) => {
     const { nome, tipo, categoria_id, alerta_minimo } = req.body;
     
-    // Pega o local_id que você já injetou no login/middleware
+    // Esta linha depende do que o middleware decodificou do Token
     const local_id = req.user.local_id; 
 
     if (!local_id) {
         return res.status(400).json({ error: "Erro: Seu usuário não possui um LOCAL_ID vinculado no banco de dados." });
     }
 
-    const client = await db.pool.connect();
+    const client = await db.pool.connect(); //
     try {
         await client.query('BEGIN');
 
@@ -1443,7 +1443,6 @@ router.post('/cadastros/produtos', verificarToken, async (req, res) => {
         
         const produto_id = resProd.rows[0].id;
 
-        // Se for uniforme, cria a grade zerada (a Trigger vai cuidar de somar depois)
         if (tipo === 'UNIFORMES') {
             const grade = (nome.includes('TENIS') || nome.includes('TÊNIS')) 
                 ? ['22','23','24','25','26','27','28','29','30','31','32','33','34','35','36','37','38','39','40','41','42','43']

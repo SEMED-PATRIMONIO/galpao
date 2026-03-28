@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken');
 // Mantive exatamente a sua chave secreta original
-const SECRET = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxpZ25kZmhqeGdiamlzd2Vta2t1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1OTU5MTcsImV4cCI6MjA3OTE3MTkxN30';
+const SECRET = process.env.JWT_SECRET || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxpZ25kZmhqeGdiamlzd2Vta2t1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1OTU5MTcsImV4cCI6MjA3OTE3MTkxN30';
 
 const verificarToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
@@ -15,7 +15,7 @@ const verificarToken = (req, res, next) => {
     jwt.verify(token, SECRET, (err, decoded) => {
         if (err) return res.status(500).send('Falha na autenticação');
 
-        // Garante que o local_id do token seja repassado para as rotas
+        // Injeta o objeto completo para que req.user.local_id funcione na rota
         req.userId = decoded.id;
         req.perfil = decoded.perfil;
         req.user = {

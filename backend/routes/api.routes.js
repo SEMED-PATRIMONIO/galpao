@@ -7854,4 +7854,25 @@ router.get('/relatorios/romaneio-padrao/:remessaId', verificarToken, async (req,
     }
 });
 
+router.get('/estoque/movimentacoes/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const sql = `
+            SELECT h.data, hd.quantidade, h.acao 
+            FROM historico_detalhes hd
+            JOIN historico h ON hd.historico_id = h.id
+            WHERE hd.produto_id = $1
+            ORDER BY h.data DESC;
+        `;
+        const { rows } = await db.query(sql, [id]);
+        
+        const entradas = rows.filter(r => r.acao === 'ENTRADA' || r.acao === 'AJUSTE_ENTRADA');
+        const saidas = rows.filter(r => r.acao === 'SAIDA' || r.acao === 'CONSUMO');
+
+        res.json({ entradas, saidas });
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao buscar histórico do produto" });
+    }
+});
+
 module.exports = router;

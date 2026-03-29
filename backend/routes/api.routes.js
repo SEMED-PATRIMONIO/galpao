@@ -6182,7 +6182,8 @@ router.get('/estoque/consulta-exclusiva', async (req, res) => {
                     '[]'
                 ) AS grade
             FROM produtos p
-            WHERE p.local_id = 37
+            WHERE p.local_id = 37 
+              AND p.tipo != 'PATRIMONIO' -- <--- ADICIONE ESTA LINHA AQUI
             ORDER BY 
                 CASE 
                     WHEN p.tipo = 'MATERIAL' THEN 1 

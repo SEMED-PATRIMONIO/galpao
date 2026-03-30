@@ -17269,8 +17269,16 @@ async function carregarConsultaEstoque() {
             .consulta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 10px; }
             .coluna-estoque { background: rgba(255, 255, 255, 0.05); border-radius: 15px; padding: 15px; border: 1px solid rgba(255,255,255,0.1); }
             .coluna-titulo { color: #00d4ff; font-size: 0.9rem; font-weight: bold; margin-bottom: 15px; border-bottom: 1px solid rgba(0,212,255,0.2); padding-bottom: 5px; text-transform: uppercase; }
-            .btn-hist-mini { background: rgba(255,255,255,0.1); border: none; color: white; border-radius: 5px; padding: 4px 8px; font-size: 0.7rem; cursor: pointer; transition: 0.3s; }
-            .btn-hist-mini:hover { background: #00d4ff; }
+            
+            /* Card como seletor total */
+            .card-consulta { 
+                cursor: pointer; 
+                user-select: none; 
+                transition: transform 0.2s, background 0.2s;
+            }
+            .card-consulta:hover { background: rgba(255,255,255,0.08) !important; transform: translateY(-2px); }
+            .card-consulta:active { transform: scale(0.98); }
+
             @media (max-width: 900px) { .consulta-grid { grid-template-columns: 1fr; } }
         </style>
 
@@ -17280,7 +17288,8 @@ async function carregarConsultaEstoque() {
                     <i class="fas fa-arrow-left"></i> VOLTAR
                 </button>
                 <h2 class="titulo-sessao" style="color: white; margin: 0;">CONSULTA DE ESTOQUE</h2>
-                <div style="width: 100px;"></div> </div>
+                <div style="width: 100px;"></div> 
+            </div>
         </div>
 
         <div id="container-busca" style="margin-bottom: 20px;">
@@ -17326,7 +17335,6 @@ async function carregarConsultaEstoque() {
         const divUniformes = document.getElementById('lista-uniformes');
         const divMateriais = document.getElementById('lista-materiais');
 
-        // Filtrar Patrimônio e ordenar alfabeticamente [cite: 172]
         const filtrados = produtosParaExibir.filter(p => p.tipo !== 'PATRIMONIO');
         const uniformes = filtrados.filter(p => p.tipo === 'UNIFORMES').sort((a, b) => a.nome.localeCompare(b.nome));
         const materiais = filtrados.filter(p => p.tipo === 'MATERIAL').sort((a, b) => a.nome.localeCompare(b.nome));
@@ -17334,18 +17342,17 @@ async function carregarConsultaEstoque() {
         const gerarCard = (p) => {
             const nivelBaixo = p.quantidade_estoque <= p.alerta_minimo;
             const isUniforme = p.tipo === 'UNIFORMES';
+            
             return `
                 <div class="card-consulta glass-panel" 
+                     onclick="gerenciarCliquesProduto(event, ${p.id}, '${p.nome}', ${isUniforme})"
                      style="margin-bottom: 10px; padding: 12px; border-radius: 10px; border: 1px solid ${nivelBaixo ? '#ff4d4d' : 'rgba(255,255,255,0.1)'};">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div style="cursor: ${isUniforme ? 'pointer' : 'default'}" ${isUniforme ? `onclick="toggleGrade(${p.id})"` : ''}>
-                            <p style="margin: 0; font-weight: bold; font-size: 0.95rem;">${p.nome}</p>
-                            <button class="btn-hist-mini" onclick="abrirModalHistorico(${p.id}, '${p.nome}')">
-                                <i class="fas fa-history"></i> Histórico
-                            </button>
+                    <div style="display: flex; justify-content: space-between; align-items: center; pointer-events: none;">
+                        <div>
+                            <p style="margin: 0; font-weight: bold; font-size: 0.95rem; color: white;">${p.nome}</p>
                         </div>
                         <div style="text-align: right;">
-                            <small style="font-size: 0.6rem; opacity: 0.6; display: block;">SALDO</small>
+                            <small style="font-size: 0.6rem; opacity: 0.6; display: block; color: white;">SALDO</small>
                             <span style="font-weight: 900; color: ${nivelBaixo ? '#ff4d4d' : '#00d4ff'};">${p.quantidade_estoque}</span>
                         </div>
                     </div>
@@ -17353,9 +17360,9 @@ async function carregarConsultaEstoque() {
                         <div id="grade-${p.id}" class="grade-expansivel" style="display:none; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1);">
                             <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(45px, 1fr)); gap: 8px;">
                                 ${p.grade.map(g => `
-                                    <div style="background: rgba(0,0,0,0.3); padding: 4px; border-radius: 5px; text-align: center;">
+                                    <div style="background: rgba(255,255,255,0.1); padding: 4px; border-radius: 5px; text-align: center;">
                                         <small style="display: block; font-size: 0.55rem; color: #00d4ff;">${g.tamanho}</small>
-                                        <strong style="font-size: 0.8rem;">${g.quantidade}</strong>
+                                        <strong style="font-size: 0.8rem; color: #ffffff;">${g.quantidade}</strong>
                                     </div>
                                 `).join('')}
                             </div>
@@ -17369,6 +17376,7 @@ async function carregarConsultaEstoque() {
         divMateriais.innerHTML = materiais.length ? materiais.map(gerarCard).join('') : '<p class="empty-msg">Sem materiais</p>';
     };
 
+    // Restante do código do fetch e busca...
     try {
         const res = await fetch(`${API_URL}/estoque/consulta-exclusiva`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
@@ -17381,9 +17389,7 @@ async function carregarConsultaEstoque() {
             const filtrados = todosProdutos.filter(p => p.nome.toLowerCase().includes(termo));
             renderizarLista(filtrados);
         });
-    } catch (err) {
-        console.error("Erro:", err);
-    }
+    } catch (err) { console.error("Erro:", err); }
 }
 
 async function abrirModalHistorico(produtoId, nome) {
@@ -17417,6 +17423,19 @@ async function abrirModalHistorico(produtoId, nome) {
     }
 }
 
+function gerenciarCliquesProduto(event, id, nome, isUniforme) {
+    // event.detail contém o número de cliques consecutivos
+    if (event.detail === 1) {
+        // Clique Simples: Abre/Fecha a grade se for uniforme
+        if (isUniforme) {
+            toggleGrade(id);
+        }
+    } else if (event.detail === 3) {
+        // Clique Triplo: Abre o Histórico (independente de ser uniforme ou material)
+        abrirModalHistorico(id, nome);
+    }
+}
+
 function fecharModalHist() {
     document.getElementById('modal-historico-prod').style.display = 'none';
 }
@@ -17444,7 +17463,10 @@ function alternarVisualizacaoConsulta(sessao) {
 // Abre/Fecha grade de uniformes
 function toggleGrade(id) {
     const grade = document.getElementById(`grade-${id}`);
-    if (grade) grade.style.display = grade.style.display === 'none' ? 'block' : 'none';
+    if (grade) {
+        const isHidden = grade.style.display === 'none';
+        grade.style.display = isHidden ? 'block' : 'none';
+    }
 }
 
 // Carrega o histórico (Necessário para a aba funcionar)

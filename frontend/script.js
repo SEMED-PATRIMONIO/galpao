@@ -9118,54 +9118,85 @@ async function efetivarInicioTransporte(remessaId) {
 
 async function telaEscolaConfirmarRecebimento() {
     const container = document.getElementById('app-content');
-    container.innerHTML = '<div style="padding:40px; text-align:center; color:white;">🔍 Localizando mercadorias em trânsito...</div>';
+    container.innerHTML = '<div style="padding:40px; text-align:center; color:white;">🔍 Localizando mercadorias...</div>';
 
     try {
-        // Busca as remessas que estão com status 'EM_TRANSPORTE' para esta escola
-        const res = await fetch(`${API_URL}/escola/painel-v2`, {
-            headers: { 'Authorization': `Bearer ${TOKEN}` }
-        });
+        // Busca Remessas e Setores em paralelo
+        const [resRemessas, resSetores] = await Promise.all([
+            fetch(`${API_URL}/escola/painel-v2`, { headers: { 'Authorization': `Bearer ${TOKEN}` } }),
+            fetch(`${API_URL}/escola/setores-unidade`, { headers: { 'Authorization': `Bearer ${TOKEN}` } })
+        ]);
 
-        if (!res.ok) throw new Error("Não foi possível carregar a lista de remessas.");
-        const dados = await res.json();
+        const dados = await resRemessas.json();
+        const setores = await resSetores.json();
 
         container.innerHTML = `
             <div style="padding:20px; max-width: 900px; margin: 0 auto;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:25px;">
-                    <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
-                    <h2 style="color:white; margin:0; font-size:1.2rem;">📦 RECEBIMENTO DE CARGAS</h2>
-                </div>
+                <h2 style="color:white; margin-bottom:25px;">📦 RECEBIMENTO DE CARGAS</h2>
 
-                ${dados.length === 0 ? `
-                    <div class="glass-panel" style="padding:40px; text-align:center; color:rgba(255,255,255,0.6);">
-                        Não há cargas pendentes de recebimento para sua unidade.
-                    </div>` : 
-                    dados.map(r => `
-                    <div class="glass-panel" style="margin-bottom:20px; border-left: 6px solid #fbbf24; background: rgba(255,255,255,0.05);">
-                        <div style="padding:20px; display:flex; justify-content:space-between; align-items:center;">
-                            <div>
-                                <div style="font-weight:bold; font-size:1.1rem; color:#fbbf24;">REMESSA #${r.remessa_id}</div>
-                                <div style="color:white; opacity:0.8; font-size:0.9rem;">Pedido #${r.pedido_id} | Origem: Almoxarifado Central</div>
-                                <div style="color:rgba(255,255,255,0.5); font-size:0.75rem; margin-top:5px;">Enviado em: ${new Date(r.data_criacao).toLocaleString()}</div>
+                ${dados.length === 0 ? '<div class="glass-panel">Sem cargas pendentes.</div>' : 
+                    dados.map(r => {
+                        const isPatrimonio = (r.tipo_pedido === 'INFRA_PATRIMONIO');
+                        return `
+                        <div class="glass-panel" style="margin-bottom:15px; padding:20px; border-left: 5px solid ${isPatrimonio ? '#eab308' : '#00d4ff'};">
+                            <div style="display:flex; justify-content:space-between; align-items:start;">
+                                <div>
+                                    <h4 style="color:white; margin:0;">Remessa #${r.remessa_id}</h4>
+                                    <p style="color:rgba(255,255,255,0.6); font-size:0.8rem;">Origem: Almoxarifado Central</p>
+                                </div>
+                                <button onclick="abrirDetalhesRemessa(${r.remessa_id})" class="btn-detalhes">CONFERIR ITENS</button>
                             </div>
-                            
-                            <div style="display:flex; gap:10px;">
-                                <button onclick="visualizarDetalhesRemessa(${r.remessa_id})" class="btn-vidro" style="padding:8px 15px; font-size:0.8rem;">
-                                    🔎 CONFERIR ITENS
-                                </button>
-                                <button onclick="confirmarChegadaEscola(${r.remessa_id})" class="btn-vidro" style="background:#10b981; border:none; padding:8px 15px; font-weight:bold;">
-                                    ✅ CONFIRMAR RECEBIMENTO
-                                </button>
-                            </div>
-                        </div>
-                        <div id="detalhes-remessa-${r.remessa_id}" style="display:none; background:rgba(0,0,0,0.3); border-radius:0 0 10px 10px; padding:15px; border-top: 1px solid rgba(255,255,255,0.1);"></div>
-                    </div>
-                `).join('')}
-            </div>
-        `;
-    } catch (err) {
-        container.innerHTML = `<div class="glass-panel" style="color:#ef4444; text-align:center; padding:30px;">⚠️ <strong>Erro:</strong> ${err.message}</div>`;
+
+                            <div id="detalhes-${r.remessa_id}" style="display:none; margin-top:15px; background:rgba(0,0,0,0.2); padding:10px; border-radius:8px;"></div>
+
+                            <hr style="border:0; border-top:1px solid rgba(255,255,255,0.1); margin:15px 0;">
+
+                            ${isPatrimonio ? `
+                                <div style="margin-bottom:15px;">
+                                    <label style="color:#eab308; display:block; font-size:0.8rem; margin-bottom:5px;">SELECIONE O SETOR QUE RECEBERÁ OS BENS:</label>
+                                    <select id="setor-remessa-${r.remessa_id}" class="select-vidro">
+                                        <option value="">-- Selecione o Setor --</option>
+                                        ${setores.map(s => `<option value="${s.id}">${s.nome}</option>`).join('')}
+                                    </select>
+                                </div>
+                            ` : ''}
+
+                            <button onclick="confirmarRecebimentoRemessa(${r.remessa_id}, ${r.pedido_id}, '${r.tipo_pedido}')" 
+                                    class="btn-confirmar-recebimento">
+                                ✅ CONFIRMAR RECEBIMENTO
+                            </button>
+                        </div>`;
+                    }).join('')}
+            </div>`;
+    } catch (err) { container.innerHTML = "Erro ao carregar dados."; }
+}
+
+async function confirmarRecebimentoRemessa(remessaId, pedidoId, tipoPedido) {
+    let setorId = null;
+
+    // Se for Patrimônio, valida se o setor foi escolhido
+    if (tipoPedido === 'INFRA_PATRIMONIO') {
+        setorId = document.getElementById(`setor-remessa-${remessaId}`).value;
+        if (!setorId) return alert("⚠️ Por favor, selecione o setor que receberá o patrimônio.");
     }
+
+    if (!confirm("Confirmar o recebimento físico desta carga?")) return;
+
+    try {
+        const res = await fetch(`${API_URL}/escola/confirmar-recebimento`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ remessaId, pedidoId, setorId })
+        });
+
+        if (res.ok) {
+            notificar("✨ Recebimento confirmado com sucesso!");
+            telaEscolaConfirmarRecebimento();
+        } else {
+            const erro = await res.json();
+            throw new Error(erro.error);
+        }
+    } catch (err) { notificar("❌ ERRO: " + err.message); }
 }
 
 async function confirmarChegadaEscola(remessaId) {
@@ -9250,39 +9281,6 @@ async function visualizarDetalhesRemessa(remessaId) {
         `;
     } catch (err) {
         divDetalhes.innerHTML = '<p style="color:#ef4444;">Erro ao carregar detalhes.</p>';
-    }
-}
-
-async function confirmarRecebimentoRemessa(remessaId, pedidoId) {
-    const usuarioId = localStorage.getItem('usuario_id');
-    
-    if (!confirm("Confirmar o recebimento físico desta carga? O saldo entrará no estoque da sua unidade.")) return;
-
-    try {
-        const res = await fetch(`${API_URL}/escola/confirmar-recebimento`, {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json', 
-                'Authorization': `Bearer ${TOKEN}` 
-            },
-            body: JSON.stringify({ 
-                remessaId, 
-                pedidoId, 
-                usuarioId // Enviando quem recebeu
-            })
-        });
-
-        const resultado = await res.json();
-
-        if (res.ok) {
-            // Notificação com estilo de sucesso
-            notificar("✨ Recebimento confirmado! Estoque da unidade atualizado.");
-            telaEscolaConfirmarRecebimento(); // Recarrega a lista para sumir a remessa recebida
-        } else {
-            throw new Error(resultado.error || "Erro desconhecido.");
-        }
-    } catch (err) {
-        notificar("❌ Erro: " + err.message);
     }
 }
 

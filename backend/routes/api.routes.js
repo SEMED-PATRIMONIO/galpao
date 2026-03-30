@@ -2039,8 +2039,7 @@ router.get('/pedidos/remessa/:id/detalhes', verificarToken, async (req, res) => 
                 l.nome as escola_nome,
                 pri.tamanho,
                 pri.quantidade_enviada,
-                prod.nome as produto_nome,
-                prod.tipo as produto_tipo  -- Adicionado: campo necessário para o romaneio
+                prod.nome as produto_nome
             FROM pedido_remessas pr
             JOIN pedidos p ON pr.pedido_id = p.id
             JOIN locais l ON p.local_destino_id = l.id
@@ -2051,26 +2050,23 @@ router.get('/pedidos/remessa/:id/detalhes', verificarToken, async (req, res) => 
         const result = await db.query(query, [id]);
 
         if (result.rows.length === 0) {
-            return res.status(404).json({ error: "Remessa não encontrada ou sem itens." });
+            return res.status(404).json({ error: "Remessa não encontrada." });
         }
 
-        // --- FORMATAÇÃO CIRÚRGICA ---
-        // Transformamos as linhas soltas em um objeto estruturado que o front-end espera
-        const dadosFormatados = {
+        // FORMATANDO PARA O FRONT-END
+        const resposta = {
             pedido_id: result.rows[0].pedido_id,
-            destino: result.rows[0].escola_nome,
+            escola_nome: result.rows[0].escola_nome,
             itens: result.rows.map(row => ({
-                nome: row.produto_nome,
-                quantidade: row.quantidade_enviada,
-                tamanho: row.tamanho,
-                tipo: row.produto_tipo
+                produto_nome: row.produto_nome,
+                tamanho: row.tamanho || '---',
+                quantidade_enviada: row.quantidade_enviada
             }))
         };
 
-        res.json(dadosFormatados);
+        res.json(resposta);
     } catch (err) {
-        console.error("Erro na consulta de detalhes:", err.message);
-        res.status(500).json({ error: "Erro no banco de dados: " + err.message });
+        res.status(500).json({ error: err.message });
     }
 });
 
@@ -7738,35 +7734,43 @@ router.post('/infra/aprovar-e-gerar-romaneio', verificarToken, async (req, res) 
 router.get('/escola/detalhes-remessa/:remessaId', verificarToken, async (req, res) => {
     const { remessaId } = req.params;
     try {
+        // 1. Primeiro pegamos o tipo do pedido para saber qual tabela consultar
         const info = await db.query(`
             SELECT p.id as pedido_id, p.tipo_pedido 
             FROM pedido_remessas pr
             JOIN pedidos p ON pr.pedido_id = p.id
             WHERE pr.id = $1`, [remessaId]);
 
-        if (info.rows.length === 0) return res.status(404).json({ error: "Não encontrado" });
+        if (info.rows.length === 0) return res.status(404).json({ error: "Remessa não encontrada" });
+        
         const { pedido_id, tipo_pedido } = info.rows[0];
-
         let itens = [];
+
         if (tipo_pedido === 'INFRA_PATRIMONIO') {
-            const resItens = await db.query(`
+            // Consulta para Patrimônios (usa a tabela patrimonios)
+            const resPat = await db.query(`
                 SELECT prod.nome, pat.numero_serie, 1 as quantidade_enviada
                 FROM patrimonios pat
                 JOIN produtos prod ON pat.produto_id = prod.id
                 WHERE pat.pedido_id = $1`, [pedido_id]);
-            itens = resItens.rows;
+            itens = resPat.rows;
         } else {
-            // CORREÇÃO: pri.quantidade_enviada em vez de pri.quantidade
-            const resItens = await db.query(`
-                SELECT prod.nome, COALESCE(pri.tamanho, 'GERAL') as tamanho, pri.quantidade_enviada
+            // CORREÇÃO CIRÚRGICA: pri.quantidade_enviada é o nome correto no seu banco
+            const resMateriais = await db.query(`
+                SELECT 
+                    prod.nome, 
+                    COALESCE(pri.tamanho, '---') as detalhe, 
+                    pri.quantidade_enviada
                 FROM pedido_remessa_itens pri
                 JOIN produtos prod ON pri.produto_id = prod.id
                 WHERE pri.remessa_id = $1`, [remessaId]);
-            itens = resItens.rows;
+            itens = resMateriais.rows;
         }
+
         res.json(itens);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        console.error("ERRO CRÍTICO NA ROTA:", err.message);
+        res.status(500).json({ error: "Erro interno: " + err.message });
     }
 });
 
@@ -7841,17 +7845,41 @@ router.get('/escola/setores-unidade', verificarToken, async (req, res) => {
 
 // 3. ROTA DE CONFIRMAÇÃO (Atualiza setor_id se for Patrimônio)
 router.post('/escola/confirmar-recebimento', verificarToken, async (req, res) => {
-    const { remessaId, pedidoId, setorId } = req.body; // Recebe setorId do front
+    const { remessaId, pedidoId, setorId } = req.body;
     const client = await db.pool.connect();
 
     try {
         await client.query('BEGIN');
 
-        // 1. Atualiza status da remessa e pedido
+        // Busca itens para atualizar o estoque da unidade
+        const resItens = await client.query(
+            "SELECT produto_id, tamanho, quantidade_enviada FROM pedido_remessa_itens WHERE remessa_id = $1", 
+            [remessaId]
+        );
+
+        // Atualiza estoque para cada item
+        for (const item of resItens.rows) {
+            if (item.tamanho && item.tamanho !== 'GERAL') {
+                // Se for uniforme, atualiza a grade
+                await client.query(
+                    `INSERT INTO estoque_tamanhos (produto_id, tamanho, quantidade) 
+                     VALUES ($1, $2, $3)
+                     ON CONFLICT (produto_id, tamanho) 
+                     DO UPDATE SET quantidade = estoque_tamanhos.quantidade + $3`,
+                    [item.produto_id, item.tamanho, item.quantidade_enviada]
+                );
+            } else {
+                // Se for material, atualiza o saldo geral
+                await client.query(
+                    "UPDATE produtos SET quantidade_estoque = quantidade_estoque + $1 WHERE id = $2",
+                    [item.quantidade_enviada, item.produto_id]
+                );
+            }
+        }
+
         await client.query("UPDATE pedido_remessas SET status = 'RECEBIDO' WHERE id = $1", [remessaId]);
         await client.query("UPDATE pedidos SET status = 'RECEBIDO', data_recebimento = NOW() WHERE id = $1", [pedidoId]);
 
-        // 2. SE FOR PATRIMÔNIO, VINCULA AO SETOR ESCOLHIDO
         if (setorId) {
             await client.query("UPDATE patrimonios SET setor_id = $1 WHERE pedido_id = $2", [setorId, pedidoId]);
         }
@@ -7860,7 +7888,7 @@ router.post('/escola/confirmar-recebimento', verificarToken, async (req, res) =>
         res.json({ success: true });
     } catch (err) {
         await client.query('ROLLBACK');
-        res.status(500).json({ error: "Erro ao confirmar recebimento: " + err.message });
+        res.status(500).json({ error: "Erro ao confirmar: " + err.message });
     } finally {
         client.release();
     }

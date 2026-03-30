@@ -8676,18 +8676,17 @@ window.processarSaidaRemessa = async function(remessaId, tipoPedido) {
         if (res.ok) {
             notificar("Saída registrada com sucesso!", "sucesso");
 
-            // --- AQUI ESTÁ A CIRURGIA PARA O PADRÃO GOVERNAMENTAL ---
-            // 1. Buscamos os detalhes da remessa para alimentar sua função
+            // Busca os detalhes formatados da remessa
             const resDados = await fetch(`${API_URL}/pedidos/remessa/${remessaId}/detalhes`, {
                 headers: { 'Authorization': `Bearer ${TOKEN}` }
             });
+            
             const dadosRemessa = await resDados.json();
 
-            // 2. Chamamos a sua função que cria o modal A4 na mesma janela
-            // Note: sua função usa (pedidoId, remessaId, dados)
+            // Agora dadosRemessa.itens existe e o .filter() não dará erro
             gerarModalRomaneioA4(dadosRemessa.pedido_id, remessaId, dadosRemessa);
 
-            // 3. Atualiza a lista de logística que ficou por baixo do modal
+            // Atualiza a fila de logística ao fundo
             telaLogisticaEntregas(); 
         }
     } catch (err) {

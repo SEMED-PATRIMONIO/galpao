@@ -2182,10 +2182,9 @@ router.get('/pedidos/remessas/pendentes-transporte', verificarToken, async (req,
 router.get('/escola/remessa/:id/detalhes-patrimonio', verificarToken, async (req, res) => {
     try {
         const query = `
-            SELECT p.id as pedido_id, prod.nome, pat.numero_serie, 1 as quantidade_enviada
+            SELECT prod.nome, pat.numero_serie, 1 as quantidade_enviada
             FROM pedido_remessas pr
-            JOIN pedidos p ON pr.pedido_id = p.id
-            JOIN patrimonios pat ON pat.pedido_id = p.id
+            JOIN patrimonios pat ON pat.pedido_id = pr.pedido_id
             JOIN produtos prod ON pat.produto_id = prod.id
             WHERE pr.id = $1`;
         const { rows } = await db.query(query, [req.params.id]);
@@ -2199,11 +2198,13 @@ router.post('/escola/recebimento/confirmar-patrimonio', verificarToken, async (r
     const client = await db.pool.connect();
     try {
         await client.query('BEGIN');
-        if (!setorId) throw new Error("Setor é obrigatório para patrimônio.");
-
+        // Apenas atualiza o setor onde o bem foi guardado e os status
+        await client.query("UPDATE patrimonios SET setor_id = $1 WHERE pedido_id = $2", [setorId, pedidoId]);
         await client.query("UPDATE pedido_remessas SET status = 'RECEBIDO' WHERE id = $1", [remessaId]);
         await client.query("UPDATE pedidos SET status = 'RECEBIDO', data_recebimento = NOW() WHERE id = $1", [pedidoId]);
-        await client.query("UPDATE patrimonios SET setor_id = $1 WHERE pedido_id = $2", [setorId, pedidoId]);
+        
+        // Log de Histórico
+        await client.query("INSERT INTO log_status_pedidos (pedido_id, usuario_id, status_novo, observacao) VALUES ($1, $2, 'RECEBIDO', 'Bens alocados no setor.')", [pedidoId, req.user.id]);
 
         await client.query('COMMIT');
         res.json({ success: true });
@@ -2217,7 +2218,7 @@ router.post('/escola/recebimento/confirmar-patrimonio', verificarToken, async (r
 router.get('/escola/remessa/:id/detalhes-consumo', verificarToken, async (req, res) => {
     try {
         const query = `
-            SELECT prod.nome, COALESCE(pri.tamanho, 'GERAL') as tamanho, pri.quantidade_enviada
+            SELECT prod.nome, COALESCE(pri.tamanho, '---') as detalhe, pri.quantidade_enviada
             FROM pedido_remessa_itens pri
             JOIN produtos prod ON pri.produto_id = prod.id
             WHERE pri.remessa_id = $1`;
@@ -2229,26 +2230,12 @@ router.get('/escola/remessa/:id/detalhes-consumo', verificarToken, async (req, r
 // Confirmação para Consumo (Atualiza estoque da escola)
 router.post('/escola/recebimento/confirmar-consumo', verificarToken, async (req, res) => {
     const { remessaId, pedidoId } = req.body;
-    const client = await db.pool.connect();
     try {
-        await client.query('BEGIN');
-        const resItens = await client.query("SELECT produto_id, tamanho, quantidade_enviada FROM pedido_remessa_itens WHERE remessa_id = $1", [remessaId]);
-
-        for (const item of resItens.rows) {
-            if (item.tamanho && item.tamanho !== 'GERAL') {
-                await client.query(`INSERT INTO estoque_tamanhos (produto_id, tamanho, quantidade) VALUES ($1, $2, $3) 
-                    ON CONFLICT (produto_id, tamanho) DO UPDATE SET quantidade = estoque_tamanhos.quantidade + $3`,
-                    [item.produto_id, item.tamanho, item.quantidade_enviada]);
-            } else {
-                await client.query("UPDATE produtos SET quantidade_estoque = quantidade_estoque + $1 WHERE id = $2", [item.quantidade_enviada, item.produto_id]);
-            }
-        }
-        await client.query("UPDATE pedido_remessas SET status = 'RECEBIDO' WHERE id = $1", [remessaId]);
-        await client.query("UPDATE pedidos SET status = 'RECEBIDO', data_recebimento = NOW() WHERE id = $1", [pedidoId]);
-        await client.query('COMMIT');
+        // Apenas encerra o fluxo, sem mexer em saldo (já feito anteriormente)
+        await db.query("UPDATE pedido_remessas SET status = 'RECEBIDO' WHERE id = $1", [remessaId]);
+        await db.query("UPDATE pedidos SET status = 'RECEBIDO', data_recebimento = NOW() WHERE id = $1", [pedidoId]);
         res.json({ success: true });
-    } catch (err) { await client.query('ROLLBACK'); res.status(500).json({ error: err.message }); }
-    finally { client.release(); }
+    } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 router.patch('/pedidos/remessa/:id/confirmar-recebimento', verificarToken, async (req, res) => {

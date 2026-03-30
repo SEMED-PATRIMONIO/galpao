@@ -8661,37 +8661,56 @@ async function telaLogisticaEntregas() {
 }
 
 window.processarSaidaRemessa = async function(remessaId, tipoPedido) {
-    if (event) event.stopPropagation();
+    // 1. Previne qualquer comportamento padrão do navegador (como abrir novas janelas)
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+
+    // 2. Garante que o TOKEN seja capturado do local correto
+    const tokenSeguro = TOKEN || localStorage.getItem('token');
+
     if (!remessaId || remessaId === "null") return notificar("Erro: ID da remessa inválido.", "erro");
 
     if (!confirm(`Confirmar o início do transporte para a Remessa #${remessaId}?`)) return;
 
     try {
+        // 3. Chamada para atualizar o status no banco (EM_TRANSPORTE)
         const res = await fetch(`${API_URL}/pedidos/logistica/confirmar-saida`, {
             method: 'POST',
-            headers: { 'Authorization': `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+            headers: { 
+                'Authorization': `Bearer ${tokenSeguro}`, 
+                'Content-Type': 'application/json' 
+            },
             body: JSON.stringify({ remessaId, tipoPedido })
         });
 
         if (res.ok) {
             notificar("Saída registrada com sucesso!", "sucesso");
 
-            // Busca os detalhes formatados da remessa
+            // 4. Busca os detalhes da remessa para o Modal (Tudo na mesma janela)
             const resDados = await fetch(`${API_URL}/pedidos/remessa/${remessaId}/detalhes`, {
-                headers: { 'Authorization': `Bearer ${TOKEN}` }
+                headers: { 'Authorization': `Bearer ${tokenSeguro}` }
             });
             
             const dadosRemessa = await resDados.json();
 
-            // Agora dadosRemessa.itens existe e o .filter() não dará erro
-            gerarModalRomaneioA4(dadosRemessa.pedido_id, remessaId, dadosRemessa);
+            // 5. Gera o Romaneio Interno (MODAL) - SEM ABRIR NOVA JANELA
+            if (typeof gerarModalRomaneioA4 === 'function') {
+                gerarModalRomaneioA4(dadosRemessa.pedido_id, remessaId, dadosRemessa);
+            }
 
-            // Atualiza a fila de logística ao fundo
-            telaLogisticaEntregas(); 
+            // 6. Atualiza a lista de logística que está por baixo
+            if (typeof telaLogisticaEntregas === 'function') {
+                telaLogisticaEntregas(); 
+            }
+        } else {
+            const erro = await res.json();
+            throw new Error(erro.error || "Erro ao confirmar saída no servidor.");
         }
     } catch (err) {
         console.error("Erro na saída:", err);
-        notificar("Erro ao processar documento.", "erro");
+        notificar("Erro ao processar: " + err.message, "erro");
     }
 }
 
@@ -9167,51 +9186,66 @@ async function telaEscolaConfirmarRecebimento() {
     } catch (err) { container.innerHTML = "Erro ao carregar."; }
 }
 
-async function visualizarItensRemessa(id, tipo) {
-    const div = document.getElementById(`lista-itens-${id}`);
-    const rota = (tipo === 'INFRA_PATRIMONIO') ? 'detalhes-patrimonio' : 'detalhes-consumo';
+async function visualizarItensRemessa(remessaId, tipoPedido) {
+    const div = document.getElementById(`lista-itens-${remessaId}`);
+    const rota = (tipoPedido === 'INFRA_PATRIMONIO') ? 'detalhes-patrimonio' : 'detalhes-consumo';
     
     if (div.style.display === 'block') { div.style.display = 'none'; return; }
+    
+    div.innerHTML = "Carregando...";
     div.style.display = 'block';
-    div.innerHTML = 'Carregando...';
 
-    const res = await fetch(`${API_URL}/escola/remessa/${id}/${rota}`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+    const res = await fetch(`${API_URL}/escola/remessa/${remessaId}/${rota}`, {
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
     const itens = await res.json();
 
     div.innerHTML = `
-        <table style="width:100%; color:white; font-size:0.8rem; border-collapse:collapse;">
+        <table style="width:100%; font-size:0.8rem; color:white; border-collapse:collapse;">
             ${itens.map(i => `
                 <tr style="border-bottom:1px solid rgba(255,255,255,0.1);">
-                    <td style="padding:8px;">${i.nome}</td>
-                    <td style="padding:8px; text-align:right; color:#00d4ff;">${i.numero_serie || i.tamanho || ''}</td>
-                    <td style="padding:8px; text-align:right;">${i.quantidade_enviada}</td>
+                    <td style="padding:5px;">${i.nome}</td>
+                    <td style="padding:5px; color:#00d4ff;">${i.numero_serie || i.detalhe || ''}</td>
+                    <td style="padding:5px; text-align:right;">${i.quantidade_enviada}</td>
                 </tr>
             `).join('')}
         </table>`;
 }
 
-async function efetivarRecebimento(remessaId, pedidoId, tipo) {
+async function efetivarRecebimento(remessaId, pedidoId, tipoPedido) {
     let setorId = null;
-    if (tipo === 'INFRA_PATRIMONIO') {
+    
+    if (tipoPedido === 'INFRA_PATRIMONIO') {
         setorId = document.getElementById(`setor-select-${remessaId}`).value;
-        if (!setorId) return alert("⚠️ Você deve selecionar um SETOR para produtos de Patrimônio!");
+        if (!setorId) return alert("⚠️ Selecione o SETOR antes de concluir.");
     }
 
-    if (!confirm("Deseja efetivar o recebimento desta carga?")) return;
+    if (!confirm("Confirmar o recebimento físico desta carga?")) return;
 
-    const rotaConfirmacao = (tipo === 'INFRA_PATRIMONIO') ? 'confirmar-patrimonio' : 'confirmar-consumo';
-    
+    const rota = (tipoPedido === 'INFRA_PATRIMONIO') ? 'confirmar-patrimonio' : 'confirmar-consumo';
+
     try {
-        const res = await fetch(`${API_URL}/escola/recebimento/${rotaConfirmacao}`, {
+        const res = await fetch(`${API_URL}/escola/recebimento/${rota}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
             body: JSON.stringify({ remessaId, pedidoId, setorId })
         });
 
         if (res.ok) {
-            exibirSucessoComRomaneio(remessaId);
+            // SUCESSO: Chama os detalhes para o Romaneio
+            const resDados = await fetch(`${API_URL}/pedidos/remessa/${remessaId}/detalhes`, {
+                headers: { 'Authorization': `Bearer ${TOKEN}` }
+            });
+            const dadosRemessa = await resDados.json();
+
+            // 1. Abre o Modal A4 na mesma janela (Padrão Governamental)
+            gerarModalRomaneioA4(pedidoId, remessaId, dadosRemessa);
+            
+            // 2. Notifica e atualiza a tela de fundo
+            notificar("Recebimento concluído com sucesso!", "sucesso");
+            telaEscolaConfirmarRecebimento();
         }
-    } catch (err) { alert("Erro na confirmação."); }
+    } catch (err) { notificar("Erro ao confirmar.", "erro"); }
 }
 
 // 3. O MODAL DE SUCESSO COM SALVAMENTO OBRIGATÓRIO E IMPRESSÃO OPCIONAL

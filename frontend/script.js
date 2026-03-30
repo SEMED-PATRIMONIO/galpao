@@ -1097,7 +1097,7 @@ async function finalizarAutorizacao(pedidoId) {
             alert("✅ Pedido Autorizado! O estoque foi atualizado e o histórico registrado.");
             document.getElementById('modal-analise').style.display = 'none';
             // Recarrega a fila de pedidos ou dashboard
-            if (typeof carregarFilaPedidos === 'function') carregarFilaPedidos();
+            if (typeof carregarFilaPedidos === 'function') telaAdminGerenciarSolicitacoes();
         } else {
             throw new Error(resultado.error);
         }

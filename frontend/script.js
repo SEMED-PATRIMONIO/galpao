@@ -9171,6 +9171,59 @@ async function telaEscolaConfirmarRecebimento() {
     } catch (err) { container.innerHTML = "Erro ao carregar dados."; }
 }
 
+async function abrirDetalhesRemessa(remessaId) {
+    const divDetalhes = document.getElementById(`detalhes-${remessaId}`);
+    if (!divDetalhes) return;
+
+    // Toggle simples (abre/fecha)
+    if (divDetalhes.style.display === 'block') {
+        divDetalhes.style.display = 'none';
+        return;
+    }
+
+    divDetalhes.style.display = 'block';
+    divDetalhes.innerHTML = '<div style="color:#00d4ff; padding:10px; font-size:0.8rem;">⏳ Carregando itens...</div>';
+
+    try {
+        const res = await fetch(`${API_URL}/escola/detalhes-remessa/${remessaId}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        
+        if (!res.ok) throw new Error("Falha ao buscar dados");
+        const itens = await res.json();
+
+        divDetalhes.innerHTML = `
+            <div style="background:rgba(255,255,255,0.05); border-radius:8px; overflow:hidden; border:1px solid rgba(255,255,255,0.1);">
+                <table style="width:100%; border-collapse:collapse; color:white; font-size:0.75rem;">
+                    <thead style="background:rgba(0,212,255,0.2);">
+                        <tr>
+                            <th style="padding:10px; text-align:left;">PRODUTO</th>
+                            <th style="padding:10px; text-align:center;">DETALHE / SÉRIE</th>
+                            <th style="padding:10px; text-align:center;">QTD</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${itens.map(i => `
+                            <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                                <td style="padding:10px;">${i.nome}</td>
+                                <td style="padding:10px; text-align:center; color:#00d4ff;">
+                                    ${i.numero_serie ? `SN: ${i.numero_serie}` : (i.detalhe || '---')}
+                                </td>
+                                <td style="padding:10px; text-align:center; font-weight:bold;">
+                                    ${i.quantidade_enviada}
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    } catch (err) {
+        console.error(err);
+        divDetalhes.innerHTML = '<div style="color:#ff4d4d; padding:10px;">❌ Erro ao listar itens.</div>';
+    }
+}
+
 async function confirmarRecebimentoRemessa(remessaId, pedidoId, tipoPedido) {
     let setorId = null;
 
@@ -9375,11 +9428,9 @@ async function gerarECompartilharRomaneio(remessaId) {
 
         const dados = await res.json();
         
-        if (!dados || dados.length === 0) {
+        if (!dados || !dados.itens || dados.itens.length === 0) {
             throw new Error("Nenhum item encontrado para esta remessa.");
         }
-
-        const info = dados[0];
 
         // 2. Cria a estrutura visual do romaneio (HTML)
         const elemento = document.createElement('div');
@@ -9391,8 +9442,8 @@ async function gerarECompartilharRomaneio(remessaId) {
                 </div>
 
                 <div style="background: #f8fafc; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
-                    <p style="margin: 5px 0;"><strong>Escola:</strong> ${info.escola_nome}</p>
-                    <p style="margin: 5px 0;"><strong>Pedido Origem:</strong> #${info.pedido_id}</p>
+                    <p style="margin: 5px 0;"><strong>Escola:</strong> ${dados.escola_nome}</p>
+                    <p style="margin: 5px 0;"><strong>Pedido Origem:</strong> #${dados.pedido_id}</p>
                     <p style="margin: 5px 0;"><strong>Data/Hora:</strong> ${new Date().toLocaleString('pt-BR')}</p>
                 </div>
 
@@ -9405,10 +9456,10 @@ async function gerarECompartilharRomaneio(remessaId) {
                         </tr>
                     </thead>
                     <tbody>
-                        ${dados.map(i => `
+                        ${dados.itens.map(i => `
                             <tr style="border-bottom: 1px solid #e2e8f0;">
                                 <td style="padding: 12px; font-weight: 500;">${i.produto_nome}</td>
-                                <td style="padding: 12px; text-align: center;">${i.tamanho}</td>
+                                <td style="padding: 12px; text-align: center;">${i.tamanho || '---'}</td>
                                 <td style="padding: 12px; text-align: center; font-weight: bold;">${i.quantidade_enviada}</td>
                             </tr>
                         `).join('')}
@@ -9434,30 +9485,23 @@ async function gerarECompartilharRomaneio(remessaId) {
         const pdfBlob = await html2pdf().set(opt).from(elemento).output('blob');
         const file = new File([pdfBlob], `Romaneio_${remessaId}.pdf`, { type: 'application/pdf' });
 
-        // 5. Lógica de Compartilhamento / Download (À prova de erros de gesto)
+        // 5. Lógica de Compartilhamento / Download
         try {
             if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
                 await navigator.share({
                     files: [file],
-                    title: `Romaneio #${remessaId} - ${info.escola_nome}`,
-                    text: `Segue romaneio digital da remessa #${remessaId} para a escola ${info.escola_nome}.`
+                    title: `Romaneio #${remessaId} - ${dados.escola_nome}`,
+                    text: `Segue romaneio digital da remessa #${remessaId} para a escola ${dados.escola_nome}.`
                 });
             } else {
-                throw new Error("API de compartilhamento não suportada neste navegador.");
+                throw new Error("Compartilhamento não suportado.");
             }
         } catch (shareErr) {
-            // Se o erro for de segurança (User Gesture) ou indisponibilidade, faz o download
-            console.warn("Redirecionando para download direto:", shareErr.message);
             const link = document.createElement('a');
             link.href = URL.createObjectURL(pdfBlob);
             link.download = `Romaneio_${remessaId}.pdf`;
             link.click();
-            
-            if (shareErr.name === 'NotAllowedError') {
-                notificar("O navegador bloqueou o compartilhamento direto. O romaneio foi baixado na sua pasta de Downloads.");
-            } else {
-                notificar("Compartilhamento indisponível. O PDF foi baixado automaticamente.");
-            }
+            notificar("O PDF foi baixado automaticamente.");
         }
 
     } catch (err) {

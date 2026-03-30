@@ -1629,9 +1629,14 @@ body.login-body {
 }
 
 .folha-a4 {
-    width: 100%;
-    font-family: 'Segoe UI', Arial, sans-serif;
-    color: #000;
+    width: 210mm;
+    min-height: 297mm;
+    padding: 20mm;
+    margin: 10px auto;
+    background: white;
+    color: black;
+    box-shadow: 0 0 10px rgba(0,0,0,0.5);
+    font-family: Arial, sans-serif;
 }
 
 .cabecalho {

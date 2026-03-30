@@ -8662,40 +8662,39 @@ async function telaLogisticaEntregas() {
 
 window.processarSaidaRemessa = async function(remessaId, tipoPedido) {
     if (event) event.stopPropagation();
-    if (!remessaId || remessaId === "null") {
-        return notificar("Erro: ID da remessa inválido.", "erro");
-    }
+    if (!remessaId || remessaId === "null") return notificar("Erro: ID da remessa inválido.", "erro");
 
     if (!confirm(`Confirmar o início do transporte para a Remessa #${remessaId}?`)) return;
 
     try {
         const res = await fetch(`${API_URL}/pedidos/logistica/confirmar-saida`, {
             method: 'POST',
-            headers: { 
-                'Authorization': `Bearer ${TOKEN}`,
-                'Content-Type': 'application/json' 
-            },
+            headers: { 'Authorization': `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ remessaId, tipoPedido })
         });
 
-        const dados = await res.json();
-
         if (res.ok) {
             notificar("Saída registrada com sucesso!", "sucesso");
-            
-            // Abre o PDF correto
-            const rotaPdf = (tipoPedido === 'INFRA_PATRIMONIO') ? 'romaneio-infra' : 'romaneio-padrao';
-            window.open(`${API_URL}/relatorios/${rotaPdf}/${remessaId}?token=${TOKEN}`, '_blank');
+
+            // --- AQUI ESTÁ A CIRURGIA PARA O PADRÃO GOVERNAMENTAL ---
+            // 1. Buscamos os detalhes da remessa para alimentar sua função
+            const resDados = await fetch(`${API_URL}/pedidos/remessa/${remessaId}/detalhes`, {
+                headers: { 'Authorization': `Bearer ${TOKEN}` }
+            });
+            const dadosRemessa = await resDados.json();
+
+            // 2. Chamamos a sua função que cria o modal A4 na mesma janela
+            // Note: sua função usa (pedidoId, remessaId, dados)
+            gerarModalRomaneioA4(dadosRemessa.pedido_id, remessaId, dadosRemessa);
+
+            // 3. Atualiza a lista de logística que ficou por baixo do modal
             telaLogisticaEntregas(); 
-        } else {
-            // Se der erro, avisa o usuário sem deslogar
-            notificar("Erro no servidor: " + (dados.error || "Tente novamente"), "erro");
         }
     } catch (err) {
-        console.error("Erro no fetch:", err);
-        notificar("Falha na comunicação com o servidor.", "erro");
+        console.error("Erro na saída:", err);
+        notificar("Erro ao processar documento.", "erro");
     }
-};
+}
 
 window.detalharFase = async function(fase) {
     const area = document.getElementById('detalhes-fase');

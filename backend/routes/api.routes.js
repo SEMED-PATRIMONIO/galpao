@@ -7734,6 +7734,7 @@ router.post('/infra/aprovar-e-gerar-romaneio', verificarToken, async (req, res) 
     }
 });
 
+// 1. ROTA DE DETALHES CORRIGIDA (Troca quantidade por quantidade_enviada)
 router.get('/escola/detalhes-remessa/:remessaId', verificarToken, async (req, res) => {
     const { remessaId } = req.params;
     try {
@@ -7755,17 +7756,113 @@ router.get('/escola/detalhes-remessa/:remessaId', verificarToken, async (req, re
                 WHERE pat.pedido_id = $1`, [pedido_id]);
             itens = resItens.rows;
         } else {
-            // CORREÇÃO: Adicionado JOIN com produtos para materiais e uniformes
+            // CORREÇÃO: pri.quantidade_enviada em vez de pri.quantidade
             const resItens = await db.query(`
-                SELECT prod.nome, COALESCE(pri.tamanho, 'GERAL') as tamanho, pri.quantidade as quantidade_enviada
+                SELECT prod.nome, COALESCE(pri.tamanho, 'GERAL') as tamanho, pri.quantidade_enviada
                 FROM pedido_remessa_itens pri
                 JOIN produtos prod ON pri.produto_id = prod.id
                 WHERE pri.remessa_id = $1`, [remessaId]);
             itens = resItens.rows;
         }
-        res.json({ tipo_pedido, itens });
+        res.json(itens);
     } catch (err) {
         res.status(500).json({ error: err.message });
+    }
+});
+
+// 2. NOVA ROTA PARA BUSCAR SETORES DA UNIDADE
+router.get('/escola/setores-unidade', verificarToken, async (req, res) => {
+    try {
+        const usuarioId = req.user.id;
+        const result = await db.query(`
+            SELECT s.id, s.nome 
+            FROM setores s
+            JOIN locais l ON s.local_id = l.id
+            JOIN usuarios u ON u.local_id = l.id
+            WHERE u.id = $1 ORDER BY s.nome ASC`, [usuarioId]);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 3. ROTA DE CONFIRMAÇÃO (Atualiza setor_id se for Patrimônio)
+// 1. ROTA DE DETALHES CORRIGIDA (Troca quantidade por quantidade_enviada)
+router.get('/escola/detalhes-remessa/:remessaId', verificarToken, async (req, res) => {
+    const { remessaId } = req.params;
+    try {
+        const info = await db.query(`
+            SELECT p.id as pedido_id, p.tipo_pedido 
+            FROM pedido_remessas pr
+            JOIN pedidos p ON pr.pedido_id = p.id
+            WHERE pr.id = $1`, [remessaId]);
+
+        if (info.rows.length === 0) return res.status(404).json({ error: "Não encontrado" });
+        const { pedido_id, tipo_pedido } = info.rows[0];
+
+        let itens = [];
+        if (tipo_pedido === 'INFRA_PATRIMONIO') {
+            const resItens = await db.query(`
+                SELECT prod.nome, pat.numero_serie, 1 as quantidade_enviada
+                FROM patrimonios pat
+                JOIN produtos prod ON pat.produto_id = prod.id
+                WHERE pat.pedido_id = $1`, [pedido_id]);
+            itens = resItens.rows;
+        } else {
+            // CORREÇÃO: pri.quantidade_enviada em vez de pri.quantidade
+            const resItens = await db.query(`
+                SELECT prod.nome, COALESCE(pri.tamanho, 'GERAL') as tamanho, pri.quantidade_enviada
+                FROM pedido_remessa_itens pri
+                JOIN produtos prod ON pri.produto_id = prod.id
+                WHERE pri.remessa_id = $1`, [remessaId]);
+            itens = resItens.rows;
+        }
+        res.json(itens);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 2. NOVA ROTA PARA BUSCAR SETORES DA UNIDADE
+router.get('/escola/setores-unidade', verificarToken, async (req, res) => {
+    try {
+        const usuarioId = req.user.id;
+        const result = await db.query(`
+            SELECT s.id, s.nome 
+            FROM setores s
+            JOIN locais l ON s.local_id = l.id
+            JOIN usuarios u ON u.local_id = l.id
+            WHERE u.id = $1 ORDER BY s.nome ASC`, [usuarioId]);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 3. ROTA DE CONFIRMAÇÃO (Atualiza setor_id se for Patrimônio)
+router.post('/escola/confirmar-recebimento', verificarToken, async (req, res) => {
+    const { remessaId, pedidoId, setorId } = req.body; // Recebe setorId do front
+    const client = await db.pool.connect();
+
+    try {
+        await client.query('BEGIN');
+
+        // 1. Atualiza status da remessa e pedido
+        await client.query("UPDATE pedido_remessas SET status = 'RECEBIDO' WHERE id = $1", [remessaId]);
+        await client.query("UPDATE pedidos SET status = 'RECEBIDO', data_recebimento = NOW() WHERE id = $1", [pedidoId]);
+
+        // 2. SE FOR PATRIMÔNIO, VINCULA AO SETOR ESCOLHIDO
+        if (setorId) {
+            await client.query("UPDATE patrimonios SET setor_id = $1 WHERE pedido_id = $2", [setorId, pedidoId]);
+        }
+
+        await client.query('COMMIT');
+        res.json({ success: true });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ error: "Erro ao confirmar recebimento: " + err.message });
+    } finally {
+        client.release();
     }
 });
 

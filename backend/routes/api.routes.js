@@ -2176,6 +2176,81 @@ router.get('/pedidos/remessas/pendentes-transporte', verificarToken, async (req,
 
 });
 
+// --- FLUXO 1: PATRIMÔNIO (INDEPENDENTE) ---
+
+// Detalhes exclusivos para Patrimônio
+router.get('/escola/remessa/:id/detalhes-patrimonio', verificarToken, async (req, res) => {
+    try {
+        const query = `
+            SELECT p.id as pedido_id, prod.nome, pat.numero_serie, 1 as quantidade_enviada
+            FROM pedido_remessas pr
+            JOIN pedidos p ON pr.pedido_id = p.id
+            JOIN patrimonios pat ON pat.pedido_id = p.id
+            JOIN produtos prod ON pat.produto_id = prod.id
+            WHERE pr.id = $1`;
+        const { rows } = await db.query(query, [req.params.id]);
+        res.json(rows);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Confirmação exclusiva para Patrimônio (Exige setorId)
+router.post('/escola/recebimento/confirmar-patrimonio', verificarToken, async (req, res) => {
+    const { remessaId, pedidoId, setorId } = req.body;
+    const client = await db.pool.connect();
+    try {
+        await client.query('BEGIN');
+        if (!setorId) throw new Error("Setor é obrigatório para patrimônio.");
+
+        await client.query("UPDATE pedido_remessas SET status = 'RECEBIDO' WHERE id = $1", [remessaId]);
+        await client.query("UPDATE pedidos SET status = 'RECEBIDO', data_recebimento = NOW() WHERE id = $1", [pedidoId]);
+        await client.query("UPDATE patrimonios SET setor_id = $1 WHERE pedido_id = $2", [setorId, pedidoId]);
+
+        await client.query('COMMIT');
+        res.json({ success: true });
+    } catch (err) { await client.query('ROLLBACK'); res.status(500).json({ error: err.message }); }
+    finally { client.release(); }
+});
+
+// --- FLUXO 2: CONSUMO (MATERIAL / UNIFORMES) ---
+
+// Detalhes para Material e Uniforme
+router.get('/escola/remessa/:id/detalhes-consumo', verificarToken, async (req, res) => {
+    try {
+        const query = `
+            SELECT prod.nome, COALESCE(pri.tamanho, 'GERAL') as tamanho, pri.quantidade_enviada
+            FROM pedido_remessa_itens pri
+            JOIN produtos prod ON pri.produto_id = prod.id
+            WHERE pri.remessa_id = $1`;
+        const { rows } = await db.query(query, [req.params.id]);
+        res.json(rows);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Confirmação para Consumo (Atualiza estoque da escola)
+router.post('/escola/recebimento/confirmar-consumo', verificarToken, async (req, res) => {
+    const { remessaId, pedidoId } = req.body;
+    const client = await db.pool.connect();
+    try {
+        await client.query('BEGIN');
+        const resItens = await client.query("SELECT produto_id, tamanho, quantidade_enviada FROM pedido_remessa_itens WHERE remessa_id = $1", [remessaId]);
+
+        for (const item of resItens.rows) {
+            if (item.tamanho && item.tamanho !== 'GERAL') {
+                await client.query(`INSERT INTO estoque_tamanhos (produto_id, tamanho, quantidade) VALUES ($1, $2, $3) 
+                    ON CONFLICT (produto_id, tamanho) DO UPDATE SET quantidade = estoque_tamanhos.quantidade + $3`,
+                    [item.produto_id, item.tamanho, item.quantidade_enviada]);
+            } else {
+                await client.query("UPDATE produtos SET quantidade_estoque = quantidade_estoque + $1 WHERE id = $2", [item.quantidade_enviada, item.produto_id]);
+            }
+        }
+        await client.query("UPDATE pedido_remessas SET status = 'RECEBIDO' WHERE id = $1", [remessaId]);
+        await client.query("UPDATE pedidos SET status = 'RECEBIDO', data_recebimento = NOW() WHERE id = $1", [pedidoId]);
+        await client.query('COMMIT');
+        res.json({ success: true });
+    } catch (err) { await client.query('ROLLBACK'); res.status(500).json({ error: err.message }); }
+    finally { client.release(); }
+});
+
 router.patch('/pedidos/remessa/:id/confirmar-recebimento', verificarToken, async (req, res) => {
     const { id } = req.params;
     try {

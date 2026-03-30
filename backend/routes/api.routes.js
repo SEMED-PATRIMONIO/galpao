@@ -2035,13 +2035,12 @@ router.get('/pedidos/remessa/:id/detalhes', verificarToken, async (req, res) => 
         const query = `
             SELECT
                 pr.id as remessa_id,
-                pr.data_criacao,
                 p.id as pedido_id,
                 l.nome as escola_nome,
-                -- l.endereco as escola_endereco, <-- REMOVIDO POIS A COLUNA NÃO EXISTE
                 pri.tamanho,
                 pri.quantidade_enviada,
-                prod.nome as produto_nome
+                prod.nome as produto_nome,
+                prod.tipo as produto_tipo  -- Adicionado: campo necessário para o romaneio
             FROM pedido_remessas pr
             JOIN pedidos p ON pr.pedido_id = p.id
             JOIN locais l ON p.local_destino_id = l.id
@@ -2055,7 +2054,20 @@ router.get('/pedidos/remessa/:id/detalhes', verificarToken, async (req, res) => 
             return res.status(404).json({ error: "Remessa não encontrada ou sem itens." });
         }
 
-        res.json(result.rows);
+        // --- FORMATAÇÃO CIRÚRGICA ---
+        // Transformamos as linhas soltas em um objeto estruturado que o front-end espera
+        const dadosFormatados = {
+            pedido_id: result.rows[0].pedido_id,
+            destino: result.rows[0].escola_nome,
+            itens: result.rows.map(row => ({
+                nome: row.produto_nome,
+                quantidade: row.quantidade_enviada,
+                tamanho: row.tamanho,
+                tipo: row.produto_tipo
+            }))
+        };
+
+        res.json(dadosFormatados);
     } catch (err) {
         console.error("Erro na consulta de detalhes:", err.message);
         res.status(500).json({ error: "Erro no banco de dados: " + err.message });

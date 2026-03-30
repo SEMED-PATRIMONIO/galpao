@@ -9118,57 +9118,135 @@ async function efetivarInicioTransporte(remessaId) {
 
 async function telaEscolaConfirmarRecebimento() {
     const container = document.getElementById('app-content');
-    container.innerHTML = '<div style="padding:40px; text-align:center; color:white;">🔍 Localizando mercadorias...</div>';
+    container.innerHTML = '<div class="loading">Buscando remessas...</div>';
 
     try {
-        // Busca Remessas e Setores em paralelo
         const [resRemessas, resSetores] = await Promise.all([
             fetch(`${API_URL}/escola/painel-v2`, { headers: { 'Authorization': `Bearer ${TOKEN}` } }),
             fetch(`${API_URL}/escola/setores-unidade`, { headers: { 'Authorization': `Bearer ${TOKEN}` } })
         ]);
 
-        const dados = await resRemessas.json();
+        const remessas = await resRemessas.json();
         const setores = await resSetores.json();
 
         container.innerHTML = `
-            <div style="padding:20px; max-width: 900px; margin: 0 auto;">
-                <h2 style="color:white; margin-bottom:25px;">📦 RECEBIMENTO DE CARGAS</h2>
+            <div style="padding:20px; max-width:900px; margin:0 auto;">
+                <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                <h2 style="color:white; margin:20px 0;">📦 RECEBIMENTO DE CARGAS</h2>
+                
+                ${remessas.map(r => {
+                    const isPatrimonio = (r.tipo_pedido === 'INFRA_PATRIMONIO');
+                    return `
+                    <div class="glass-panel" style="margin-bottom:20px; padding:20px; border-left: 6px solid ${isPatrimonio ? '#eab308' : '#00d4ff'};">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <h3 style="color:white; margin:0;">Remessa #${r.remessa_id}</h3>
+                            <button onclick="visualizarItensRemessa(${r.remessa_id}, '${r.tipo_pedido}')" class="btn-detalhes">👁️ VISUALIZAR ITENS</button>
+                        </div>
+                        
+                        <div id="lista-itens-${r.remessa_id}" style="display:none; margin-top:15px; padding:10px; background:rgba(0,0,0,0.3); border-radius:8px;"></div>
 
-                ${dados.length === 0 ? '<div class="glass-panel">Sem cargas pendentes.</div>' : 
-                    dados.map(r => {
-                        const isPatrimonio = (r.tipo_pedido === 'INFRA_PATRIMONIO');
-                        return `
-                        <div class="glass-panel" style="margin-bottom:15px; padding:20px; border-left: 5px solid ${isPatrimonio ? '#eab308' : '#00d4ff'};">
-                            <div style="display:flex; justify-content:space-between; align-items:start;">
-                                <div>
-                                    <h4 style="color:white; margin:0;">Remessa #${r.remessa_id}</h4>
-                                    <p style="color:rgba(255,255,255,0.6); font-size:0.8rem;">Origem: Almoxarifado Central</p>
-                                </div>
-                                <button onclick="abrirDetalhesRemessa(${r.remessa_id})" class="btn-detalhes">CONFERIR ITENS</button>
+                        <hr style="border:0; border-top:1px solid rgba(255,255,255,0.1); margin:15px 0;">
+
+                        ${isPatrimonio ? `
+                            <div class="setor-obrigatorio">
+                                <label style="color:#eab308; display:block; font-size:0.8rem; font-weight:bold; margin-bottom:8px;">📍 SETOR DE DESTINO (OBRIGATÓRIO):</label>
+                                <select id="setor-select-${r.remessa_id}" class="select-vidro" style="width:100%; border:1px solid #eab308;">
+                                    <option value="">-- SELECIONE O SETOR --</option>
+                                    ${setores.map(s => `<option value="${s.id}">${s.nome}</option>`).join('')}
+                                </select>
                             </div>
+                        ` : ''}
 
-                            <div id="detalhes-${r.remessa_id}" style="display:none; margin-top:15px; background:rgba(0,0,0,0.2); padding:10px; border-radius:8px;"></div>
-
-                            <hr style="border:0; border-top:1px solid rgba(255,255,255,0.1); margin:15px 0;">
-
-                            ${isPatrimonio ? `
-                                <div style="margin-bottom:15px;">
-                                    <label style="color:#eab308; display:block; font-size:0.8rem; margin-bottom:5px;">SELECIONE O SETOR QUE RECEBERÁ OS BENS:</label>
-                                    <select id="setor-remessa-${r.remessa_id}" class="select-vidro">
-                                        <option value="">-- Selecione o Setor --</option>
-                                        ${setores.map(s => `<option value="${s.id}">${s.nome}</option>`).join('')}
-                                    </select>
-                                </div>
-                            ` : ''}
-
-                            <button onclick="confirmarRecebimentoRemessa(${r.remessa_id}, ${r.pedido_id}, '${r.tipo_pedido}')" 
-                                    class="btn-confirmar-recebimento">
-                                ✅ CONFIRMAR RECEBIMENTO
-                            </button>
-                        </div>`;
-                    }).join('')}
+                        <button onclick="efetivarRecebimento(${r.remessa_id}, ${r.pedido_id}, '${r.tipo_pedido}')" 
+                                class="btn-confirmar-recebimento" style="margin-top:15px; width:100%;">
+                            ✅ CONFIRMAR RECEBIMENTO
+                        </button>
+                    </div>`;
+                }).join('')}
             </div>`;
-    } catch (err) { container.innerHTML = "Erro ao carregar dados."; }
+    } catch (err) { container.innerHTML = "Erro ao carregar."; }
+}
+
+async function visualizarItensRemessa(id, tipo) {
+    const div = document.getElementById(`lista-itens-${id}`);
+    const rota = (tipo === 'INFRA_PATRIMONIO') ? 'detalhes-patrimonio' : 'detalhes-consumo';
+    
+    if (div.style.display === 'block') { div.style.display = 'none'; return; }
+    div.style.display = 'block';
+    div.innerHTML = 'Carregando...';
+
+    const res = await fetch(`${API_URL}/escola/remessa/${id}/${rota}`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+    const itens = await res.json();
+
+    div.innerHTML = `
+        <table style="width:100%; color:white; font-size:0.8rem; border-collapse:collapse;">
+            ${itens.map(i => `
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.1);">
+                    <td style="padding:8px;">${i.nome}</td>
+                    <td style="padding:8px; text-align:right; color:#00d4ff;">${i.numero_serie || i.tamanho || ''}</td>
+                    <td style="padding:8px; text-align:right;">${i.quantidade_enviada}</td>
+                </tr>
+            `).join('')}
+        </table>`;
+}
+
+async function efetivarRecebimento(remessaId, pedidoId, tipo) {
+    let setorId = null;
+    if (tipo === 'INFRA_PATRIMONIO') {
+        setorId = document.getElementById(`setor-select-${remessaId}`).value;
+        if (!setorId) return alert("⚠️ Você deve selecionar um SETOR para produtos de Patrimônio!");
+    }
+
+    if (!confirm("Deseja efetivar o recebimento desta carga?")) return;
+
+    const rotaConfirmacao = (tipo === 'INFRA_PATRIMONIO') ? 'confirmar-patrimonio' : 'confirmar-consumo';
+    
+    try {
+        const res = await fetch(`${API_URL}/escola/recebimento/${rotaConfirmacao}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ remessaId, pedidoId, setorId })
+        });
+
+        if (res.ok) {
+            exibirSucessoComRomaneio(remessaId);
+        }
+    } catch (err) { alert("Erro na confirmação."); }
+}
+
+// 3. O MODAL DE SUCESSO COM SALVAMENTO OBRIGATÓRIO E IMPRESSÃO OPCIONAL
+async function exibirSucessoComRomaneio(remessaId) {
+    // 1. Gera o PDF automaticamente (Salvamento Obrigatório)
+    // Aqui você chama sua rota de relatório que gera o PDF
+    const urlPdf = `${API_URL}/relatorios/romaneio-padrao/${remessaId}?token=${TOKEN}`;
+    
+    // Simula o download obrigatório
+    const link = document.createElement('a');
+    link.href = urlPdf;
+    link.download = `Romaneio_Recebido_${remessaId}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    // 2. Mostra o Modal de Sucesso
+    const app = document.getElementById('app-content');
+    app.innerHTML = `
+        <div class="modal-vidro" style="display:flex; align-items:center; justify-content:center;">
+            <div class="glass-panel animate__animated animate__zoomIn" style="text-align:center; padding:40px; max-width:500px;">
+                <div style="font-size:4rem; color:#10b981; margin-bottom:20px;">✅</div>
+                <h2 style="color:white;">RECEBIMENTO CONCLUÍDO!</h2>
+                <p style="color:rgba(255,255,255,0.7); margin-bottom:30px;">O romaneio foi baixado automaticamente no seu dispositivo.</p>
+                
+                <div style="display:grid; gap:10px;">
+                    <button onclick="window.open('${urlPdf}', '_blank')" class="btn-confirmar" style="background:#00d4ff; color:#000;">
+                        🖨️ VISUALIZAR / IMPRIMIR (OPCIONAL)
+                    </button>
+                    <button onclick="telaEscolaConfirmarRecebimento()" class="btn-voltar-vidro" style="width:100%;">
+                        CONCLUIR E VOLTAR À LISTA
+                    </button>
+                </div>
+            </div>
+        </div>`;
 }
 
 async function abrirDetalhesRemessa(remessaId) {

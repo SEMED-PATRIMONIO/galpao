@@ -2043,40 +2043,47 @@ router.get('/pedidos/logistica/entregas-pendentes', verificarToken, async (req, 
 router.get('/pedidos/remessa/:id/detalhes', verificarToken, async (req, res) => {
     const { id } = req.params;
     try {
-        const query = `
-            SELECT
-                pr.id as remessa_id,
-                p.id as pedido_id,
-                l.nome as escola_nome,
-                pri.tamanho,
-                pri.quantidade_enviada,
-                prod.nome as produto_nome
+        // 1. Primeiro, identifica o tipo de pedido e os dados básicos da remessa
+        const basicInfo = await db.query(`
+            SELECT p.id as pedido_id, p.tipo_pedido, l.nome as escola_nome
             FROM pedido_remessas pr
             JOIN pedidos p ON pr.pedido_id = p.id
             JOIN locais l ON p.local_destino_id = l.id
-            JOIN pedido_remessa_itens pri ON pr.id = pri.remessa_id
-            JOIN produtos prod ON pri.produto_id = prod.id
-            WHERE pr.id = $1
-        `;
-        const result = await db.query(query, [id]);
+            WHERE pr.id = $1`, [id]);
 
-        if (result.rows.length === 0) {
+        if (basicInfo.rows.length === 0) {
             return res.status(404).json({ error: "Remessa não encontrada." });
         }
 
-        // FORMATANDO PARA O FRONT-END
-        const resposta = {
-            pedido_id: result.rows[0].pedido_id,
-            escola_nome: result.rows[0].escola_nome,
-            itens: result.rows.map(row => ({
-                produto_nome: row.produto_nome,
-                tamanho: row.tamanho || '---',
-                quantidade_enviada: row.quantidade_enviada
-            }))
-        };
+        const { pedido_id, tipo_pedido, escola_nome } = basicInfo.rows[0];
+        let itens = [];
 
-        res.json(resposta);
+        // 2. Busca os itens de acordo com o tipo
+        if (tipo_pedido === 'INFRA_PATRIMONIO') {
+            // Busca na tabela de patrimonios (usando numero_serie como detalhe)
+            const resPat = await db.query(`
+                SELECT prod.nome as produto_nome, pat.numero_serie as tamanho, 1 as quantidade_enviada
+                FROM patrimonios pat
+                JOIN produtos prod ON pat.produto_id = prod.id
+                WHERE pat.pedido_id = $1`, [pedido_id]);
+            itens = resPat.rows;
+        } else {
+            // Busca na tabela de itens de remessa (Material/Uniforme)
+            const resConsumo = await db.query(`
+                SELECT prod.nome as produto_nome, COALESCE(pri.tamanho, 'GERAL') as tamanho, pri.quantidade_enviada
+                FROM pedido_remessa_itens pri
+                JOIN produtos prod ON pri.produto_id = prod.id
+                WHERE pri.remessa_id = $1`, [id]);
+            itens = resConsumo.rows;
+        }
+
+        res.json({
+            pedido_id,
+            escola_nome,
+            itens
+        });
     } catch (err) {
+        console.error("Erro na rota de detalhes:", err);
         res.status(500).json({ error: err.message });
     }
 });

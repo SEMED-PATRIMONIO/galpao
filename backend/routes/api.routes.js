@@ -1681,43 +1681,48 @@ router.post('/escola/confirmar-recebimento', verificarToken, async (req, res) =>
     try {
         await client.query('BEGIN');
 
-        // 1. Busca o tipo do pedido e o destino real para garantir o salto correto
-        const pedidoInfo = await client.query(
-            "SELECT tipo_pedido, local_destino_id FROM pedidos WHERE id = $1", 
+        // 1. Busca dados e valida se o pedido existe e o destino
+        const pedidoCheck = await client.query(
+            "SELECT tipo_pedido, local_destino_id, status FROM pedidos WHERE id = $1", 
             [pedidoId]
         );
         
-        if (pedidoInfo.rows.length === 0) throw new Error("Pedido não encontrado.");
-        const { tipo_pedido, local_destino_id } = pedidoInfo.rows[0];
+        if (pedidoCheck.rows.length === 0) throw new Error("Pedido não encontrado.");
+        
+        const { tipo_pedido, local_destino_id, status: statusAtual } = pedidoCheck.rows[0];
 
-        // 2. FLUXO ESPECÍFICO PARA PATRIMÔNIO
+        // Evita processar algo que já foi finalizado
+        if (statusAtual === 'RECEBIDO') {
+            throw new Error("Este pedido já foi confirmado anteriormente.");
+        }
+
+        // 2. SE FOR PATRIMÔNIO: Move do Local 51 para o Destino Real
         if (tipo_pedido === 'INFRA_PATRIMONIO') {
-            // Move do Local 51 para o Local Destino e vincula ao Setor
             const resPat = await client.query(`
                 UPDATE patrimonios 
                 SET 
-                    local_id = $1,      -- Salto do 51 para o destino real
-                    setor_id = $2,      -- Alocação no setor escolhido
-                    em_transito = false, -- Fim do trânsito
+                    local_id = $1, 
+                    setor_id = $2, 
+                    em_transito = false,
                     data_atualizacao = NOW()
                 WHERE pedido_id = $3 AND local_id = 51`, 
                 [local_destino_id, setorId, pedidoId]
             );
 
             if (resPat.rowCount === 0) {
-                throw new Error("Nenhum item em trânsito (Local 51) encontrado para este pedido.");
+                throw new Error("Patrimônios não localizados no trânsito (Local 51).");
             }
         }
 
-        // 3. ATUALIZAÇÃO DE STATUS (Comum a todos os tipos)
+        // 3. ATUALIZA STATUS (Agora com 'RECEBIDO' autorizado no Type do banco)
         await client.query("UPDATE pedido_remessas SET status = 'RECEBIDO' WHERE id = $1", [remessaId]);
         await client.query("UPDATE pedidos SET status = 'RECEBIDO', data_recebimento = NOW() WHERE id = $1", [pedidoId]);
 
-        // 4. LOG DE HISTÓRICO
+        // 4. LOG DE SEGURANÇA (Histórico)
         await client.query(
             `INSERT INTO log_status_pedidos (pedido_id, usuario_id, status_novo, observacao) 
              VALUES ($1, $2, 'RECEBIDO', $3)`,
-            [pedidoId, req.user.id, tipo_pedido === 'INFRA_PATRIMONIO' ? 'Patrimônio alocado no setor.' : 'Material/Uniforme recebido.']
+            [pedidoId, req.user.id, `Recebimento confirmado na unidade. Tipo: ${tipo_pedido}`]
         );
 
         await client.query('COMMIT');
@@ -1725,8 +1730,8 @@ router.post('/escola/confirmar-recebimento', verificarToken, async (req, res) =>
 
     } catch (err) {
         await client.query('ROLLBACK');
-        console.error("Erro no recebimento:", err.message);
-        res.status(500).json({ error: err.message });
+        console.error("ERRO NO RECEBIMENTO:", err.message);
+        res.status(500).json({ error: "Falha no banco: " + err.message });
     } finally {
         client.release();
     }
@@ -7908,57 +7913,6 @@ router.get('/escola/setores-unidade', verificarToken, async (req, res) => {
         res.json(result.rows);
     } catch (err) {
         res.status(500).json({ error: err.message });
-    }
-});
-
-// 3. ROTA DE CONFIRMAÇÃO (Atualiza setor_id se for Patrimônio)
-router.post('/escola/confirmar-recebimento', verificarToken, async (req, res) => {
-    const { remessaId, pedidoId, setorId } = req.body;
-    const client = await db.pool.connect();
-
-    try {
-        await client.query('BEGIN');
-
-        // Busca itens para atualizar o estoque da unidade
-        const resItens = await client.query(
-            "SELECT produto_id, tamanho, quantidade_enviada FROM pedido_remessa_itens WHERE remessa_id = $1", 
-            [remessaId]
-        );
-
-        // Atualiza estoque para cada item
-        for (const item of resItens.rows) {
-            if (item.tamanho && item.tamanho !== 'GERAL') {
-                // Se for uniforme, atualiza a grade
-                await client.query(
-                    `INSERT INTO estoque_tamanhos (produto_id, tamanho, quantidade) 
-                     VALUES ($1, $2, $3)
-                     ON CONFLICT (produto_id, tamanho) 
-                     DO UPDATE SET quantidade = estoque_tamanhos.quantidade + $3`,
-                    [item.produto_id, item.tamanho, item.quantidade_enviada]
-                );
-            } else {
-                // Se for material, atualiza o saldo geral
-                await client.query(
-                    "UPDATE produtos SET quantidade_estoque = quantidade_estoque + $1 WHERE id = $2",
-                    [item.quantidade_enviada, item.produto_id]
-                );
-            }
-        }
-
-        await client.query("UPDATE pedido_remessas SET status = 'RECEBIDO' WHERE id = $1", [remessaId]);
-        await client.query("UPDATE pedidos SET status = 'RECEBIDO', data_recebimento = NOW() WHERE id = $1", [pedidoId]);
-
-        if (setorId) {
-            await client.query("UPDATE patrimonios SET setor_id = $1 WHERE pedido_id = $2", [setorId, pedidoId]);
-        }
-
-        await client.query('COMMIT');
-        res.json({ success: true });
-    } catch (err) {
-        await client.query('ROLLBACK');
-        res.status(500).json({ error: "Erro ao confirmar: " + err.message });
-    } finally {
-        client.release();
     }
 });
 

@@ -818,7 +818,8 @@ async function telaAdminGerenciarSolicitacoes() {
         const res = await fetch(`${API_URL}/pedidos/admin/pendentes`, { 
             headers: { 'Authorization': `Bearer ${TOKEN}` } 
         });
-        const pedidos = await res.json();
+        let pedidos = await res.json();
+        pedidos = pedidos.filter(p => p.tipo_pedido !== 'INFRA_PATRIMONIO');        
 
         app.innerHTML = `
             <div style="padding:20px; min-height:100vh;" class="animar-entrada">

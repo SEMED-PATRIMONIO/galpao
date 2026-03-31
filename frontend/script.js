@@ -284,6 +284,24 @@ async function carregarDashboard() {
 
     // 4. Início da construção do HTML
     let html = `
+    <style>
+            /* Animação de pulsar em vermelho para o alerta */
+            @keyframes pulse-vermelho {
+                0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+                70% { transform: scale(1.2); box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+                100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+            }
+            .badge-alerta {
+                position: absolute; top: -10px; right: -10px; 
+                background: #ef4444; color: white; min-width: 26px; height: 26px; 
+                border-radius: 50%; display: none; align-items: center; justify-content: center; 
+                font-size: 0.75rem; font-weight: 900; box-shadow: 0 0 15px rgba(239, 68, 68, 0.6); 
+                border: 2px solid rgba(255,255,255,0.2); animation: pulse-vermelho 2s infinite; z-index: 10;
+            }
+            #badge-infra-count {
+               animation: pulse-vermelho 2s infinite !important;
+            }    
+        </style>
         <div class="painel-usuario-vidro">
             <span class="nome-usuario-painel">${nome.toUpperCase()}</span>
             <button onclick="logout()" class="btn-sair-vidro">SAIR</button>
@@ -308,8 +326,9 @@ async function carregarDashboard() {
 
     if (perfil === 'logistica') {
         html += `
-            <button class="btn-grande btn-vidro" onclick="telaSaidaTransferencia37()">
-                <i>🏛️</i><span>SOLICITAR AO PATRIMÔNIO</span>
+            <button class="btn-grande btn-vidro" style="position: relative;" onclick="infra_telaPendentes()">
+                <div id="badge-infra-count" class="badge-alerta">0</div>
+                <i>🏗️</i><span>SOLICITADO PELA INFRA</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="telaRelatorioColetaLiberada()">
                 <i>🚚</i><span>PEDIDOS LIBERADOS PARA ENTREGA</span>
@@ -15939,34 +15958,33 @@ async function confirmarTransferenciaInterna() {
 }
 
 async function verificarAlertasPatrimonio() {
+    const badge = document.getElementById('badge-infra-count');
+    if (!badge) return;
+
     try {
-        const res = await fetch(`${API_URL}/patrimonio/verificar-pendencias`, {
+        // Buscamos os pedidos pendentes
+        const res = await fetch(`${API_URL}/infra/pendentes`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
-        const pendencias = await res.json();
+        const dados = await res.json();
 
-        const btnPatrimonio = document.getElementById('btn-menu-patrimonio');
-        if (!btnPatrimonio) return;
+        // Filtra conforme a sua regra de negócio
+        const pendentesInfra = dados.filter(p => 
+            p.tipo_pedido === 'INFRA_PATRIMONIO' && 
+            p.status === 'AGUARDANDO_AUTORIZACAO'
+        );
 
-        // Limpa alerta anterior se existir
-        const alertaExistente = document.getElementById('esfera-alerta-patrimonio');
-        if (alertaExistente) alertaExistente.remove();
+        const total = pendentesInfra.length;
 
-        if (pendencias.length > 0) {
-            const esfera = document.createElement('div');
-            esfera.id = 'esfera-alerta-patrimonio';
-            esfera.innerHTML = pendencias.length;
-            esfera.style.cssText = `
-                position: absolute; top: -10px; right: -10px; width: 24px; height: 24px;
-                background: #ef4444; color: white; border-radius: 50%; display: flex;
-                align-items: center; justify-content: center; font-size: 0.75rem;
-                font-weight: bold; box-shadow: 0 0 15px rgba(239, 68, 68, 0.7);
-                animation: pulsoEsfera 1.5s infinite; z-index: 100;
-            `;
-            btnPatrimonio.style.position = 'relative';
-            btnPatrimonio.appendChild(esfera);
+        if (total > 0) {
+            badge.innerText = total;
+            badge.style.display = 'flex'; // Exibe e começa a pulsar via CSS
+        } else {
+            badge.style.display = 'none'; // Esconde se for zero
         }
-    } catch (err) { console.error("Erro ao verificar alertas:", err); }
+    } catch (err) {
+        console.error("Erro ao verificar alertas de infra:", err);
+    }
 }
 
 async function abrirModalDecisaoTransferencia(pendencias) {
@@ -19372,29 +19390,44 @@ window.infra_abrirModalAcao = function(p) {
 
 async function processarAprovacaoDireta(pedidoId) {
     const btn = document.getElementById('btn-confirmar-infra');
+    if (!btn) return;
+
     btn.disabled = true;
     btn.innerText = "PROCESSANDO...";
 
     try {
         const res = await fetch(`${API_URL}/infra/aprovar-automatico`, {
             method: 'POST',
-            headers: { 'Authorization': `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+            headers: { 
+                'Authorization': `Bearer ${TOKEN}`, 
+                'Content-Type': 'application/json' 
+            },
             body: JSON.stringify({ pedidoId })
         });
+
         const dados = await res.json();
 
         if (res.ok) {
-            document.getElementById('modal-decisao-infra').remove();
-            notificar("Aprovado! Abrindo Romaneio...", "sucesso");
-            window.open(`${API_URL}/relatorios/romaneio-infra/${dados.romaneioId}`, '_blank');
+            // 1. Remove o modal da tela
+            const modal = document.getElementById('modal-decisao-infra');
+            if (modal) modal.remove();
+
+            // 2. Notifica o sucesso (Ajustei o texto para não prometer o romaneio)
+            notificar("Solicitação aprovada e registrada com sucesso!", "sucesso");
+
+            // 3. Atualiza a lista de pendentes imediatamente
             infra_telaPendentes();
+            
         } else {
-            notificar(dados.error, "erro");
+            notificar(dados.error || "Erro ao processar aprovação.", "erro");
             btn.disabled = false;
+            btn.innerText = "CONFIRMAR";
         }
     } catch (err) {
-        notificar("Erro ao aprovar.", "erro");
+        console.error("Erro na aprovação direta:", err);
+        notificar("Erro de conexão com o servidor.", "erro");
         btn.disabled = false;
+        btn.innerText = "CONFIRMAR";
     }
 }
 

@@ -9233,12 +9233,10 @@ async function visualizarItensRemessa(remessaId, tipoPedido) {
 
 async function efetivarRecebimento(remessaId, pedidoId, tipoPedido) {
     let setorId = null;
-    
-    // Validação obrigatória apenas para Patrimônio
     if (tipoPedido === 'INFRA_PATRIMONIO') {
         const selectSetor = document.getElementById(`setor-select-${remessaId}`);
         setorId = selectSetor ? selectSetor.value : null;
-        if (!setorId) return alert("⚠️ Você deve selecionar o SETOR antes de confirmar o recebimento.");
+        if (!setorId) return alert("⚠️ Selecione o SETOR antes de confirmar.");
     }
 
     if (!confirm("Confirmar o recebimento físico desta carga?")) return;
@@ -9250,29 +9248,34 @@ async function efetivarRecebimento(remessaId, pedidoId, tipoPedido) {
             body: JSON.stringify({ remessaId, pedidoId, setorId })
         });
 
-        if (res.ok) {
-            notificar("Recebimento concluído com sucesso!", "sucesso");
+        if (!res.ok) {
+            const erro = await res.json();
+            throw new Error(erro.error || "Erro ao gravar no banco.");
+        }
 
-            // BUSCA DADOS PARA O ROMANEIO (A4 Modal na mesma janela)
+        // Se chegou aqui, salvou com sucesso!
+        notificar("✨ Recebimento confirmado com sucesso!", "sucesso");
+
+        // Agora busca detalhes para o Modal (Se falhar aqui, o dado já está salvo)
+        try {
             const resDados = await fetch(`${API_URL}/pedidos/remessa/${remessaId}/detalhes`, {
                 headers: { 'Authorization': `Bearer ${TOKEN}` }
             });
             const dadosRemessa = await resDados.json();
 
-            // Abre o modal padrão A4
-            if (typeof gerarModalRomaneioA4 === 'function') {
+            if (resDados.ok && typeof gerarModalRomaneioA4 === 'function') {
                 gerarModalRomaneioA4(pedidoId, remessaId, dadosRemessa);
             }
-
-            // Atualiza a lista de remessas ao fundo
-            telaEscolaConfirmarRecebimento();
-        } else {
-            const erro = await res.json();
-            alert("Erro: " + erro.error);
+        } catch (pdfErr) {
+            console.warn("Recebido, mas houve erro ao gerar o visual do romaneio:", pdfErr);
+            notificar("Recebido! (Erro visual ao gerar romaneio)", "aviso");
         }
+
+        telaEscolaConfirmarRecebimento(); // Recarrega a fila
+
     } catch (err) {
-        console.error(err);
-        notificar("Erro ao processar recebimento.", "erro");
+        console.error("Erro crítico:", err);
+        notificar("❌ " + err.message, "erro");
     }
 }
 

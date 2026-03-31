@@ -126,16 +126,18 @@ router.get('/pedidos/admin/aguardando', verificarToken, async (req, res) => {
 // ROTA 2: Para a função telaAdminGerenciarSolicitacoes (Apenas Pendentes)
 router.get('/pedidos/admin/pendentes', verificarToken, async (req, res) => {
     try {
-        const result = await db.query(`
+const result = await db.query(`
             SELECT 
                 p.id, 
                 p.data_criacao, 
                 u.nome as solicitante, 
-                COALESCE(l.nome, '⚠️ LOCAL NÃO VINCULADO') as escola_nome
+                COALESCE(l.nome, '⚠️ LOCAL NÃO VINCULADO') as escola_nome,
+                p.tipo_pedido -- Certifique-se de retornar este campo para o front
             FROM pedidos p
             LEFT JOIN usuarios u ON p.usuario_origem_id = u.id
             LEFT JOIN locais l ON p.local_destino_id = l.id
             WHERE p.status = 'AGUARDANDO_AUTORIZACAO'
+              AND p.tipo_pedido != 'INFRA_PATRIMONIO'  /* <--- ADICIONE ESTA LINHA */
             ORDER BY p.data_criacao ASC
         `);
         res.json(result.rows);

@@ -326,9 +326,8 @@ async function carregarDashboard() {
 
     if (perfil === 'logistica') {
         html += `
-            <button class="btn-grande btn-vidro" style="position: relative;" onclick="infra_telaPendentes()">
-                <div id="badge-infra-count" class="badge-alerta">0</div>
-                <i>🏗️</i><span>SOLICITADO PELA INFRA</span>
+            <button class="btn-grande btn-vidro" onclick="telaSaidaTransferencia37()">
+                <i>🏛️</i><span>SOLICITAR AO PATRIMÔNIO</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="telaRelatorioColetaLiberada()">
                 <i>🚚</i><span>PEDIDOS LIBERADOS PARA ENTREGA</span>

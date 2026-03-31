@@ -339,28 +339,38 @@ router.get('/pedidos/estoque/pendentes', verificarToken, async (req, res) => {
 
 router.post('/pedidos/estoque/iniciar-separacao', verificarToken, async (req, res) => {
     const { pedidoId } = req.body;
+    const client = await db.pool.connect(); // <--- SEMPRE use o client para transações
+
     try {
-        await db.query('BEGIN');
+        await client.query('BEGIN');
         
-        // 1. Pegamos o status atual antes de mudar
-        const atual = await db.query("SELECT status FROM pedidos WHERE id = $1", [pedidoId]);
+        // 1. Pegamos o status atual (Usando o client!)
+        const atual = await client.query("SELECT status FROM pedidos WHERE id = $1", [pedidoId]);
+        if (atual.rows.length === 0) throw new Error("Pedido não encontrado");
+        
         const statusAnterior = atual.rows[0].status;
 
         // 2. Atualizamos para 'SEPARACAO_INICIADA'
-        await db.query("UPDATE pedidos SET status = 'SEPARACAO_INICIADA' WHERE id = $1", [pedidoId]);
+        await client.query("UPDATE pedidos SET status = 'SEPARACAO_INICIADA' WHERE id = $1", [pedidoId]);
 
-        // 3. GRAVAMOS NO LOG (O que faltava!)
-        await db.query(
+        // 3. GRAVAMOS NO LOG 
+        // Verifique se é req.user.id ou req.userId no seu sistema
+        const usuarioId = req.user ? req.user.id : req.userId;
+
+        await client.query(
             `INSERT INTO log_status_pedidos (pedido_id, usuario_id, status_anterior, status_novo, observacao) 
              VALUES ($1, $2, $3, 'SEPARACAO_INICIADA', 'Usuário iniciou a conferência dos itens')`,
-            [pedidoId, req.userId, statusAnterior]
+            [pedidoId, usuarioId, statusAnterior]
         );
 
-        await db.query('COMMIT');
+        await client.query('COMMIT');
         res.json({ message: "Iniciado com sucesso" });
     } catch (err) {
-        await db.query('ROLLBACK');
+        await client.query('ROLLBACK');
+        console.error("Erro ao iniciar separação:", err.message);
         res.status(500).json({ error: err.message });
+    } finally {
+        client.release(); // <--- OBRIGATÓRIO soltar a conexão
     }
 });
 
@@ -1665,79 +1675,58 @@ router.post('/pedidos/logistica/despachar', verificarToken, async (req, res) => 
 
 // ROTA: Confirmar Recebimento na Escola (Híbrida: Uniformes e Patrimônio)
 router.post('/escola/confirmar-recebimento', verificarToken, async (req, res) => {
-    const { remessaId } = req.body;
+    const { remessaId, pedidoId, setorId } = req.body;
     const client = await db.pool.connect();
 
     try {
         await client.query('BEGIN');
 
-        const info = await client.query(`
-            SELECT p.id as pedido_id, p.local_destino_id, p.tipo_pedido 
-            FROM pedidos p 
-            JOIN pedido_remessas pr ON pr.pedido_id = p.id 
-            WHERE pr.id = $1`, [remessaId]);
+        // 1. Busca o tipo do pedido e o destino real para garantir o salto correto
+        const pedidoInfo = await client.query(
+            "SELECT tipo_pedido, local_destino_id FROM pedidos WHERE id = $1", 
+            [pedidoId]
+        );
+        
+        if (pedidoInfo.rows.length === 0) throw new Error("Pedido não encontrado.");
+        const { tipo_pedido, local_destino_id } = pedidoInfo.rows[0];
 
-        if (info.rows.length === 0) throw new Error("Remessa não localizada.");
-        const { pedido_id, local_destino_id, tipo_pedido } = info.rows[0];
-
+        // 2. FLUXO ESPECÍFICO PARA PATRIMÔNIO
         if (tipo_pedido === 'INFRA_PATRIMONIO') {
-            // Lógica de Patrimônio
-            await client.query(`UPDATE patrimonios SET local_id = $1, status = 'ALOCADO', em_transito = false WHERE pedido_id = $2`, [local_destino_id, pedido_id]);
-            
-            const produtosPat = await client.query(`
-                SELECT prod.nome, prod.tipo, COUNT(*) as qtd FROM patrimonios pat
-                JOIN produtos prod ON pat.produto_id = prod.id WHERE pat.pedido_id = $1 GROUP BY prod.nome, prod.tipo`, [pedido_id]);
+            // Move do Local 51 para o Local Destino e vincula ao Setor
+            const resPat = await client.query(`
+                UPDATE patrimonios 
+                SET 
+                    local_id = $1,      -- Salto do 51 para o destino real
+                    setor_id = $2,      -- Alocação no setor escolhido
+                    em_transito = false, -- Fim do trânsito
+                    data_atualizacao = NOW()
+                WHERE pedido_id = $3 AND local_id = 51`, 
+                [local_destino_id, setorId, pedidoId]
+            );
 
-            for (const p of produtosPat.rows) {
-                await client.query(`
-                    INSERT INTO produtos (nome, tipo, local_id, quantidade_estoque) VALUES ($1, $2, $3, $4)
-                    ON CONFLICT (nome, local_id) DO UPDATE SET quantidade_estoque = produtos.quantidade_estoque + $4
-                `, [p.nome, p.tipo, local_destino_id, parseInt(p.qtd)]);
-            }
-        } else {
-            // Lógica para MATERIAL e UNIFORMES
-            const itensRemessa = await client.query(`SELECT produto_id, tamanho, quantidade FROM pedido_remessa_itens WHERE remessa_id = $1`, [remessaId]);
-
-            for (const item of itensRemessa.rows) {
-                const prodOriginal = await client.query(`SELECT nome, tipo, categoria_id FROM produtos WHERE id = $1`, [item.produto_id]);
-                const pBase = prodOriginal.rows[0];
-
-                await client.query(`
-                    INSERT INTO produtos (nome, tipo, categoria_id, local_id, quantidade_estoque)
-                    VALUES ($1, $2, $3, $4, 0)
-                    ON CONFLICT (nome, local_id) DO NOTHING
-                `, [pBase.nome, pBase.tipo, pBase.categoria_id, local_destino_id]);
-
-                const resProdLocal = await client.query(`SELECT id FROM produtos WHERE nome = $1 AND local_id = $2`, [pBase.nome, local_destino_id]);
-                const novoProdutoId = resProdLocal.rows[0].id;
-
-                if (pBase.tipo === 'UNIFORMES') {
-                    await client.query(`
-                        INSERT INTO estoque_tamanhos (produto_id, tamanho, quantidade) VALUES ($1, $2, $3)
-                        ON CONFLICT (produto_id, tamanho) DO UPDATE SET quantidade = estoque_tamanhos.quantidade + $3
-                    `, [novoProdutoId, item.tamanho, item.quantidade]);
-
-                    await client.query(`
-                        UPDATE produtos SET quantidade_estoque = (SELECT SUM(quantidade) FROM estoque_tamanhos WHERE produto_id = $1)
-                        WHERE id = $1
-                    `, [novoProdutoId]);
-                } else {
-                    // MATERIAL: Atualiza coluna quantidade_estoque diretamente
-                    await client.query(`
-                        UPDATE produtos SET quantidade_estoque = quantidade_estoque + $1 WHERE id = $2
-                    `, [item.quantidade, novoProdutoId]);
-                }
+            if (resPat.rowCount === 0) {
+                throw new Error("Nenhum item em trânsito (Local 51) encontrado para este pedido.");
             }
         }
 
-        await client.query("UPDATE pedidos SET status = 'ENTREGUE', data_recebimento = NOW() WHERE id = $1", [pedido_id]);
+        // 3. ATUALIZAÇÃO DE STATUS (Comum a todos os tipos)
         await client.query("UPDATE pedido_remessas SET status = 'RECEBIDO' WHERE id = $1", [remessaId]);
+        await client.query("UPDATE pedidos SET status = 'RECEBIDO', data_recebimento = NOW() WHERE id = $1", [pedidoId]);
+
+        // 4. LOG DE HISTÓRICO
+        await client.query(
+            `INSERT INTO log_status_pedidos (pedido_id, usuario_id, status_novo, observacao) 
+             VALUES ($1, $2, 'RECEBIDO', $3)`,
+            [pedidoId, req.user.id, tipo_pedido === 'INFRA_PATRIMONIO' ? 'Patrimônio alocado no setor.' : 'Material/Uniforme recebido.']
+        );
 
         await client.query('COMMIT');
         res.json({ success: true });
+
     } catch (err) {
         await client.query('ROLLBACK');
-        res.status(500).json({ error: "Erro ao confirmar recebimento: " + err.message });
+        console.error("Erro no recebimento:", err.message);
+        res.status(500).json({ error: err.message });
     } finally {
         client.release();
     }
@@ -1958,50 +1947,50 @@ router.post('/pedidos/logistica/iniciar-transporte', verificarToken, async (req,
 
 router.post('/infra/aprovar-automatico', verificarToken, async (req, res) => {
     const { pedidoId } = req.body;
-    const usuarioId = req.user.id;
-
     const client = await db.pool.connect();
+
     try {
         await client.query('BEGIN');
 
-        // 1. Pega os dados do pedido
-        const pedidoRes = await client.query(`
-            SELECT p.id, p.local_destino_id, ip.produto_id, ip.quantidade 
-            FROM pedidos p 
-            JOIN itens_pedido ip ON p.id = ip.pedido_id 
+        // 1. Busca os detalhes do pedido
+        const pedidoData = await client.query(`
+            SELECT ip.produto_id, ip.quantidade, p.local_destino_id
+            FROM itens_pedido ip
+            JOIN pedidos p ON ip.pedido_id = p.id
             WHERE p.id = $1`, [pedidoId]);
-        
-        const { local_destino_id, produto_id, quantidade } = pedidoRes.rows[0];
 
-        // 2. SELEÇÃO AUTOMÁTICA: Pega os primeiros 'X' itens disponíveis no Central (37)
-        const bensRes = await client.query(`
-            SELECT id FROM patrimonios 
-            WHERE produto_id = $1 AND local_id = 37 AND status = 'ESTOQUE' 
-            LIMIT $2`, [produto_id, quantidade]);
+        if (pedidoData.rows.length === 0) throw new Error("Pedido não encontrado.");
+        const { produto_id, quantidade, local_destino_id } = pedidoData.rows[0];
 
-        if (bensRes.rows.length < quantidade) {
-            throw new Error(`Estoque insuficiente no Central. Disponível: ${bensRes.rows.length}`);
+        // 2. MOVIMENTAÇÃO CIRÚRGICA: Transfere para o Local 51 (Trânsito)
+        // Isso retira do Local 37 e evita que outro usuário peça o mesmo item
+        const resPat = await client.query(`
+            UPDATE patrimonios 
+            SET 
+                local_id = 51, 
+                em_transito = true,
+                pedido_id = $1,
+                local_destino_id = $2,
+                data_atualizacao = NOW()
+            WHERE id IN (
+                SELECT id FROM patrimonios 
+                WHERE produto_id = $3 AND local_id = 37 AND status = 'ESTOQUE'
+                LIMIT $4
+            ) RETURNING id`, [pedidoId, local_destino_id, produto_id, quantidade]);
+
+        if (resPat.rowCount < quantidade) {
+            throw new Error("Quantidade de patrimônios disponíveis insuficiente no Local 37.");
         }
 
-        const idsBens = bensRes.rows.map(b => b.id);
-
-        // 3. CRIA O ROMANEIO AUTOMATICAMENTE
-        const romRes = await client.query(
-            "INSERT INTO romaneios (usuario_estoque_id, status) VALUES ($1, 'EM_TRANSPORTE') RETURNING id",
-            [usuarioId]
-        );
-        const romaneioId = romRes.rows[0].id;
-
-        // 4. VINCULA OS BENS E ATUALIZA PEDIDO/REMESSA
-        await client.query("UPDATE patrimonios SET pedido_id = $1, em_transito = true, local_destino_id = $2 WHERE id = ANY($3)", [pedidoId, local_destino_id, idsBens]);
-        
-        await client.query("UPDATE pedidos SET status = 'COLETA_LIBERADA', romaneio_id = $1, data_autorizacao = NOW(), autorizado_por = $2 WHERE id = $3", [romaneioId, usuarioId, pedidoId]);
-
-        // Cria ou atualiza a remessa na pedido_remessas para 'PRONTO'
-        await client.query("INSERT INTO pedido_remessas (pedido_id, status) VALUES ($1, 'PRONTO') ON CONFLICT (id) DO UPDATE SET status = 'PRONTO'", [pedidoId]);
+        // 3. Atualiza o status do pedido para 'EM_TRANSPORTE'
+        await client.query(`
+            UPDATE pedidos 
+            SET status = 'EM_TRANSPORTE', data_saida = NOW() 
+            WHERE id = $1`, [pedidoId]);
 
         await client.query('COMMIT');
-        res.json({ success: true, romaneioId });
+        res.json({ success: true }); // Retorno limpo, sem disparar PDFs
+
     } catch (err) {
         await client.query('ROLLBACK');
         res.status(500).json({ error: err.message });

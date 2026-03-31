@@ -1947,23 +1947,28 @@ router.post('/pedidos/logistica/iniciar-transporte', verificarToken, async (req,
 
 router.post('/infra/aprovar-automatico', verificarToken, async (req, res) => {
     const { pedidoId } = req.body;
+    const usuarioId = req.user.id; // Obtido do middleware verificarToken
+
     const client = await db.pool.connect();
 
     try {
         await client.query('BEGIN');
 
-        // 1. Busca os detalhes do pedido
+        // 1. Procura os detalhes do pedido e o destino real
         const pedidoData = await client.query(`
             SELECT ip.produto_id, ip.quantidade, p.local_destino_id
             FROM itens_pedido ip
             JOIN pedidos p ON ip.pedido_id = p.id
             WHERE p.id = $1`, [pedidoId]);
 
-        if (pedidoData.rows.length === 0) throw new Error("Pedido não encontrado.");
+        if (pedidoData.rows.length === 0) {
+            throw new Error("Pedido não encontrado.");
+        }
+
         const { produto_id, quantidade, local_destino_id } = pedidoData.rows[0];
 
-        // 2. MOVIMENTAÇÃO CIRÚRGICA: Transfere para o Local 51 (Trânsito)
-        // Isso retira do Local 37 e evita que outro usuário peça o mesmo item
+        // 2. MOVIMENTAÇÃO DE PATRIMÓNIO: Transfere para o Local 51 (Trânsito)
+        // Retira do Local 37 (Origem) e marca como 'em_transito'
         const resPat = await client.query(`
             UPDATE patrimonios 
             SET 
@@ -1975,24 +1980,40 @@ router.post('/infra/aprovar-automatico', verificarToken, async (req, res) => {
             WHERE id IN (
                 SELECT id FROM patrimonios 
                 WHERE produto_id = $3 AND local_id = 37 AND status = 'ESTOQUE'
+                ORDER BY id ASC
                 LIMIT $4
             ) RETURNING id`, [pedidoId, local_destino_id, produto_id, quantidade]);
 
         if (resPat.rowCount < quantidade) {
-            throw new Error("Quantidade de patrimônios disponíveis insuficiente no Local 37.");
+            throw new Error(`Quantidade de patrimónios disponíveis insuficiente no Local 37. Disponíveis: ${resPat.rowCount}`);
         }
 
-        // 3. Atualiza o status do pedido para 'EM_TRANSPORTE'
+        // 3. ATUALIZA STATUS DO PEDIDO PARA 'EM_TRANSPORTE'
         await client.query(`
             UPDATE pedidos 
             SET status = 'EM_TRANSPORTE', data_saida = NOW() 
             WHERE id = $1`, [pedidoId]);
 
+        // 4. CRIA A REMESSA (Crucial para aparecer na listagem da escola)
+        // Sem este registo, o JOIN na função telaEscolaConfirmarRecebimento não encontra o pedido
+        await client.query(`
+            INSERT INTO pedido_remessas (pedido_id, status, data_criacao) 
+            VALUES ($1, 'EM_TRANSPORTE', NOW())`, [pedidoId]);
+
+        // 5. REGISTA NO LOG DE HISTÓRICO
+        await client.query(`
+            INSERT INTO log_status_pedidos (pedido_id, usuario_id, status_novo, observacao) 
+            VALUES ($1, $2, 'EM_TRANSPORTE', 'Aprovação automática Infra: Itens movidos para o Local 51 (Trânsito)')`, 
+            [pedidoId, usuarioId]);
+
         await client.query('COMMIT');
-        res.json({ success: true }); // Retorno limpo, sem disparar PDFs
+        
+        // Retorno limpo para o Frontend
+        res.json({ success: true, message: "Aprovação concluída e remessa gerada." });
 
     } catch (err) {
         await client.query('ROLLBACK');
+        console.error("ERRO NA APROVAÇÃO INFRA:", err.message);
         res.status(500).json({ error: err.message });
     } finally {
         client.release();

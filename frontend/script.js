@@ -9234,37 +9234,46 @@ async function visualizarItensRemessa(remessaId, tipoPedido) {
 async function efetivarRecebimento(remessaId, pedidoId, tipoPedido) {
     let setorId = null;
     
+    // Validação obrigatória apenas para Patrimônio
     if (tipoPedido === 'INFRA_PATRIMONIO') {
-        setorId = document.getElementById(`setor-select-${remessaId}`).value;
-        if (!setorId) return alert("⚠️ Selecione o SETOR antes de concluir.");
+        const selectSetor = document.getElementById(`setor-select-${remessaId}`);
+        setorId = selectSetor ? selectSetor.value : null;
+        if (!setorId) return alert("⚠️ Você deve selecionar o SETOR antes de confirmar o recebimento.");
     }
 
     if (!confirm("Confirmar o recebimento físico desta carga?")) return;
 
-    const rota = (tipoPedido === 'INFRA_PATRIMONIO') ? 'confirmar-patrimonio' : 'confirmar-consumo';
-
     try {
-        const res = await fetch(`${API_URL}/escola/recebimento/${rota}`, {
+        const res = await fetch(`${API_URL}/escola/confirmar-recebimento`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
             body: JSON.stringify({ remessaId, pedidoId, setorId })
         });
 
         if (res.ok) {
-            // SUCESSO: Chama os detalhes para o Romaneio
+            notificar("Recebimento concluído com sucesso!", "sucesso");
+
+            // BUSCA DADOS PARA O ROMANEIO (A4 Modal na mesma janela)
             const resDados = await fetch(`${API_URL}/pedidos/remessa/${remessaId}/detalhes`, {
                 headers: { 'Authorization': `Bearer ${TOKEN}` }
             });
             const dadosRemessa = await resDados.json();
 
-            // 1. Abre o Modal A4 na mesma janela (Padrão Governamental)
-            gerarModalRomaneioA4(pedidoId, remessaId, dadosRemessa);
-            
-            // 2. Notifica e atualiza a tela de fundo
-            notificar("Recebimento concluído com sucesso!", "sucesso");
+            // Abre o modal padrão A4
+            if (typeof gerarModalRomaneioA4 === 'function') {
+                gerarModalRomaneioA4(pedidoId, remessaId, dadosRemessa);
+            }
+
+            // Atualiza a lista de remessas ao fundo
             telaEscolaConfirmarRecebimento();
+        } else {
+            const erro = await res.json();
+            alert("Erro: " + erro.error);
         }
-    } catch (err) { notificar("Erro ao confirmar.", "erro"); }
+    } catch (err) {
+        console.error(err);
+        notificar("Erro ao processar recebimento.", "erro");
+    }
 }
 
 // 3. O MODAL DE SUCESSO COM SALVAMENTO OBRIGATÓRIO E IMPRESSÃO OPCIONAL
@@ -19408,26 +19417,22 @@ async function processarAprovacaoDireta(pedidoId) {
         const dados = await res.json();
 
         if (res.ok) {
-            // 1. Remove o modal da tela
             const modal = document.getElementById('modal-decisao-infra');
             if (modal) modal.remove();
 
-            // 2. Notifica o sucesso (Ajustei o texto para não prometer o romaneio)
-            notificar("Solicitação aprovada e registrada com sucesso!", "sucesso");
-
-            // 3. Atualiza a lista de pendentes imediatamente
-            infra_telaPendentes();
+            notificar("Saída autorizada! O bem foi movido para o setor de trânsito.", "sucesso");
             
+            // Atualiza a tela de pendentes sem recarregar a página
+            infra_telaPendentes(); 
         } else {
-            notificar(dados.error || "Erro ao processar aprovação.", "erro");
+            notificar(dados.error || "Erro na aprovação.", "erro");
             btn.disabled = false;
             btn.innerText = "CONFIRMAR";
         }
     } catch (err) {
-        console.error("Erro na aprovação direta:", err);
-        notificar("Erro de conexão com o servidor.", "erro");
+        console.error(err);
+        notificar("Erro de comunicação com o servidor.", "erro");
         btn.disabled = false;
-        btn.innerText = "CONFIRMAR";
     }
 }
 

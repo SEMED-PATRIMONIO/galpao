@@ -16366,26 +16366,22 @@ async function abrirModalPendenciasTransferencia() {
                 
                 <div id="lista-itens-pendentes">
                     ${pendencias.length === 0 ? 
-                        '<p style="color:gray; text-align:center; padding: 20px;">Nenhuma transferência autorizada pendente para sua unidade.</p>' : 
+                        '<p style="color:gray; text-align:center; padding: 20px;">Nenhuma transferência direta pendente para sua unidade.</p>' : 
                         pendencias.map(p => `
                         <div style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:15px; margin-bottom:15px;">
                             <div style="display:flex; justify-content:space-between; align-items:center;">
                                 <div>
                                     <strong style="color:#60a5fa; font-size:1.1rem;">${p.produto_nome}</strong><br>
-                                    <small style="color:rgba(255,255,255,0.6);">Origem: ${p.local_origem}</small>
+                                    <small style="color:rgba(255,255,255,0.6);">Vindo de: ${p.local_origem}</small>
                                 </div>
                                 <div style="display:flex; gap:10px;">
                                     <button onclick="prepararAceite(${p.id}, '${p.produto_nome}')" 
-                                            style="background:#10b981; color:white; border:none; padding:10px 15px; border-radius:8px; cursor:pointer; font-weight:bold;">
-                                        ACEITAR
-                                    </button>
+                                            class="btn-confirmar-v2">ACEITAR</button>
                                     <button onclick="prepararRecusa(${p.id}, '${p.produto_nome}')" 
-                                            style="background:#ef4444; color:white; border:none; padding:10px 15px; border-radius:8px; cursor:pointer; font-weight:bold;">
-                                        RECUSAR
-                                    </button>
+                                            class="btn-recusar-v2">RECUSAR</button>
                                 </div>
                             </div>
-                            <div id="form-decisao-${p.id}" style="margin-top:15px; display:none; border-top:1px solid rgba(255,255,255,0.1); padding-top:15px;"></div>
+                            <div id="form-decisao-${p.id}" style="margin-top:15px; display:none;"></div>
                         </div>
                     `).join('')}
                 </div>
@@ -16420,26 +16416,22 @@ async function abrirModalPendenciasTransferencia2() {
                 
                 <div id="lista-itens-pendentes">
                     ${pendencias.length === 0 ? 
-                        '<p style="color:gray; text-align:center; padding: 20px;">Nenhuma transferência autorizada pendente para sua unidade.</p>' : 
+                        '<p style="color:gray; text-align:center; padding: 20px;">Nenhuma transferência direta pendente para sua unidade.</p>' : 
                         pendencias.map(p => `
                         <div style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:15px; margin-bottom:15px;">
                             <div style="display:flex; justify-content:space-between; align-items:center;">
                                 <div>
                                     <strong style="color:#60a5fa; font-size:1.1rem;">${p.produto_nome}</strong><br>
-                                    <small style="color:rgba(255,255,255,0.6);">Origem: ${p.local_origem}</small>
+                                    <small style="color:rgba(255,255,255,0.6);">Vindo de: ${p.local_origem}</small>
                                 </div>
                                 <div style="display:flex; gap:10px;">
                                     <button onclick="prepararAceite(${p.id}, '${p.produto_nome}')" 
-                                            style="background:#10b981; color:white; border:none; padding:10px 15px; border-radius:8px; cursor:pointer; font-weight:bold;">
-                                        ACEITAR
-                                    </button>
+                                            class="btn-confirmar-v2">ACEITAR</button>
                                     <button onclick="prepararRecusa(${p.id}, '${p.produto_nome}')" 
-                                            style="background:#ef4444; color:white; border:none; padding:10px 15px; border-radius:8px; cursor:pointer; font-weight:bold;">
-                                        RECUSAR
-                                    </button>
+                                            class="btn-recusar-v2">RECUSAR</button>
                                 </div>
                             </div>
-                            <div id="form-decisao-${p.id}" style="margin-top:15px; display:none; border-top:1px solid rgba(255,255,255,0.1); padding-top:15px;"></div>
+                            <div id="form-decisao-${p.id}" style="margin-top:15px; display:none;"></div>
                         </div>
                     `).join('')}
                 </div>

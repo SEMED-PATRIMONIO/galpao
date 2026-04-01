@@ -5720,8 +5720,10 @@ router.get('/patrimonio/verificar-pendencias', verificarToken, async (req, res) 
     try {
         const usuarioId = req.user ? req.user.id : req.userId;
 
-        // O filtro ped.status != 'AGUARDANDO_AUTORIZACAO' garante que solicitações
-        // ainda não aprovadas não apareçam na lista de recebimento manual.
+        // Filtro Triplo de Isolamento:
+        // 1. p.local_id != 51 -> Ignora itens no "Limbo" da Infra
+        // 2. ped.status != 'AGUARDANDO_AUTORIZACAO' -> Apenas itens já aprovados
+        // 3. ped.tipo_pedido != 'INFRA_PATRIMONIO' -> Ignora o fluxo de Logística Centralizada
         const result = await db.query(`
             SELECT p.id, prod.nome as produto_nome, l_origem.nome as local_origem, p.local_id as local_origem_id
             FROM patrimonios p
@@ -5731,7 +5733,8 @@ router.get('/patrimonio/verificar-pendencias', verificarToken, async (req, res) 
             WHERE p.local_destino_id = (SELECT local_id FROM usuarios WHERE id = $1) 
             AND p.em_transito = true
             AND p.local_id != 51
-            AND ped.status != 'AGUARDANDO_AUTORIZACAO'`, [usuarioId]);
+            AND ped.status != 'AGUARDANDO_AUTORIZACAO'
+            AND ped.tipo_pedido != 'INFRA_PATRIMONIO'`, [usuarioId]);
 
         res.json(result.rows);
     } catch (err) {

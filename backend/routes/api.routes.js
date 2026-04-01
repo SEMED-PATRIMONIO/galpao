@@ -5716,15 +5716,20 @@ router.post('/patrimonio/executar-transferencia-externa', verificarToken, async 
 
 router.get('/patrimonio/verificar-pendencias', verificarToken, async (req, res) => {
     try {
-        // O filtro p.local_id != 51 isola as transferências diretas do fluxo de logística
+        const usuarioId = req.user ? req.user.id : req.userId;
+
+        // O filtro ped.status != 'AGUARDANDO_AUTORIZACAO' garante que solicitações
+        // ainda não aprovadas não apareçam na lista de recebimento manual.
         const result = await db.query(`
             SELECT p.id, prod.nome as produto_nome, l_origem.nome as local_origem, p.local_id as local_origem_id
             FROM patrimonios p
             JOIN produtos prod ON p.produto_id = prod.id
             JOIN locais l_origem ON p.local_id = l_origem.id
+            JOIN pedidos ped ON p.pedido_id = ped.id
             WHERE p.local_destino_id = (SELECT local_id FROM usuarios WHERE id = $1) 
             AND p.em_transito = true
-            AND p.local_id != 51`, [req.user ? req.user.id : req.userId]);
+            AND p.local_id != 51
+            AND ped.status != 'AGUARDANDO_AUTORIZACAO'`, [usuarioId]);
 
         res.json(result.rows);
     } catch (err) {

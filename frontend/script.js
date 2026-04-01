@@ -16339,42 +16339,57 @@ function exibirResumoImportacao(res) {
 }
 
 async function abrirModalPendenciasTransferencia() {
-    const res = await fetch(`${API_URL}/patrimonio/verificar-pendencias`, {
-        headers: { 'Authorization': `Bearer ${TOKEN}` }
-    });
-    const pendencias = await res.json();
+    try {
+        const res = await fetch(`${API_URL}/patrimonio/verificar-pendencias`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        
+        if (!res.ok) throw new Error("Falha ao buscar pendências no servidor.");
+        const pendencias = await res.json();
 
-    const modal = document.createElement('div');
-    modal.className = 'alerta-vidro-overlay';
-    modal.id = 'modal-pendencias-geral';
-    modal.innerHTML = `
-        <div class="painel-vidro" style="width: 600px; padding: 25px; max-height: 80vh; overflow-y: auto;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                <h3 style="color:white; margin:0;">📦 TRANSFERÊNCIAS RECEBIDAS</h3>
-                <button onclick="document.getElementById('modal-pendencias-geral').remove()" class="btn-sair-vidro">VOLTAR</button>
-            </div>
-            
-            <div id="lista-itens-pendentes">
-                ${pendencias.length === 0 ? '<p style="color:gray; text-align:center;">Nenhuma pendência encontrada.</p>' : 
-                pendencias.map(p => `
-                    <div style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:15px; margin-bottom:15px;">
-                        <div style="display:flex; justify-content:space-between;">
-                            <div>
-                                <strong style="color:#60a5fa; font-size:1.1rem;">${p.produto_nome}</strong><br>
-                                <small style="color:gray;">Vindo de: ${p.local_origem}</small>
+        const modal = document.createElement('div');
+        modal.className = 'alerta-vidro-overlay';
+        modal.id = 'modal-pendencias-geral';
+        
+        modal.innerHTML = `
+            <div class="painel-vidro" style="width: 600px; padding: 25px; max-height: 80vh; overflow-y: auto;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                    <h3 style="color:white; margin:0;">📦 TRANSFERÊNCIAS RECEBIDAS</h3>
+                    <button onclick="document.getElementById('modal-pendencias-geral').remove()" class="btn-sair-vidro">VOLTAR</button>
+                </div>
+                
+                <div id="lista-itens-pendentes">
+                    ${pendencias.length === 0 ? 
+                        '<p style="color:gray; text-align:center; padding: 20px;">Nenhuma transferência pendente para sua unidade.</p>' : 
+                        pendencias.map(p => `
+                        <div style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:15px; margin-bottom:15px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <div>
+                                    <strong style="color:#60a5fa; font-size:1.1rem;">${p.produto_nome}</strong><br>
+                                    <small style="color:rgba(255,255,255,0.6);">Origem: ${p.local_origem}</small>
+                                </div>
+                                <div style="display:flex; gap:10px;">
+                                    <button onclick="prepararAceite(${p.id}, '${p.produto_nome}')" 
+                                            style="background:#10b981; color:white; border:none; padding:10px 15px; border-radius:8px; cursor:pointer; font-weight:bold;">
+                                        ACEITAR
+                                    </button>
+                                    <button onclick="prepararRecusa(${p.id}, '${p.produto_nome}')" 
+                                            style="background:#ef4444; color:white; border:none; padding:10px 15px; border-radius:8px; cursor:pointer; font-weight:bold;">
+                                        RECUSAR
+                                    </button>
+                                </div>
                             </div>
-                            <div style="display:flex; gap:10px;">
-                                <button onclick="prepararAceite(${p.id}, '${p.produto_nome}')" style="background:#10b981; color:white; border:none; padding:8px 15px; border-radius:8px; cursor:pointer; font-weight:bold;">ACEITAR</button>
-                                <button onclick="prepararRecusa(${p.id}, '${p.produto_nome}')" style="background:#ef4444; color:white; border:none; padding:8px 15px; border-radius:8px; cursor:pointer; font-weight:bold;">RECUSAR</button>
-                            </div>
+                            <div id="form-decisao-${p.id}" style="margin-top:15px; display:none; border-top:1px solid rgba(255,255,255,0.1); padding-top:15px;"></div>
                         </div>
-                        <div id="form-decisao-${p.id}" style="margin-top:15px; display:none; border-top:1px solid rgba(255,255,255,0.1); padding-top:15px;"></div>
-                    </div>
-                `).join('')}
+                    `).join('')}
+                </div>
             </div>
-        </div>
-    `;
-    document.body.appendChild(modal);
+        `;
+        document.body.appendChild(modal);
+    } catch (err) {
+        console.error(err);
+        notificar("Erro ao carregar modal de transferências.", "erro");
+    }
 }
 
 async function abrirModalPendenciasTransferencia2() {

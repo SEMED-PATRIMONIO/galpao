@@ -559,11 +559,11 @@ function abrirSubmenuVitrificado(titulo) {
             <button class="btn-grande btn-vidro" onclick="telaRelatorioLogStatus()">
                 <i>🕵️</i><span>AUDITORIA DE MOVIMENTAÇÕES</span>
             </button>
-            <button onclick="telaAuditoriaPedidos()" class="btn-grande btn-vidro">
-                🔍 HISTÓRICO
+            <button class="btn-grande btn-vidro" onclick="telaAuditoriaPedidos()">
+                <i>🔍</i><span>HISTÓRICO</span>
             </button>
-            <button onclick="telaVisualizarRomaneios()" class="btn-grande btn-vidro">
-                📂 ARQUIVO DE ROMANEIOS
+            <button class="btn-grande btn-vidro" onclick="telaVisualizarRomaneios()">
+                <i>📂</i><span>ARQUIVO DE ROMANEIOS</span>
             </button>
             <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaRelatorioPedidosGeral()">
                 <i>📦</i><span>RELATÓRIO DE PEDIDOS</span>

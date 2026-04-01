@@ -2043,47 +2043,56 @@ router.get('/pedidos/logistica/entregas-pendentes', verificarToken, async (req, 
 router.get('/pedidos/remessa/:id/detalhes', verificarToken, async (req, res) => {
     const { id } = req.params;
     try {
-        // 1. Primeiro, identifica o tipo de pedido e os dados básicos da remessa
-        const basicInfo = await db.query(`
-            SELECT p.id as pedido_id, p.tipo_pedido, l.nome as escola_nome
+        // 1. Busca TODAS as informações globais do Pedido e da Remessa
+        const queryGlobal = `
+            SELECT 
+                p.id as pedido_id, 
+                pr.id as remessa_id,
+                p.tipo_pedido, 
+                l.nome as escola_nome,
+                p.data_criacao as data_pedido,
+                p.data_saida as data_envio,
+                u.nome as solicitante,
+                pr.status as status_remessa
             FROM pedido_remessas pr
             JOIN pedidos p ON pr.pedido_id = p.id
             JOIN locais l ON p.local_destino_id = l.id
-            WHERE pr.id = $1`, [id]);
+            LEFT JOIN usuarios u ON p.usuario_origem_id = u.id
+            WHERE pr.id = $1`;
+            
+        const infoRes = await db.query(queryGlobal, [id]);
 
-        if (basicInfo.rows.length === 0) {
+        if (infoRes.rows.length === 0) {
             return res.status(404).json({ error: "Remessa não encontrada." });
         }
 
-        const { pedido_id, tipo_pedido, escola_nome } = basicInfo.rows[0];
+        const info = infoRes.rows[0];
         let itens = [];
 
-        // 2. Busca os itens de acordo com o tipo
-        if (tipo_pedido === 'INFRA_PATRIMONIO') {
-            // Busca na tabela de patrimonios (usando numero_serie como detalhe)
+        // 2. Busca os itens (Lógica Híbrida: Patrimônio vs Consumo)
+        if (info.tipo_pedido === 'INFRA_PATRIMONIO') {
             const resPat = await db.query(`
-                SELECT prod.nome as produto_nome, pat.numero_serie as tamanho, 1 as quantidade_enviada
+                SELECT prod.nome as produto_nome, pat.numero_serie as detalhe, 1 as qtd
                 FROM patrimonios pat
                 JOIN produtos prod ON pat.produto_id = prod.id
-                WHERE pat.pedido_id = $1`, [pedido_id]);
+                WHERE pat.pedido_id = $1`, [info.pedido_id]);
             itens = resPat.rows;
         } else {
-            // Busca na tabela de itens de remessa (Material/Uniforme)
-            const resConsumo = await db.query(`
-                SELECT prod.nome as produto_nome, COALESCE(pri.tamanho, 'GERAL') as tamanho, pri.quantidade_enviada
+            const resCons = await db.query(`
+                SELECT prod.nome as produto_nome, COALESCE(pri.tamanho, '---') as detalhe, pri.quantidade_enviada as qtd
                 FROM pedido_remessa_itens pri
                 JOIN produtos prod ON pri.produto_id = prod.id
                 WHERE pri.remessa_id = $1`, [id]);
-            itens = resConsumo.rows;
+            itens = resCons.rows;
         }
 
+        // 3. Retorna o objeto completo para o Front
         res.json({
-            pedido_id,
-            escola_nome,
+            ...info,
             itens
         });
     } catch (err) {
-        console.error("Erro na rota de detalhes:", err);
+        console.error("Erro ao buscar super-detalhes:", err);
         res.status(500).json({ error: err.message });
     }
 });

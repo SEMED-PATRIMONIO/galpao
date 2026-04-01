@@ -4732,7 +4732,6 @@ router.get('/produtos', verificarToken, async (req, res) => {
 });
 
 const multer = require('multer');
-const path = require('path');
 
 // Configuração de Armazenamento
 const storage = multer.diskStorage({

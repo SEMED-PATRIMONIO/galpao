@@ -559,6 +559,9 @@ function abrirSubmenuVitrificado(titulo) {
             <button class="btn-grande btn-vidro" onclick="telaRelatorioLogStatus()">
                 <i>🕵️</i><span>AUDITORIA DE MOVIMENTAÇÕES</span>
             </button>
+            <button onclick="telaVisualizarRomaneios()" class="btn-vidro" style="background:#3b82f6;">
+                📂 ARQUIVO DE ROMANEIOS
+            </button>
             <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaRelatorioPedidosGeral()">
                 <i>📦</i><span>RELATÓRIO DE PEDIDOS</span>
             </button>
@@ -592,6 +595,9 @@ function abrirSubmenuVitrificado(titulo) {
             </button>
             <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaRelatorioPedidosGeral()">
                 <i>📦</i><span>RELATÓRIO DE PEDIDOS</span>
+            </button>
+            <button onclick="telaVisualizarRomaneios()" class="btn-vidro" style="background:#3b82f6;">
+                📂 ARQUIVO DE ROMANEIOS
             </button>
             `;
         }
@@ -8500,42 +8506,42 @@ async function telaAdminDashboard() {
         const res = await fetch(`${API_URL}/admin/dashboard/stats`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
-        
-        if (!res.ok) throw new Error("Não foi possível obter dados do servidor.");
         const s = await res.json();
 
         container.innerHTML = `
-            <div class="painel-vidro" style="max-width: 1000px; margin: auto; padding: 25px;">
+            <div class="painel-vidro" style="max-width: 1100px; margin: auto; padding: 25px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid rgba(255,255,255,0.1); padding-bottom:15px; margin-bottom:25px;">
                     <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
                     <h2 style="color:white; margin:0; font-size:1.4rem;">📊 PAINEL GERENCIAL DE PEDIDOS</h2>
                 </div>
 
                 <div style="background:rgba(0,0,0,0.2); border-radius:15px; padding: 30px;">
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 25px;">
+                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px;">
                         
                         ${renderCirculo('SOLICITADO', s.qtd_solicitado, '📩', '#ef4444')}
                         ${renderCirculo('AUTORIZADO', s.qtd_autorizado, '⚖️', '#f59e0b')}
                         ${renderCirculo('EM SEPARAÇÃO', s.qtd_separacao, '📦', '#8b5cf6')}
-
                         ${renderCirculo('PRONTO PARA ENTREGA', s.qtd_pronto, '✅', '#3b82f6')}
+
                         ${renderCirculo('A CAMINHO', s.qtd_transporte, '🚚', '#06b6d4')}
                         ${renderCirculo('ENTREGUE', s.qtd_entregue, '🏠', '#10b981')}
+                        
+                        ${renderCirculo('TRANSFERÊNCIA (50)', s.qtd_transferencia, '🔄', '#ec4899')}
+                        ${renderCirculo('TRÂNSITO (51)', s.qtd_limbo, '📍', '#94a3b8')}
 
                     </div>
 
                     <div id="detalhes-dashboard" style="margin-top:40px; background:rgba(255,255,255,0.05); border-radius:12px; padding:25px; border: 1px solid rgba(255,255,255,0.1); color: white;">
                         <h3 id="titulo-fase" style="color:white; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:10px;">📊 Detalhes da Operação</h3>
                         <div id="lista-fase-conteudo" style="margin-top:15px; text-align:center; opacity:0.6;">
-                            Clique em um dos cards acima para listar os pedidos deste status.
+                            Clique em um dos cards acima para listar os registros.
                         </div>
                     </div>
                 </div>
             </div>
         `;
     } catch (err) { 
-        console.error(err);
-        notificar("Erro ao abrir painel gerencial.", "erro");
+        notificar("Erro ao carregar dashboard.", "erro");
     }
 }
 
@@ -19653,6 +19659,86 @@ window.infra_validarQuantidade = function(max) {
     }
 };
 
+async function telaVisualizarRomaneios() {
+    const container = document.getElementById('app-content');
+    
+    // Layout Base
+    container.innerHTML = `
+        <div style="display:flex; flex-direction:column; height: calc(100vh - 20px); color:white; font-family:sans-serif;">
+            <div style="padding:15px; background:rgba(0,0,0,0.3); display:flex; align-items:center; gap:20px;">
+                <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                <h3 style="margin:0; font-size:1.2rem; letter-spacing:1px;">📂 ARQUIVO DIGITAL DE ROMANEIOS</h3>
+            </div>
+
+            <div style="display:flex; flex:1; overflow:hidden;">
+                <div id="coluna-lista-pdf" style="width:380px; background:rgba(255,255,255,0.05); border-right:1px solid rgba(255,255,255,0.1); overflow-y:auto; padding:10px;">
+                    <div id="lista-arquivos-pdf" style="display:flex; flex-direction:column; gap:8px;">
+                        <p style="text-align:center; padding:20px; opacity:0.5;">Buscando arquivos...</p>
+                    </div>
+                </div>
+
+                <div id="visualizador-pdf" style="flex:1; background:rgba(0,0,0,0.2); display:flex; align-items:center; justify-content:center;">
+                    <div id="placeholder-pdf" style="text-align:center; opacity:0.3;">
+                        <span style="font-size:5rem;">📄</span>
+                        <p>Selecione um documento ao lado para visualizar</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    try {
+        const res = await fetch(`${API_URL}/admin/listar-romaneios`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const arquivos = await res.json();
+
+        const listaDiv = document.getElementById('lista-arquivos-pdf');
+        
+        if (arquivos.length === 0) {
+            listaDiv.innerHTML = '<p style="text-align:center; padding:20px; color:gray;">Nenhum PDF encontrado.</p>';
+            return;
+        }
+
+        listaDiv.innerHTML = arquivos.map(arq => {
+            const dataFormatada = new Date(arq.data).toLocaleString('pt-BR');
+            return `
+                <div class="card-arquivo-pdf" onclick="carregarPreviewPDF('${arq.nome}')" 
+                     style="padding:12px; background:rgba(255,255,255,0.03); border-radius:8px; cursor:pointer; border:1px solid transparent; transition:0.2s;">
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <span style="font-size:1.5rem;">📕</span>
+                        <div style="flex:1; overflow:hidden;">
+                            <strong style="font-size:0.85rem; display:block; white-space:nowrap; text-overflow:ellipsis; overflow:hidden;">${arq.nome}</strong>
+                            <small style="color:gray; font-size:0.7rem;">${dataFormatada} • ${arq.tamanho}</small>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+    } catch (err) {
+        document.getElementById('lista-arquivos-pdf').innerHTML = '<p style="color:#ef4444;">Erro ao carregar lista.</p>';
+    }
+}
+
+// Função para injetar o PDF no lado direito
+function carregarPreviewPDF(nomeArquivo) {
+    const viewer = document.getElementById('visualizador-pdf');
+    
+    // Destaca o item selecionado na lista (estética)
+    document.querySelectorAll('.card-arquivo-pdf').forEach(el => {
+        el.style.borderColor = 'transparent';
+        el.style.background = 'rgba(255,255,255,0.03)';
+    });
+    event.currentTarget.style.borderColor = '#3b82f6';
+    event.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)';
+
+    // Injeta o Iframe com o arquivo
+    // Nota: O caminho '/romaneios/' deve ser acessível via URL no seu servidor
+    viewer.innerHTML = `
+        <iframe src="romaneios/${nomeArquivo}" style="width:100%; height:100%; border:none;" title="Visualizador de PDF"></iframe>
+    `;
+}
 
 window.telaVisualizarEstoque = telaVisualizarEstoque;
 window.telaAbastecerEstoque = telaAbastecerEstoque;

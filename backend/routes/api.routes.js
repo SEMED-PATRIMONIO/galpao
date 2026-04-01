@@ -3173,33 +3173,35 @@ router.get('/estoque/historico/detalhes/:id', verificarToken, async (req, res) =
 
 router.get('/admin/dashboard/stats', verificarToken, async (req, res) => {
     try {
-        const query = `
+        const sql = `
             SELECT 
-                COUNT(*) FILTER (WHERE status = 'AGUARDANDO_AUTORIZACAO') as qtd_solicitado,
-                COUNT(*) FILTER (WHERE status = 'APROVADO') as qtd_autorizado,
-                COUNT(*) FILTER (WHERE status = 'EM_SEPARACAO') as qtd_separacao,
-                COUNT(*) FILTER (WHERE status = 'COLETA_LIBERADA') as qtd_pronto,
-                COUNT(*) FILTER (WHERE status = 'EM_TRANSPORTE') as qtd_transporte,
-                COUNT(*) FILTER (WHERE status = 'ENTREGUE') as qtd_entregue
+                COUNT(*) FILTER (WHERE status = 'AGUARDANDO_AUTORIZACAO') as solicitado,
+                COUNT(*) FILTER (WHERE status = 'APROVADO') as autorizado,
+                COUNT(*) FILTER (WHERE status = 'EM_SEPARACAO') as separacao,
+                COUNT(*) FILTER (WHERE status = 'COLETA_LIBERADA') as pronto,
+                COUNT(*) FILTER (WHERE status = 'EM_TRANSPORTE') as transporte,
+                -- Consolidação de Entregue + Recebido
+                COUNT(*) FILTER (WHERE status IN ('ENTREGUE', 'RECEBIDO')) as entregue,
+                -- Contagem individual de bens (Patrimônios) nos estados de trânsito
+                (SELECT COUNT(*) FROM patrimonios WHERE local_id = 50) as transferencia_50,
+                (SELECT COUNT(*) FROM patrimonios WHERE local_id = 51) as transito_51
             FROM pedidos;
         `;
-        const { rows } = await db.query(query);
-        
-        // Converte os valores para números inteiros para garantir o funcionamento no JS
-        const stats = rows[0];
-        const formatado = {
-            qtd_solicitado: parseInt(stats.qtd_solicitado) || 0,
-            qtd_autorizado: parseInt(stats.qtd_autorizado) || 0,
-            qtd_separacao: parseInt(stats.qtd_separacao) || 0,
-            qtd_pronto: parseInt(stats.qtd_pronto) || 0,
-            qtd_transporte: parseInt(stats.qtd_transporte) || 0,
-            qtd_entregue: parseInt(stats.qtd_entregue) || 0
-        };
+        const { rows } = await db.query(sql);
+        const s = rows[0];
 
-        res.json(formatado);
+        res.json({
+            qtd_solicitado: s.solicitado,
+            qtd_autorizado: s.autorizado,
+            qtd_separacao: s.separacao,
+            qtd_pronto: s.pronto,
+            qtd_transporte: s.transporte,
+            qtd_entregue: s.entregue,
+            qtd_transferencia: s.transferencia_50,
+            qtd_limbo: s.transito_51
+        });
     } catch (err) {
-        console.error("Erro na rota stats:", err.message);
-        res.status(500).json({ error: "Erro ao carregar estatísticas: " + err.message });
+        res.status(500).json({ error: err.message });
     }
 });
 
@@ -6754,31 +6756,50 @@ router.get('/gerencial/lista-por-status/:status', verificarToken, async (req, re
 router.get('/admin/dashboard/detalhes/:fase', verificarToken, async (req, res) => {
     const { fase } = req.params;
 
-    // DICIONÁRIO DE TRADUÇÃO: Frontend -> Banco de Dados
-    const mapaStatus = {
-        'SOLICITADO': 'AGUARDANDO_AUTORIZACAO',
-        'AUTORIZADO': 'APROVADO',           // Ajustado para bater com seu ENUM
-        'EM SEPARAÇÃO': 'EM_SEPARACAO',
-        'PRONTO PARA ENTREGA': 'COLETA_LIBERADA',
-        'A CAMINHO': 'EM_TRANSPORTE',
-        'ENTREGUE': 'ENTREGUE'
-    };
-
-    const statusReal = mapaStatus[fase] || fase;
-
     try {
-        const sql = `
-            SELECT p.id, l.nome as escola, p.status 
-            FROM pedidos p 
-            JOIN locais l ON p.local_destino_id = l.id 
-            WHERE p.status = $1
-            ORDER BY p.id DESC;
-        `;
-        const { rows } = await db.query(sql, [statusReal]);
+        let sql = "";
+        let params = [];
+
+        if (fase === 'TRANSFERÊNCIA (50)' || fase === 'TRÂNSITO (51)') {
+            const localAlvo = fase.includes('50') ? 50 : 51;
+            sql = `
+                SELECT p.id, l.nome as escola, p.numero_serie as info_extra
+                FROM patrimonios p 
+                LEFT JOIN locais l ON p.local_destino_id = l.id 
+                WHERE p.local_id = $1
+                ORDER BY p.data_atualizacao DESC;
+            `;
+            params = [localAlvo];
+        } else if (fase === 'ENTREGUE') {
+            sql = `
+                SELECT p.id, l.nome as escola, p.status 
+                FROM pedidos p 
+                JOIN locais l ON p.local_destino_id = l.id 
+                WHERE p.status IN ('ENTREGUE', 'RECEBIDO')
+                ORDER BY p.id DESC;
+            `;
+        } else {
+            const mapaStatus = {
+                'SOLICITADO': 'AGUARDANDO_AUTORIZACAO',
+                'AUTORIZADO': 'APROVADO',
+                'EM SEPARAÇÃO': 'EM_SEPARACAO',
+                'PRONTO PARA ENTREGA': 'COLETA_LIBERADA',
+                'A CAMINHO': 'EM_TRANSPORTE'
+            };
+            sql = `
+                SELECT p.id, l.nome as escola, p.status 
+                FROM pedidos p 
+                JOIN locais l ON p.local_destino_id = l.id 
+                WHERE p.status = $1
+                ORDER BY p.id DESC;
+            `;
+            params = [mapaStatus[fase] || fase];
+        }
+
+        const { rows } = await db.query(sql, params);
         res.json(rows);
     } catch (err) {
-        console.error("Erro ao listar detalhes:", err.message);
-        res.status(500).json({ error: "Erro ao buscar detalhes: " + err.message });
+        res.status(500).json({ error: err.message });
     }
 });
 
@@ -8082,6 +8103,35 @@ router.get('/estoque/movimentacoes/:id', async (req, res) => {
         res.json({ entradas, saidas });
     } catch (err) {
         res.status(500).json({ error: "Erro ao buscar histórico do produto" });
+    }
+});
+
+// Rota para listar os PDFs salvos no disco
+router.get('/admin/listar-romaneios', verificarToken, (req, res) => {
+    const diretorio = '/var/www/patrimoniosemed/frontend/romaneios';
+
+    try {
+        if (!fs.existsSync(diretorio)) {
+            return res.json([]);
+        }
+
+        const arquivos = fs.readdirSync(diretorio)
+            .filter(file => file.endsWith('.pdf'))
+            .map(file => {
+                const stats = fs.statSync(path.join(diretorio, file));
+                return {
+                    nome: file,
+                    data: stats.mtime, // Data de modificação
+                    tamanho: (stats.size / 1024).toFixed(2) + ' KB'
+                };
+            })
+            // Ordenação Decrescente (Mais recentes primeiro)
+            .sort((a, b) => b.data - a.data);
+
+        res.json(arquivos);
+    } catch (err) {
+        console.error("Erro ao listar romaneios:", err);
+        res.status(500).json({ error: "Erro ao acessar diretório de arquivos." });
     }
 });
 

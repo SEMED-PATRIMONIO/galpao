@@ -8863,6 +8863,74 @@ window.iniciarTransporteRemessa = async function(remessaId) {
     }
 };
 
+async function processarSalvamentoRomaneio(pedidoId, remessaId, dados) {
+    // 1. Preparação dos dados e datas
+    const dataPedido = dados.data_pedido ? new Date(dados.data_pedido).toLocaleDateString('pt-BR') : '---';
+    const dataEnvio = dados.data_envio ? new Date(dados.data_envio).toLocaleDateString('pt-BR') : '---'; 
+
+    // 2. Geramos o HTML de forma "silenciosa" (em uma variável, não na tela)
+    const htmlConteudo = `
+        <div style="font-family: Arial, sans-serif; padding: 40px; color: #333;">
+            <div style="text-align: center; border-bottom: 2px solid #000; padding-bottom: 20px; margin-bottom: 20px;">
+                <h2 style="margin:0;">ROMANEIO DE ENTREGA</h2>
+                <p>PREFEITURA DE QUEIMADOS - SME</p>
+            </div>
+            
+            <div style="display: flex; justify-content: space-between; margin-bottom: 30px;">
+                <div>
+                    <p><b>REMESSA:</b> #${dados.remessa_id || remessaId}</p>
+                    <p><b>PEDIDO:</b> #${dados.pedido_id || pedidoId}</p>
+                    <p><b>DESTINO:</b> ${dados.escola_nome}</p>
+                </div>
+                <div style="text-align: right;">
+                    <p><b>DATA PEDIDO:</b> ${dataPedido}</p>
+                    <p><b>DATA ENVIO:</b> ${dataEnvio}</p>
+                </div>
+            </div>
+
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="background: #f2f2f2;">
+                        <th style="border: 1px solid #ddd; padding: 10px; text-align: left;">PRODUTO</th>
+                        <th style="border: 1px solid #ddd; padding: 10px; text-align: center;">TAM/SÉRIE</th>
+                        <th style="border: 1px solid #ddd; padding: 10px; text-align: center;">QTD</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${dados.itens.map(i => `
+                        <tr>
+                            <td style="border: 1px solid #ddd; padding: 10px;">${i.produto_nome}</td>
+                            <td style="border: 1px solid #ddd; padding: 10px; text-align: center;">${i.detalhe}</td>
+                            <td style="border: 1px solid #ddd; padding: 10px; text-align: center;">${i.qtd}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+
+    // 3. Enviar para o servidor salvar no disco
+    try {
+        const res = await fetch(`${API_URL}/admin/salvar-romaneio-disco`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json', 
+                'Authorization': `Bearer ${TOKEN}` 
+            },
+            body: JSON.stringify({ 
+                html: htmlConteudo, 
+                nomeArquivo: `romaneio_${remessaId}.pdf` 
+            })
+        });
+
+        if (res.ok) {
+            console.log("✅ Romaneio salvo no servidor com sucesso.");
+        }
+    } catch (err) {
+        console.error("❌ Falha ao salvar romaneio no disco:", err);
+    }
+}
+
 function gerarModalRomaneioA4(pedidoId, remessaId, dados) {
     const modal = document.createElement('div');
     modal.id = 'modal-romaneio';
@@ -8915,7 +8983,7 @@ function gerarModalRomaneioA4(pedidoId, remessaId, dados) {
                 <h2>ROMANEIO DE ENTREGA</h2>
             </div>
 
-<table class="tabela-itens-romaneio">
+            <table class="tabela-itens-romaneio">
                 <thead>
                     <tr>
                         <th>PRODUTO</th>
@@ -9239,40 +9307,35 @@ async function efetivarRecebimento(remessaId, pedidoId, tipoPedido) {
     if (!confirm("Confirmar o recebimento físico desta carga?")) return;
 
     try {
+        // 1. Grava o recebimento no Banco de Dados
         const res = await fetch(`${API_URL}/escola/confirmar-recebimento`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
             body: JSON.stringify({ remessaId, pedidoId, setorId })
         });
 
-        if (!res.ok) {
-            const erro = await res.json();
-            throw new Error(erro.error || "Erro ao gravar no banco.");
+        if (!res.ok) throw new Error("Erro ao gravar recebimento no servidor.");
+
+        // 2. Busca os detalhes completos para compor o romaneio
+        const resDados = await fetch(`${API_URL}/pedidos/remessa/${remessaId}/detalhes`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const dadosRemessa = await resDados.json();
+
+        // --- O GATILHO ESTÁ AQUI ---
+        // Chamamos a função de salvamento silencioso em vez de abrir o modal
+        if (resDados.ok) {
+            await processarSalvamentoRomaneio(pedidoId, remessaId, dadosRemessa);
         }
+        // ---------------------------
 
-        // Se chegou aqui, salvou com sucesso!
-        notificar("✨ Recebimento confirmado com sucesso!", "sucesso");
-
-        // Agora busca detalhes para o Modal (Se falhar aqui, o dado já está salvo)
-        try {
-            const resDados = await fetch(`${API_URL}/pedidos/remessa/${remessaId}/detalhes`, {
-                headers: { 'Authorization': `Bearer ${TOKEN}` }
-            });
-            const dadosRemessa = await resDados.json();
-
-            if (resDados.ok && typeof gerarModalRomaneioA4 === 'function') {
-                gerarModalRomaneioA4(pedidoId, remessaId, dadosRemessa);
-            }
-        } catch (pdfErr) {
-            console.warn("Recebido, mas houve erro ao gerar o visual do romaneio:", pdfErr);
-            notificar("Recebido! (Erro visual ao gerar romaneio)", "aviso");
-        }
-
-        telaEscolaConfirmarRecebimento(); // Recarrega a fila
+        // 3. Notifica o usuário e limpa a tela
+        notificar("✨ Recebimento confirmado! O romaneio foi arquivado no servidor.", "sucesso");
+        telaEscolaConfirmarRecebimento(); 
 
     } catch (err) {
-        console.error("Erro crítico:", err);
-        notificar("❌ " + err.message, "erro");
+        console.error("Erro crítico no fluxo:", err);
+        notificar("❌ Falha no processo: " + err.message, "erro");
     }
 }
 

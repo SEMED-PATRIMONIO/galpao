@@ -8868,6 +8868,8 @@ function gerarModalRomaneioA4(pedidoId, remessaId, dados) {
     modal.id = 'modal-romaneio';
     
     // 1. Identificar todos os tamanhos únicos na remessa para criar as colunas
+    const dataPedido = dados.data_pedido ? new Date(dados.data_pedido).toLocaleDateString('pt-BR') : '---';
+    const dataEnvio = dados.data_envio ? new Date(dados.data_envio).toLocaleDateString('pt-BR') : '---';    
     const tamanhosExistentes = [...new Set(dados.itens
         .filter(i => i.tamanho)
         .map(i => i.tamanho))].sort((a, b) => a.localeCompare(b, undefined, {numeric: true}));
@@ -8899,9 +8901,13 @@ function gerarModalRomaneioA4(pedidoId, remessaId, dados) {
                         <p>SECRETARIA MUNICIPAL DE EDUCAÇÃO</p>
                     </div>
                 </div>
-                <div class="info-pedido">
-                    <p>PEDIDO: #${pedidoId}</p>
-                    <h1>REMESSA: ${remessaId || '---'}</h1>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; font-size:0.9rem;">
+                    <p><b>REMESSA:</b> #${dados.remessa_id || remessaId}</p>
+                    <p><b>PEDIDO ORIGEM:</b> #${dados.pedido_id || pedidoId}</p>
+                    <p><b>SOLICITANTE:</b> ${dados.solicitante || 'Não informado'}</p>
+                    <p><b>DESTINO:</b> ${dados.escola_nome || '---'}</p>
+                    <p><b>DATA PEDIDO:</b> ${dataPedido}</p>
+                    <p><b>DATA ENVIO:</b> ${dataEnvio}</p>
                 </div>
             </header>
 
@@ -8909,51 +8915,42 @@ function gerarModalRomaneioA4(pedidoId, remessaId, dados) {
                 <h2>ROMANEIO DE ENTREGA</h2>
             </div>
 
-            <table class="tabela-grade">
+<table class="tabela-itens-romaneio">
                 <thead>
                     <tr>
-                        <th class="txt-esquerda">DESCRIÇÃO DO PRODUTO</th>
-                        ${tamanhosExistentes.map(t => `<th width="40">${t}</th>`).join('')}
-                        <th width="60">TOTAL</th>
+                        <th>PRODUTO</th>
+                        <th style="text-align:center;">TAM/SÉRIE</th>
+                        <th style="text-align:center;">QTD</th>
                     </tr>
                 </thead>
                 <tbody>
-                    ${Object.values(produtosAgrupados).map(p => `
+                    ${dados.itens.map(i => `
                         <tr>
-                            <td class="txt-esquerda">${p.nome}</td>
-                            ${tamanhosExistentes.map(t => `
-                                <td>${p.tamanhos[t] || '-'}</td>
-                            `).join('')}
-                            <td style="font-weight:bold; background:#f9f9f9;">${p.total}</td>
+                            <td>${i.produto_nome}</td>
+                            <td style="text-align:center;">${i.detalhe}</td>
+                            <td style="text-align:center;"><b>${i.qtd}</b></td>
                         </tr>
                     `).join('')}
                 </tbody>
             </table>
 
-            <div class="rodape">
-                <div style="font-size: 13px;">
-                    <p><strong>DESTINO:</strong> ${dados.destino}</p>
-                    <p><strong>DATA DE SAÍDA:</strong> ${new Date().toLocaleString()}</p>
-                    <p><strong>EMISSOR:</strong> ${localStorage.getItem('nome')}</p>
-                </div>
-
-                <div class="assinatura-box">
+            <div class="footer-assinaturas">
+                <div class="campo-assinatura">
                     <div class="linha-assinatura"></div>
-                    <p style="font-size:11px;">RECEBIDO POR (NOME LEGÍVEL)</p>
-                    <div class="linha-assinatura"></div>
-                    <p style="font-size:11px;">MATRÍCULA / RG / DATA</p>
+                    <p>Responsável pela Expedição</p>
                 </div>
+                <div class="campo-assinatura">
+                    <div class="linha-assinatura"></div>
+                    <p>Recebido em: ____/____/____<br>Assinatura e Carimbo</p>
+                </div>
+            </div>
+            
+            <div class="botoes-acao-modal">
+                <button onclick="window.print()" class="btn-imprimir">🖨️ IMPRIMIR</button>
+                <button onclick="this.closest('.modal-romaneio-overlay').remove()" class="btn-fechar">FECHAR</button>
             </div>
         </div>
     `;
-
-    // Estilo do container do Modal (Overlay)
-    Object.assign(modal.style, {
-        position: 'fixed', top: '0', left: '0', width: '100vw', height: '100vh',
-        background: 'rgba(0,0,0,0.9)', zIndex: '9999', padding: '20px',
-        overflowY: 'auto', display: 'flex', justifyContent: 'center'
-    });
-
     document.body.appendChild(modal);
 }
 

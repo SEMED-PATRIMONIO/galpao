@@ -3,6 +3,9 @@ const router = express.Router();
 const db = require('../db');
 const { verificarToken, verificarPerfil } = require('../auth/auth.middleware');
 const XLSX = require('xlsx');
+const pdf = require('html-pdf'); // Instale com: npm install html-pdf
+const path = require('path');
+const fs = require('fs');
 
 // ALTERAR STATUS DO USUÁRIO (Ativar/Inativar)
 router.patch('/usuarios/:id/status', verificarToken, async (req, res) => {
@@ -18,6 +21,29 @@ router.patch('/usuarios/:id/status', verificarToken, async (req, res) => {
     } catch (err) {
         res.status(500).json({ error: "Erro ao alterar status: " + err.message });
     }
+});
+
+router.post('/admin/salvar-romaneio-disco', verificarToken, (req, res) => {
+    const { html, nomeArquivo } = req.body;
+    
+    // O caminho que você solicitou
+    const diretorioDestino = '/var/www/patrimoniosemed/frontend/romaneios';
+    const caminhoCompleto = path.join(diretorioDestino, nomeArquivo);
+
+    // Garante que a pasta existe
+    if (!fs.existsSync(diretorioDestino)){
+        fs.mkdirSync(diretorioDestino, { recursive: true });
+    }
+
+    const options = { format: 'A4', border: '10mm' };
+
+    pdf.create(html, options).toFile(caminhoCompleto, (err, result) => {
+        if (err) {
+            console.error("Erro ao gerar PDF:", err);
+            return res.status(500).json({ error: "Erro ao salvar arquivo." });
+        }
+        res.json({ success: true, path: caminhoCompleto });
+    });
 });
 
 router.get('/locais/lista-simples', verificarToken, async (req, res) => {

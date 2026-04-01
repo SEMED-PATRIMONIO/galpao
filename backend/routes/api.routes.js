@@ -8138,4 +8138,99 @@ router.get('/admin/listar-romaneios', verificarToken, (req, res) => {
     }
 });
 
+// 1. Lista pedidos que tiveram movimentação no período
+router.get('/admin/auditoria/filtrar', verificarToken, async (req, res) => {
+    const { inicio, fim } = req.query; // Datas no formato YYYY-MM-DD
+    try {
+        const sql = `
+            SELECT DISTINCT p.id, p.data_criacao, p.status, p.tipo_pedido, l.nome as destino
+            FROM pedidos p
+            JOIN locais l ON p.local_destino_id = l.id
+            LEFT JOIN log_status_pedidos log ON p.id = log.pedido_id
+            WHERE (p.data_criacao BETWEEN $1 AND $2)
+               OR (log.data_hora BETWEEN $1 AND $2)
+            ORDER BY p.id DESC`;
+        
+        const { rows } = await db.query(sql, [inicio + ' 00:00:00', fim + ' 23:59:59']);
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 2. Busca o Ciclo de Vida completo de um pedido
+router.get('/admin/auditoria/pedido/:id/fluxo', verificarToken, async (req, res) => {
+    const { id } = req.params;
+    try {
+        // Dados mestre do pedido
+        const pedido = await db.query(`
+            SELECT p.*, u.nome as solicitante, l.nome as destino
+            FROM pedidos p
+            JOIN locais l ON p.local_destino_id = l.id
+            JOIN usuarios u ON p.usuario_origem_id = u.id
+            WHERE p.id = $1`, [id]);
+
+        // Linha do tempo (Logs)
+        const logs = await db.query(`
+            SELECT log.*, u.nome as executor
+            FROM log_status_pedidos log
+            JOIN usuarios u ON log.usuario_id = u.id
+            WHERE log.pedido_id = $1
+            ORDER BY log.data_hora ASC`, [id]);
+
+        res.json({ info: pedido.rows[0], historico: logs.rows });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/admin/relatorio/exportar-fluxo', verificarToken, async (req, res) => {
+    const { dados } = req.body;
+    
+    const html = `
+        <style>
+            @page { size: A4 landscape; margin: 1cm; }
+            body { font-family: sans-serif; font-size: 11px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+            th { background-color: #f2f2f2; }
+            .cabecalho { text-align: center; border-bottom: 2px solid #000; margin-bottom: 20px; }
+        </style>
+        <div class="cabecalho">
+            <h1>RELATÓRIO DE RASTREABILIDADE - PEDIDO #${dados.info.id}</h1>
+            <p>Destino: ${dados.info.destino} | Tipo: ${dados.info.tipo_pedido}</p>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>DATA/HORA</th>
+                    <th>STATUS ANTERIOR</th>
+                    <th>STATUS NOVO</th>
+                    <th>EXECUTADO POR</th>
+                    <th>OBSERVAÇÃO / AÇÃO</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${dados.historico.map(log => `
+                    <tr>
+                        <td>${new Date(log.data_hora).toLocaleString('pt-BR')}</td>
+                        <td>${log.status_anterior || 'INÍCIO'}</td>
+                        <td><b>${log.status_novo}</b></td>
+                        <td>${log.executor}</td>
+                        <td>${log.observacao || ''}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
+
+    const options = { orientation: 'landscape', format: 'A4' };
+
+    pdf.create(html, options).toBuffer((err, buffer) => {
+        if (err) return res.status(500).json({ error: "Erro ao gerar PDF" });
+        res.type('pdf');
+        res.send(buffer);
+    });
+});
+
 module.exports = router;

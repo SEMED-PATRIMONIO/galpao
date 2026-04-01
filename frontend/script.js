@@ -559,7 +559,10 @@ function abrirSubmenuVitrificado(titulo) {
             <button class="btn-grande btn-vidro" onclick="telaRelatorioLogStatus()">
                 <i>🕵️</i><span>AUDITORIA DE MOVIMENTAÇÕES</span>
             </button>
-            <button onclick="telaVisualizarRomaneios()" class="btn-vidro" style="background:#3b82f6;">
+            <button onclick="telaAuditoriaPedidos()" class="btn-grande btn-vidro">
+                🔍 HISTÓRICO
+            </button>
+            <button onclick="telaVisualizarRomaneios()" class="btn-grande btn-vidro">
                 📂 ARQUIVO DE ROMANEIOS
             </button>
             <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaRelatorioPedidosGeral()">
@@ -19730,6 +19733,117 @@ function carregarPreviewPDF(nomeArquivo) {
     viewer.innerHTML = `
         <iframe src="romaneios/${nomeArquivo}" style="width:100%; height:100%; border:none;" title="Visualizador de PDF"></iframe>
     `;
+}
+
+async function telaAuditoriaPedidos() {
+    const container = document.getElementById('app-content');
+    container.innerHTML = `
+        <div style="display:flex; flex-direction:column; height: 100vh; color:white;">
+            <div style="padding:15px; background:rgba(0,0,0,0.3); display:flex; align-items:center; gap:20px;">
+                <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                <h3 style="margin:0;">🔍 RASTREABILIDADE E FLUXO DE PEDIDOS</h3>
+            </div>
+
+            <div style="display:flex; flex:1; overflow:hidden;">
+                <div style="width:400px; background:rgba(255,255,255,0.05); border-right:1px solid rgba(255,255,255,0.1); padding:20px; overflow-y:auto;">
+                    <div style="margin-bottom:20px; background:rgba(0,0,0,0.2); padding:15px; border-radius:10px;">
+                        <label style="font-size:0.8rem; color:gray;">PERÍODO:</label>
+                        <input type="date" id="audit-inicio" class="select-vidro" style="width:100%; margin:5px 0;">
+                        <input type="date" id="audit-fim" class="select-vidro" style="width:100%; margin:5px 0;">
+                        <button onclick="buscarAuditoria()" class="btn-confirmar-v2" style="width:100%; margin-top:10px;">PESQUISAR</button>
+                    </div>
+                    <div id="lista-pedidos-auditoria">
+                        <p style="text-align:center; color:gray; margin-top:50px;">Selecione um período acima.</p>
+                    </div>
+                </div>
+
+                <div id="detalhe-fluxo-pedido" style="flex:1; padding:30px; overflow-y:auto; background:rgba(0,0,0,0.1);">
+                    <div style="text-align:center; margin-top:100px; opacity:0.3;">
+                        <span style="font-size:5rem;">🕵️‍♂️</span>
+                        <p>Selecione um pedido para investigar o fluxo completo</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+async function buscarAuditoria() {
+    const inicio = document.getElementById('audit-inicio').value;
+    const fim = document.getElementById('audit-fim').value;
+    if(!inicio || !fim) return notificar("Defina o período!", "erro");
+
+    const lista = document.getElementById('lista-pedidos-auditoria');
+    lista.innerHTML = '<div class="spinner"></div>';
+
+    try {
+        const res = await fetch(`${API_URL}/admin/auditoria/filtrar?inicio=${inicio}&fim=${fim}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const dados = await res.json();
+
+        lista.innerHTML = dados.map(p => `
+            <div class="card-arquivo-pdf" onclick="visualizarFluxoPedido(${p.id})" style="margin-bottom:8px; padding:12px;">
+                <div style="display:flex; justify-content:space-between;">
+                    <strong style="color:#fbbf24;">#${p.id}</strong>
+                    <span style="font-size:0.7rem; background:rgba(255,255,255,0.1); padding:2px 6px; border-radius:4px;">${p.status}</span>
+                </div>
+                <div style="font-size:0.8rem; margin-top:5px;">${p.destino}</div>
+                <small style="color:gray;">${new Date(p.data_criacao).toLocaleDateString('pt-BR')}</small>
+            </div>
+        `).join('');
+    } catch (err) { lista.innerHTML = "Erro ao buscar."; }
+}
+
+async function visualizarFluxoPedido(id) {
+    const painel = document.getElementById('detalhe-fluxo-pedido');
+    painel.innerHTML = '<div class="spinner"></div>';
+
+    try {
+        const res = await fetch(`${API_URL}/admin/auditoria/pedido/${id}/fluxo`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const dados = await res.json();
+
+        painel.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:30px;">
+                <div>
+                    <h2 style="margin:0;">FLUXO DO PEDIDO #${dados.info.id}</h2>
+                    <p style="color:#60a5fa;">Solicitante: ${dados.info.solicitante} | Destino: ${dados.info.destino}</p>
+                </div>
+                <button onclick='exportarFluxoPDF(${JSON.stringify(dados)})' class="btn-vidro" style="background:#10b981;">📄 EXPORTAR PAISAGEM (A4)</button>
+            </div>
+
+            <div class="timeline-container">
+                ${dados.historico.map(log => `
+                    <div style="margin-bottom:20px; border-left:3px solid #fbbf24; padding-left:15px; position:relative;">
+                        <div style="font-weight:bold; color:#fbbf24;">${log.status_novo}</div>
+                        <div style="font-size:0.85rem; color:white;">${log.observacao || 'Sem observação'}</div>
+                        <small style="color:gray;">Por: ${log.executor} em ${new Date(log.data_hora).toLocaleString('pt-BR')}</small>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    } catch (err) { painel.innerHTML = "Erro ao carregar fluxo."; }
+}
+
+async function exportarFluxoPDF(dados) {
+    try {
+        const res = await fetch(`${API_URL}/admin/relatorio/exportar-fluxo`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ dados })
+        });
+        
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Fluxo_Pedido_${dados.info.id}.pdf`;
+        a.click();
+    } catch (err) {
+        notificar("Erro ao exportar PDF", "erro");
+    }
 }
 
 window.telaVisualizarEstoque = telaVisualizarEstoque;

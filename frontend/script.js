@@ -106,7 +106,7 @@ document.getElementById('form-login')?.addEventListener('submit', async (e) => {
             TOKEN = data.token;
             carregarDashboard();
         } else {
-            notificar(data.message || 'Usuário ou senha inválidos', 'erro');
+            notificar(data.message || 'Usuário e/ou senha inválidos', 'erro');
         }
     } catch (err) {
         console.error("Erro na conexão:", err);
@@ -1123,7 +1123,7 @@ async function finalizarAutorizacao(pedidoId) {
         const resultado = await res.json();
 
         if (resultado.success) {
-            alert("✅ Pedido Autorizado! O estoque foi atualizado e o histórico registrado.");
+            notificar("✅ Pedido Autorizado! O estoque foi atualizado e o histórico registrado.");
             document.getElementById('modal-analise').style.display = 'none';
             // Recarrega a fila de pedidos ou dashboard
             if (typeof carregarFilaPedidos === 'function') telaAdminGerenciarSolicitacoes();
@@ -1131,7 +1131,7 @@ async function finalizarAutorizacao(pedidoId) {
             throw new Error(resultado.error);
         }
     } catch (err) {
-        alert("Erro ao finalizar: " + err.message);
+        notificar("Erro ao finalizar: " + err.message);
     }
 }
 
@@ -1659,7 +1659,7 @@ async function confirmarRecebimentoantigo(pedidoId) {
 // Função para Estoque definir volumes e liberar 
 async function liberarParaLogistica(pedidoId) {
     const volumes = document.getElementById(`volumes_${pedidoId}`).value;
-    if (!volumes) return notificar("INFORME A QTD DE VOLUMES");
+    if (!volumes) return notificar("INFORME A QUANTIDADE DE VOLUMES");
 
     const res = await fetch(`${API_URL}/pedidos/${pedidoId}/status`, {
         method: 'PATCH',
@@ -1671,7 +1671,7 @@ async function liberarParaLogistica(pedidoId) {
     });
 
     if (res.ok) {
-        notificar("PEDIDO LIBERADO PARA LOGÍSTICA");
+        notificar("PEDIDO LIBERADO PARA ENTREGA");
         carregarDashboard();
     }
 }
@@ -2026,7 +2026,7 @@ async function salvarUsuario() {
     });
 
     if (res.ok) {
-        notificar("UTILIZADOR CRIADO!");
+        notificar("LOGIN CRIADO!");
         telaGerenciarUsuarios();
     }
 }
@@ -2050,7 +2050,7 @@ async function alternarStatusUsuario(id, statusAtual) {
         if (res.ok) {
             telaGerenciarUsuarios(); // Recarrega a listagem
         } else {
-            alert("Erro ao alterar status no servidor.");
+            notificar("Erro ao alterar status no servidor.");
         }
     } catch (err) {
         console.error("Erro status:", err);
@@ -3031,7 +3031,7 @@ async function processarEntradaEstoque() {
     const usuarioId = localStorage.getItem('usuario_id'); 
 
     if (!usuarioId) {
-        alert("⚠️ Erro: Sessão de usuário não encontrada. Por favor, faça login novamente.");
+        notificar("⚠️ Erro: Sessão de usuário não encontrada. Por favor, faça login novamente.");
         return;
     }
 
@@ -3066,7 +3066,7 @@ async function processarEntradaEstoque() {
     const itensParaEnviar = Object.values(mapaItens);
 
     if (itensParaEnviar.length === 0) {
-        alert("⚠️ Informe ao menos uma quantidade válida para realizar a entrada.");
+        notificar("⚠️ Informe ao menos uma quantidade válida para realizar a entrada.");
         return;
     }
 
@@ -3093,13 +3093,13 @@ async function processarEntradaEstoque() {
         const resultado = await res.json();
         
         if (resultado.success) {
-            alert("✅ Estoque atualizado com sucesso!");
+            notificar("✅ Estoque atualizado com sucesso!");
             carregarDashboard(); // Ou carregarConsultaEstoque() se preferir voltar para a lista
         } else {
             throw new Error(resultado.error || "Erro desconhecido no servidor");
         }
     } catch (err) {
-        alert("❌ Erro na operação: " + err.message);
+        notificar("❌ Erro na operação: " + err.message);
     } finally {
         btn.disabled = false;
         btn.innerHTML = originalText;
@@ -9311,7 +9311,7 @@ async function efetivarRecebimento(remessaId, pedidoId, tipoPedido) {
     if (tipoPedido === 'INFRA_PATRIMONIO') {
         const selectSetor = document.getElementById(`setor-select-${remessaId}`);
         setorId = selectSetor ? selectSetor.value : null;
-        if (!setorId) return alert("⚠️ Selecione o SETOR antes de confirmar.");
+        if (!setorId) return notificar("⚠️ Selecione o SETOR antes de confirmar.");
     }
 
     if (!confirm("Confirmar o recebimento físico desta carga?")) return;
@@ -9443,7 +9443,7 @@ async function confirmarRecebimentoRemessa(remessaId, pedidoId, tipoPedido) {
     // Se for Patrimônio, valida se o setor foi escolhido
     if (tipoPedido === 'INFRA_PATRIMONIO') {
         setorId = document.getElementById(`setor-remessa-${remessaId}`).value;
-        if (!setorId) return alert("⚠️ Por favor, selecione o setor que receberá o patrimônio.");
+        if (!setorId) return notificar("⚠️ Por favor, selecione o setor que receberá o patrimônio.");
     }
 
     if (!confirm("Confirmar o recebimento físico desta carga?")) return;
@@ -12965,7 +12965,7 @@ async function telaPatrimonioSolicitar() {
             const produtoNome = sel.options[sel.selectedIndex].dataset.nome;
             const produtoId = sel.value;
 
-            if (!produtoId) return alert("Selecione um produto.");
+            if (!produtoId) return notificar("Selecione um produto.");
 
             itensSolicitados.push({ produto_id: produtoId, nome: produtoNome, quantidade: qtd });
             renderizarListaPatrimonio();
@@ -12982,7 +12982,7 @@ async function telaPatrimonioSolicitar() {
         };
 
         window.enviarSolicitacaoPatrimonio = async () => {
-            if (itensSolicitados.length === 0) return alert("Adicione ao menos um item.");
+            if (itensSolicitados.length === 0) return notificar("Adicione ao menos um item.");
             
             const payload = {
                 local_destino_id: USUARIO.local_id, // Se for Escola, o destino é ela mesma
@@ -12997,7 +12997,7 @@ async function telaPatrimonioSolicitar() {
             });
 
             if (res.ok) {
-                alert("✅ Solicitação enviada com sucesso!");
+                notificar("✅ Solicitação enviada com sucesso!");
                 telaMenuPatrimonio();
             }
         };
@@ -13080,7 +13080,7 @@ async function telaPatrimonioEntrada() {
                 setor_id: null // Pode ser definido depois
             };
 
-            if (!data.produto_id || data.quantidade < 1) return alert("Preencha o produto e a quantidade.");
+            if (!data.produto_id || data.quantidade < 1) return notificar("Preencha o produto e a quantidade.");
 
             const res = await fetch(`${API_URL}/patrimonio/entrada`, {
                 method: 'POST',
@@ -13089,7 +13089,7 @@ async function telaPatrimonioEntrada() {
             });
 
             if (res.ok) {
-                alert("✅ Itens registrados individualmente no patrimônio!");
+                notificar("✅ Itens registrados individualmente no patrimônio!");
                 telaMenuPatrimonio();
             }
         };
@@ -14575,7 +14575,7 @@ window.detalharPatrimonio = async function(id) {
         const contentType = res.headers.get("content-type");
         if (!res.ok || !contentType || !contentType.includes("application/json")) {
             console.error("O servidor não retornou um JSON válido. Verifique a rota no backend.");
-            return alert("Erro ao carregar detalhes: Rota não encontrada ou erro no servidor.");
+            return notificar("Erro ao carregar detalhes: Rota não encontrada ou erro no servidor.");
         }
 
         const item = await res.json();
@@ -14756,7 +14756,7 @@ async function telaPatrimonioRegistarItem() {
 
     } catch (err) {
         console.error(err);
-        alert("Erro ao carregar dados para registo.");
+        notificar("Erro ao carregar dados para registo.");
     }
 
     // Função interna para processar o envio
@@ -14769,7 +14769,7 @@ async function telaPatrimonioRegistarItem() {
         };
 
         if (!payload.produto_id || !payload.setor_id) {
-            return alert("Por favor, selecione o produto e o setor.");
+            return notificar("Por favor, selecione o produto e o setor.");
         }
 
         const res = await fetch(`${API_URL}/patrimonio/itens`, {
@@ -14783,7 +14783,7 @@ async function telaPatrimonioRegistarItem() {
             document.getElementById('modal-registo-item').remove();
         } else {
             const erro = await res.json();
-            alert("Erro: " + erro.error);
+            notificar("Erro: " + erro.error);
         }
     };
 }
@@ -14820,7 +14820,7 @@ async function telaGerenciarSetores() {
 
     window.salvarSetor = async () => {
         const nome = document.getElementById('nome-setor').value;
-        if (!nome) return alert("Digite o nome do setor.");
+        if (!nome) return notificar("Digite o nome do setor.");
 
         const res = await fetch(`${API_URL}/patrimonio/setores`, {
             method: 'POST',
@@ -14834,7 +14834,7 @@ async function telaGerenciarSetores() {
             await atualizarListaSetores(); 
         } else {
             const erro = await res.json();
-            alert(erro.error);
+            notificar(erro.error);
         }
     };
 }
@@ -14871,7 +14871,7 @@ async function telaGerenciarSetores2() {
 
     window.salvarSetor = async () => {
         const nome = document.getElementById('nome-setor').value;
-        if (!nome) return alert("Digite o nome do setor.");
+        if (!nome) return notificar("Digite o nome do setor.");
 
         const res = await fetch(`${API_URL}/patrimonio/setores`, {
             method: 'POST',
@@ -14885,7 +14885,7 @@ async function telaGerenciarSetores2() {
             await atualizarListaSetores(); 
         } else {
             const erro = await res.json();
-            alert(erro.error);
+            notificar(erro.error);
         }
     };
 }
@@ -14894,7 +14894,7 @@ async function telaGerenciarSetores2() {
 window.salvarSetor = async () => {
     const input = document.getElementById('nome-setor');
     const nome = input.value.trim();
-    if (!nome) return alert("Por favor, digite o nome do setor.");
+    if (!nome) return notificar("Por favor, digite o nome do setor.");
 
     try {
         const res = await fetch(`${API_URL}/patrimonio/setores`, {
@@ -14914,11 +14914,11 @@ window.salvarSetor = async () => {
             // Se você tiver a função notificar, use-a aqui
             if (typeof notificar === "function") notificar("Setor cadastrado!", "sucesso");
         } else {
-            alert(dados.error || "Erro ao salvar.");
+            notificar(dados.error || "Erro ao salvar.");
         }
     } catch (err) {
         console.error("Erro na requisição:", err);
-        alert("Erro de conexão com o servidor.");
+        notificar("Erro de conexão com o servidor.");
     }
 };
 
@@ -15025,7 +15025,7 @@ window.telaEditarItemPatrimonio = async function(id) {
         `;
         document.body.appendChild(modal);
     } catch (err) {
-        alert("Erro ao abrir edição: " + err.message);
+        notificar("Erro ao abrir edição: " + err.message);
     }
 };
 
@@ -15413,8 +15413,8 @@ async function salvarSetorPatrimonioIndependente() {
     const input = document.getElementById('nome-setor-patrimonio');
     const nome = input.value.trim();
 
-    if (!nome) return alert("Digite o nome do setor.");
-    if (!TOKEN) return alert("Sua sessão expirou. Faça login novamente.");
+    if (!nome) return notificar("Digite o nome do setor.");
+    if (!TOKEN) return notificar("Sua sessão expirou. Faça login novamente.");
 
     try {
         const res = await fetch(`${API_URL}/modulo-patrimonio/setores/novo`, {
@@ -15430,10 +15430,10 @@ async function salvarSetorPatrimonioIndependente() {
 
         if (res.ok) {
             input.value = '';
-            alert("Setor cadastrado com sucesso!");
+            notificar("Setor cadastrado com sucesso!");
             await atualizarListaSetoresPatrimonio(); // Chama a lista isolada
         } else {
-            alert(data.error || "Erro ao salvar.");
+            notificar(data.error || "Erro ao salvar.");
         }
     } catch (err) {
         console.error("Erro na requisição isolada:", err);
@@ -15501,7 +15501,7 @@ async function telaGerenciarSetoresPatrimonio() {
 
 async function executarSalvarSetor() {
     const nome = document.getElementById('novo-nome-setor').value;
-    if (!nome) return alert("Digite o nome.");
+    if (!nome) return notificar("Digite o nome.");
 
     const res = await fetch(`${API_URL}/patrimonio/setores/registrar`, {
         method: 'POST',
@@ -15517,7 +15517,7 @@ async function executarSalvarSetor() {
         await atualizarListaSetoresExclusiva();
     } else {
         const erro = await res.json();
-        alert(erro.error);
+        notificar(erro.error);
     }
 }
 
@@ -15823,10 +15823,10 @@ async function salvarAlteracaoEstado(id) {
                 const nomeSetor = document.getElementById('nome-setor-titulo').innerText.replace('ITENS EM: ', '');
                 await carregarItensPorSetor(setorId, nomeSetor);
             }
-            alert("Estado atualizado com sucesso!");
+            notificar("Estado atualizado com sucesso!");
         }
     } catch (err) {
-        alert("Erro ao salvar alteração.");
+        notificar("Erro ao salvar alteração.");
     }
 }
 
@@ -15834,7 +15834,7 @@ window.prepararEdicaoItem = () => {
     if (window.itemSelecionadoId) {
         telaEditarItemPatrimonio(window.itemSelecionadoId);
     } else {
-        alert("Por favor, selecione um item na lista primeiro clicando sobre ele.");
+        notificar("Por favor, selecione um item na lista primeiro clicando sobre ele.");
     }
 };
 
@@ -16159,11 +16159,11 @@ async function processarRespostaTransferencia(patrimonio_id, decisao) {
     const motivo_recusa = document.getElementById('motivo-recusa-transf')?.value;
 
     if (decisao === 'ACEITAR' && !setor_id) {
-        alert("Por favor, selecione o setor de destino.");
+        notificar("Por favor, selecione o setor de destino.");
         return;
     }
     if (decisao === 'RECUSAR' && !motivo_recusa.trim()) {
-        alert("Por favor, informe o motivo da recusa.");
+        notificar("Por favor, informe o motivo da recusa.");
         return;
     }
 
@@ -16234,13 +16234,13 @@ async function abrirModalTransferenciaExterna() {
         document.body.appendChild(modal);
     } catch (err) {
         console.error(err);
-        alert("Erro ao carregar locais. Verifique a conexão com o servidor.");
+        notificar("Erro ao carregar locais. Verifique a conexão com o servidor.");
     }
 }
 
 async function executarEnvioExterno() {
     const localDestinoId = document.getElementById('select-unidade-destino').value;
-    if (!localDestinoId) return alert("Selecione um destino!");
+    if (!localDestinoId) return notificar("Selecione um destino!");
 
     try {
         const res = await fetch(`${API_URL}/patrimonio/executar-transferencia-externa`, {
@@ -16256,7 +16256,7 @@ async function executarEnvioExterno() {
         });
 
         if (res.ok) {
-            alert("Bem enviado com sucesso! Aguardando aceite do destino.");
+            notificar("Item enviado com sucesso! Aguardando aceite do destino.");
             document.getElementById('modal-transferencia-externa').remove();
             
             // Recarrega a tabela para mostrar o item com opacidade e tag [EM TRÂNSITO]
@@ -16480,7 +16480,7 @@ async function enviarResposta(patrimonio_id, decisao) {
     const setor_id = document.getElementById(`sel-setor-${patrimonio_id}`)?.value;
     const motivo_recusa = document.getElementById(`motivo-${patrimonio_id}`)?.value;
 
-    if (decisao === 'RECUSAR' && !motivo_recusa) return alert("Motivo da recusa é obrigatório!");
+    if (decisao === 'RECUSAR' && !motivo_recusa) return notificar("Motivo da recusa é obrigatório!");
 
     const res = await fetch(`${API_URL}/patrimonio/responder-transferencia`, {
         method: 'POST',
@@ -16489,7 +16489,7 @@ async function enviarResposta(patrimonio_id, decisao) {
     });
 
     if (res.ok) {
-        alert("Processado com sucesso!");
+        notificar("Processado com sucesso!");
         abrirModalPendenciasTransferencia(); // Recarrega a lista
         verificarAlertasPatrimonio(); // Atualiza a esfera no dashboard
     }
@@ -16889,7 +16889,7 @@ window.telaPendentesInfra = async function() {
     
     if (!container) {
         console.error("ERRO CRÍTICO: Nenhum container (app-content ou app) foi encontrado no HTML!");
-        return alert("Erro interno: Container de tela não encontrado.");
+        return notificar("Erro interno: Container de tela não encontrado.");
     }
 
     // Agora que garantimos que o container existe, limpamos e desenhamos a tela
@@ -17007,11 +17007,11 @@ window.executarTransferenciaFinal = async function(destId, qtd) {
         });
 
         if(res.ok) {
-            alert("Transferência realizada com sucesso!");
+            notificar("Transferência realizada com sucesso!");
             carregarDashboard();
         }
     } catch (err) {
-        alert("Erro ao transferir: " + err.message);
+        notificar("Erro ao transferir: " + err.message);
     }
 };
 
@@ -17150,7 +17150,7 @@ function confirmarGrade(id, nome, tipo) {
     });
 
     if (totalGeral === 0) {
-        alert("Insira pelo menos uma quantidade.");
+        notificar("Não é permitido quantidade zerada");
         return;
     }
 
@@ -17221,7 +17221,7 @@ function removerItem(index) {
 }
 
 async function finalizarEntradaEstoque() {
-    if (carrinhoEntrada.length === 0) return alert("O resumo está vazio!");
+    if (carrinhoEntrada.length === 0) return notificar("O resumo está vazio!");
 
     const payload = {
         itens: carrinhoEntrada,
@@ -17238,16 +17238,16 @@ async function finalizarEntradaEstoque() {
         const result = await response.json();
 
         if (result.success) {
-            alert("🔥 Level Up! Estoque atualizado com sucesso.");
+            notificar("Estoque atualizado com sucesso.");
             carrinhoEntrada = [];
             renderizarResumoLateral();
             // Opcional: recarregar listagem principal aqui
         } else {
-            alert("Erro: " + result.error);
+            notificar("Erro: " + result.error);
         }
     } catch (err) {
         console.error(err);
-        alert("Falha na comunicação com o servidor.");
+        notificar("Falha na comunicação com o servidor.");
     }
 }
 
@@ -17387,7 +17387,7 @@ function adicionarMaterial(id, nome) {
     const qtd = parseInt(input.value);
 
     if (!qtd || qtd <= 0) {
-        alert("Informe uma quantidade válida.");
+        notificar("Informe uma quantidade válida.");
         return;
     }
 
@@ -17447,7 +17447,7 @@ async function filtrarHistoricoPorPeriodo() {
     const inicio = document.getElementById('data-inicio').value;
     const fim = document.getElementById('data-fim').value;
     
-    if (!inicio || !fim) return alert("Selecione o período completo.");
+    if (!inicio || !fim) return notificar("Selecione o período completo.");
 
     // Chamada para a API passando as datas como parâmetros
     const response = await fetch(`/api/estoque/historico-periodo?inicio=${inicio}&fim=${fim}`);
@@ -17529,7 +17529,7 @@ async function compartilharRelatorio() {
     } else {
         // Fallback para PC caso não tenha suporte: copia para o clipboard
         navigator.clipboard.writeText(textoShare);
-        alert("Resumo copiado para a área de transferência!");
+        notificar("Resumo copiado para a área de transferência!");
     }
 }
 
@@ -17935,7 +17935,7 @@ function validarEstoqueMax(input) {
     const max = parseInt(input.dataset.max);
     const atual = parseInt(input.value) || 0;
     if (atual > max) {
-        alert(`⚠️ Quantidade insuficiente! Estoque disponível: ${max}`);
+        notificar(`⚠️ Quantidade insuficiente! Estoque disponível: ${max}`);
         input.value = 0;
         input.focus();
     }
@@ -17946,7 +17946,7 @@ async function processarSaidaPedido() {
     const usuarioId = localStorage.getItem('usuario_id');
 
     if (!localDestinoId) {
-        alert("⚠️ Selecione o Local de Destino!");
+        notificar("⚠️ Selecione o Local de Destino!");
         return;
     }
 
@@ -17978,7 +17978,7 @@ async function processarSaidaPedido() {
 
     const itensParaEnviar = Object.values(mapaItens);
     if (itensParaEnviar.length === 0) {
-        alert("⚠️ Informe as quantidades para saída.");
+        notificar("⚠️ Informe as quantidades para saída.");
         return;
     }
 
@@ -18001,13 +18001,13 @@ async function processarSaidaPedido() {
         const resultado = await res.json();
 
         if (res.ok) {
-            alert("✅ Pedido APROVADO! Estoque atualizado e histórico registrado.");
+            notificar("✅ Pedido APROVADO! Estoque atualizado e histórico registrado.");
             carregarDashboard();
         } else {
             throw new Error(resultado.error);
         }
     } catch (err) {
-        alert("❌ Erro no Pedido: " + err.message);
+        notificar("❌ Erro no Pedido: " + err.message);
     }
 }
 

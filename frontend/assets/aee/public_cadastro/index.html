@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AEE - Técnico</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <style>
+        :root { --blue: #004587; --glass: rgba(255, 255, 255, 0.85); }
+        body { 
+            font-family: 'Segoe UI', sans-serif; margin: 0; background: linear-gradient(135deg, #004587 0%, #00a8e8 100%);
+            min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 15px;
+        }
+
+        .glass-card { 
+            background: var(--glass); backdrop-filter: blur(10px); border-radius: 25px; 
+            padding: 25px; width: 100%; max-width: 400px; box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+            border: 1px solid rgba(255,255,255,0.3);
+        }
+
+        .menu-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
+        .menu-btn { 
+            background: white; border-radius: 20px; padding: 20px; text-align: center;
+            border: none; color: var(--blue); font-weight: bold; cursor: pointer;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+        .menu-btn i { font-size: 2rem; display: block; margin-bottom: 10px; }
+
+        .item-aluno {
+            background: white; border-radius: 15px; padding: 12px; margin-bottom: 10px;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+
+        .btn-acao { background: var(--blue); color: white; border: none; padding: 12px; border-radius: 12px; width: 100%; font-weight: bold; margin-top: 10px; }
+        .hidden { display: none !important; }
+        .form-control { width: 100%; padding: 12px; margin: 8px 0; border-radius: 10px; border: 1px solid #ddd; box-sizing: border-box; }
+    </style>
+</head>
+<body>
+
+    <div id="tela-login-equipe" class="full-screen-center">
+        <div class="glass-card" style="max-width: 320px;">
+            <div class="header">
+                <i class="bi bi-shield-lock-fill"></i>
+                <h1>Acesso Restrito</h1>
+                <p>Identifique-se para cadastrar</p>
+            </div>
+            <input type="text" id="equipe-login" class="form-control mb-3" placeholder="Seu login">
+            <input type="password" id="equipe-senha" class="form-control mb-3" placeholder="Sua senha">
+            <button class="btn-next" onclick="loginEquipe()">Acessar Sistema</button>
+        </div>
+    </div>
+
+    <div id="view-menu" class="glass-card hidden">
+        <div style="text-align: center;">
+            <p>Olá, <b id="nome-tecnico">--</b></p>
+            <h3>O que deseja fazer?</h3>
+        </div>
+        <div class="menu-grid">
+            <button class="menu-btn" onclick="abrirFormulario()">
+                <i class="bi bi-person-plus"></i> Novo Aluno
+            </button>
+            <button class="menu-btn" onclick="listarAlunos()">
+                <i class="bi bi-person-lines-fill"></i> Ver Alunos
+            </button>
+        </div>
+        <button class="btn-acao" style="background: #666; margin-top: 20px;" onclick="location.reload()">Sair</button>
+    </div>
+
+    <div id="view-lista" class="glass-card hidden">
+        <div class="d-flex justify-content-between">
+            <h4>Alunos Cadastrados</h4>
+            <button onclick="voltarMenu()" style="border:none; background:none; color:var(--blue); font-weight:bold;">Voltar</button>
+        </div>
+        <div id="container-lista"></div>
+    </div>
+
+    <div id="view-form" class="glass-card hidden">
+        <h4 id="form-titulo">Novo Cadastro</h4>
+        <input type="hidden" id="edit-id">
+        <label>Nome do Aluno</label>
+        <input type="text" id="f-nome" class="form-control">
+        <label>RA</label>
+        <input type="number" id="f-ra" class="form-control">
+        <label>Escola</label>
+        <select id="f-escola" class="form-control">
+            <option>CAEEQ</option>
+            <option>CEADQ</option>
+            <option>E M ALBERTO PIRRO</opt/ion>
+            <option>E M ALLAN KARDEC</option>
+            <option>E M ANNA PEROBELLI</option>
+            <option>E M CARLOS PEREIRA NETO</option>
+            <option>E M CLEDON CAVALCANTE</option>
+            <option>E M DIVA TEIXEIRA</option>
+            <option>E M DR FRANCISCO M BRANDAO</option>
+            <option>E M ELOI TEIXEIRA</option>
+            <option>E M GILVANEI PEREIRA</option>
+            <option>E M JOAQUIM DE FREITAS</option>
+            <option>E M JOSE ANASTACIO</option>
+            <option>E M JOSE BITTENCOURT</option>
+            <option>E M JOSE DE ANCHIETA</option>
+            <option>E M LEOPOLDO MACHADO</option>
+            <option>E M LUIZ DE CAMOES</option>
+            <option>E M MARIA C P XANCHAO</option>
+            <option>E M METODISTA</option>
+            <option>E M MONTEIRO LOBATO</option>
+            <option>E M NELSON CARNEIRO</option>
+            <option>E M OSCAR WEINSCHENCK</option>
+            <option>E M PASTOR ARSENIO</option>
+            <option>E M PAULO FREIRE</option>
+            <option>E M SANTO EXPEDITO</option>
+            <option>E M SAO JOSE</option>
+            <option>E M SCINTILLA EXEL</option>
+            <option>E M SEBASTIAO VERISSIMO</option>
+            <option>E M TIRADENTES</option>
+            <option>E M UBIRAJARA FERREIRA</option>
+            <option>E M VALCIRA SANTANA</option>
+            <option>E M WALDICK PEREIRA</option>
+            <option>E M WASHINGTON MANOEL</option> 
+        </select>
+        
+        <button class="btn-acao" onclick="salvar()">Salvar Dados</button>
+        <button class="btn-acao" style="background:none; color:var(--blue);" onclick="voltarMenu()">Cancelar</button>
+    </div>
+    <div class="spec-grid">
+        <div class="spec-item">
+            <span><i class="bi bi-activity"></i> Fisioterapia</span>
+            <input type="number" class="carga" data-spec="Fisioterapia" placeholder="0">
+        </div>
+        <div class="spec-item">
+            <span><i class="bi bi-headset"></i> Fonoaudiologia</span>
+            <input type="number" class="carga" data-spec="Fonoaudiologia" placeholder="0">
+        </div>
+        <div class="spec-item">
+            <span><i class="bi bi-brain"></i> Psicologia</span>
+            <input type="number" class="carga" data-spec="Psicologia" placeholder="0">
+        </div>
+        <div class="spec-item">
+            <span><i class="bi bi-puzzle"></i> Terapia Ocupacional</span>
+            <input type="number" class="carga" data-spec="TerapiaOcupacional" placeholder="0">
+        </div>
+        <div class="spec-item">
+            <span><i class="bi bi-person-walking"></i> Psicomotricidade</span>
+            <input type="number" class="carga" data-spec="Psicomotricidade" placeholder="0">
+        </div>
+        <div class="spec-item">
+            <span><i class="bi bi-book"></i> Psicopedagogia</span>
+            <input type="number" class="carga" data-spec="Psicopedagogia" placeholder="0">
+        </div>
+    </div>
+<script>
+    let usuarioLogadoId = null;
+
+    async function loginEquipe() {
+        const login = document.getElementById('equipe-login').value;
+        const senha = document.getElementById('equipe-senha').value;
+
+        const res = await fetch('/api/login-equipe', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ login, senha })
+        });
+
+        if(res.ok) {
+            const data = await res.json();
+            usuarioLogadoId = data.user.id;
+            document.getElementById('tela-login-equipe').classList.add('hidden');
+            // Mostra o formulário de cadastro que já existia
+            document.querySelector('.glass-card:not(#tela-login-equipe)').classList.remove('hidden');
+        } else {
+            alert("Acesso negado. Verifique suas credenciais.");
+        }
+    }
+
+    function mostrarView(id) {
+        ['view-login', 'view-menu', 'view-lista', 'view-form'].forEach(v => document.getElementById(v).classList.add('hidden'));
+        document.getElementById(id).classList.remove('hidden');
+    }
+
+    function voltarMenu() { mostrarView('view-menu'); }
+
+    function abrirFormulario() {
+        document.getElementById('form-titulo').innerText = "Novo Cadastro";
+        document.getElementById('edit-id').value = "";
+        document.getElementById('f-nome').value = "";
+        document.getElementById('f-ra').value = "";
+        mostrarView('view-form');
+    }
+
+    async function listarAlunos() {
+        mostrarView('view-lista');
+        const res = await fetch(`/api/alunos/meus/${user.id}`);
+        const alunos = await res.json();
+        const container = document.getElementById('container-lista');
+        container.innerHTML = "";
+        
+        alunos.forEach(a => {
+            // SÓ MOSTRA O BOTÃO DE EDITAR SE O USUÁRIO FOR O DONO
+            const btnEditar = a.criado_por_usuario_id === user.id ? 
+                `<i class="bi bi-pencil-square" onclick="prepararEdicao(${JSON.stringify(a).replace(/"/g, '&quot;')})" style="color:var(--blue); cursor:pointer;"></i>` : 
+                `<i class="bi bi-lock-fill" style="color:#ccc;" title="Apenas o criador pode alterar"></i>`;
+
+            container.innerHTML += `
+                <div class="item-aluno">
+                    <div>
+                        <b>${a.nome_completo}</b><br>
+                        <small>${a.escola}</small>
+                    </div>
+                    ${btnEditar}
+                </div>
+            `;
+        });
+    }
+
+    function prepararEdicao(aluno) {
+        document.getElementById('form-titulo').innerText = "Editar Registro";
+        document.getElementById('edit-id').value = aluno.id;
+        document.getElementById('f-nome').value = aluno.nome_completo;
+        document.getElementById('f-ra').value = aluno.ra;
+        document.getElementById('f-escola').value = aluno.escola;
+        mostrarView('view-form');
+    }
+
+    async function salvar() {
+        const id = document.getElementById('edit-id').value;
+        const payload = {
+            nome: document.getElementById('f-nome').value,
+            ra: document.getElementById('f-ra').value,
+            escola: document.getElementById('f-escola').value,
+            usuario_id: usuarioLogadoId,
+            especialidades: [], // Mantenha a lógica de especialidades que já tínhamos
+            carga: {}
+        };
+
+        const url = id ? `/api/alunos/${id}` : '/api/alunos';
+        const method = id ? 'PUT' : 'POST';
+
+        const res = await fetch(url, {
+            method: method,
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+
+        if(res.ok) {
+            alert("Sucesso!");
+            voltarMenu();
+        } else {
+            const err = await res.json();
+            alert(err.error || "Erro ao salvar.");
+        }
+    }
+</script>
+</body>
+</html>

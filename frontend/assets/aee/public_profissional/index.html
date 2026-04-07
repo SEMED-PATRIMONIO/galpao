@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AEE - Portal Saúde</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <style> /* ... (Estilos de vidro azul e branco) ... */ </style>
+</head>
+<body>
+    <div id="view-login" class="glass-card">
+        <h3>Acesso Profissional</h3>
+        <input type="text" id="l-user" class="form-control" placeholder="Login">
+        <input type="password" id="l-pass" class="form-control" placeholder="Senha">
+        <button class="btn-acao" onclick="login()">Entrar</button>
+    </div>
+
+    <div id="view-main" class="hidden">
+        <div class="header">
+            <h4 id="nome-p">Dr(a). --</h4>
+            <span class="badge bg-light text-primary" id="esp-p">--</span>
+        </div>
+        
+        <div class="menu-grid">
+            <button class="menu-btn" onclick="mostrarAlunos()">
+                <i class="bi bi-people"></i> Meus Alunos
+            </button>
+            <button class="menu-btn" onclick="abrirAgenda()">
+                <i class="bi bi-calendar-event"></i> Agendar
+            </button>
+        </div>
+    </div>
+
+    <div id="view-agendar" class="glass-card hidden">
+        <h4>Novo Agendamento</h4>
+        <select id="sel-aluno" class="form-control"></select>
+        <input type="datetime-local" id="data-agenda" class="form-control">
+        <textarea id="obs-agenda" class="form-control" placeholder="Observações/Orientações"></textarea>
+        <button class="btn-acao" onclick="salvarAgenda()">Confirmar Agendamento</button>
+        <button onclick="voltar()" class="btn-acao" style="background:none; color:#666;">Voltar</button>
+    </div>
+</body>
+<script>
+    let prof = null;
+    // Lógica de login, troca de senha obrigatória (BCrypt) e busca de alunos por especialidade...
+</script>
+</html>

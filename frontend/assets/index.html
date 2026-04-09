@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AEE Digital - Portal Técnico</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <style>
+        :root { 
+            --blue: #004587; 
+            --light-blue: #00a8e8;
+            --glass: rgba(255, 255, 255, 0.9); 
+            --shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+        }
+
+        body { 
+            font-family: 'Segoe UI', Roboto, sans-serif; 
+            margin: 0; 
+            background: linear-gradient(135deg, var(--blue) 0%, var(--light-blue) 100%);
+            min-height: 100vh; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            padding: 10px;
+            box-sizing: border-box;
+        }
+
+        .glass-card { 
+            background: var(--glass); 
+            backdrop-filter: blur(12px); 
+            -webkit-backdrop-filter: blur(12px);
+            border-radius: 25px; 
+            padding: 25px; 
+            width: 100%; 
+            max-width: 450px; 
+            box-shadow: var(--shadow);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            margin-top: 10px;
+            box-sizing: border-box;
+            transition: all 0.3s ease;
+        }
+
+        .header { text-align: center; margin-bottom: 20px; color: var(--blue); }
+        .header i { font-size: 3rem; color: var(--blue); }
+        .header h1 { font-size: 1.5rem; margin: 10px 0 5px; }
+
+        .menu-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 20px; }
+        .menu-btn { 
+            background: white; border-radius: 18px; padding: 18px; text-align: center;
+            border: none; color: var(--blue); font-weight: bold; cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05); transition: transform 0.2s;
+        }
+        .menu-btn:active { transform: scale(0.95); }
+        .menu-btn i { font-size: 1.8rem; display: block; margin-bottom: 8px; }
+
+        .item-aluno {
+            background: white; border-radius: 15px; padding: 15px; margin-bottom: 12px;
+            display: flex; justify-content: space-between; align-items: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: 600; color: #444; font-size: 0.9rem; }
+        
+        .form-control { 
+            width: 100%; padding: 12px; border-radius: 12px; border: 1px solid #ddd; 
+            box-sizing: border-box; font-size: 1rem; outline: none; transition: border 0.3s;
+        }
+        .form-control:focus { border-color: var(--light-blue); }
+
+        .spec-grid { display: grid; grid-template-columns: 1fr; gap: 10px; margin: 15px 0; }
+        .spec-item { 
+            display: flex; justify-content: space-between; align-items: center; 
+            background: rgba(0,0,0,0.03); padding: 10px 15px; border-radius: 12px;
+        }
+        .spec-item span { font-size: 0.9rem; font-weight: 500; }
+        .carga { width: 60px; text-align: center; padding: 5px; border-radius: 8px; border: 1px solid #ccc; }
+
+        .btn-acao { 
+            background: var(--blue); color: white; border: none; padding: 15px; 
+            border-radius: 15px; width: 100%; font-weight: bold; cursor: pointer;
+            font-size: 1rem; margin-top: 10px; transition: background 0.3s;
+        }
+        .btn-acao:hover { background: #003366; }
+
+        .recibo-container {
+            background: #fff; border: 2px dashed var(--blue); border-radius: 20px;
+            padding: 20px; margin: 15px 0; text-align: center;
+        }
+        .btn-whatsapp {
+            background: #25D366; color: white; border: none; padding: 15px;
+            border-radius: 15px; width: 100%; font-weight: bold; margin-top: 10px;
+            cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px;
+        }
+
+        .hidden { display: none !important; }
+        .text-success { color: #28a745; font-size: 0.85rem; font-weight: bold; }
+        .small-muted { font-size: 0.8rem; color: #666; margin-top: 4px; display: block; }
+        /* Sistema de Alertas (Toasts) Centralizados */
+        #toast-container {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 9999;
+            display: none;
+        }
+
+        .toast-card {
+            background: var(--glass);
+            backdrop-filter: blur(15px);
+            padding: 20px 40px;
+            border-radius: 20px;
+            box-shadow: var(--shadow);
+            border: 1px solid rgba(255,255,255,0.3);
+            text-align: center;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .toast-card i { font-size: 2.5rem; display: block; margin-bottom: 10px; }
+        .toast-success { color: #28a745; }
+        .toast-error { color: #dc3545; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translate(-50%, -40%); } to { opacity: 1; transform: translate(-50%, -50%); } }
+
+        /* Melhorias na Grid e Inputs */
+        .menu-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .menu-btn {
+            background: white;
+            border: none;
+            padding: 20px 10px;
+            border-radius: 18px;
+            color: var(--blue);
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.3s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        }
+
+        .menu-btn:hover { transform: translateY(-3px); box-shadow: var(--shadow); }
+        .menu-btn i { font-size: 1.5rem; }
+
+        .form-section-title {
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #666;
+            margin: 25px 0 10px 0;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 5px;
+        }
+</style>
+</head>
+<body>
+
+    <div id="view-login" class="glass-card">
+        <div class="header">
+            <i class="bi bi-shield-lock-fill"></i>
+            <h1>Acesso Restrito</h1>
+            <p>Identifique-se para continuar</p>
+        </div>
+        <div class="form-group">
+            <input type="text" id="equipe-login" class="form-control" placeholder="Seu login">
+        </div>
+        <div class="form-group">
+            <input type="password" id="equipe-senha" class="form-control" placeholder="Sua senha">
+        </div>
+        <button class="btn-acao" onclick="loginEquipe()">Acessar Sistema</button>
+    </div>
+
+    <div id="view-menu" class="glass-card hidden">
+        <div class="header">
+            <p>Olá, <b id="nome-tecnico-logado">--</b></p>
+            <h3>Gestão Técnica AEE</h3>
+        </div>
+
+    <div id="toast-container">
+            <div id="toast-content" class="toast-card">
+                <i id="toast-icon" class="bi"></i>
+                <span id="toast-message"></span>
+            </div>
+        </div>
+
+        <div id="view-menu" class="glass-card hidden">
+            <div class="header" style="text-align: center; margin-bottom: 25px;">
+                <p style="margin: 0; opacity: 0.8;">Bem-vindo(a), <b id="nome-tecnico-logado">--</b></p>
+                <h3 style="color: var(--blue); margin: 5px 0;">Gestão Técnica AEE</h3>
+            </div>
+
+            <div class="menu-grid">
+                <button class="menu-btn" onclick="abrirFormulario()">
+                    <i class="bi bi-person-plus-fill"></i> Novo Aluno
+                </button>
+                <button class="menu-btn" onclick="listarAlunos()">
+                    <i class="bi bi-search"></i> Listar Alunos
+                </button>
+                <button class="menu-btn" onclick="mostrarView('view-pais')" style="grid-column: span 2; background: var(--blue); color: white;">
+                    <i class="bi bi-shield-lock"></i> Gerar Acesso para Pais
+                </button>
+                <button class="menu-btn" onclick="mostrarView('view-usuarios')">
+                    <i class="bi bi-people"></i> Equipe/Saúde
+                </button>
+                <button class="menu-btn" onclick="carregarEspecialidades(); mostrarView('view-especialidades')">
+                    <i class="bi bi-tags"></i> Especialidades
+                </button>
+            </div>
+
+            <button class="btn-acao" style="background: rgba(255,0,0,0.1); color: #d32f2f; margin-top: 30px; border: 1px solid rgba(255,0,0,0.2);" onclick="location.reload()">
+                <i class="bi bi-box-arrow-right"></i> Encerrar Sessão
+            </button>
+        </div>
+
+        <div id="view-form" class="glass-card hidden">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h4 id="form-titulo" style="color: var(--blue); margin: 0;">Cadastro de Aluno</h4>
+                <button onclick="voltarMenu()" class="bi bi-x-lg" style="border:none; background:none; font-size: 1.2rem;"></button>
+            </div>
+            
+            <input type="hidden" id="edit-id">
+            
+            <div class="form-section-title">Dados Básicos</div>
+            <div class="form-group">
+                <label><i class="bi bi-person"></i> Nome Completo</label>
+                <input type="text" id="f-nome" class="form-control" placeholder="Ex: João Silva">
+            </div>
+            
+            <div class="form-group">
+                <label><i class="bi bi-hash"></i> Número do RA</label>
+                <input type="number" id="f-ra" class="form-control" placeholder="Apenas números">
+            </div>
+            
+            <div class="form-group">
+                <label><i class="bi bi-building"></i> Unidade Escolar</label>
+                <select id="f-escola" class="form-control">
+                    <option value="" disabled selected>Selecione a escola...</option>
+                    <option value="CAEEQ">CAEEQ</option>
+                    <option value="CEADQ">CEADQ</option>
+                    <option>E M ALBERTO PIRRO</opt/ion>
+                    <option>E M ALLAN KARDEC</option>
+                    <option>E M ANNA PEROBELLI</option>
+                    <option>E M CARLOS PEREIRA NETO</option>
+                    <option>E M CLEDON CAVALCANTE</option>
+                    <option>E M DIVA TEIXEIRA</option>
+                    <option>E M DR FRANCISCO M BRANDAO</option>
+                    <option>E M ELOI TEIXEIRA</option>
+                    <option>E M GILVANEI PEREIRA</option>
+                    <option>E M JOAQUIM DE FREITAS</option>
+                    <option>E M JOSE ANASTACIO</option>
+                    <option>E M JOSE BITTENCOURT</option>
+                    <option>E M JOSE DE ANCHIETA</option>
+                    <option>E M LEOPOLDO MACHADO</option>
+                    <option>E M LUIZ DE CAMOES</option>
+                    <option>E M MARIA C P XANCHAO</option>
+                    <option>E M METODISTA</option>
+                    <option>E M MONTEIRO LOBATO</option>
+                    <option>E M NELSON CARNEIRO</option>
+                    <option>E M OSCAR WEINSCHENCK</option>
+                    <option>E M PASTOR ARSENIO</option>
+                    <option>E M PAULO FREIRE</option>
+                    <option>E M SANTO EXPEDITO</option>
+                    <option>E M SAO JOSE</option>
+                    <option>E M SCINTILLA EXEL</option>
+                    <option>E M SEBASTIAO VERISSIMO</option>
+                    <option>E M TIRADENTES</option>
+                    <option>E M UBIRAJARA FERREIRA</option>
+                    <option>E M VALCIRA SANTANA</option>
+                    <option>E M WALDICK PEREIRA</option>
+                    <option>E M WASHINGTON MANOEL</option> 
+                </select>
+            </div>
+
+    <div class="form-section-title">Apoio Necessário</div>
+        <p class="small-muted">Marque as especialidades e defina a carga horária semanal.</p>
+        
+        <div id="container-especialidades-aluno" class="spec-grid" style="background: white; padding: 15px; border-radius: 15px; border: 1px solid #eee;">
+            <small class="text-muted">Carregando especialidades...</small>
+        </div>
+
+        <button class="btn-save" style="width: 100%; margin-top: 25px;" onclick="salvar()">
+            <i class="bi bi-cloud-check"></i> Finalizar Cadastro
+        </button>
+    </div>
+
+    <div id="view-usuarios" class="glass-card hidden">
+        <h4 style="color: var(--blue);"><i class="bi bi-person-badge"></i> Gestão de Usuários</h4>
+        
+        <div class="form-group">
+            <label>Nome Completo</label>
+            <input type="text" id="u-nome" class="form-control">
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div class="form-group">
+                <label>Login</label>
+                <input type="text" id="u-login" class="form-control">
+            </div>
+            <div class="form-group">
+                <label>Senha</label>
+                <input type="password" id="u-senha" class="form-control">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>Especialidade (Para Profissionais)</label>
+            <select id="u-especialidade" class="form-control">
+                <option value="">Selecione...</option>
+            </select>
+        </div>
+
+        <div style="margin-top: 20px;">
+            <button onclick="cadastrarEquipe()" class="btn-save" style="width: 100%; margin-bottom: 10px;">
+                Salvar como Equipe Admin
+            </button>
+            <button onclick="cadastrarProfissional()" class="btn-save" style="width: 100%; background: var(--light-blue);">
+                Salvar como Profissional Saúde
+            </button>
+        </div>
+        <button class="btn-acao" style="background:none; color:#666;" onclick="voltarMenu()">Voltar</button>
+    </div>
+<script>
+     const headers = () => ({
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('aee_token')}`
+    });
+
+    function voltarMenu() {
+        document.querySelectorAll('.glass-card').forEach(c => c.classList.add('hidden'));
+        document.getElementById('view-menu').classList.remove('hidden');
+        carregarDashboard(); // Mantém os totais atualizados
+    }
+
+    // --- CADASTRO DE ALUNOS ---
+    async function salvar() {
+        const id = document.getElementById('edit-id').value;
+        const nome = document.getElementById('f-nome').value;
+        const ra = document.getElementById('f-ra').value;
+        const escola = document.getElementById('f-escola').value;
+
+        if (!nome || !ra || !escola) return showToast("Preencha os campos obrigatórios!", "error");
+
+        // Captura especialidades marcadas e suas respectivas horas
+        const especialidades = [];
+        document.querySelectorAll('#container-especialidades-aluno input[type="checkbox"]:checked').forEach(cb => {
+            const hInput = document.getElementById(`h-${cb.value}`);
+            especialidades.push({
+                id: cb.value,
+                horas: hInput ? hInput.value : 0
+            });
+        });
+
+        const rota = id ? `/api/alunos/editar/${id}` : '/api/alunos/cadastrar';
+        
+        try {
+            const res = await fetch(rota, {
+                method: 'POST',
+                headers: headers(),
+                body: JSON.stringify({ nome, ra, escola, especialidades })
+            });
+
+            if (res.ok) {
+                showToast(id ? "Cadastro atualizado!" : "Aluno cadastrado com sucesso!");
+                voltarMenu();
+            } else {
+                const erro = await res.json();
+                showToast(erro.error, "error");
+            }
+        } catch (err) { showToast("Erro ao conectar com servidor.", "error"); }
+    }
+
+    // --- CADASTRO DE EQUIPE (ADMIN) ---
+    async function cadastrarEquipe() {
+        const nome = document.getElementById('u-nome').value;
+        const login = document.getElementById('u-login').value;
+        const senha = document.getElementById('u-senha').value;
+
+        if (!nome || !login || !senha) return showToast("Preencha todos os campos!", "error");
+
+        try {
+            const res = await fetch('/api/equipe/cadastrar', {
+                method: 'POST',
+                headers: headers(),
+                body: JSON.stringify({ nome, login, senha })
+            });
+
+            if (res.ok) {
+                showToast("Membro da equipe salvo!");
+                limparCamposUsuario();
+                voltarMenu();
+            } else {
+                const erro = await res.json();
+                showToast(erro.error, "error");
+            }
+        } catch (err) { showToast("Erro de conexão.", "error"); }
+    }
+
+    // --- CADASTRO DE PROFISSIONAIS DE SAÚDE ---
+    async function cadastrarProfissional() {
+        const nome = document.getElementById('u-nome').value;
+        const login = document.getElementById('u-login').value;
+        const senha = document.getElementById('u-senha').value;
+        const especialidade_id = document.getElementById('u-especialidade').value;
+
+        if (!especialidade_id) return showToast("Selecione a especialidade!", "error");
+
+        try {
+            const res = await fetch('/api/profissionais/cadastrar', {
+                method: 'POST',
+                headers: headers(),
+                body: JSON.stringify({ nome, login, senha, especialidade_id })
+            });
+
+            if (res.ok) {
+                showToast("Profissional de saúde cadastrado!");
+                limparCamposUsuario();
+                voltarMenu();
+            } else {
+                const erro = await res.json();
+                showToast(erro.error, "error");
+            }
+        } catch (err) { showToast("Erro de conexão.", "error"); }
+    }
+
+    // --- CADASTRO DE ACESSO DOS PAIS ---
+    async function cadastrarPais() {
+        const aluno_id = document.getElementById('pai-aluno-id').value;
+        const usuario = document.getElementById('pai-usuario').value;
+        const senha_pin = document.getElementById('pai-pin').value;
+
+        if (!aluno_id || !usuario || senha_pin.length !== 5) {
+            return showToast("Verifique o PIN (5 dígitos) e o aluno.", "error");
+        }
+
+        try {
+            const res = await fetch('/api/pais/registrar', {
+                method: 'POST',
+                headers: headers(),
+                body: JSON.stringify({ aluno_id, usuario, senha_pin })
+            });
+
+            if (res.ok) {
+                showToast("Acesso dos pais ativado!");
+                voltarMenu();
+            } else {
+                const erro = await res.json();
+                showToast(erro.error, "error");
+            }
+        } catch (err) { showToast("Erro ao registrar acesso.", "error"); }
+    }
+
+    // --- AUXILIARES ---
+    function limparCamposUsuario() {
+        document.getElementById('u-nome').value = "";
+        document.getElementById('u-login').value = "";
+        document.getElementById('u-senha').value = "";
+        document.getElementById('u-especialidade').value = "";
+    }
+
+// Função de Login
+async function loginEquipe() {
+    const login = document.getElementById('equipe-login').value;
+    const senha = document.getElementById('equipe-senha').value;
+
+    if (!login || !senha) {
+        return showToast("Preencha todos os campos", "error");
+    }
+
+    try {
+        const res = await fetch('/api/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ login, senha })
+        });
+
+        const dados = await res.json();
+
+        if (res.ok) {
+            localStorage.setItem('aee_token', dados.token);
+            localStorage.setItem('aee_nome', dados.user.nome);
+            document.getElementById('nome-tecnico-logado').innerText = dados.user.nome;
+            mostrarView('view-menu');
+            showToast("Login realizado com sucesso!");
+        } else {
+            showToast(dados.error || "Erro ao acessar", "error");
+        }
+    } catch (err) {
+        showToast("Erro de conexão com o servidor", "error");
+    }
+}
+
+// Ouvinte para a tecla Enter nos campos de login
+document.getElementById('equipe-senha').addEventListener('keypress', function (e) {
+    if (e.key === 'Enter') loginEquipe();
+});
+document.getElementById('equipe-login').addEventListener('keypress', function (e) {
+    if (e.key === 'Enter') document.getElementById('equipe-senha').focus();
+});
+
+// Função Auxiliar para exibir mensagens (Toasts)
+function showToast(msg, tipo = 'success') {
+    const container = document.getElementById('toast-container');
+    const message = document.getElementById('toast-message');
+    const icon = document.getElementById('toast-icon');
+    
+    container.style.display = 'block';
+    message.innerText = msg;
+    icon.className = tipo === 'success' ? 'bi bi-check-circle-fill toast-success' : 'bi bi-exclamation-triangle-fill toast-error';
+
+    setTimeout(() => { container.style.display = 'none'; }, 3000);
+}
+
+function mostrarView(viewId) {
+    document.querySelectorAll('.glass-card').forEach(v => v.classList.add('hidden'));
+    document.getElementById(viewId).classList.remove('hidden');
+}
+
+</script>
+</body>
+</html>

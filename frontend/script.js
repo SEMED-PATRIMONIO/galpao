@@ -14211,7 +14211,7 @@ async function telaPatrimonioConsultaEscola() {
                 <div class="painel-vidro" style="padding: 15px; display: flex; flex-direction: column; overflow: hidden;">
                     <h3 style="margin-top:0; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; font-size: 1rem;">📍 Setores</h3>
                     <div id="lista-setores-inventario" style="flex: 1; overflow-y: auto; margin-top: 10px;">
-                        <p style="color:gray; font-size: 0.8rem;">Carregando...</p>
+                        <p style="color:gray; font-size: 0.8rem;"> </p>
                     </div>
                 </div>
 
@@ -14302,6 +14302,9 @@ async function telaPatrimonioConsultaEscola2() {
                 <button id="btn-transferir-externo" disabled class="btn-acao-topo" onclick="abrirModalTransferenciaExterna()">
                     🚚 TRANSFERIR P/ OUTRO LOCAL
                 </button>
+                <button id="btn-transferir-externo" disabled class="btn-acao-topo" onclick="telaEditarItemPatrimonio()">
+                    🚨 EDITAR ESTADO CONSERVAÇÃO
+                </button>
                 <button class="btn-acao-topo" style="background:#8b5cf6; color:white; opacity:1; cursor:pointer;" onclick="abrirModalImportarExcel()">
                     📊 IMPORTAR DO EXCEL
                 </button>
@@ -14312,7 +14315,7 @@ async function telaPatrimonioConsultaEscola2() {
                 <div class="painel-vidro" style="padding: 15px; display: flex; flex-direction: column; overflow: hidden;">
                     <h3 style="margin-top:0; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; font-size: 1rem;">📍 Setores</h3>
                     <div id="lista-setores-inventario" style="flex: 1; overflow-y: auto; margin-top: 10px;">
-                        <p style="color:gray; font-size: 0.8rem;">Carregando...</p>
+                        <p style="color:gray; font-size: 0.8rem;"> </p>
                     </div>
                 </div>
 

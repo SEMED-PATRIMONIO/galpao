@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Portal AEE - Família</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <style>
+        :root { 
+            --primary-blue: #004587; 
+            --secondary-blue: #00a8e8;
+            --glass: rgba(255, 255, 255, 0.9);
+        }
+        body { 
+            background: linear-gradient(135deg, var(--primary-blue) 0%, var(--secondary-blue) 100%);
+            background-attachment: fixed; min-height: 100vh;
+            font-family: 'Segoe UI', system-ui, sans-serif; color: #333;
+        }
+
+        .glass-card {
+            background: var(--glass); backdrop-filter: blur(15px);
+            border-radius: 25px; border: 1px solid rgba(255,255,255,0.3);
+            box-shadow: 0 15px 35px rgba(0,0,0,0.2);
+            padding: 25px; margin-bottom: 20px;
+        }
+
+        .alert-badge {
+            background: #ff4757; color: white; padding: 4px 12px;
+            border-radius: 50px; font-size: 0.75rem; font-weight: bold;
+        }
+
+        .atendimento-item {
+            background: white; border-radius: 15px; padding: 15px;
+            margin-bottom: 15px; border-left: 5px solid var(--secondary-blue);
+            transition: 0.3s;
+        }
+
+        .agendamento-novo {
+            border-left: 5px solid #ffa502;
+            background: #fffaf0;
+        }
+
+        .btn-ciente {
+            background: #2ed573; color: white; border: none;
+            padding: 8px 15px; border-radius: 10px; font-weight: bold;
+            width: 100%; margin-top: 10px;
+        }
+
+        .hidden { display: none !important; }
+        
+        /* Estilo para Prestação de Contas */
+        .txt-evidencia { font-style: italic; font-size: 0.85rem; color: #666; }
+    </style>
+</head>
+<body>
+
+    <div class="container py-4">
+        <div id="view-login" class="glass-card text-center mx-auto" style="max-width: 400px; margin-top: 50px;">
+            <i class="bi bi-shield-lock-fill text-primary" style="font-size: 4rem;"></i>
+            <h3 class="fw-bold mt-3">Acesso Família</h3>
+            <p class="text-muted small">Digite seu PIN de 5 dígitos para entrar</p>
+            
+            <input type="text" id="login-usuario" class="form-control mb-3 text-center" placeholder="Usuário (Login)">
+            <input type="password" id="login-pin" class="form-control mb-4 text-center" maxlength="5" placeholder="PIN de 5 dígitos">
+            
+            <button class="btn btn-primary w-100 py-3 fw-bold" onclick="efetuarLogin()">ENTRAR NO PORTAL</button>
+        </div>
+
+        <div id="view-dashboard" class="hidden">
+            <div class="glass-card mb-4 d-flex justify-content-between align-items-center">
+                <div>
+                    <h5 class="mb-0 fw-bold" id="nome-aluno">---</h5>
+                    <small class="text-muted" id="ra-aluno">RA: ---</small>
+                </div>
+                <button class="btn btn-light btn-sm" onclick="logout()"><i class="bi bi-box-arrow-right"></i></button>
+            </div>
+
+            <div id="area-alertas"></div>
+
+            <h6 class="text-white mb-3 fw-bold"><i class="bi bi-journal-check"></i> Evolução dos Atendimentos</h6>
+            <div id="lista-evolucao"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_PREFIX = '/api/v2/familia';
+        let tokenAuth = localStorage.getItem('aee_token_pai');
+
+        async function carregarDados() {
+            try {
+                const res = await fetch(`${API_PREFIX}/dashboard`, {
+                    headers: { 'Authorization': `Bearer ${tokenAuth}` }
+                });
+                if (res.status === 401) return logout();
+                const data = await res.json();
+
+                // Renderiza Aluno
+                document.getElementById('perfil-aluno').innerHTML = `
+                    <img src="${data.aluno.foto_url || 'https://via.placeholder.com/80'}" class="rounded-circle mb-2" style="width:80px; height:80px; object-fit:cover; border:3px solid var(--secondary-blue)">
+                    <h5 class="mb-0">${data.aluno.nome_completo}</h5>
+                    <p class="small text-muted">${data.aluno.escola}</p>
+                `;
+
+                // Renderiza Agendamentos
+                const divAg = document.getElementById('lista-agendamentos');
+                divAg.innerHTML = data.agendamentos.length ? data.agendamentos.map(ag => `
+                    <div class="card-info" id="ag-${ag.id}">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <span class="badge bg-primary mb-2">Consulta Agendada</span>
+                                <p class="mb-1"><b>Data/Hora:</b> ${new Date(ag.data_hora).toLocaleString()}</p>
+                            </div>
+                            <button class="btn btn-sm btn-outline-primary" onclick="confirmarCiencia(${ag.id}, 'Agendamento para ${new Date(ag.data_hora).toLocaleDateString()}')">
+                                Confirmar Ciência
+                            </button>
+                        </div>
+                    </div>
+                `).join('') : '<p class="text-center text-muted">Nenhum agendamento pendente.</p>';
+
+                // Renderiza Evoluções (Respeitando o sigilo)
+                const divEv = document.getElementById('lista-evolucoes');
+                divEv.innerHTML = data.evolucoes.map(ev => `
+                    <div class="card-info border-start border-4 border-success">
+                        <p class="small text-muted mb-1">${new Date(ev.data_hora).toLocaleDateString()} - Parecer do Especialista</p>
+                        <p class="mb-2">${ev.evolucao}</p>
+                        <small class="text-muted"><i class="bi bi-person-badge"></i> Dr(a). ${ev.tecnico}</small>
+                    </div>
+                `).join('');
+
+            } catch (err) { console.error("Erro ao carregar dashboard"); }
+        }
+
+        async function efetuarLogin() {
+            const usuario = document.getElementById('login-usuario').value;
+            const senha_pin = document.getElementById('login-pin').value;
+
+            try {
+                const res = await fetch(`${API_PREFIX}/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ usuario, senha_pin })
+                });
+
+                const data = await res.json();
+                if (res.ok) {
+                    localStorage.setItem('aee_token_pai', data.token);
+                    tokenAuth = data.token;
+                    carregarDados();
+                } else {
+                    alert(data.error);
+                }
+            } catch (err) { alert("Erro ao conectar."); }
+        }
+
+        async function confirmarCiencia(idAgendamento, detalhe) {
+            if(!confirm("Deseja confirmar que está ciente deste atendimento?")) return;
+            try {
+                const res = await fetch(`${API_PREFIX}/confirmar-ciencia`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${tokenAuth}`
+                    },
+                    body: JSON.stringify({ id_evento: idAgendamento, detalhe: detalhe })
+                });
+
+                if (res.ok) {
+                    const card = document.getElementById(`ag-${idAgendamento}`);
+                    card.classList.add('opacity-50');
+                    card.innerHTML = '<div class="text-center text-success"><i class="bi bi-check-all"></i> Ciência confirmada com sucesso!</div>';
+                    setTimeout(carregarDados, 1500);
+                }
+            } catch (err) { alert("Erro ao registrar ciência."); }
+        }
+
+        async function confirmarCiencia(idEvento) {
+            try {
+                const res = await fetch('/api/v2/familia/confirmar-ciencia', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('aee_token_pai')}` 
+                    },
+                    body: JSON.stringify({ id_evento: idEvento, detalhe: 'Pai visualizou e confirmou agendamento' })
+                });
+
+                if (res.ok) {
+                    alert("Confirmação registrada!");
+                    carregarAlertas(); // Atualiza a lista
+                }
+            } catch (err) { alert("Erro ao confirmar ciência."); }
+        }
+
+        function logout() {
+            localStorage.removeItem('aee_token_pai');
+            location.reload();
+        }
+
+// Função para carregar alertas de novos agendamentos
+async function carregarAlertas() {
+    const res = await fetch('/api/v2/familia/alertas-pendentes', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('aee_token_pai')}` }
+    });
+    const alertas = await res.json();
+    
+    if (alertas.length > 0) {
+        const listaHtml = alertas.map(a => `
+            <div class="alert alert-info border-0 shadow-sm mb-3">
+                <i class="bi bi-calendar-event"></i> 
+                Novo agendamento: <b>${new Date(a.data_hora).toLocaleString()}</b><br>
+                Especialista: ${a.profissional} (${a.especialidade})
+                <button class="btn btn-sm btn-primary w-100 mt-2" onclick="confirmarCiencia(${a.id})">
+                    Estou Ciente
+                </button>
+            </div>
+        `).join('');
+        
+        document.getElementById('container-alertas').innerHTML = listaHtml;
+    }
+}
+
+
+
+        window.onload = () => { if (tokenAuth) carregarDados(); };
+    </script>
+</body>
+</html>

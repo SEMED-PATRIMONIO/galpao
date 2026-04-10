@@ -14198,6 +14198,9 @@ async function telaPatrimonioConsultaEscola() {
                 <button id="btn-transferir-externo" disabled class="btn-acao-topo" onclick="abrirModalTransferenciaExterna()">
                     🚚 TRANSFERIR P/ OUTRO LOCAL
                 </button>
+                <button id="btn-transferir-interno" disabled class="btn-acao-topo" onclick="telaEditarItemPatrimonio()">
+                    🚨 EDITAR ESTADO DE CONSERVAÇÃO
+                </button>                
                 <button class="btn-acao-topo" style="background:#8b5cf6; color:white; opacity:1; cursor:pointer;" onclick="abrirModalImportarExcel()">
                     📊 IMPORTAR DO EXCEL
                 </button>
@@ -14416,7 +14419,7 @@ async function carregarItensPorSetor(setor_id, nome_setor) {
     areaTabela.innerHTML = `
         <div style="display: flex; gap: 10px; margin-bottom: 20px; align-items: center;">
             <input type="text" id="filtro-inventario" onkeyup="filtrarTabelaInventario()" 
-                   placeholder="🔍 Pesquisar por nome ou série..." class="input-vidro" style="flex: 1;">
+                   placeholder="🔍 Pesquisar por nome ou Nº Patrimônio..." class="input-vidro" style="flex: 1;">
             
             <button onclick="gerarExcelInventario('${nome_setor}')" class="btn-sair-vidro" style="background: #16a34a; border:none; color:white;" title="Exportar para Excel">
                 Excel 📊
@@ -14475,10 +14478,10 @@ function renderizarTabela(dados) {
     const legendaHtml = `
         <div style="display: flex; gap: 20px; margin-bottom: 15px; padding: 10px; background: rgba(0, 0, 0, 0.2); border-radius: 8px; flex-wrap: wrap; border: 1px solid rgba(255,255,255,0.05);">
             <div style="display:flex; align-items:center; gap:8px; font-size:0.75rem; color:#4ade80; font-weight:bold;">
-                <span style="font-size: 1.2rem;">●</span> COM Nº PATRIMÔNIO (RGP)
+                <span style="font-size: 1.2rem;">●</span> COM Nº PATRIMÔNIO
             </div>
             <div style="display:flex; align-items:center; gap:8px; font-size:0.75rem; color:#fbbf24; font-weight:bold;">
-                <span style="font-size: 1.2rem;">●</span> PENDENTE DE ETIQUETA (RGP)
+                <span style="font-size: 1.2rem;">●</span> PENDENTE DE ETIQUETA
             </div>
         </div>
     `;
@@ -14658,7 +14661,7 @@ function gerarPDFInventario(nomeSetor) {
 
     // Título do Relatório
     doc.setFontSize(18);
-    doc.text("Relatório de Inventário de Património", 14, 20);
+    doc.text("Relatório de Inventário de Patrimônio", 14, 20);
     
     doc.setFontSize(11);
     doc.text(`Setor: ${nomeSetor}`, 14, 30);
@@ -14727,7 +14730,7 @@ async function telaPatrimonioRegistarItem() {
                     </div>
 
                     <div>
-                        <label style="color:white; font-size:0.8rem; opacity:0.7;">NÚMERO DE SÉRIE / PLAQUETA</label>
+                        <label style="color:white; font-size:0.8rem; opacity:0.7;">Nº PATRIMÔNIO</label>
                         <input type="text" id="reg-pat-serie" placeholder="Ex: ABC-12345" 
                             style="width:100%; padding:12px; border-radius:10px; background:rgba(255,255,255,0.1); color:white; border:1px solid rgba(255,255,255,0.2);">
                     </div>

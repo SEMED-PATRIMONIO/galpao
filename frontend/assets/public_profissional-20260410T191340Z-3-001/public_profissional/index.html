@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AEE - Portal Especialista</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <style>
+        :root { 
+            --primary-blue: #004587; 
+            --secondary-blue: #00a8e8; 
+            --glass: rgba(255, 255, 255, 0.95); 
+        }
+        body { 
+            background: linear-gradient(135deg, #00264d 0%, #004587 100%);
+            background-attachment: fixed;
+            min-height: 100vh; 
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            color: #333;
+        }
+        .glass-card {
+            background: var(--glass); 
+            backdrop-filter: blur(15px); 
+            border-radius: 25px;
+            border: 1px solid rgba(255,255,255,0.3); 
+            box-shadow: 0 15px 35px rgba(0,0,0,0.2);
+        }
+        .btn-atender {
+            background: var(--primary-blue);
+            color: white;
+            border-radius: 12px;
+            transition: 0.3s;
+        }
+        .btn-atender:hover {
+            background: var(--secondary-blue);
+            color: white;
+            transform: translateY(-2px);
+        }
+        .badge-status { border-radius: 8px; padding: 5px 12px; }
+        .navbar-prof { background: rgba(0,0,0,0.2); backdrop-filter: blur(10px); }
+    </style>
+</head>
+<body>
+
+    <nav class="navbar navbar-dark navbar-prof px-4 py-3 mb-4">
+        <span class="navbar-brand fw-bold"><i class="bi bi-heart-pulse-fill me-2"></i>AEE Saúde</span>
+        <div class="text-white d-flex align-items-center">
+            <span class="me-3">Dr(a). <b id="nome-prof">...</b></span>
+            <button onclick="logout()" class="btn btn-sm btn-outline-light rounded-pill">Sair</button>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="row">
+            <div class="col-12">
+                <div class="glass-card p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h4 class="fw-bold m-0 text-primary">Agenda de Atendimentos</h4>
+                        <button class="btn btn-atender" onclick="abrirModalAgendamento()">
+                            <i class="bi bi-calendar-plus me-2"></i>Novo Agendamento
+                        </button>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Aluno</th>
+                                    <th>Data/Hora</th>
+                                    <th>Status</th>
+                                    <th class="text-center">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabela-atendimentos">
+                                </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalAtendimento" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content glass-card border-0">
+                <div class="modal-header border-0">
+                    <h5 class="fw-bold text-primary">Registrar Atendimento</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-1 text-muted">Aluno: <b id="modal-nome-aluno" class="text-dark"></b></p>
+                    <input type="hidden" id="id-agendamento">
+                    
+                    <div class="form-check form-switch mb-3 mt-3">
+                        <input class="form-check-input" type="checkbox" id="check-presenca" checked>
+                        <label class="form-check-label fw-bold" for="check-presenca">Aluno Presente</label>
+                    </div>
+
+                    <label class="form-label fw-bold">Observações / Conduta Médica</label>
+                    <textarea id="anotacao-medica" class="form-control rounded-4" rows="5" placeholder="Digite aqui o que o responsável deve saber sobre este atendimento..."></textarea>
+                    <small class="text-muted"><i class="bi bi-info-circle me-1"></i>Esta nota será enviada para o portal do pai.</small>
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="button" class="btn btn-light rounded-pill" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-atender px-4" onclick="salvarAtendimento()">Finalizar e Salvar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const token = localStorage.getItem('token_prof');
+
+        async function carregarAgenda() {
+            try {
+                const res = await fetch('/api/meus-alunos', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const atendimentos = await res.json();
+                
+                const corpo = document.getElementById('tabela-atendimentos');
+                corpo.innerHTML = atendimentos.map(a => `
+                    <tr>
+                        <td><b class="text-dark">${a.nome_completo}</b><br><small class="text-muted">RA: ${a.ra}</small></td>
+                        <td>${new Date(a.data_hora).toLocaleString('pt-BR')}</td>
+                        <td>
+                            <span class="badge badge-status ${a.status === 'Agendado' ? 'bg-warning text-dark' : 'bg-success text-white'}">
+                                ${a.status}
+                            </span>
+                        </td>
+                        <td class="text-center">
+                            <button class="btn btn-atender btn-sm" onclick="abrirAtendimento(${a.id}, '${a.nome_completo}')">
+                                <i class="bi bi-pencil-square me-1"></i> Atender
+                            </button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (err) { console.error(err); }
+        }
+
+        function abrirAtendimento(id, nome) {
+            document.getElementById('id-agendamento').value = id;
+            document.getElementById('modal-nome-aluno').innerText = nome;
+            const modal = new bootstrap.Modal(document.getElementById('modalAtendimento'));
+            modal.show();
+        }
+
+        async function salvarAtendimento() {
+            const id = document.getElementById('id-agendamento').value;
+            const anotacoes = document.getElementById('anotacao-medica').value;
+            const presente = document.getElementById('check-presenca').checked;
+
+            if(!anotacoes) return alert("Por favor, descreva o atendimento.");
+
+            try {
+                const res = await fetch('/api/atendimento/registrar', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}` 
+                    },
+                    body: JSON.stringify({ agendamento_id: id, presente, anotacoes })
+                });
+
+                if (res.ok) {
+                    alert("Atendimento finalizado com sucesso!");
+                    location.reload();
+                }
+            } catch (err) { alert("Erro ao salvar."); }
+        }
+
+        function logout() {
+            localStorage.clear();
+            window.location.href = 'login.html';
+        }
+
+        window.onload = () => {
+            if(!token) window.location.href = 'login.html';
+            // Puxar nome do profissional do localStorage se guardou no login
+            document.getElementById('nome-prof').innerText = localStorage.getItem('userNome') || 'Especialista';
+            carregarAgenda();
+        };
+    </script>
+</body>
+</html>

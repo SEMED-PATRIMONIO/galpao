@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel Gestão AEE - SEMED</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        :root { 
+            --primary-blue: #004587; 
+            --secondary-blue: #00a8e8;
+            --bg-light: #f4f7f9; 
+            --sidebar-width: 260px;
+            --glass: rgba(255, 255, 255, 0.7);
+        }
+
+        body { 
+            background: linear-gradient(135deg, #f4f7f9 0%, #e0e8f0 100%);
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            min-height: 100vh;
+        }
+        
+        /* Barra Lateral Glassmorphism */
+        .sidebar {
+            width: var(--sidebar-width);
+            background: rgba(0, 38, 77, 0.85); /* Fundo translúcido escuro */
+            backdrop-filter: blur(15px);
+            border-right: 1px solid rgba(255,255,255,0.1);
+            color: white;
+            position: fixed;
+            height: 100vh;
+            padding-top: 20px;
+            z-index: 1000;
+        }
+
+        .sidebar a {
+            color: rgba(255,255,255,0.8);
+            text-decoration: none;
+            padding: 12px 20px;
+            display: block;
+            transition: all 0.3s ease;
+            border-left: 4px solid transparent;
+        }
+
+        .sidebar a:hover, .sidebar a.active {
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+            border-left-color: var(--secondary-blue);
+        }
+
+        .main-content {
+            margin-left: var(--sidebar-width);
+            padding: 30px;
+        }
+
+        /* Cartões Glassmorphism */
+        .glass-card {
+            background: var(--glass);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            border-radius: 15px;
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+        }
+
+        .stat-card {
+            border-left: 5px solid var(--primary-blue);
+        }
+
+        .table-glass {
+            background: transparent;
+        }
+        
+        .table-glass thead th {
+            background: rgba(0, 69, 135, 0.05);
+            border-bottom: 2px solid rgba(0,0,0,0.1);
+        }
+
+        .d-none { display: none !important; }
+    </style>
+</head>
+<body>
+
+    <div id="view-login" class="container d-flex justify-content-center align-items-center vh-100">
+        <div class="glass-card p-5 text-center shadow-lg" style="max-width: 400px; width: 100%;">
+            <h3 class="fw-bold mb-4" style="color: var(--primary-blue);">Gestão AEE</h3>
+            <div class="mb-3">
+                <input type="text" class="form-control rounded-pill text-center" id="login" placeholder="Usuário">
+            </div>
+            <div class="mb-4">
+                <input type="password" class="form-control rounded-pill text-center" id="senha" placeholder="Senha" onkeypress="if(event.key === 'Enter') fazerLogin()">
+            </div>
+            <button class="btn btn-primary w-100 rounded-pill fw-bold" onclick="fazerLogin()">Entrar no Painel</button>
+        </div>
+    </div>
+
+    <div id="sidebar" class="sidebar d-none">
+        <div class="text-center mb-4">
+            <h4 class="fw-bold m-0">AEE Digital</h4>
+            <small class="text-light">Painel de Controle</small>
+            <div class="mt-3">
+                <span class="badge bg-secondary rounded-pill px-3 py-2" id="nome-tecnico-logado">Gestor</span>
+            </div>
+        </div>
+        <nav>
+            <a href="#" onclick="mostrarView('view-menu')" class="active"><i class="bi bi-speedometer2 me-2"></i> Dashboard</a>
+            <a href="#" onclick="mostrarView('view-alunos')"><i class="bi bi-person-badge me-2"></i> Alunos</a>
+            <a href="#" onclick="mostrarView('view-profissionais')"><i class="bi bi-heart-pulse me-2"></i> Profissionais</a>
+            <a href="#" onclick="mostrarView('view-pais')"><i class="bi bi-people me-2"></i> Familiares</a>
+            <a href="#" onclick="mostrarView('view-agendamentos')"><i class="bi bi-calendar-event me-2"></i> Agendamentos</a>
+        </nav>
+        <div class="position-absolute bottom-0 w-100 p-3">
+            <button onclick="logout()" class="btn btn-outline-light w-100 rounded-pill">Sair do Sistema</button>
+        </div>
+    </div>
+
+    <div id="main-content" class="main-content d-none">
+        
+        <div id="view-menu" class="view-section">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2 class="fw-bold text-dark">Visão Geral</h2>
+                <button class="btn btn-primary rounded-pill"><i class="bi bi-download me-2"></i>Relatório Mensal</button>
+            </div>
+
+            <div class="row g-4 mb-4">
+                <div class="col-md-3">
+                    <div class="glass-card p-4 stat-card">
+                        <h6 class="text-muted fw-bold">Total de Alunos</h6>
+                        <h2 class="m-0 fw-bold text-primary" id="count-alunos">--</h2>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="glass-card p-4 stat-card" style="border-left-color: #28a745;">
+                        <h6 class="text-muted fw-bold">Profissionais</h6>
+                        <h2 class="m-0 fw-bold text-success" id="count-profissionais">--</h2>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="glass-card p-4 stat-card" style="border-left-color: #ffc107;">
+                        <h6 class="text-muted fw-bold">Atendimentos (Mês)</h6>
+                        <h2 class="m-0 fw-bold text-warning" id="count-atendimentos">--</h2>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="glass-card p-4 stat-card" style="border-left-color: #dc3545;">
+                        <h6 class="text-muted fw-bold">Faltas</h6>
+                        <h2 class="m-0 fw-bold text-danger" id="count-faltas">--</h2>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-8">
+                    <div class="glass-card p-4">
+                        <h5 class="fw-bold mb-3">Evolução de Atendimentos</h5>
+                        <canvas id="graficoAtendimentos" height="100"></canvas>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="glass-card p-4 h-100">
+                        <h5 class="fw-bold mb-3">Especialidades Mais Buscadas</h5>
+                        <canvas id="graficoEspecialidades"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="view-alunos" class="view-section d-none">
+            <div class="glass-card p-4">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h4 class="fw-bold m-0 text-primary">Gestão de Alunos</h4>
+                    <button class="btn btn-primary rounded-pill px-4" onclick="abrirModal('aluno')"><i class="bi bi-plus-lg me-1"></i> Novo Aluno</button>
+                </div>
+                <table class="table table-hover align-middle table-glass">
+                    <thead>
+                        <tr><th>RA</th><th>Nome Completo</th><th>Escola</th><th>Data Cadastro</th></tr>
+                    </thead>
+                    <tbody id="tabela-alunos"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="view-profissionais" class="view-section d-none">
+            <div class="glass-card p-4">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h4 class="fw-bold m-0 text-success">Profissionais de Saúde</h4>
+                    <button class="btn btn-success rounded-pill px-4" onclick="abrirModal('profissional')"><i class="bi bi-plus-lg me-1"></i> Novo Profissional</button>
+                </div>
+                <table class="table table-hover align-middle table-glass">
+                    <thead>
+                        <tr><th>Nome</th><th>Especialidade</th><th>Status</th></tr>
+                    </thead>
+                    <tbody id="tabela-profissionais"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="view-pais" class="view-section d-none">
+            <div class="glass-card p-4">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h4 class="fw-bold m-0 text-info">Acesso Familiares</h4>
+                    <button class="btn btn-info text-white rounded-pill px-4" onclick="abrirModal('pai')"><i class="bi bi-plus-lg me-1"></i> Gerar Acesso Pai</button>
+                </div>
+                <table class="table table-hover align-middle table-glass">
+                    <thead>
+                        <tr><th>Responsável</th><th>Aluno Vinculado</th><th>Status de Acesso</th></tr>
+                    </thead>
+                    <tbody id="tabela-pais"></tbody>
+                </table>
+            </div>
+        </div>
+
+    </div> <div class="modal fade" id="modalCadastro" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg" style="border-radius: 25px; background: var(--glass); backdrop-filter: blur(15px);">
+                <div class="modal-header border-0">
+                    <h5 class="modal-title fw-bold" id="modalLabel">Novo Registro</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="modalBody">
+                    </div>
+                <div class="modal-footer border-0">
+                    <button type="button" class="btn btn-light rounded-pill" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary rounded-pill px-4" onclick="salvarDados()">Salvar Registro</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast-container" class="position-fixed bottom-0 end-0 p-3" style="z-index: 1060">
+        <div id="liveToast" class="toast align-items-center text-white bg-dark border-0 rounded-4" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div class="toast-body" id="toast-text"></div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // --- FUNÇÕES DE NAVEGAÇÃO E UI ---
+        function mostrarView(id) {
+            // Esconde todas as seções
+            document.querySelectorAll('.view-section').forEach(el => el.classList.add('d-none'));
+            document.getElementById('view-login').classList.add('d-none');
+            
+            if (id === 'view-login') {
+                document.getElementById('sidebar').classList.add('d-none');
+                document.getElementById('main-content').classList.add('d-none');
+                document.getElementById('view-login').classList.remove('d-none');
+            } else {
+                document.getElementById('sidebar').classList.remove('d-none');
+                document.getElementById('main-content').classList.remove('d-none');
+                document.getElementById(id).classList.remove('d-none');
+                
+                // Atualiza Sidebar ativa
+                document.querySelectorAll('.sidebar a').forEach(a => a.classList.remove('active'));
+                event?.currentTarget?.classList?.add('active');
+            }
+        }
+
+        function mostrarToast(msg) {
+            document.getElementById('toast-text').innerText = msg;
+            new bootstrap.Toast(document.getElementById('liveToast')).show();
+        }
+
+        // --- LOGIN CORRIGIDO ---
+        async function fazerLogin() {
+            const loginVal = document.getElementById('login').value;
+            // Case-insensitive aplicado conforme sua preferência
+            const senhaVal = document.getElementById('senha').value.toLowerCase();
+
+            if (!loginVal || !senhaVal) return mostrarToast('Preencha os dados!');
+
+            try {
+                const res = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ login: loginVal, senha: senhaVal })
+                });
+                
+                const dados = await res.json();
+                
+                // Adaptação para o novo formato do Backend (success: true)
+                if (res.ok && dados.success) {
+                    localStorage.setItem('token', dados.token);
+                    localStorage.setItem('userNome', dados.user.nome);
+                    document.getElementById('nome-tecnico-logado').innerText = dados.user.nome;
+                    mostrarView('view-menu');
+                    carregarDados();
+                } else {
+                    mostrarToast(dados.error || 'Usuário ou senha inválidos.');
+                }
+            } catch (err) {
+                mostrarToast('Erro de conexão com o servidor.');
+            }
+        }
+
+        function logout() {
+            localStorage.clear();
+            mostrarView('view-login');
+        }
+
+        // --- LÓGICA DE DADOS (CRUD) ---
+        async function carregarDados() {
+            buscarListagem('/api/alunos/listar', 'tabela-alunos', 'alunos');
+            buscarListagem('/api/profissionais/listar', 'tabela-profissionais', 'profissionais');
+            buscarListagem('/api/pais/listar', 'tabela-pais', 'pais');
+            // Inicializar gráficos genéricos do Dashboard
+            initGraficos();
+        }
+
+        async function buscarListagem(endpoint, tabelaId, tipo) {
+            const token = localStorage.getItem('token');
+            const corpo = document.getElementById(tabelaId);
+            
+            if(!corpo) {
+                console.warn(`Tabela ${tabelaId} não encontrada.`);
+                return;
+            }
+
+            try {
+                const res = await fetch(endpoint, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if(!res.ok) throw new Error("Falha na requisição");
+                const dados = await res.json();
+                
+                corpo.innerHTML = dados.map(item => {
+                    if (tipo === 'alunos') {
+                        return `<tr><td><code>${item.ra}</code></td><td><b>${item.nome_completo}</b></td><td>${item.escola}</td><td>${new Date(item.criado_em).toLocaleDateString()}</td></tr>`;
+                    } else if (tipo === 'profissionais') {
+                        return `<tr><td><b>${item.nome}</b></td><td>${item.especialidade}</td><td>${item.ativo ? '<span class="badge bg-success">Ativo</span>' : '<span class="badge bg-danger">Inativo</span>'}</td></tr>`;
+                    } else if (tipo === 'pais') {
+                        return `<tr><td>${item.usuario}</td><td>${item.aluno_id || 'ID Vínculo'}</td><td>${item.senha_alterada ? '✅ Acesso Liberado' : '⏳ Aguardando Troca de Senha'}</td></tr>`;
+                    }
+                }).join('');
+            } catch (err) {
+                corpo.innerHTML = "<tr><td colspan='4' class='text-center text-danger'>Erro ao conectar com o servidor.</td></tr>";
+            }
+        }
+
+        function abrirModal(tipo) {
+            // Apenas abre o modal visualmente para os forms que você ainda vai programar
+            document.getElementById('modalLabel').innerText = `Novo Cadastro: ${tipo.toUpperCase()}`;
+            document.getElementById('modalBody').innerHTML = `<p class="text-muted">Carregando formulário de ${tipo}...</p>`;
+            new bootstrap.Modal(document.getElementById('modalCadastro')).show();
+        }
+
+        function salvarDados() {
+            mostrarToast("Função de salvamento em desenvolvimento.");
+            bootstrap.Modal.getInstance(document.getElementById('modalCadastro')).hide();
+        }
+
+        // --- GRÁFICOS (CHART.JS) ---
+        let chartAtendimentos, chartEspecialidades;
+        function initGraficos() {
+            if(chartAtendimentos) chartAtendimentos.destroy();
+            if(chartEspecialidades) chartEspecialidades.destroy();
+
+            const ctxA = document.getElementById('graficoAtendimentos').getContext('2d');
+            chartAtendimentos = new Chart(ctxA, {
+                type: 'line',
+                data: {
+                    labels: ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun'],
+                    datasets: [{
+                        label: 'Atendimentos Realizados',
+                        data: [12, 19, 3, 5, 2, 3],
+                        borderColor: '#004587',
+                        tension: 0.4, fill: true, backgroundColor: 'rgba(0, 69, 135, 0.1)'
+                    }]
+                }
+            });
+
+            const ctxE = document.getElementById('graficoEspecialidades').getContext('2d');
+            chartEspecialidades = new Chart(ctxE, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Psicologia', 'Fonoaudiologia', 'Terapia Ocupacional'],
+                    datasets: [{
+                        data: [10, 20, 30],
+                        backgroundColor: ['#004587', '#00a8e8', '#f4f7f9']
+                    }]
+                }
+            });
+        }
+
+        // --- INICIALIZAÇÃO CORRIGIDA ---
+        window.onload = () => {
+            const token = localStorage.getItem('token');
+            const nome = localStorage.getItem('userNome');
+            
+            // Verificação rigorosa contra tokens expirados ou 'undefined' do JS
+            if (!token || token === "undefined" || token === "null") {
+                logout(); // Garante que a tela limpe o cache e mostre o login
+            } else {
+                document.getElementById('nome-tecnico-logado').innerText = nome || 'Gestor';
+                mostrarView('view-menu');
+                carregarDados();
+            }
+        };
+    </script>
+</body>
+</html>

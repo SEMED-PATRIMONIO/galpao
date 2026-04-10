@@ -389,6 +389,92 @@ appCadastro.get('/api/v2/listagem/completa', verificarToken, async (req, res) =>
     } catch (err) { res.status(500).json({ error: "Erro ao buscar listagens." }); }
 });
 
+// Rota para Gerar Relatório PDF (A4)
+appCadastro.post('/api/v2/relatorio/gerar', verificarToken, async (req, res) => {
+    const { tabela } = req.body;
+    
+    // Mapeamento de títulos e colunas para ordenação
+    const config = {
+        alunos: { titulo: 'Relatório Geral de Alunos (AEE)', tabelaDB: 'aee_alunos', ordem: 'nome_completo' },
+        pais: { titulo: 'Relatório de Acessos: Pais e Responsáveis', tabelaDB: 'aee_usuarios_pais', ordem: 'usuario' },
+        profissionais: { titulo: 'Relatório de Profissionais de Saúde', tabelaDB: 'aee_profissionais_saude', ordem: 'nome' },
+        especialidades: { titulo: 'Relatório de Especialidades Médicas', tabelaDB: 'aee_especialidades', ordem: 'nome' },
+        usuarios: { titulo: 'Relatório de Usuários da Equipe', tabelaDB: 'aee_usuarios_equipe', ordem: 'nome' }
+    };
+
+    const sel = config[tabela];
+
+    try {
+        const result = await pool.query(`SELECT * FROM ${sel.tabelaDB} WHERE ativo = true ORDER BY ${sel.ordem} ASC`);
+        const registros = result.rows;
+
+        const browser = await puppeteer.launch({ args: ['--no-sandbox'] });
+        const page = await browser.newPage();
+
+        // Conteúdo HTML do PDF
+        const dataEmissao = new Date().toLocaleString('pt-BR');
+        let htmlContent = `
+            <html>
+            <head>
+                <style>
+                    body { font-family: sans-serif; margin: 0; padding: 0; }
+                    .header { display: flex; align-items: flex-start; margin-bottom: 20px; }
+                    .logo { width: 80px; height: auto; }
+                    .title { text-align: center; width: 100%; font-size: 18px; font-weight: bold; color: #004587; margin-top: 10px; }
+                    table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 12px; }
+                    th { background-color: #f2f2f2; border: 1px solid #ddd; padding: 8px; text-align: left; }
+                    td { border: 1px solid #ddd; padding: 8px; }
+                    .footer { text-align: center; margin-top: 30px; font-size: 10px; color: #666; }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <img src="http://localhost:3004/logap.png" class="logo">
+                </div>
+                <div class="title">${sel.titulo}</div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Registro / Nome</th>
+                            <th>Detalhes / Vínculo</th>
+                            <th>Data Cadastro</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${registros.map(r => `
+                            <tr>
+                                <td>${r.nome_completo || r.nome || r.usuario}</td>
+                                <td>${r.ra || r.especialidade || r.escola || '-'}</td>
+                                <td>${new Date(r.criado_em).toLocaleDateString('pt-BR')}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+                <div class="footer">
+                    Queimados/RJ, ${dataEmissao}
+                </div>
+            </body>
+            </html>
+        `;
+
+        await page.setContent(htmlContent);
+        const pdfBuffer = await page.pdf({
+            format: 'A4',
+            margin: { top: '1cm', bottom: '1cm', left: '1cm', right: '1cm' },
+            printBackground: true
+        });
+
+        await browser.close();
+
+        res.contentType("application/pdf");
+        res.send(pdfBuffer);
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Erro ao gerar PDF");
+    }
+});
+
 // Inicialização dos Servidores
 appCadastro.listen(3004, () => console.log("Cadastro rodando na 3004"));
 appPainel.listen(3005, () => console.log("Painel rodando na 3005"));

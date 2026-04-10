@@ -11747,11 +11747,11 @@ async function telaAdminPedidoPatrimonios() {
                         <option value="">-- SELECIONE O MODELO --</option>
                         ${produtos.map(p=>`<option value="${p.id}">${p.nome}</option>`).join('')}
                     </select>
-                    <label>PLAQUETA / TAG:</label>
+                    <label>Nº PATRIMÔNIO:</label>
                     <select id="pat_individual" class="input-vidro"></select>
                     <button onclick="addCarrinhoPatrimonio()" class="btn-vidro" style="background:#10b981; margin-top:15px; width:100%;">➕ ADICIONAR</button>
                 </div>
-                <div id="display-carrinho-admin" class="painel-interno-vidro">Aguardando...</div>
+                <div id="display-carrinho-admin" class="painel-interno-vidro"> </div>
             </div>
             <button id="btnFinalizar" onclick="finalizarPedidoPatrimonioDireto()" disabled class="btn-grande btn-vidro" style="margin-top:20px;">🚀 FINALIZAR PATRIMÔNIOS</button>
         </div>
@@ -11796,7 +11796,7 @@ async function telaAdminPedidoUniformes() {
                             <div>
                                 <label>TAMANHO:</label>
                                 <select id="uni_tamanho" class="input-vidro" style="width:100%;">
-                                    <option value="">Aguardando...</option>
+                                    <option value=""> </option>
                                 </select>
                             </div>
                             <div>
@@ -14198,7 +14198,7 @@ async function telaPatrimonioConsultaEscola() {
                 <button id="btn-transferir-externo" disabled class="btn-acao-topo" onclick="abrirModalTransferenciaExterna()">
                     🚚 TRANSFERIR P/ OUTRO LOCAL
                 </button>
-                <button id="btn-transferir-interno" disabled class="btn-acao-topo" onclick="telaEditarItemPatrimonio()">
+                <button id="btn-mudar-estado" enabled class="btn-acao-topo" onclick="telaEditarItemPatrimonio()">
                     🚨 EDITAR ESTADO DE CONSERVAÇÃO
                 </button>                
                 <button class="btn-acao-topo" style="background:#8b5cf6; color:white; opacity:1; cursor:pointer;" onclick="abrirModalImportarExcel()">
@@ -14302,7 +14302,7 @@ async function telaPatrimonioConsultaEscola2() {
                 <button id="btn-transferir-externo" disabled class="btn-acao-topo" onclick="abrirModalTransferenciaExterna()">
                     🚚 TRANSFERIR P/ OUTRO LOCAL
                 </button>
-                <button id="btn-transferir-externo" disabled class="btn-acao-topo" onclick="telaEditarItemPatrimonio()">
+                <button id="btn-mudar-estado" enabled class="btn-acao-topo" onclick="telaEditarItemPatrimonio()">
                     🚨 EDITAR ESTADO CONSERVAÇÃO
                 </button>
                 <button class="btn-acao-topo" style="background:#8b5cf6; color:white; opacity:1; cursor:pointer;" onclick="abrirModalImportarExcel()">
@@ -14539,7 +14539,7 @@ function renderizarTabela(dados) {
                                 </td>
 
                                 <td style="padding:6px 12px; font-weight: bold; color: ${corTexto};">
-                                    ${i.patrimonio || '<span style="opacity:0.3;">AGUARDANDO...</span>'}
+                                    ${i.patrimonio || '<span style="opacity:0.3;"> </span>'}
                                 </td>
                                 
                                 <td style="padding:6px 12px;">

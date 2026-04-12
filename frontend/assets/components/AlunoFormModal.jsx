@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
 const AlunoFormModal = ({ isOpen, onClose, onSave, alunoInicial, listaEspecialidades = [] }) => {
-  // 1. ADICIONADO 'escola' ao estado inicial para coincidir com o banco 
   const initialState = {
     nome_completo: '',
     ra: '',
@@ -51,7 +50,6 @@ const AlunoFormModal = ({ isOpen, onClose, onSave, alunoInicial, listaEspecialid
         </header>
 
         <div className="p-6 space-y-5">
-          {/* Campo: Nome */}
           <div>
             <label className="block text-xs font-bold text-slate-500 uppercase mb-1 tracking-wider">
               Nome Completo
@@ -65,7 +63,6 @@ const AlunoFormModal = ({ isOpen, onClose, onSave, alunoInicial, listaEspecialid
             />
           </div>
 
-          {/* Campo: RA */}
           <div>
             <label className="block text-xs font-bold text-slate-500 uppercase mb-1 tracking-wider">
               RA (Registro Acadêmico)
@@ -79,7 +76,6 @@ const AlunoFormModal = ({ isOpen, onClose, onSave, alunoInicial, listaEspecialid
             />
           </div>
 
-          {/* 2. ADICIONADO NOVO CAMPO: Escola (Obrigatório no Banco) */}
           <div>
             <label className="block text-xs font-bold text-slate-500 uppercase mb-1 tracking-wider">
               Unidade Escolar
@@ -128,14 +124,15 @@ const AlunoFormModal = ({ isOpen, onClose, onSave, alunoInicial, listaEspecialid
 
         <footer className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end items-center gap-4">
           <button 
+            type="button"
             onClick={onClose} 
             className="text-slate-500 font-bold hover:text-slate-700 transition-colors"
           >
             Cancelar
           </button>
           <button 
+            type="button"
             onClick={() => onSave(aluno)} 
-            {/* 3. Ajustada a validação do botão para exigir nome e escola */}
             disabled={!aluno.nome_completo || !aluno.escola}
             className={`px-8 py-3 bg-blue-600 text-white rounded-xl font-bold shadow-lg transition-all active:scale-95 ${
               (!aluno.nome_completo || !aluno.escola) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-700'

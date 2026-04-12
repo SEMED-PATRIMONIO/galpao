@@ -1,22 +1,21 @@
 import React, { useState, useEffect } from 'react';
 
 const AlunoFormModal = ({ isOpen, onClose, onSave, alunoInicial, listaEspecialidades = [] }) => {
-  // Estado inicial padrão
+  // 1. ADICIONADO 'escola' ao estado inicial para coincidir com o banco 
   const initialState = {
     nome_completo: '',
     ra: '',
+    escola: '', 
     especialidades: {}
   };
 
   const [aluno, setAluno] = useState(initialState);
 
-  // Sincroniza o formulário quando abre para edição ou novo cadastro
   useEffect(() => {
     if (isOpen) {
       if (alunoInicial) {
         setAluno({
           ...alunoInicial,
-          // Garante que especialidades seja ao menos um objeto vazio
           especialidades: alunoInicial.especialidades || {}
         });
       } else {
@@ -25,7 +24,6 @@ const AlunoFormModal = ({ isOpen, onClose, onSave, alunoInicial, listaEspecialid
     }
   }, [alunoInicial, isOpen]);
 
-  // Lógica para marcar/desmarcar especialidades no JSONB
   const toggleEspecialidade = (nome) => {
     setAluno(prev => ({
       ...prev,
@@ -42,7 +40,6 @@ const AlunoFormModal = ({ isOpen, onClose, onSave, alunoInicial, listaEspecialid
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[110] p-4">
       <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
         
-        {/* Cabeçalho */}
         <header className="bg-blue-600 p-6 text-white flex justify-between items-center">
           <div>
             <h2 className="text-xl font-bold">
@@ -82,7 +79,20 @@ const AlunoFormModal = ({ isOpen, onClose, onSave, alunoInicial, listaEspecialid
             />
           </div>
 
-          {/* Trecho das Especialidades (JSONB) */}
+          {/* 2. ADICIONADO NOVO CAMPO: Escola (Obrigatório no Banco) */}
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase mb-1 tracking-wider">
+              Unidade Escolar
+            </label>
+            <input 
+              type="text" 
+              placeholder="Ex: E.M. Paulo Freire"
+              className="w-full p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+              value={aluno.escola}
+              onChange={e => setAluno({...aluno, escola: e.target.value})}
+            />
+          </div>
+
           <div className="pt-2">
             <label className="text-sm font-bold text-slate-800 uppercase flex items-center gap-2">
               <span className="w-2 h-2 bg-blue-600 rounded-full"></span>
@@ -110,13 +120,12 @@ const AlunoFormModal = ({ isOpen, onClose, onSave, alunoInicial, listaEspecialid
                   </button>
                 ))
               ) : (
-                <p className="text-xs text-amber-600 italic">Nenhuma especialidade cadastrada no sistema.</p>
+                <p className="text-xs text-amber-600 italic">Nenhuma especialidade cadastrada.</p>
               )}
             </div>
           </div>
         </div>
 
-        {/* Rodapé */}
         <footer className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end items-center gap-4">
           <button 
             onClick={onClose} 
@@ -126,9 +135,10 @@ const AlunoFormModal = ({ isOpen, onClose, onSave, alunoInicial, listaEspecialid
           </button>
           <button 
             onClick={() => onSave(aluno)} 
-            disabled={!aluno.nome_completo}
+            {/* 3. Ajustada a validação do botão para exigir nome e escola */}
+            disabled={!aluno.nome_completo || !aluno.escola}
             className={`px-8 py-3 bg-blue-600 text-white rounded-xl font-bold shadow-lg transition-all active:scale-95 ${
-              !aluno.nome_completo ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-700'
+              (!aluno.nome_completo || !aluno.escola) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-700'
             }`}
           >
             {alunoInicial ? 'Atualizar Aluno' : 'Salvar Registro'}

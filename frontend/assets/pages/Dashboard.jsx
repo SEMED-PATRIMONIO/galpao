@@ -1,105 +1,116 @@
 import React, { useState, useEffect } from 'react';
 import MainLayout from '../layouts/MainLayout';
 import DataTable from '../components/DataTable';
+import ActionButtons from '../components/ActionButtons';
+import AlunoFormModal from '../components/AlunoFormModal';
+import ChangePasswordModal from '../components/ChangePasswordModal';
 
 const Dashboard = () => {
   const [activeTab, setActiveTab] = useState('aee_alunos');
   const [data, setData] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [isAlunoModalOpen, setIsAlunoModalOpen] = useState(false);
+  const [isPassModalOpen, setIsPassModalOpen] = useState(false);
+  const [especialidades, setEspecialidades] = useState([]);
 
-  // Função para buscar dados do backend
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const response = await fetch(`/api/data/${activeTab}`);
-      const result = await response.json();
-      setData(result);
-    } catch (error) {
-      console.error("Erro ao buscar dados:", error);
-    } finally {
-      setLoading(false);
-    }
+  // Configuração de colunas por tabela
+  const columnConfig = {
+    aee_alunos: [
+      { key: 'id', label: 'ID' },
+      { key: 'nome_completo', label: 'Nome do Aluno' },
+      { key: 'ra', label: 'RA' }
+    ],
+    aee_usuarios_pais: [
+      { key: 'id', label: 'ID' },
+      { key: 'nome_pai', label: 'Responsável' },
+      { key: 'email', label: 'E-mail' }
+    ],
+    aee_profissionais_saude: [
+      { key: 'id', label: 'ID' },
+      { key: 'nome', label: 'Profissional' },
+      { key: 'conselho', label: 'Conselho/Registro' }
+    ],
+    aee_especialidades: [
+      { key: 'id', label: 'ID' },
+      { key: 'nome', label: 'Especialidade' }
+    ],
+    aee_usuarios_equipe: [
+      { key: 'id', label: 'ID' },
+      { key: 'nome', label: 'Nome' },
+      { key: 'username', label: 'Usuário' }
+    ]
   };
 
-  // Carrega os dados sempre que mudar de aba
+  const fetchData = async () => {
+    try {
+      const res = await fetch(`/api/data/${activeTab}`);
+      const result = await res.json();
+      setData(result);
+    } catch (e) { console.error(e); }
+  };
+
   useEffect(() => {
     fetchData();
-    setSelectedId(null); // Limpa seleção ao mudar de aba
+    setSelectedId(null);
+    // Carrega especialidades para o modal de aluno
+    fetch('/api/data/aee_especialidades').then(res => res.json()).then(setEspecialidades);
   }, [activeTab]);
 
-  const handleInativar = async () => {
-    if (!selectedId) return;
-    
-    const currentIndex = data.findIndex(item => item.id === selectedId);
-    
-    try {
-      await fetch(`/api/data/${activeTab}/${selectedId}/inativar`, { method: 'PATCH' });
-      
-      const newData = data.filter(item => item.id !== selectedId);
-      setData(newData);
+  const handleAction = (type) => {
+    if (type === 'incluir') setIsAlunoModalOpen(true);
+    if (type === 'inativar') handleInativar();
+    if (type === 'editar') alert('Funcionalidade de edição em desenvolvimento');
+  };
 
-      if (newData.length > 0) {
-        const nextItem = newData[currentIndex] || newData[currentIndex - 1];
-        setSelectedId(nextItem.id);
-      } else {
-        setSelectedId(null);
-      }
-    } catch (error) {
-      alert("Erro ao inativar registro.");
-    }
+  const handleInativar = async () => {
+    if (!window.confirm("Deseja realmente inativar este registro?")) return;
+    await fetch(`/api/data/${activeTab}/${selectedId}/inativar`, { method: 'PATCH' });
+    fetchData();
+  };
+
+  const saveAluno = async (alunoData) => {
+    await fetch('/api/data/aee_alunos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(alunoData)
+    });
+    setIsAlunoModalOpen(false);
+    fetchData();
   };
 
   return (
-    <MainLayout activeTab={activeTab} setActiveTab={setActiveTab}>
-      <div className="flex h-full bg-[#F8FAFC]">
-        {/* Área Central: Tabela */}
-        <div className="flex-1 p-6 overflow-auto">
-          <header className="mb-6">
-            <h1 className="text-2xl font-bold text-slate-800 capitalize">
-              {activeTab.replace('aee_', '').replace('_', ' ')}
-            </h1>
-            <p className="text-slate-500 text-sm">Gerenciamento de registros do sistema AEE</p>
-          </header>
-
-          {loading ? (
-            <div className="flex justify-center p-10">Carregando...</div>
-          ) : (
-            <DataTable 
-              data={data} 
-              selectedId={selectedId} 
-              onSelect={setSelectedId} 
-              type={activeTab}
-            />
-          )}
+    <MainLayout 
+      user={{ nome: 'Administrador' }} 
+      activeTab={activeTab} 
+      setActiveTab={setActiveTab}
+      onOpenPass={() => setIsPassModalOpen(true)}
+    >
+      <div className="flex h-full">
+        <div className="flex-1 overflow-auto p-4">
+          <DataTable 
+            data={data} 
+            columns={columnConfig[activeTab] || []} 
+            selectedId={selectedId} 
+            onSelect={setSelectedId} 
+          />
         </div>
-        
-        {/* Botões de Ação na Direita */}
-        <div className="flex flex-col gap-4 p-4 bg-white border-l border-slate-200 w-48">
-          <button 
-            className="bg-blue-600 text-white py-2 px-4 rounded-lg font-bold hover:bg-blue-700 transition-all"
-            onClick={() => alert('Abrir modal de cadastro')}
-          >
-            ➕ Novo
-          </button>
-          
-          <button 
-            disabled={!selectedId} 
-            className={`flex items-center justify-center gap-2 py-2 px-4 rounded-lg font-bold border transition-all ${
-              selectedId 
-                ? 'border-red-200 text-red-600 hover:bg-red-50' 
-                : 'border-slate-100 text-slate-300 cursor-not-allowed'
-            }`}
-            onClick={handleInativar}
-          >
-            🗑️ Inativar
-          </button>
-
-          <div className="mt-auto border-t pt-4 text-[10px] text-slate-400 text-center uppercase tracking-widest">
-            AEE Cadastro v1.0
-          </div>
+        <div className="p-4 border-l bg-white">
+          <ActionButtons selectedId={selectedId} onAction={handleAction} />
         </div>
       </div>
+
+      <AlunoFormModal 
+        isOpen={isAlunoModalOpen} 
+        onClose={() => setIsAlunoModalOpen(false)} 
+        onSave={saveAluno}
+        listaEspecialidades={especialidades}
+      />
+
+      <ChangePasswordModal 
+        isOpen={isPassModalOpen} 
+        onClose={() => setIsPassModalOpen(false)} 
+        userId={1} 
+      />
     </MainLayout>
   );
 };

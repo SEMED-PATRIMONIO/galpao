@@ -1,6 +1,3 @@
-// /var/www/aee-cadastro/frontend/src/components/ActionButtons.jsx
-
-// Botões estilizados com tons de azul e estados desativados
 const ActionButtons = ({ selectedId, onAction }) => {
   // Função auxiliar para gerar classes dinâmicas (Tailwind)
   const btnClass = (isActive) => `

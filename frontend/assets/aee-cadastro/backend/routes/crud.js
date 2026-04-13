@@ -26,7 +26,6 @@ router.get('/:table', async (req, res) => {
     try {
         let query = `SELECT * FROM ${tabela}`;
         
-        // Se a tabela tiver lógica de inativação, filtramos apenas os ativos
         if (tabelasComAtivo.includes(tabela)) {
             query += ` WHERE ativo = true`;
         }
@@ -54,56 +53,51 @@ router.get('/:table/:id', async (req, res) => {
     }
 });
 
-// 3. Inativar Registro (Soft Delete) - CORRIGIDO
-router.delete('/:table/:id', async (req, res) => {
+// 3. Inativar Registro (Soft Delete) - SUPORTE AMPLIADO
+// Usamos .all para aceitar DELETE, POST ou PATCH e não dar erro de método
+router.all('/:table/inativar/:id', async (req, res) => {
     const tabela = getTableName(req.params.table);
     const { id } = req.params;
     
     try {
         let query = '';
         if (tabelasComAtivo.includes(tabela)) {
-            // Caso a tabela use a coluna booleana 'ativo'
+            // AQUI É ONDE O 't' VIRA 'f'
             query = `UPDATE ${tabela} SET ativo = false WHERE id = $1`;
-            console.log(`[CRUD] Inativando via 'ativo=false' na tabela ${tabela} ID ${id}`);
+            console.log(`[CRUD] Mudando 'ativo' para FALSE na tabela ${tabela} ID ${id}`);
         } else {
-            // Caso a tabela use a coluna de texto 'status'
             query = `UPDATE ${tabela} SET status = 'Inativo' WHERE id = $1`;
-            console.log(`[CRUD] Inativando via 'status=Inativo' na tabela ${tabela} ID ${id}`);
+            console.log(`[CRUD] Mudando 'status' para Inativo na tabela ${tabela} ID ${id}`);
         }
 
         const result = await pool.query(query, [id]);
         
         if (result.rowCount === 0) {
-            return res.status(404).json({ error: 'Registro não encontrado.' });
+            return res.status(404).json({ error: 'Registro não encontrado no banco de dados.' });
         }
 
-        res.json({ message: 'Registro removido com sucesso.' });
+        res.json({ message: 'Registro inativado com sucesso no banco!' });
     } catch (err) {
-        console.error("Erro na inativação:", err.message);
-        res.status(500).json({ error: 'Erro ao inativar registro no servidor.' });
+        console.error("Erro crítico na inativação:", err.message);
+        res.status(500).json({ error: 'Erro ao processar inativação no servidor.' });
     }
 });
 
-// 4. Exemplo de rota de Update Genérica (ajuste conforme sua necessidade)
-router.put('/:table/:id', async (req, res) => {
+// Mantemos também a rota DELETE padrão por compatibilidade
+router.delete('/:table/:id', async (req, res) => {
     const tabela = getTableName(req.params.table);
     const { id } = req.params;
-    const campos = req.body;
-
     try {
-        const keys = Object.keys(campos);
-        const values = Object.values(campos);
-        const setClause = keys.map((key, index) => `${key} = $${index + 1}`).join(', ');
-        
-        const query = `UPDATE ${tabela} SET ${setClause} WHERE id = $${keys.length + 1}`;
-        await pool.query(query, [...values, id]);
-        
-        res.json({ message: 'Atualizado com sucesso!' });
+        const query = tabelasComAtivo.includes(tabela) 
+            ? `UPDATE ${tabela} SET ativo = false WHERE id = $1`
+            : `UPDATE ${tabela} SET status = 'Inativo' WHERE id = $1`;
+            
+        await pool.query(query, [id]);
+        res.json({ message: 'Removido com sucesso.' });
     } catch (err) {
-        console.error("Erro no update:", err.message);
-        res.status(500).json({ error: 'Erro ao atualizar.' });
+        res.status(500).json({ error: 'Erro ao excluir.' });
     }
 });
 
-// IMPORTANTE: Exportar o router corretamente para o server.js
-module.exports = router;
+// 4. Update Genérica
+router.put

@@ -190,7 +190,7 @@ router.patch('/:table/:id/reativar', async (req, res) => {
 });
 
 // Rota para buscar logs de acesso dos pais e auditoria de faltas
-app.get('/api/admin/auditoria-acessos', async (req, res) => {
+router.get('/admin/auditoria-acessos', async (req, res) => {
     try {
         const query = `
             SELECT 

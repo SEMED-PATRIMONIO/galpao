@@ -1,159 +1,109 @@
-// /var/www/aee-cadastro/backend/routes/crud.js
 const express = require('express');
 const router = express.Router();
 const pool = require('../db');
-const bcrypt = require('bcrypt');
 
-// Função auxiliar: Garante que as tabelas tenham o prefixo 'aee_' correto
-const getTableName = (param) => param.startsWith('aee_') ? param : `aee_${param}`;
+// --- CONFIGURAÇÃO ---
 
-// Lista de tabelas que utilizam o campo booleano 'ativo' para Soft Delete
-const tabelasComAtivo = [
-  'aee_alunos', 
-  'aee_escolas', 
-  'aee_especialidades', 
-  'aee_usuarios_equipe', 
-  'aee_profissionais_saude', 
-  'aee_usuarios_pais'
-];
+// Lista de tabelas que usam a coluna 'ativo' (boolean) para soft delete
+const tabelasComAtivo = ['aee_usuarios_equipe', 'aee_alunos', 'aee_profissionais_saude'];
 
-// ==========================================
-// ROTAS ESPECÍFICAS
-// ==========================================
+// Função auxiliar para mapear o nome da rota para o nome real da tabela no banco
+const getTableName = (param) => {
+    const mapping = {
+        'alunos': 'aee_alunos',
+        'usuarios': 'aee_usuarios_equipe',
+        'profissionais': 'aee_profissionais_saude',
+        'especialidades': 'aee_especialidades'
+    };
+    return mapping[param] || param;
+};
 
-// Listar Escolas Ativas
-router.get('/escolas', async (req, res) => {
-  try {
-    const result = await pool.query('SELECT * FROM aee_escolas WHERE ativo = true ORDER BY nome ASC');
-    res.json(result.rows);
-  } catch (err) {
-    res.status(500).json({ error: 'Erro ao buscar escolas: ' + err.message });
-  }
-});
+// --- ROTAS ---
 
-// Listar Especialidades Ativas
-router.get('/especialidades', async (req, res) => {
-  try {
-    const result = await pool.query('SELECT * FROM aee_especialidades WHERE ativo = true ORDER BY nome ASC');
-    res.json(result.rows);
-  } catch (err) {
-    res.status(500).json({ error: 'Erro ao buscar especialidades: ' + err.message });
-  }
-});
-
-// Listar Registros Inativos (Para a Lixeira)
-router.get('/:table/inativos', async (req, res) => {
-  const tabela = getTableName(req.params.table);
-  try {
-    let query = '';
-    if (tabelasComAtivo.includes(tabela)) {
-      query = `SELECT * FROM ${tabela} WHERE ativo = false ORDER BY id DESC`;
-    } else {
-      query = `SELECT * FROM ${tabela} WHERE status = 'Inativo' ORDER BY id DESC`;
-    }
-    const result = await pool.query(query);
-    res.json(result.rows);
-  } catch (err) {
-    res.status(500).json({ error: 'Erro ao buscar inativos.' });
-  }
-});
-
-// ==========================================
-// CRUD GENÉRICO
-// ==========================================
-
-// Listar registros (Apenas os Ativos)
+// 1. Listar Registros (Apenas Ativos)
 router.get('/:table', async (req, res) => {
-  const tabela = getTableName(req.params.table);
-  try {
-    let query = `SELECT * FROM ${tabela}`;
-    if (tabelasComAtivo.includes(tabela)) {
-      query += ' WHERE ativo = true';
-    } else {
-      query += " WHERE status != 'Inativo'";
-    }
-    query += ' ORDER BY id DESC';
-    const result = await pool.query(query);
-    res.json(result.rows);
-  } catch (err) {
-    res.status(500).json({ error: 'Erro ao buscar dados: ' + err.message });
-  }
-});
-
-// Criar Registro
-router.post('/:table', async (req, res) => {
-  const tabela = getTableName(req.params.table);
-  const data = req.body;
-
-  if (data.senha_hash) {
-    data.senha_hash = await bcrypt.hash(data.senha_hash, 10);
-  }
-
-  const keys = Object.keys(data);
-  const values = Object.values(data);
-  const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
-
-  const query = `INSERT INTO ${tabela} (${keys.join(', ')}) VALUES (${placeholders}) RETURNING *`;
-  try {
-    const result = await pool.query(query, values);
-    res.status(201).json(result.rows[0]);
-  } catch (err) {
-    res.status(500).json({ error: 'Erro ao inserir registro: ' + err.message });
-  }
-});
-
-// Inativar Registro (Soft Delete)
-router.delete('/:table/:id', async (req, res) => {
-  const tabela = getTableName(req.params.table);
-  const { id } = req.params;
-  try {
-    let query = '';
-    if (tabelasComAtivo.includes(tabela)) {
-      query = `UPDATE ${tabela} SET ativo = false WHERE id = $1`;
-    } else {
-      query = `UPDATE ${tabela} SET status = 'Inativo' WHERE id = $1`;
-    }
-    await pool.query(query, [id]);
-    res.json({ message: 'Registro movido para a lixeira.' });
-  } catch (err) {
-    res.status(500).json({ error: 'Erro ao inativar registro.' });
-  }
-});
-
-// Reativar Registro
-router.patch('/:table/:id/reativar', async (req, res) => {
-  const tabela = getTableName(req.params.table);
-  const { id } = req.params;
-  try {
-    let query = '';
-    if (tabelasComAtivo.includes(tabela)) {
-      query = `UPDATE ${tabela} SET ativo = true WHERE id = $1`;
-    } else {
-      query = `UPDATE ${tabela} SET status = 'Agendado' WHERE id = $1`;
-    }
-    await pool.query(query, [id]);
-    res.json({ message: 'Registro reativado com sucesso.' });
-  } catch (err) {
-    res.status(500).json({ error: 'Erro ao reativar registro.' });
-  }
-});
-
-// Auditoria de Acessos (Ajustado de app para router)
-router.get('/admin/auditoria-acessos', async (req, res) => {
+    const tabela = getTableName(req.params.table);
     try {
-        const query = `
-            SELECT l.id, l.data_hora as data_acesso, u.usuario as nome_pai, 
-                   al.nome_completo as nome_aluno, al.escola
-            FROM aee_log_acesso_pais l
-            JOIN aee_usuarios_pais u ON l.pai_id = u.id
-            JOIN aee_alunos al ON l.aluno_id = al.id
-            ORDER BY l.data_hora DESC LIMIT 100
-        `;
+        let query = `SELECT * FROM ${tabela}`;
+        
+        // Se a tabela tiver lógica de inativação, filtramos apenas os ativos
+        if (tabelasComAtivo.includes(tabela)) {
+            query += ` WHERE ativo = true`;
+        }
+        
+        query += ` ORDER BY id DESC`;
+        
         const result = await pool.query(query);
         res.json(result.rows);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        console.error(`Erro ao listar ${tabela}:`, err.message);
+        res.status(500).json({ error: 'Erro ao buscar dados.' });
     }
 });
 
+// 2. Buscar por ID
+router.get('/:table/:id', async (req, res) => {
+    const tabela = getTableName(req.params.table);
+    const { id } = req.params;
+    try {
+        const result = await pool.query(`SELECT * FROM ${tabela} WHERE id = $1`, [id]);
+        if (result.rows.length === 0) return res.status(404).json({ error: 'Não encontrado' });
+        res.json(result.rows[0]);
+    } catch (err) {
+        res.status(500).json({ error: 'Erro ao buscar registro.' });
+    }
+});
+
+// 3. Inativar Registro (Soft Delete) - CORRIGIDO
+router.delete('/:table/:id', async (req, res) => {
+    const tabela = getTableName(req.params.table);
+    const { id } = req.params;
+    
+    try {
+        let query = '';
+        if (tabelasComAtivo.includes(tabela)) {
+            // Caso a tabela use a coluna booleana 'ativo'
+            query = `UPDATE ${tabela} SET ativo = false WHERE id = $1`;
+            console.log(`[CRUD] Inativando via 'ativo=false' na tabela ${tabela} ID ${id}`);
+        } else {
+            // Caso a tabela use a coluna de texto 'status'
+            query = `UPDATE ${tabela} SET status = 'Inativo' WHERE id = $1`;
+            console.log(`[CRUD] Inativando via 'status=Inativo' na tabela ${tabela} ID ${id}`);
+        }
+
+        const result = await pool.query(query, [id]);
+        
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: 'Registro não encontrado.' });
+        }
+
+        res.json({ message: 'Registro removido com sucesso.' });
+    } catch (err) {
+        console.error("Erro na inativação:", err.message);
+        res.status(500).json({ error: 'Erro ao inativar registro no servidor.' });
+    }
+});
+
+// 4. Exemplo de rota de Update Genérica (ajuste conforme sua necessidade)
+router.put('/:table/:id', async (req, res) => {
+    const tabela = getTableName(req.params.table);
+    const { id } = req.params;
+    const campos = req.body;
+
+    try {
+        const keys = Object.keys(campos);
+        const values = Object.values(campos);
+        const setClause = keys.map((key, index) => `${key} = $${index + 1}`).join(', ');
+        
+        const query = `UPDATE ${tabela} SET ${setClause} WHERE id = $${keys.length + 1}`;
+        await pool.query(query, [...values, id]);
+        
+        res.json({ message: 'Atualizado com sucesso!' });
+    } catch (err) {
+        console.error("Erro no update:", err.message);
+        res.status(500).json({ error: 'Erro ao atualizar.' });
+    }
+});
+
+// IMPORTANTE: Exportar o router corretamente para o server.js
 module.exports = router;

@@ -1,3 +1,4 @@
+// /var/www/aee-cadastro/backend/server_gestor.js
 const express = require('express');
 const pool = require('./db');
 const bcrypt = require('bcrypt');
@@ -14,14 +15,12 @@ const JWT_SECRET = 'segredo_gestao_diretoria_aee';
 app.post('/api/gestor/login', async (req, res) => {
     const { login, senha } = req.body;
     try {
-        // Busca o usuário na tabela aee_usuarios_equipe [cite: 88, 94]
         const result = await pool.query(
             'SELECT * FROM aee_usuarios_equipe WHERE login = $1 AND ativo = true', 
             [login]
         );
         const usuario = result.rows[0];
 
-        // Verifica a senha através do hash 
         if (usuario && await bcrypt.compare(senha, usuario.senha_hash)) {
             const token = jwt.sign(
                 { id: usuario.id, nome: usuario.nome, nivel: 'gestor' }, 
@@ -34,47 +33,51 @@ app.post('/api/gestor/login', async (req, res) => {
                 user: { id: usuario.id, nome: usuario.nome } 
             });
         } else {
-            res.status(401).json({ error: 'Credenciais inválidas ou acesso inativo' });
+            res.status(401).json({ error: 'Credenciais inválidas ou conta inativa.' });
         }
     } catch (err) {
-        res.status(500).json({ error: "Erro no servidor: " + err.message });
+        res.status(500).json({ error: err.message });
     }
 });
 
-// Helper para filtros de data (usado nas estatísticas)
-const getPeriodFilter = (startDate, endDate, column) => {
-    if (startDate && endDate) {
-        return ` AND ${column} BETWEEN '${startDate} 00:00:00' AND '${endDate} 23:59:59'`;
-    }
-    return '';
+// Helper para filtros de data
+const getPeriodFilter = (start, end, column) => {
+    if (start && end) return ` AND ${column} BETWEEN '${start}' AND '${end}'`;
+    return "";
 };
 
-// 2. ROTA DE ESTATÍSTICAS (DASHBOARD)
-app.get('/api/diretoria/stats', async (req, res) => {
+// 2. ROTA DE ESTATÍSTICAS PARA O DASHBOARD
+app.get('/api/diretoria/estatisticas', async (req, res) => {
     const { start, end } = req.query;
     try {
-        const stats = {
-            // Contagens baseadas nas tabelas do sistema [cite: 18, 73, 62, 1, 34]
-            alunos: (await pool.query(`SELECT count(*) FROM aee_alunos WHERE ativo = true ${getPeriodFilter(start, end, 'data_cadastro')}`)).rows[0].count,
-            profissionais: (await pool.query(`SELECT count(*) FROM aee_profissionais_saude WHERE ativo = true ${getPeriodFilter(start, end, 'criado_em')}`)).rows[0].count,
-            especialidades: (await pool.query(`SELECT count(*) FROM aee_especialidades WHERE ativo = true`)).rows[0].count,
-            agendamentos: (await pool.query(`SELECT count(*) FROM aee_agendamentos WHERE status != 'Inativo' ${getPeriodFilter(start, end, 'data_hora')}`)).rows[0].count,
-            atendimentos: (await pool.query(`SELECT count(*) FROM aee_atendimentos WHERE status = 'Realizado' ${getPeriodFilter(start, end, 'data_hora')}`)).rows[0].count,
-            faltas: (await pool.query(`SELECT count(*) FROM aee_atendimentos WHERE status = 'Falta' ${getPeriodFilter(start, end, 'data_hora')}`)).rows[0].count,
-            // Agendamentos que ainda aguardam confirmação do pai (status 'Agendado') [cite: 13]
-            pendentes_pai: (await pool.query(`SELECT count(*) FROM aee_agendamentos WHERE status = 'Agendado'`)).rows[0].count
-        };
+        const stats = {};
+        
+        // Total de Alunos
+        const alunos = await pool.query(`SELECT COUNT(*) FROM aee_alunos WHERE ativo = true ${getPeriodFilter(start, end, 'data_cadastro')}`);
+        stats.totalAlunos = alunos.rows[0].count;
+
+        // Total de Profissionais
+        const profissionais = await pool.query(`SELECT COUNT(*) FROM aee_profissionais_saude WHERE ativo = true ${getPeriodFilter(start, end, 'criado_em')}`);
+        stats.totalProfissionais = profissionais.rows[0].count;
+
+        // Agendamentos por Status
+        const agendamentos = await pool.query(`
+            SELECT status, COUNT(*) FROM aee_agendamentos 
+            WHERE status != 'Inativo' ${getPeriodFilter(start, end, 'data_hora')}
+            GROUP BY status
+        `);
+        stats.agendamentos = agendamentos.rows;
+
         res.json(stats);
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// 3. ROTA PARA LISTAGEM DETALHADA (MODAL E PDF)
+// 3. ROTA PARA LISTAGEM DETALHADA
 app.get('/api/diretoria/detalhes/:categoria', async (req, res) => {
     const { categoria } = req.params;
     const { start, end } = req.query;
     let query = "";
 
-    // Mapeamento de categorias para queries SQL reais
     switch(categoria) {
         case 'alunos': 
             query = `SELECT nome_completo, ra, escola, data_cadastro FROM aee_alunos WHERE ativo = true ${getPeriodFilter(start, end, 'data_cadastro')}`;
@@ -85,12 +88,18 @@ app.get('/api/diretoria/detalhes/:categoria', async (req, res) => {
         case 'agendamentos':
             query = `SELECT a.data_hora, al.nome_completo as aluno, p.nome as profissional, a.status FROM aee_agendamentos a JOIN aee_alunos al ON a.aluno_id = al.id JOIN aee_profissionais_saude p ON a.profissional_id = p.id WHERE a.status != 'Inativo' ${getPeriodFilter(start, end, 'a.data_hora')}`;
             break;
+        default:
+            return res.status(400).json({ error: "Categoria inválida" });
     }
-    
+
     try {
         const result = await pool.query(query);
         res.json(result.rows);
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.listen(3005, () => console.log('🚀 Servidor GESTOR/DIRETORIA rodando na porta 3005'));
+// Inicialização
+const PORT = 3005;
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`📊 Servidor de Gestão (Dash) Online na porta ${PORT}`);
+});

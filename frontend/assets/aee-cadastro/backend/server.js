@@ -2,7 +2,7 @@
 const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcrypt');
-const pool = require('./db');     // Garanta que o ficheiro db.js está na mesma pasta
+const pool = require('./db'); 
 const authRoutes = require('./routes/auth');
 const crudRoutes = require('./routes/crud');
 
@@ -12,8 +12,8 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Registo das Rotas Modulares
-// Mapeamos ambos os prefixos para o crudRoutes para garantir compatibilidade total
+// Registro das Rotas Modulares
+// Mapeamos os prefixos para garantir compatibilidade com o frontend
 app.use('/api/auth', authRoutes);
 app.use('/api/crud', crudRoutes);
 app.use('/api/data', crudRoutes);
@@ -36,7 +36,7 @@ app.patch('/api/usuarios/update-password/:id', async (req, res) => {
         const salt = await bcrypt.genSalt(10);
         const hash = await bcrypt.hash(senha, salt);
         
-        // Atualiza a senha e marca que não é mais o primeiro acesso (se aplicável)
+        // Atualiza a senha na tabela de equipe
         const query = `
             UPDATE aee_usuarios_equipe 
             SET senha_hash = $1 
@@ -57,12 +57,12 @@ app.patch('/api/usuarios/update-password/:id', async (req, res) => {
     }
 });
 
-// Porta de execução
+// Inicialização do Servidor
 const PORT = 3004;
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
     console.log(`
-    🚀 Sistema AEE (Atendimento Educacional Especializado)
-    📡 Backend operacional na porta ${PORT}
-    📅 ${new Date().toLocaleString()}
+    🚀 Servidor Principal AEE Online
+    📡 Porta: ${PORT}
+    🔗 URL: https://aeecadastro.paiva.api.br
     `);
 });

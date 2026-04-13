@@ -4,15 +4,21 @@ const pool = require('../db');
 
 // --- CONFIGURAÇÃO ---
 
-// Lista de tabelas que usam a coluna 'ativo' (boolean) para soft delete
-const tabelasComAtivo = ['aee_usuarios_equipe', 'aee_alunos', 'aee_profissionais_saude'];
+// Lista exata das tabelas que possuem a coluna 'ativo' (boolean) conforme seu banco
+const tabelasComAtivo = [
+    'aee_usuarios_equipe', 
+    'aee_alunos', 
+    'aee_profissionais_saude', 
+    'aee_usuarios_pais'
+];
 
-// Função auxiliar para mapear o nome da rota para o nome real da tabela no banco
+// Mapeamento completo das rotas para as tabelas reais do banco
 const getTableName = (param) => {
     const mapping = {
         'alunos': 'aee_alunos',
         'usuarios': 'aee_usuarios_equipe',
         'profissionais': 'aee_profissionais_saude',
+        'pais': 'aee_usuarios_pais',
         'especialidades': 'aee_especialidades'
     };
     return mapping[param] || param;
@@ -20,41 +26,42 @@ const getTableName = (param) => {
 
 // --- ROTAS ---
 
-// 1. Listar Registros (Apenas Ativos)
+// 1. Listar Registros (Apenas Ativos ou Sem Filtro se não houver coluna ativo)
 router.get('/:table', async (req, res) => {
     const tabela = getTableName(req.params.table);
     try {
-        let query = `SELECT * FROM ${tabela}`;
+        let sql = `SELECT * FROM ${tabela}`;
         
+        // Filtro blindado: IS NOT FALSE pega TRUE e também registros que porventura estejam NULL
         if (tabelasComAtivo.includes(tabela)) {
-            query += ` WHERE ativo = true`;
+            sql += ` WHERE ativo IS NOT FALSE`;
         }
         
-        query += ` ORDER BY id DESC`;
+        sql += ` ORDER BY id DESC`;
         
-        const result = await pool.query(query);
+        const result = await pool.query(sql);
         res.json(result.rows);
     } catch (err) {
-        console.error(`Erro ao listar ${tabela}:`, err.message);
+        console.error(`[ERRO LISTAGEM] Tabela ${tabela}:`, err.message);
         res.status(500).json({ error: 'Erro ao buscar dados.' });
     }
 });
 
-// 2. Buscar por ID
+// 2. Buscar Registro por ID
 router.get('/:table/:id', async (req, res) => {
     const tabela = getTableName(req.params.table);
     const { id } = req.params;
     try {
         const result = await pool.query(`SELECT * FROM ${tabela} WHERE id = $1`, [id]);
-        if (result.rows.length === 0) return res.status(404).json({ error: 'Não encontrado' });
+        if (result.rows.length === 0) return res.status(404).json({ error: 'Registro não encontrado.' });
         res.json(result.rows[0]);
     } catch (err) {
         res.status(500).json({ error: 'Erro ao buscar registro.' });
     }
 });
 
-// 3. Inativar Registro (Soft Delete) - SUPORTE AMPLIADO
-// Usamos .all para aceitar DELETE, POST ou PATCH e não dar erro de método
+// 3. Inativar Registro (Soft Delete) - ROTA MULTI-MÉTODO
+// Esta rota aceita DELETE, POST ou PATCH para garantir que os botões do front funcionem
 router.all('/:table/inativar/:id', async (req, res) => {
     const tabela = getTableName(req.params.table);
     const { id } = req.params;
@@ -62,42 +69,63 @@ router.all('/:table/inativar/:id', async (req, res) => {
     try {
         let query = '';
         if (tabelasComAtivo.includes(tabela)) {
-            // AQUI É ONDE O 't' VIRA 'f'
+            // Comando que muda 't' para 'f' no Postgres
             query = `UPDATE ${tabela} SET ativo = false WHERE id = $1`;
-            console.log(`[CRUD] Mudando 'ativo' para FALSE na tabela ${tabela} ID ${id}`);
         } else {
+            // Fallback para tabelas que usem status em texto
             query = `UPDATE ${tabela} SET status = 'Inativo' WHERE id = $1`;
-            console.log(`[CRUD] Mudando 'status' para Inativo na tabela ${tabela} ID ${id}`);
         }
 
         const result = await pool.query(query, [id]);
         
         if (result.rowCount === 0) {
-            return res.status(404).json({ error: 'Registro não encontrado no banco de dados.' });
+            return res.status(404).json({ error: 'Registro não encontrado para inativação.' });
         }
 
-        res.json({ message: 'Registro inativado com sucesso no banco!' });
+        res.json({ message: 'Registro inativado com sucesso!' });
     } catch (err) {
-        console.error("Erro crítico na inativação:", err.message);
+        console.error(`[ERRO INATIVAÇÃO] Tabela ${tabela}:`, err.message);
         res.status(500).json({ error: 'Erro ao processar inativação no servidor.' });
     }
 });
 
-// Mantemos também a rota DELETE padrão por compatibilidade
+// 4. Rota DELETE padrão (Por compatibilidade com chamadas diretas)
 router.delete('/:table/:id', async (req, res) => {
     const tabela = getTableName(req.params.table);
     const { id } = req.params;
     try {
         const query = tabelasComAtivo.includes(tabela) 
             ? `UPDATE ${tabela} SET ativo = false WHERE id = $1`
-            : `UPDATE ${tabela} SET status = 'Inativo' WHERE id = $1`;
+            : `DELETE FROM ${tabela} WHERE id = $1`; // Delete real se não tiver coluna ativo
             
-        await pool.query(query, [id]);
-        res.json({ message: 'Removido com sucesso.' });
+        const result = await pool.query(query, [id]);
+        res.json({ message: result.rowCount > 0 ? 'Removido/Inativado com sucesso.' : 'Nada foi alterado.' });
     } catch (err) {
-        res.status(500).json({ error: 'Erro ao excluir.' });
+        res.status(500).json({ error: 'Erro na operação de exclusão.' });
     }
 });
 
-// 4. Update Genérica
-router.put
+// 5. Atualização Genérica (PUT)
+router.put('/:table/:id', async (req, res) => {
+    const tabela = getTableName(req.params.table);
+    const { id } = req.params;
+    const campos = req.body;
+
+    try {
+        const keys = Object.keys(campos);
+        if (keys.length === 0) return res.status(400).json({ error: 'Nenhum campo enviado.' });
+
+        const values = Object.values(campos);
+        const setClause = keys.map((key, index) => `${key} = $${index + 1}`).join(', ');
+        
+        const query = `UPDATE ${tabela} SET ${setClause} WHERE id = $${keys.length + 1}`;
+        const result = await pool.query(query, [...values, id]);
+        
+        res.json({ message: 'Atualizado com sucesso!', affected: result.rowCount });
+    } catch (err) {
+        console.error(`[ERRO UPDATE] Tabela ${tabela}:`, err.message);
+        res.status(500).json({ error: 'Erro ao atualizar registro.' });
+    }
+});
+
+module.exports = router;

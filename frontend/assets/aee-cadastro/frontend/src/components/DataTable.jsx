@@ -2,7 +2,8 @@ import React from 'react';
 
 const DataTable = ({ data, columns = [], selectedId, onSelect }) => {
   // Estado de lista vazia com design moderno
-  if (!data || data.length === 0) {
+  const safeData = Array.isArray(data) ? data : [];
+  if (safeData.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 px-4 text-center bg-white rounded-3xl border-2 border-dashed border-blue-100">
         <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center text-4xl mb-4 animate-bounce">📁</div>
@@ -29,7 +30,7 @@ const DataTable = ({ data, columns = [], selectedId, onSelect }) => {
             </tr>
           </thead>
           <tbody className="divide-y divide-blue-50">
-            {data.map((item) => (
+            {safeData.map((item) => (
               <tr 
                 key={item.id}
                 onClick={() => onSelect(item.id === selectedId ? null : item.id)}

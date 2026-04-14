@@ -8,29 +8,37 @@ import ProfissionalFormModal from '../components/ProfissionalFormModal';
 import AgendamentoFormModal from '../components/AgendamentoFormModal';
 import ReativarModal from '../components/ReativarModal';
 import Swal from 'sweetalert2';
+import { useNavigate } from 'react-router-dom';
 
 const Dashboard = () => {
-  // --- ESTADOS DE NAVEGAÇÃO E DADOS ---
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('aee_alunos');
   const [data, setData] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // --- ESTADOS DOS MODAIS ---
   const [isAlunoModalOpen, setIsAlunoModalOpen] = useState(false);
   const [isEspecialidadeModalOpen, setIsEspecialidadeModalOpen] = useState(false);
   const [isProfissionalModalOpen, setIsProfissionalModalOpen] = useState(false);
   const [isAgendamentoModalOpen, setIsAgendamentoModalOpen] = useState(false);
   const [isReativarOpen, setIsReativarOpen] = useState(false);
 
-  // --- ESTADOS DE EDIÇÃO E LISTAS AUXILIARES ---
   const [itemParaEditar, setItemParaEditar] = useState(null);
   const [especialidades, setEspecialidades] = useState([]);
   const [escolas, setEscolas] = useState([]);
   const [alunos, setAlunos] = useState([]);
   const [profissionais, setProfissionais] = useState([]);
 
-  // Configuração das colunas conforme a aba ativa
+  // ✅ Validação do token ao carregar
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      localStorage.clear();
+      navigate('/login', { replace: true });
+    }
+  }, [navigate]);
+
+  // ✅ Colunas alinhadas às colunas reais do banco
   const columnConfig = {
     aee_alunos: [
       { key: 'id', label: 'ID' },
@@ -40,19 +48,22 @@ const Dashboard = () => {
     ],
     aee_usuarios_equipe: [
       { key: 'id', label: 'ID' },
-      { key: 'usuario', label: 'Usuário' },
-      { key: 'nome', label: 'Nome Completo' },
-      { key: 'cargo', label: 'Cargo/Função' }
+      { key: 'login', label: 'Usuário' },
+      { key: 'nome', label: 'Nome Completo' }
     ],
     aee_profissionais_saude: [
       { key: 'id', label: 'ID' },
-      { key: 'nome_completo', label: 'Profissional' },
-      { key: 'especialidade', label: 'Área' },
-      { key: 'registro_profissional', label: 'Registro/Conselho' }
+      { key: 'nome', label: 'Profissional' },
+      { key: 'login', label: 'Login' }
     ],
     aee_especialidades: [
       { key: 'id', label: 'ID' },
       { key: 'nome', label: 'Especialidade' }
+    ],
+    aee_usuarios_pais: [
+      { key: 'id', label: 'ID' },
+      { key: 'usuario', label: 'Usuário' },
+      { key: 'aluno_id', label: 'ID do Aluno' }
     ],
     aee_agendamentos: [
       { key: 'id', label: 'Nº' },
@@ -63,8 +74,7 @@ const Dashboard = () => {
     ]
   };
 
-  // --- BUSCA DE DADOS ---
-
+  // ✅ Busca dados da aba ativa
   const fetchData = useCallback(async () => {
     setLoading(true);
     const tableParam = activeTab.replace('aee_', '');
@@ -73,28 +83,28 @@ const Dashboard = () => {
       const result = await response.json();
       setData(Array.isArray(result) ? result : []);
     } catch (error) {
-      console.error("Erro ao buscar dados:", error);
+      console.error('Erro ao buscar dados:', error);
       setData([]);
     } finally {
       setLoading(false);
     }
   }, [activeTab]);
 
-  // Carrega listas para os campos de SELECT (dropdowns)
+  // ✅ Busca listas auxiliares para os selects dos modais
   const fetchAuxiliares = async () => {
     try {
       const [resEsp, resEsc, resAlu, resProf] = await Promise.all([
         fetch('/api/crud/especialidades'),
         fetch('/api/crud/escolas'),
         fetch('/api/crud/alunos'),
-        fetch('/api/crud/profissionais_saude')
+        fetch('/api/crud/profissionais')
       ]);
       setEspecialidades(await resEsp.json());
       setEscolas(await resEsc.json());
       setAlunos(await resAlu.json());
       setProfissionais(await resProf.json());
     } catch (e) {
-      console.error("Erro ao carregar listas auxiliares");
+      console.error('Erro ao carregar listas auxiliares:', e);
     }
   };
 
@@ -104,14 +114,13 @@ const Dashboard = () => {
     setSelectedId(null);
   }, [fetchData]);
 
-  // --- LÓGICA DE AÇÕES ---
-
+  // ✅ Roteador de ações dos botões
   const handleAction = (action) => {
     if (action === 'incluir') {
       setItemParaEditar(null);
       abrirModalCorreto();
     } else if (action === 'editar' && selectedId) {
-      const item = data.find(d => d.id === selectedId);
+      const item = data.find((d) => d.id === selectedId);
       setItemParaEditar(item);
       abrirModalCorreto();
     } else if (action === 'inativar' && selectedId) {
@@ -126,10 +135,11 @@ const Dashboard = () => {
     if (activeTab === 'aee_agendamentos') setIsAgendamentoModalOpen(true);
   };
 
+  // ✅ CORREÇÃO PRINCIPAL: usa PATCH /inativar (não DELETE)
   const confirmarInativacao = () => {
     Swal.fire({
       title: 'Inativar Registro?',
-      text: "O item será movido para o arquivo de inativos.",
+      text: 'O item será movido para o arquivo de inativos.',
       icon: 'warning',
       showCancelButton: true,
       confirmButtonColor: '#ef4444',
@@ -137,20 +147,29 @@ const Dashboard = () => {
       cancelButtonText: 'Cancelar'
     }).then(async (result) => {
       if (result.isConfirmed) {
-        const tableParam = activeTab.replace('aee_', '');
-        await fetch(`/api/crud/${tableParam}/${selectedId}`, { method: 'DELETE' });
-        fetchData();
-        setSelectedId(null);
-        Swal.fire('Inativado!', '', 'success');
+        try {
+          const tableParam = activeTab.replace('aee_', '');
+          const response = await fetch(
+            `/api/crud/${tableParam}/${selectedId}/inativar`,
+            { method: 'PATCH' }
+          );
+          if (!response.ok) throw new Error();
+          fetchData();
+          setSelectedId(null);
+          Swal.fire('Inativado!', 'Registro movido para o arquivo.', 'success');
+        } catch {
+          Swal.fire('Erro', 'Não foi possível inativar o registro.', 'error');
+        }
       }
     });
   };
 
+  // ✅ Salvar (POST = incluir, PUT = editar)
   const handleSave = async (formData) => {
     const tableParam = activeTab.replace('aee_', '');
     const method = itemParaEditar ? 'PUT' : 'POST';
-    const url = itemParaEditar 
-      ? `/api/crud/${tableParam}/${itemParaEditar.id}` 
+    const url = itemParaEditar
+      ? `/api/crud/${tableParam}/${itemParaEditar.id}`
       : `/api/crud/${tableParam}`;
 
     try {
@@ -164,9 +183,12 @@ const Dashboard = () => {
         Swal.fire('Sucesso!', 'Operação realizada com êxito.', 'success');
         fecharTodosModais();
         fetchData();
+      } else {
+        const err = await response.json();
+        throw new Error(err.error || 'Erro ao salvar');
       }
     } catch (error) {
-      Swal.fire('Erro', 'Não foi possível salvar os dados.', 'error');
+      Swal.fire('Erro', error.message || 'Não foi possível salvar os dados.', 'error');
     }
   };
 
@@ -181,7 +203,7 @@ const Dashboard = () => {
   return (
     <MainLayout activeTab={activeTab} setActiveTab={setActiveTab}>
       <div className="flex h-full">
-        
+
         {/* TABELA PRINCIPAL */}
         <div className="flex-1 p-8 overflow-auto">
           <header className="mb-8">
@@ -199,11 +221,11 @@ const Dashboard = () => {
                 Sincronizando Banco de Dados...
               </div>
             ) : (
-              <DataTable 
-                data={data} 
-                columns={columnConfig[activeTab] || []} 
-                selectedId={selectedId} 
-                onSelect={setSelectedId} 
+              <DataTable
+                data={data}
+                columns={columnConfig[activeTab] || []}
+                selectedId={selectedId}
+                onSelect={setSelectedId}
               />
             )}
           </div>
@@ -212,9 +234,9 @@ const Dashboard = () => {
         {/* PAINEL DE AÇÕES LATERAL */}
         <aside className="w-80 bg-white/60 backdrop-blur-md border-l border-slate-100 p-8 flex flex-col shadow-2xl">
           <ActionButtons selectedId={selectedId} onAction={handleAction} />
-          
+
           <div className="mt-auto space-y-3">
-            <button 
+            <button
               onClick={() => setIsReativarOpen(true)}
               className="w-full py-4 bg-amber-50 text-amber-700 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] border-2 border-amber-100 hover:bg-amber-500 hover:text-white transition-all flex items-center justify-center gap-3"
             >
@@ -224,24 +246,23 @@ const Dashboard = () => {
         </aside>
       </div>
 
-      {/* MODAIS DE FORMULÁRIO */}
-      
-      <AlunoFormModal 
-        isOpen={isAlunoModalOpen} 
+      {/* MODAIS */}
+      <AlunoFormModal
+        isOpen={isAlunoModalOpen}
         onClose={fecharTodosModais}
         onSave={handleSave}
         alunoInicial={itemParaEditar}
         listaEscolas={escolas}
       />
 
-      <EspecialidadeFormModal 
+      <EspecialidadeFormModal
         isOpen={isEspecialidadeModalOpen}
         onClose={fecharTodosModais}
         onSave={handleSave}
         dadosIniciais={itemParaEditar}
       />
 
-      <ProfissionalFormModal 
+      <ProfissionalFormModal
         isOpen={isProfissionalModalOpen}
         onClose={fecharTodosModais}
         onSave={handleSave}
@@ -249,7 +270,7 @@ const Dashboard = () => {
         listaEspecialidades={especialidades}
       />
 
-      <AgendamentoFormModal 
+      <AgendamentoFormModal
         isOpen={isAgendamentoModalOpen}
         onClose={fecharTodosModais}
         onSave={handleSave}
@@ -258,7 +279,7 @@ const Dashboard = () => {
         listaProfissionais={profissionais}
       />
 
-      <ReativarModal 
+      <ReativarModal
         isOpen={isReativarOpen}
         onClose={() => setIsReativarOpen(false)}
         tabela={activeTab}

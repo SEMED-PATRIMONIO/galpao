@@ -6,6 +6,9 @@ import AlunoFormModal from '../components/AlunoFormModal';
 import EspecialidadeFormModal from '../components/EspecialidadeFormModal';
 import ProfissionalFormModal from '../components/ProfissionalFormModal';
 import AgendamentoFormModal from '../components/AgendamentoFormModal';
+import EquipeFormModal from '../components/EquipeFormModal';
+import PaisFormModal from '../components/PaisFormModal';
+import EscolaFormModal from '../components/EscolaFormModal';
 import ReativarModal from '../components/ReativarModal';
 import Swal from 'sweetalert2';
 import { useNavigate } from 'react-router-dom';
@@ -17,11 +20,17 @@ const Dashboard = () => {
   const [selectedId, setSelectedId] = useState(null);
   const [loading, setLoading] = useState(false);
 
+  // ✅ Modais existentes
   const [isAlunoModalOpen, setIsAlunoModalOpen] = useState(false);
   const [isEspecialidadeModalOpen, setIsEspecialidadeModalOpen] = useState(false);
   const [isProfissionalModalOpen, setIsProfissionalModalOpen] = useState(false);
   const [isAgendamentoModalOpen, setIsAgendamentoModalOpen] = useState(false);
   const [isReativarOpen, setIsReativarOpen] = useState(false);
+
+  // ✅ Novos modais
+  const [isEquipeModalOpen, setIsEquipeModalOpen] = useState(false);
+  const [isPaisModalOpen, setIsPaisModalOpen] = useState(false);
+  const [isEscolaModalOpen, setIsEscolaModalOpen] = useState(false);
 
   const [itemParaEditar, setItemParaEditar] = useState(null);
   const [especialidades, setEspecialidades] = useState([]);
@@ -38,7 +47,7 @@ const Dashboard = () => {
     }
   }, [navigate]);
 
-  // ✅ Colunas alinhadas às colunas reais do banco
+  // ✅ Colunas alinhadas ao banco real
   const columnConfig = {
     aee_alunos: [
       { key: 'id', label: 'ID' },
@@ -59,6 +68,10 @@ const Dashboard = () => {
     aee_especialidades: [
       { key: 'id', label: 'ID' },
       { key: 'nome', label: 'Especialidade' }
+    ],
+    aee_escolas: [
+      { key: 'id', label: 'ID' },
+      { key: 'nome', label: 'Nome da Escola' }
     ],
     aee_usuarios_pais: [
       { key: 'id', label: 'ID' },
@@ -90,7 +103,7 @@ const Dashboard = () => {
     }
   }, [activeTab]);
 
-  // ✅ Busca listas auxiliares para os selects dos modais
+  // ✅ Busca listas auxiliares
   const fetchAuxiliares = async () => {
     try {
       const [resEsp, resEsc, resAlu, resProf] = await Promise.all([
@@ -114,7 +127,6 @@ const Dashboard = () => {
     setSelectedId(null);
   }, [fetchData]);
 
-  // ✅ Roteador de ações dos botões
   const handleAction = (action) => {
     if (action === 'incluir') {
       setItemParaEditar(null);
@@ -128,14 +140,18 @@ const Dashboard = () => {
     }
   };
 
+  // ✅ Abre o modal correto para TODAS as abas
   const abrirModalCorreto = () => {
     if (activeTab === 'aee_alunos') setIsAlunoModalOpen(true);
     if (activeTab === 'aee_especialidades') setIsEspecialidadeModalOpen(true);
     if (activeTab === 'aee_profissionais_saude') setIsProfissionalModalOpen(true);
     if (activeTab === 'aee_agendamentos') setIsAgendamentoModalOpen(true);
+    if (activeTab === 'aee_usuarios_equipe') setIsEquipeModalOpen(true);
+    if (activeTab === 'aee_usuarios_pais') setIsPaisModalOpen(true);
+    if (activeTab === 'aee_escolas') setIsEscolaModalOpen(true);
   };
 
-  // ✅ CORREÇÃO PRINCIPAL: usa PATCH /inativar (não DELETE)
+  // ✅ PATCH para inativar
   const confirmarInativacao = () => {
     Swal.fire({
       title: 'Inativar Registro?',
@@ -183,6 +199,7 @@ const Dashboard = () => {
         Swal.fire('Sucesso!', 'Operação realizada com êxito.', 'success');
         fecharTodosModais();
         fetchData();
+        fetchAuxiliares();
       } else {
         const err = await response.json();
         throw new Error(err.error || 'Erro ao salvar');
@@ -197,6 +214,9 @@ const Dashboard = () => {
     setIsEspecialidadeModalOpen(false);
     setIsProfissionalModalOpen(false);
     setIsAgendamentoModalOpen(false);
+    setIsEquipeModalOpen(false);
+    setIsPaisModalOpen(false);
+    setIsEscolaModalOpen(false);
     setItemParaEditar(null);
   };
 
@@ -246,7 +266,7 @@ const Dashboard = () => {
         </aside>
       </div>
 
-      {/* MODAIS */}
+      {/* ✅ TODOS OS MODAIS */}
       <AlunoFormModal
         isOpen={isAlunoModalOpen}
         onClose={fecharTodosModais}
@@ -277,6 +297,29 @@ const Dashboard = () => {
         agendamentoInicial={itemParaEditar}
         listaAlunos={alunos}
         listaProfissionais={profissionais}
+      />
+
+      <EquipeFormModal
+        isOpen={isEquipeModalOpen}
+        onClose={fecharTodosModais}
+        onSave={handleSave}
+        usuarioInicial={itemParaEditar}
+        listaEspecialidades={especialidades}
+      />
+
+      <PaisFormModal
+        isOpen={isPaisModalOpen}
+        onClose={fecharTodosModais}
+        onSave={handleSave}
+        paisInicial={itemParaEditar}
+        listaAlunos={alunos}
+      />
+
+      <EscolaFormModal
+        isOpen={isEscolaModalOpen}
+        onClose={fecharTodosModais}
+        onSave={handleSave}
+        escolaInicial={itemParaEditar}
       />
 
       <ReativarModal

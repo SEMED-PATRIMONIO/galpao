@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 
-// Tabelas que usam o campo 'ativo' para controlar o que é exibido
 const tabelasComAtivo = ['aee_usuarios_equipe', 'aee_alunos', 'aee_profissionais_saude', 'aee_usuarios_pais'];
 
 const getTableName = (param) => {
@@ -18,67 +17,71 @@ const getTableName = (param) => {
     return mapping[param] || param;
 };
 
-// 1. LISTAGEM (Exibe apenas quem tem 'ativo = true')
+// 1. LISTAGEM (Garante retorno de array para evitar tela branca)
 router.get('/:table', async (req, res) => {
     const tabela = getTableName(req.params.table);
     try {
         let sql = `SELECT * FROM ${tabela}`;
-        if (tabelasComAtivo.includes(tabela)) {
-            sql += ` WHERE ativo = true`; // Aqui filtramos para "enxugar" a lista
-        }
+        if (tabelasComAtivo.includes(tabela)) sql += ` WHERE ativo = true`;
         sql += ` ORDER BY id DESC`;
         const result = await pool.query(sql);
         res.json(result.rows || []);
     } catch (err) {
-        res.status(200).json([]);
+        res.status(200).json([]); // Retorna vazio em vez de erro para o front não travar
     }
 });
 
-// 2. ALTERAR STATUS (Inativar ou Restaurar)
-// Mudamos o nome para 'patch' para refletir que é apenas uma ALTERAÇÃO de campo
-router.patch('/:table/:id/status', async (req, res) => {
-    const tabela = getTableName(req.params.table);
-    const { id } = req.params;
-    const { novoStatus } = req.body; // O front envia 'true' ou 'false'
-
-    try {
-        // AQUI ESTÁ A MÁGICA: Apenas um UPDATE, nada de apagar registros
-        const query = `UPDATE ${tabela} SET ativo = $1 WHERE id = $2`;
-        await pool.query(query, [novoStatus, id]);
-        res.json({ message: 'Status atualizado com sucesso' });
-    } catch (err) {
-        res.status(500).json({ error: 'Erro ao alterar status' });
-    }
-});
-
-// Mantida por compatibilidade com os botões atuais do seu portal
-router.delete('/:table/:id', async (req, res) => {
+// 2. INATIVAR (Ajustado para a URL que o seu Dashboard.jsx usa)
+router.patch('/:table/:id/inativar', async (req, res) => {
     const tabela = getTableName(req.params.table);
     const { id } = req.params;
     try {
-        // Mesmo estando em uma rota "delete", o comando é de UPDATE
         const query = `UPDATE ${tabela} SET ativo = false WHERE id = $1`;
         await pool.query(query, [id]);
-        res.json({ message: 'Registro inativado' });
+        res.json({ message: 'Inativado com sucesso!' });
     } catch (err) {
-        res.status(500).json({ error: 'Erro ao inativar' });
+        res.status(500).json({ error: 'Erro ao inativar no banco.' });
     }
 });
 
-// 3. EDITAR DADOS GERAIS
+// 3. SALVAR NOVO (POST) - Faltava esta rota no seu código
+router.post('/:table', async (req, res) => {
+    const tabela = getTableName(req.params.table);
+    const campos = req.body;
+    try {
+        const keys = Object.keys(campos);
+        const values = Object.values(campos);
+        const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
+        const query = `INSERT INTO ${tabela} (${keys.join(', ')}) VALUES (${placeholders}) RETURNING *`;
+        const result = await pool.query(query, values);
+        res.json(result.rows[0]);
+    } catch (err) {
+        res.status(500).json({ error: 'Erro ao inserir registro.' });
+    }
+});
+
+// 4. ATUALIZAR (PUT)
 router.put('/:table/:id', async (req, res) => {
     const tabela = getTableName(req.params.table);
     const { id } = req.params;
-    const campos = req.body;
+    const campos = req.body; // O front envia os campos alterados aqui
+    
     try {
         const keys = Object.keys(campos).filter(k => k !== 'id');
-        const values = keys.map(k => campos[k]);
+        const values = Object.values(campos).filter((v, i) => Object.keys(campos)[i] !== 'id');
+        
+        // Monta o SQL automaticamente: "SET nome=$1, ra=$2..."
         const setClause = keys.map((key, index) => `${key} = $${index + 1}`).join(', ');
+        
         const query = `UPDATE ${tabela} SET ${setClause} WHERE id = $${keys.length + 1}`;
-        await pool.query(query, [...values, id]);
-        res.json({ message: 'Salvo com sucesso' });
+        const result = await pool.query(query, [...values, id]);
+
+        if (result.rowCount === 0) return res.status(404).json({ error: 'Não encontrado' });
+        
+        res.json({ message: 'Atualizado com sucesso no Postgres!' });
     } catch (err) {
-        res.status(500).json({ error: 'Erro ao salvar' });
+        console.error(err);
+        res.status(500).json({ error: 'Erro ao editar no banco' });
     }
 });
 

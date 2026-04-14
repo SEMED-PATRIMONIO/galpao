@@ -18,6 +18,8 @@ const Dashboard = () => {
   const [especialidades, setEspecialidades] = useState([]);
   const [escolas, setEscolas] = useState([]);
   const [alunoParaEditar, setAlunoParaEditar] = useState(null);
+  const [isEspecialidadeModalOpen, setIsEspecialidadeModalOpen] = useState(false);
+  const [isEquipeModalOpen, setIsEquipeModalOpen] = useState(false);
 
   const columnConfig = {
     aee_alunos: [
@@ -26,7 +28,25 @@ const Dashboard = () => {
       { key: 'ra', label: 'RA' },
       { key: 'escola', label: 'Unidade Escolar' }
     ],
-    // ... manter as outras configurações de colunas
+    aee_usuarios_pais: [
+      { key: 'id', label: 'ID' },
+      { key: 'nome_completo', label: 'Responsável' },
+      { key: 'telefone', label: 'Contato' }
+    ],
+    aee_profissionais_saude: [
+      { key: 'id', label: 'ID' },
+      { key: 'nome_completo', label: 'Profissional' },
+      { key: 'especialidade', label: 'Área' }
+    ],
+    aee_especialidades: [
+      { key: 'id', label: 'ID' },
+      { key: 'nome', label: 'Nome da Especialidade' }
+    ],
+    aee_usuarios_equipe: [
+      { key: 'id', label: 'ID' },
+      { key: 'nome_completo', label: 'Nome' },
+      { key: 'cargo', label: 'Função' }
+    ]
   };
 
   const fetchData = async () => {
@@ -53,19 +73,27 @@ const Dashboard = () => {
     setSelectedId(null);
   }, [activeTab]);
 
-  const handleAction = (type) => {
-    if (type === 'incluir') {
-      setAlunoParaEditar(null);
-      setIsAlunoModalOpen(true);
+  const handleAction = (action) => {
+    if (action === 'incluir') {
+      setElementoParaEditar(null); // Limpa para novo cadastro
+      if (activeTab === 'aee_alunos') setIsAlunoModalOpen(true);
+      if (activeTab === 'aee_especialidades') setIsEspecialidadeModalOpen(true);
+      if (activeTab === 'aee_usuarios_equipe') setIsEquipeModalOpen(true);
+      // Adicione aqui os outros conforme precisar
     }
-    if (type === 'editar') {
-      if (!selectedId) return Swal.fire("Atenção", "Selecione um registro primeiro!", "info");
-      const aluno = data.find(d => d.id === selectedId);
-      setAlunoParaEditar(aluno);
-      setIsAlunoModalOpen(true);
+
+    if (action === 'editar' && selectedId) {
+      const item = data.find(i => i.id === selectedId);
+      setElementoParaEditar(item); // Preenche o formulário com os dados atuais
+      
+      if (activeTab === 'aee_alunos') setIsAlunoModalOpen(true);
+      if (activeTab === 'aee_especialidades') setIsEspecialidadeModalOpen(true);
+      if (activeTab === 'aee_usuarios_equipe') setIsEquipeModalOpen(true);
     }
-    if (type === 'inativar') handleInativar();
-    if (type === 'reativar') setIsReativarOpen(true);
+
+    if (action === 'inativar' && selectedId) {
+      inativarRegistro(selectedId);
+    }
   };
 
   const handleInativar = async () => {
@@ -82,6 +110,31 @@ const Dashboard = () => {
       await fetch(`/api/crud/${activeTab.replace('aee_', '')}/${selectedId}/inativar`, { method: 'PATCH' });
       fetchData();
       Swal.fire("Sucesso", "Registro arquivado!", "success");
+    }
+  };
+
+  const handleSave = async (formData) => {
+    try {
+      const method = elementoParaEditar ? 'PUT' : 'POST';
+      const url = elementoParaEditar 
+        ? `/api/crud/${activeTab}/${elementoParaEditar.id}` 
+        : `/api/crud/${activeTab}`;
+
+      const response = await fetch(url, {
+        method: method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
+
+      if (response.ok) {
+        Swal.fire('Sucesso!', 'Dados salvos no banco.', 'success');
+        fetchData(); // Recarrega a tabela na hora
+        setIsAlunoModalOpen(false);
+        setIsEspecialidadeModalOpen(false);
+        setIsEquipeModalOpen(false);
+      }
+    } catch (error) {
+      Swal.fire('Erro', 'Não foi possível salvar.', 'error');
     }
   };
 

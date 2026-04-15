@@ -22,19 +22,17 @@ const Login = () => {
       const data = await response.json();
 
       if (response.ok) {
-        // --- CRUCIAL: Salva as credenciais para o App.jsx validar ---
         localStorage.setItem('token', data.token);
         localStorage.setItem('user', JSON.stringify(data.user));
 
         Swal.fire({
           icon: 'success',
           title: 'Acesso Autorizado',
-          text: `Bem-vindo, ${data.user.nome || data.user.usuario}!`,
+          text: `Bem-vindo, ${data.user.nome || data.user.login}!`,
           timer: 1500,
           showConfirmButton: false
         });
 
-        // Redireciona para o Dashboard principal
         navigate('/dashboard');
       } else {
         Swal.fire({
@@ -59,16 +57,19 @@ const Login = () => {
     <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
       <div className="max-w-md w-full bg-white rounded-[2rem] shadow-2xl overflow-hidden border border-blue-50">
         <div className="p-8">
+
           {/* LOGO / TÍTULO */}
           <div className="text-center mb-10">
             <div className="inline-flex items-center justify-center w-20 h-20 bg-blue-600 rounded-3xl shadow-lg shadow-blue-200 mb-4">
               <span className="text-white text-4xl font-black">AE</span>
             </div>
             <h1 className="text-3xl font-black text-slate-800 uppercase tracking-tighter">Portal Gestor</h1>
-            <p className="text-slate-400 font-medium">Educação Especial & Inclusiva</p>
+            {/* ✅ ALTERADO */}
+            <p className="text-slate-400 font-medium">Atendimento Especial & Inclusivo</p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-6">
+
             {/* CAMPO USUÁRIO */}
             <div>
               <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 ml-1">
@@ -104,8 +105,8 @@ const Login = () => {
               type="submit"
               disabled={loading}
               className={`w-full py-5 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg 
-                ${loading 
-                  ? 'bg-slate-200 text-slate-400 cursor-not-allowed' 
+                ${loading
+                  ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
                   : 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-200 active:scale-[0.98]'
                 }`}
             >
@@ -113,12 +114,14 @@ const Login = () => {
             </button>
           </form>
 
-          {/* RODAPÉ */}
+          {/* RODAPÉ ✅ ALTERADO com fonte menor */}
           <div className="mt-10 text-center">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-              &copy; 2026 OMEQ Tecnologia
+            <p className="text-[9px] font-bold text-slate-400 leading-relaxed">
+              Desenvolvido pela Subsecretaria Adjunta de<br />
+              Inovação e Tecnologia da SEMED - Queimados/RJ
             </p>
           </div>
+
         </div>
       </div>
     </div>

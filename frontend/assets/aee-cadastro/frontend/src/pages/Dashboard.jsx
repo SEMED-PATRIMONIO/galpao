@@ -13,6 +13,17 @@ import ReativarModal from '../components/ReativarModal';
 import Swal from 'sweetalert2';
 import { useNavigate } from 'react-router-dom';
 
+// ✅ Mapa de rótulos visuais (não afeta banco nem variáveis)
+const rotulosVisuais = {
+  aee_alunos: 'Pacientes',
+  aee_usuarios_equipe: 'Equipe',
+  aee_profissionais_saude: 'Profissionais de Saúde',
+  aee_especialidades: 'Especialidades',
+  aee_escolas: 'Estabelecimentos',
+  aee_usuarios_pais: 'Pais / Responsáveis',
+  aee_agendamentos: 'Agendamentos'
+};
+
 const Dashboard = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('aee_alunos');
@@ -20,14 +31,11 @@ const Dashboard = () => {
   const [selectedId, setSelectedId] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // ✅ Modais existentes
   const [isAlunoModalOpen, setIsAlunoModalOpen] = useState(false);
   const [isEspecialidadeModalOpen, setIsEspecialidadeModalOpen] = useState(false);
   const [isProfissionalModalOpen, setIsProfissionalModalOpen] = useState(false);
   const [isAgendamentoModalOpen, setIsAgendamentoModalOpen] = useState(false);
   const [isReativarOpen, setIsReativarOpen] = useState(false);
-
-  // ✅ Novos modais
   const [isEquipeModalOpen, setIsEquipeModalOpen] = useState(false);
   const [isPaisModalOpen, setIsPaisModalOpen] = useState(false);
   const [isEscolaModalOpen, setIsEscolaModalOpen] = useState(false);
@@ -38,7 +46,6 @@ const Dashboard = () => {
   const [alunos, setAlunos] = useState([]);
   const [profissionais, setProfissionais] = useState([]);
 
-  // ✅ Validação do token ao carregar
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) {
@@ -47,13 +54,12 @@ const Dashboard = () => {
     }
   }, [navigate]);
 
-  // ✅ Colunas alinhadas ao banco real
   const columnConfig = {
     aee_alunos: [
       { key: 'id', label: 'ID' },
-      { key: 'nome_completo', label: 'Nome do Aluno' },
+      { key: 'nome_completo', label: 'Nome do Paciente' },
       { key: 'ra', label: 'RA' },
-      { key: 'escola', label: 'Unidade Escolar' }
+      { key: 'escola', label: 'Estabelecimento' }
     ],
     aee_usuarios_equipe: [
       { key: 'id', label: 'ID' },
@@ -71,23 +77,22 @@ const Dashboard = () => {
     ],
     aee_escolas: [
       { key: 'id', label: 'ID' },
-      { key: 'nome', label: 'Nome da Escola' }
+      { key: 'nome', label: 'Nome do Estabelecimento' }
     ],
     aee_usuarios_pais: [
       { key: 'id', label: 'ID' },
       { key: 'usuario', label: 'Usuário' },
-      { key: 'aluno_id', label: 'ID do Aluno' }
+      { key: 'aluno_id', label: 'ID do Paciente' }
     ],
     aee_agendamentos: [
       { key: 'id', label: 'Nº' },
-      { key: 'aluno_nome', label: 'Aluno' },
+      { key: 'aluno_nome', label: 'Paciente' },
       { key: 'profissional_nome', label: 'Profissional' },
       { key: 'data_hora', label: 'Data/Hora' },
       { key: 'status', label: 'Status' }
     ]
   };
 
-  // ✅ Busca dados da aba ativa
   const fetchData = useCallback(async () => {
     setLoading(true);
     const tableParam = activeTab.replace('aee_', '');
@@ -103,7 +108,6 @@ const Dashboard = () => {
     }
   }, [activeTab]);
 
-  // ✅ Busca listas auxiliares
   const fetchAuxiliares = async () => {
     try {
       const [resEsp, resEsc, resAlu, resProf] = await Promise.all([
@@ -140,7 +144,6 @@ const Dashboard = () => {
     }
   };
 
-  // ✅ Abre o modal correto para TODAS as abas
   const abrirModalCorreto = () => {
     if (activeTab === 'aee_alunos') setIsAlunoModalOpen(true);
     if (activeTab === 'aee_especialidades') setIsEspecialidadeModalOpen(true);
@@ -151,7 +154,6 @@ const Dashboard = () => {
     if (activeTab === 'aee_escolas') setIsEscolaModalOpen(true);
   };
 
-  // ✅ PATCH para inativar
   const confirmarInativacao = () => {
     Swal.fire({
       title: 'Inativar Registro?',
@@ -180,7 +182,6 @@ const Dashboard = () => {
     });
   };
 
-  // ✅ Salvar (POST = incluir, PUT = editar)
   const handleSave = async (formData) => {
     const tableParam = activeTab.replace('aee_', '');
     const method = itemParaEditar ? 'PUT' : 'POST';
@@ -227,8 +228,9 @@ const Dashboard = () => {
         {/* TABELA PRINCIPAL */}
         <div className="flex-1 p-8 overflow-auto">
           <header className="mb-8">
+            {/* ✅ Usa rótulo visual em vez do nome da tabela */}
             <h2 className="text-3xl font-black text-slate-800 uppercase tracking-tighter">
-              {activeTab.replace('aee_', '').replace(/_/g, ' ')}
+              {rotulosVisuais[activeTab] || activeTab.replace('aee_', '').replace(/_/g, ' ')}
             </h2>
             <p className="text-slate-400 font-bold text-xs uppercase tracking-widest mt-1">
               Base de Dados • {data.length} registros encontrados
@@ -266,13 +268,14 @@ const Dashboard = () => {
         </aside>
       </div>
 
-      {/* ✅ TODOS OS MODAIS */}
+      {/* MODAIS */}
       <AlunoFormModal
         isOpen={isAlunoModalOpen}
         onClose={fecharTodosModais}
         onSave={handleSave}
         alunoInicial={itemParaEditar}
         listaEscolas={escolas}
+        listaEspecialidades={especialidades}
       />
 
       <EspecialidadeFormModal

@@ -6,13 +6,13 @@ const MainLayout = ({ children, activeTab, setActiveTab }) => {
   const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem('user') || '{}');
 
-  // ✅ Adicionado Escolas ao menu
+  // ✅ Rótulos visuais alterados (ids internos mantidos para o banco)
   const menuItems = [
-    { id: 'aee_alunos', label: 'Alunos', icon: '🎓' },
+    { id: 'aee_alunos', label: 'Pacientes', icon: '🎓' },
     { id: 'aee_usuarios_equipe', label: 'Equipe', icon: '👥' },
     { id: 'aee_profissionais_saude', label: 'Profissionais', icon: '🩺' },
     { id: 'aee_especialidades', label: 'Especialidades', icon: '📑' },
-    { id: 'aee_escolas', label: 'Escolas', icon: '🏫' },
+    { id: 'aee_escolas', label: 'Estabelecimentos', icon: '🏫' },
     { id: 'aee_usuarios_pais', label: 'Pais / Responsáveis', icon: '🏠' },
   ];
 
@@ -47,11 +47,12 @@ const MainLayout = ({ children, activeTab, setActiveTab }) => {
               AE
             </div>
             <div>
+              {/* ✅ ALTERADO */}
               <h1 className="text-white font-black text-sm uppercase tracking-tighter leading-none">
-                Portal OMEQ
+                Atendimento Especializado
               </h1>
               <span className="text-blue-400 text-[10px] font-bold uppercase tracking-widest">
-                Gestão Inclusiva
+                Cadastro Azul
               </span>
             </div>
           </div>

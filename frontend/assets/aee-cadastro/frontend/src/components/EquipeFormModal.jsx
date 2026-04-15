@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import bcryptjs from 'bcryptjs';
 
 const EquipeFormModal = ({ isOpen, onClose, onSave, usuarioInicial, listaEspecialidades = [] }) => {
   const [formData, setFormData] = useState({
@@ -29,29 +28,24 @@ const EquipeFormModal = ({ isOpen, onClose, onSave, usuarioInicial, listaEspecia
 
   if (!isOpen) return null;
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
 
-    const dadosParaSalvar = { ...formData };
+    const dadosParaSalvar = {
+      nome: formData.nome,
+      login: formData.login,
+    };
 
-    // Se senha foi preenchida, faz hash antes de enviar
-    if (dadosParaSalvar.senha && dadosParaSalvar.senha.trim() !== '') {
-      const salt = await bcryptjs.genSalt(10);
-      dadosParaSalvar.senha_hash = await bcryptjs.hash(dadosParaSalvar.senha, salt);
-    }
-    // Remove o campo 'senha' (o banco usa 'senha_hash')
-    delete dadosParaSalvar.senha;
-
-    // Se é edição e não digitou senha, não envia senha_hash (mantém a atual)
-    if (usuarioInicial && !dadosParaSalvar.senha_hash) {
-      delete dadosParaSalvar.senha_hash;
+    // Envia senha em texto plano - o backend faz o hash
+    if (formData.senha && formData.senha.trim() !== '') {
+      dadosParaSalvar.senha = formData.senha;
     }
 
-    // Converte especialidade_id para inteiro ou null
-    if (dadosParaSalvar.especialidade_id === '' || dadosParaSalvar.especialidade_id === null) {
+    // especialidade_id
+    if (formData.especialidade_id === '' || formData.especialidade_id === null) {
       dadosParaSalvar.especialidade_id = null;
     } else {
-      dadosParaSalvar.especialidade_id = parseInt(dadosParaSalvar.especialidade_id);
+      dadosParaSalvar.especialidade_id = parseInt(formData.especialidade_id);
     }
 
     onSave(dadosParaSalvar);
@@ -60,14 +54,14 @@ const EquipeFormModal = ({ isOpen, onClose, onSave, usuarioInicial, listaEspecia
   return (
     <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
       <div className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl overflow-hidden">
-        
+
         {/* CABEÇALHO */}
         <div className="bg-indigo-600 px-10 py-8 text-white relative">
           <h2 className="text-2xl font-black uppercase tracking-tighter">
             {usuarioInicial ? '📝 Editar Membro da Equipe' : '➕ Novo Membro da Equipe'}
           </h2>
           <p className="text-indigo-100 text-xs font-bold uppercase tracking-widest mt-1">
-            Usuários com acesso ao sistema (aee_usuarios_equipe)
+            Usuários com acesso ao sistema
           </p>
           <button
             onClick={onClose}
@@ -81,7 +75,7 @@ const EquipeFormModal = ({ isOpen, onClose, onSave, usuarioInicial, listaEspecia
         <form onSubmit={handleSubmit} className="p-10 space-y-6">
           <div className="grid grid-cols-2 gap-6">
 
-            {/* NOME COMPLETO */}
+            {/* NOME */}
             <div className="col-span-2">
               <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
                 Nome Completo
@@ -114,7 +108,7 @@ const EquipeFormModal = ({ isOpen, onClose, onSave, usuarioInicial, listaEspecia
             {/* SENHA */}
             <div>
               <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
-                {usuarioInicial ? 'Nova Senha (deixe vazio para manter)' : 'Senha'}
+                {usuarioInicial ? 'Nova Senha (vazio = manter)' : 'Senha'}
               </label>
               <input
                 type="password"

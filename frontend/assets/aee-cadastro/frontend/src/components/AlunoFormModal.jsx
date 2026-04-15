@@ -1,36 +1,57 @@
 import React, { useState, useEffect } from 'react';
 
-const AlunoFormModal = ({ isOpen, onClose, onSave, alunoInicial, listaEscolas = [] }) => {
-  // Estado inicial do formulário seguindo a estrutura do seu Postgres
+const AlunoFormModal = ({ isOpen, onClose, onSave, alunoInicial, listaEscolas = [], listaEspecialidades = [] }) => {
   const [formData, setFormData] = useState({
     nome_completo: '',
     ra: '',
     data_nascimento: '',
-    escola: ''
+    escola: '',
+    especialidades: []
   });
 
-  // Sempre que o modal abrir ou o aluno selecionado mudar, atualizamos os campos
   useEffect(() => {
     if (alunoInicial) {
-      // Se for edição, preenchemos com os dados vindos do banco
+      // especialidades vem como jsonb do banco (array de ids ou nomes)
+      let esps = [];
+      if (Array.isArray(alunoInicial.especialidades)) {
+        esps = alunoInicial.especialidades;
+      } else if (typeof alunoInicial.especialidades === 'string') {
+        try { esps = JSON.parse(alunoInicial.especialidades); } catch { esps = []; }
+      }
       setFormData({
         nome_completo: alunoInicial.nome_completo || '',
         ra: alunoInicial.ra || '',
-        data_nascimento: alunoInicial.data_nascimento ? alunoInicial.data_nascimento.split('T')[0] : '',
-        escola: alunoInicial.escola || ''
+        data_nascimento: alunoInicial.data_nascimento
+          ? alunoInicial.data_nascimento.split('T')[0]
+          : '',
+        escola: alunoInicial.escola || '',
+        especialidades: esps
       });
     } else {
-      // Se for inclusão, limpamos o formulário
       setFormData({
         nome_completo: '',
         ra: '',
         data_nascimento: '',
-        escola: ''
+        escola: '',
+        especialidades: []
       });
     }
   }, [alunoInicial, isOpen]);
 
   if (!isOpen) return null;
+
+  // ✅ Toggle de especialidade pelo ID
+  const toggleEspecialidade = (id) => {
+    setFormData((prev) => {
+      const jaTemp = prev.especialidades.includes(id);
+      return {
+        ...prev,
+        especialidades: jaTemp
+          ? prev.especialidades.filter((e) => e !== id)
+          : [...prev.especialidades, id]
+      };
+    });
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -39,17 +60,17 @@ const AlunoFormModal = ({ isOpen, onClose, onSave, alunoInicial, listaEscolas = 
 
   return (
     <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-      <div className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
-        
-        {/* CABEÇALHO */}
-        <div className="bg-blue-600 px-10 py-8 text-white relative">
+      <div className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl overflow-hidden max-h-[95vh] flex flex-col">
+
+        {/* CABEÇALHO ✅ ALUNO → PACIENTE, sem texto da tabela */}
+        <div className="bg-blue-600 px-10 py-8 text-white relative shrink-0">
           <h2 className="text-2xl font-black uppercase tracking-tighter">
-            {alunoInicial ? '📝 Editar Aluno' : '➕ Novo Cadastro'}
+            {alunoInicial ? '📝 Editar Paciente' : '➕ Novo Cadastro'}
           </h2>
           <p className="text-blue-100 text-xs font-bold uppercase tracking-widest mt-1">
-            Informações do Aluno (Tabela aee_alunos)
+            Informações do Paciente
           </p>
-          <button 
+          <button
             onClick={onClose}
             className="absolute top-8 right-8 w-10 h-10 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full transition-colors"
           >
@@ -57,14 +78,14 @@ const AlunoFormModal = ({ isOpen, onClose, onSave, alunoInicial, listaEscolas = 
           </button>
         </div>
 
-        {/* FORMULÁRIO */}
-        <form onSubmit={handleSubmit} className="p-10 space-y-6">
+        {/* FORMULÁRIO COM SCROLL */}
+        <form onSubmit={handleSubmit} className="p-10 space-y-6 overflow-y-auto flex-1">
           <div className="grid grid-cols-2 gap-6">
-            
+
             {/* NOME COMPLETO */}
             <div className="col-span-2">
               <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
-                Nome Completo do Aluno
+                Nome Completo do Paciente
               </label>
               <input
                 type="text"
@@ -79,7 +100,7 @@ const AlunoFormModal = ({ isOpen, onClose, onSave, alunoInicial, listaEscolas = 
             {/* RA */}
             <div>
               <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
-                RA (Registro do Aluno)
+                RA (Registro do Paciente)
               </label>
               <input
                 type="text"
@@ -105,10 +126,10 @@ const AlunoFormModal = ({ isOpen, onClose, onSave, alunoInicial, listaEscolas = 
               />
             </div>
 
-            {/* UNIDADE ESCOLAR */}
+            {/* ESTABELECIMENTO ✅ rótulo atualizado */}
             <div className="col-span-2">
               <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
-                Unidade Escolar Atual
+                Local Onde Recebe Atendimento
               </label>
               <select
                 required
@@ -116,17 +137,69 @@ const AlunoFormModal = ({ isOpen, onClose, onSave, alunoInicial, listaEscolas = 
                 value={formData.escola}
                 onChange={(e) => setFormData({ ...formData, escola: e.target.value })}
               >
-                <option value="">Selecione a Escola</option>
+                <option value="">Selecione o Estabelecimento</option>
                 {listaEscolas.map((esc) => (
                   <option key={esc.id} value={esc.nome}>{esc.nome}</option>
                 ))}
-                {/* Fallback caso a lista de escolas falhe */}
-                {!listaEscolas.length && <option value={formData.escola}>{formData.escola || 'Carregando...'}</option>}
+                {!listaEscolas.length && (
+                  <option value={formData.escola}>{formData.escola || 'Carregando...'}</option>
+                )}
               </select>
+            </div>
+
+            {/* ✅ ESPECIALIDADES COM CHECKBOXES */}
+            <div className="col-span-2">
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">
+                Especialidades de Acompanhamento
+              </label>
+
+              {listaEspecialidades.length === 0 ? (
+                <p className="text-slate-400 text-xs font-medium italic px-2">
+                  Nenhuma especialidade cadastrada.
+                </p>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  {listaEspecialidades.map((esp) => {
+                    const selecionada = formData.especialidades.includes(esp.id);
+                    return (
+                      <button
+                        key={esp.id}
+                        type="button"
+                        onClick={() => toggleEspecialidade(esp.id)}
+                        className={`flex items-center gap-3 px-4 py-3 rounded-2xl border-2 font-bold text-xs transition-all text-left
+                          ${selecionada
+                            ? 'bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-200'
+                            : 'bg-slate-50 border-slate-100 text-slate-600 hover:border-blue-300 hover:bg-blue-50'
+                          }`}
+                      >
+                        <span className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-all
+                          ${selecionada
+                            ? 'bg-white border-white'
+                            : 'border-slate-300 bg-white'
+                          }`}
+                        >
+                          {selecionada && (
+                            <svg className="w-3 h-3 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                        </span>
+                        {esp.nome}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {formData.especialidades.length > 0 && (
+                <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest mt-3 ml-1">
+                  {formData.especialidades.length} especialidade(s) selecionada(s)
+                </p>
+              )}
             </div>
           </div>
 
-          {/* RODAPÉ E BOTÕES */}
+          {/* BOTÕES */}
           <div className="pt-6 flex gap-4">
             <button
               type="button"

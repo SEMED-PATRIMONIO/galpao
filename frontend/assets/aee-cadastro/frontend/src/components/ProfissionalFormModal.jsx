@@ -1,51 +1,85 @@
 import React, { useState, useEffect } from 'react';
 
 const ProfissionalFormModal = ({ isOpen, onClose, onSave, profissionalInicial, listaEspecialidades = [] }) => {
-  // Estado inicial baseado na tabela aee_profissionais_saude
   const [formData, setFormData] = useState({
-    nome_completo: '',
-    especialidade: '',
-    registro_profissional: ''
+    nome: '',
+    login: '',
+    senha: '',
+    especialidades_ids: []
   });
 
-  // Sincronização para Edição ou Novo Cadastro
   useEffect(() => {
     if (profissionalInicial) {
+      let esps = [];
+      if (Array.isArray(profissionalInicial.especialidades_ids)) {
+        esps = profissionalInicial.especialidades_ids;
+      } else if (profissionalInicial.especialidade_id) {
+        esps = [profissionalInicial.especialidade_id];
+      }
       setFormData({
-        nome_completo: profissionalInicial.nome_completo || '',
-        especialidade: profissionalInicial.especialidade || '',
-        registro_profissional: profissionalInicial.registro_profissional || ''
+        nome: profissionalInicial.nome || '',
+        login: profissionalInicial.login || '',
+        senha: '',
+        especialidades_ids: esps
       });
     } else {
       setFormData({
-        nome_completo: '',
-        especialidade: '',
-        registro_profissional: ''
+        nome: '',
+        login: '',
+        senha: '',
+        especialidades_ids: []
       });
     }
   }, [profissionalInicial, isOpen]);
 
   if (!isOpen) return null;
 
+  const toggleEspecialidade = (id) => {
+    setFormData((prev) => {
+      const jaTemp = prev.especialidades_ids.includes(id);
+      return {
+        ...prev,
+        especialidades_ids: jaTemp
+          ? prev.especialidades_ids.filter((e) => e !== id)
+          : [...prev.especialidades_ids, id]
+      };
+    });
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSave(formData);
+
+    const dadosParaSalvar = {
+      nome: formData.nome,
+      login: formData.login,
+    };
+
+    // Envia senha em texto plano - o backend faz o hash
+    if (formData.senha && formData.senha.trim() !== '') {
+      dadosParaSalvar.senha = formData.senha;
+    }
+
+    // Usa o primeiro id selecionado para especialidade_id
+    dadosParaSalvar.especialidade_id = formData.especialidades_ids.length > 0
+      ? formData.especialidades_ids[0]
+      : null;
+
+    onSave(dadosParaSalvar);
   };
 
   return (
     <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-      <div className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
-        
-        {/* CABEÇALHO - Tema Ciano/Médico */}
-        <div className="bg-cyan-600 px-10 py-8 text-white relative">
-          <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
-            <span className="text-3xl">🩺</span> 
-            {profissionalInicial ? 'Editar Profissional' : 'Novo Profissional'}
+      <div className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl overflow-hidden max-h-[95vh] flex flex-col">
+
+        {/* CABEÇALHO */}
+        <div className="bg-teal-600 px-10 py-8 text-white relative shrink-0">
+          <h2 className="text-2xl font-black uppercase tracking-tighter">
+            {profissionalInicial ? '📝 Editar Profissional' : '➕ Novo Profissional de Saúde'}
           </h2>
-          <p className="text-cyan-100 text-[10px] font-bold uppercase tracking-widest mt-1">
-            Gestão de Especialistas de Saúde e Apoio
+          <p className="text-teal-100 text-xs font-bold uppercase tracking-widest mt-1">
+            Profissionais de Saúde
           </p>
-          <button 
+          <button
             onClick={onClose}
             className="absolute top-8 right-8 w-10 h-10 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full transition-colors"
           >
@@ -54,71 +88,108 @@ const ProfissionalFormModal = ({ isOpen, onClose, onSave, profissionalInicial, l
         </div>
 
         {/* FORMULÁRIO */}
-        <form onSubmit={handleSubmit} className="p-10 space-y-6">
+        <form onSubmit={handleSubmit} className="p-10 space-y-6 overflow-y-auto flex-1">
           <div className="grid grid-cols-2 gap-6">
-            
-            {/* NOME COMPLETO */}
+
+            {/* NOME */}
             <div className="col-span-2">
               <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
-                Nome do Profissional
+                Nome Completo
               </label>
               <input
                 type="text"
                 required
-                className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent focus:border-cyan-500 focus:bg-white rounded-2xl outline-none transition-all font-bold text-slate-700"
-                value={formData.nome_completo}
-                onChange={(e) => setFormData({ ...formData, nome_completo: e.target.value })}
-                placeholder="Ex: Dra. Ana Paula Silveira"
+                className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent focus:border-teal-500 focus:bg-white rounded-2xl outline-none transition-all font-bold text-slate-700"
+                value={formData.nome}
+                onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
+                placeholder="Ex: Dr. Carlos Andrade"
               />
             </div>
 
-            {/* ESPECIALIDADE */}
+            {/* LOGIN */}
             <div>
               <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
-                Especialidade Principal
-              </label>
-              <select
-                required
-                className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent focus:border-cyan-500 focus:bg-white rounded-2xl outline-none transition-all font-bold text-slate-700 appearance-none"
-                value={formData.especialidade}
-                onChange={(e) => setFormData({ ...formData, especialidade: e.target.value })}
-              >
-                <option value="">Selecione a Área</option>
-                {listaEspecialidades.map((esp) => (
-                  <option key={esp.id} value={esp.nome}>{esp.nome}</option>
-                ))}
-                {/* Fallback para carregar valor existente caso a lista demore */}
-                {!listaEspecialidades.find(e => e.nome === formData.especialidade) && formData.especialidade && (
-                    <option value={formData.especialidade}>{formData.especialidade}</option>
-                )}
-              </select>
-            </div>
-
-            {/* REGISTRO PROFISSIONAL */}
-            <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
-                Registro (CRM, CRP, etc)
+                Login de Acesso
               </label>
               <input
                 type="text"
                 required
-                className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent focus:border-cyan-500 focus:bg-white rounded-2xl outline-none transition-all font-bold text-slate-700"
-                value={formData.registro_profissional}
-                onChange={(e) => setFormData({ ...formData, registro_profissional: e.target.value })}
-                placeholder="Ex: CRP 06/123456"
+                className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent focus:border-teal-500 focus:bg-white rounded-2xl outline-none transition-all font-bold text-slate-700"
+                value={formData.login}
+                onChange={(e) => setFormData({ ...formData, login: e.target.value })}
+                placeholder="Ex: dr.carlos"
               />
             </div>
-          </div>
 
-          <div className="bg-cyan-50 p-4 rounded-2xl border border-cyan-100 flex items-start gap-3">
-             <span className="text-lg">🛡️</span>
-             <p className="text-[10px] text-cyan-700 font-bold leading-tight uppercase tracking-wider">
-               Certifique-se de que o registro profissional esteja correto para a validade dos laudos e relatórios emitidos.
-             </p>
+            {/* SENHA */}
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
+                {profissionalInicial ? 'Nova Senha (vazio = manter)' : 'Senha'}
+              </label>
+              <input
+                type="password"
+                required={!profissionalInicial}
+                className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent focus:border-teal-500 focus:bg-white rounded-2xl outline-none transition-all font-bold text-slate-700"
+                value={formData.senha}
+                onChange={(e) => setFormData({ ...formData, senha: e.target.value })}
+                placeholder="••••••••"
+              />
+            </div>
+
+            {/* ESPECIALIDADES COM CHECKBOXES */}
+            <div className="col-span-2">
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">
+                Especialidade(s) de Atuação
+              </label>
+
+              {listaEspecialidades.length === 0 ? (
+                <p className="text-slate-400 text-xs font-medium italic px-2">
+                  Nenhuma especialidade cadastrada.
+                </p>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  {listaEspecialidades.map((esp) => {
+                    const selecionada = formData.especialidades_ids.includes(esp.id);
+                    return (
+                      <button
+                        key={esp.id}
+                        type="button"
+                        onClick={() => toggleEspecialidade(esp.id)}
+                        className={`flex items-center gap-3 px-4 py-3 rounded-2xl border-2 font-bold text-xs transition-all text-left
+                          ${selecionada
+                            ? 'bg-teal-600 border-teal-600 text-white shadow-md shadow-teal-200'
+                            : 'bg-slate-50 border-slate-100 text-slate-600 hover:border-teal-300 hover:bg-teal-50'
+                          }`}
+                      >
+                        <span className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-all
+                          ${selecionada
+                            ? 'bg-white border-white'
+                            : 'border-slate-300 bg-white'
+                          }`}
+                        >
+                          {selecionada && (
+                            <svg className="w-3 h-3 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                        </span>
+                        {esp.nome}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {formData.especialidades_ids.length > 0 && (
+                <p className="text-[10px] font-black text-teal-500 uppercase tracking-widest mt-3 ml-1">
+                  {formData.especialidades_ids.length} especialidade(s) selecionada(s)
+                </p>
+              )}
+            </div>
           </div>
 
           {/* BOTÕES */}
-          <div className="pt-4 flex gap-4">
+          <div className="pt-6 flex gap-4">
             <button
               type="button"
               onClick={onClose}
@@ -128,7 +199,7 @@ const ProfissionalFormModal = ({ isOpen, onClose, onSave, profissionalInicial, l
             </button>
             <button
               type="submit"
-              className="flex-[2] py-4 rounded-2xl font-black text-xs uppercase tracking-widest text-white bg-cyan-600 hover:bg-cyan-700 shadow-lg shadow-cyan-200 transition-all active:scale-95"
+              className="flex-[2] py-4 rounded-2xl font-black text-xs uppercase tracking-widest text-white bg-teal-600 hover:bg-teal-700 shadow-lg shadow-teal-200 transition-all active:scale-95"
             >
               {profissionalInicial ? 'Salvar Alterações' : 'Cadastrar Profissional'}
             </button>

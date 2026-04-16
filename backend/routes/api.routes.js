@@ -1553,30 +1553,28 @@ router.post('/pedidos/estoque/finalizar-remessa', verificarToken, async (req, re
 
         // 2. Loop para registrar itens E DAR BAIXA UNIFICADA NO ESTOQUE
         for (const item of itens) {
-            // --- INÍCIO DO BLOCO DE CORREÇÃO ---
-
-            const produtoInfoRes = await client.query('SELECT tipo, nome FROM produtos WHERE id = $1', [item.produto_id]);
+            
+            const produtoInfoRes = await client.query('SELECT nome FROM produtos WHERE id = $1', [item.produto_id]);
             if (produtoInfoRes.rows.length === 0) throw new Error(`Produto ID ${item.produto_id} não encontrado.`);
             const { nome: nomeProduto } = produtoInfoRes.rows[0];
 
-            // Lógica UNIFICADA: Tudo agora acontece na tabela 'estoque_por_local'
-            // Para MATERIAL, o 'tamanho' será NULL, o que é tratado corretamente pela tabela.
+            // --- INÍCIO DA CORREÇÃO FINAL ---
+            // Usando 'IS NOT DISTINCT FROM' para tratar UNIFORMES e MATERIAIS de forma robusta e simples.
             const updateRes = await client.query(
                 `UPDATE estoque_por_local 
                  SET quantidade = quantidade - $1 
                  WHERE local_id = 37 
                    AND produto_id = $2 
-                   -- Trata tanto UNIFORME (com tamanho) quanto MATERIAL (tamanho é NULL)
-                   AND (tamanho = $3 OR (tamanho IS NULL AND $3 IS NULL))
+                   AND tamanho IS NOT DISTINCT FROM $3
                    AND quantidade >= $1`,
                 [item.quantidade_enviada, item.produto_id, item.tamanho]
             );
+            // --- FIM DA CORREÇÃO FINAL ---
 
             if (updateRes.rowCount === 0) {
+                // Mensagem de erro aprimorada para incluir o nome do produto
                 throw new Error(`Estoque insuficiente no Almoxarifado Central para o produto "${nomeProduto}" (Tam: ${item.tamanho || 'Único'}).`);
             }
-
-            // --- FIM DO BLOCO DE CORREÇÃO ---
 
             // Registrar o item na remessa (lógica original mantida)
             await client.query(
@@ -1587,7 +1585,6 @@ router.post('/pedidos/estoque/finalizar-remessa', verificarToken, async (req, re
         }
         
         // As etapas 3, 4, 5 e 6 (cálculo de saldo, logs, etc.) continuam iguais
-        // ... (seu código original aqui, já está correto) ...
         const check = await client.query(`
             SELECT 
                 (SELECT COALESCE(SUM(quantidade), 0) FROM itens_pedido WHERE pedido_id = $1) as solicitado,

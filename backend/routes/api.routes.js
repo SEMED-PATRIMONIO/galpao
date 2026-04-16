@@ -1536,6 +1536,10 @@ router.get('/produtos/:id/grade', verificarToken, async (req, res) => {
 });
 
 router.post('/pedidos/estoque/finalizar-remessa', verificarToken, async (req, res) => {
+    // ================== INÍCIO DO BLOCO DE DIAGNÓSTICO ==================
+    console.log('--- PAYLOAD RECEBIDO EM /finalizar-remessa ---');
+    console.log(JSON.stringify(req.body, null, 2));
+    // =================== FIM DO BLOCO DE DIAGNÓSTICO ===================
     const { pedidoId, itens } = req.body;
     const usuarioId = req.userId;
     const client = await db.pool.connect();

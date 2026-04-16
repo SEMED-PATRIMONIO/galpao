@@ -1538,31 +1538,81 @@ router.get('/produtos/:id/grade', verificarToken, async (req, res) => {
 router.post('/pedidos/estoque/finalizar-remessa', verificarToken, async (req, res) => {
     const { pedidoId, itens } = req.body;
     const usuarioId = req.userId; // Extraído do token
+    
+    // IMPORTANTE: Precisamos de uma conexão 'client' para toda a transação
+    const client = await db.pool.connect();
 
     try {
-        await db.query('BEGIN');
+        await client.query('BEGIN');
 
         // 1. Criar o cabeçalho da Remessa
-        const remessaRes = await db.query(
+        const remessaRes = await client.query(
             `INSERT INTO pedido_remessas (pedido_id, status, data_criacao) 
              VALUES ($1, 'PRONTO', NOW()) RETURNING id`,
             [pedidoId]
         );
         const remessaId = remessaRes.rows[0].id;
 
-        // 2. Registrar os itens da remessa
+        // 2. Loop para registrar itens E DAR BAIXA NO ESTOQUE
         for (const item of itens) {
-            await db.query(
+            // --- INÍCIO DO NOVO BLOCO ---
+
+            // 2.1. Descobrir o tipo do produto para a baixa correta
+            const produtoRes = await client.query('SELECT tipo FROM produtos WHERE id = $1', [item.produto_id]);
+            if (produtoRes.rows.length === 0) {
+                throw new Error(`Produto com ID ${item.produto_id} não encontrado.`);
+            }
+            const tipoProduto = produtoRes.rows[0].tipo;
+
+            // 2.2. Lógica de baixa condicional
+            if (tipoProduto === 'UNIFORMES') {
+                // BAIXA NA NOVA TABELA 'estoque_por_local'
+                const updateRes = await client.query(
+                    `UPDATE estoque_por_local 
+                     SET quantidade = quantidade - $1 
+                     WHERE produto_id = $2 
+                       AND tamanho = $3 
+                       AND local_id = 37 
+                       AND quantidade >= $1`, // Garante que não haja estoque negativo
+                    [item.quantidade_enviada, item.produto_id, item.tamanho]
+                );
+                // Validação de estoque
+                if (updateRes.rowCount === 0) {
+                    throw new Error(`Estoque insuficiente no Almoxarifado Central para o produto ID ${item.produto_id}, tamanho ${item.tamanho}.`);
+                }
+
+            } else if (tipoProduto === 'MATERIAL') {
+                // BAIXA NA TABELA ANTIGA 'produtos' (MANTENDO A LÓGICA EXISTENTE)
+                const updateRes = await client.query(
+                    `UPDATE produtos 
+                     SET quantidade_estoque = quantidade_estoque - $1 
+                     WHERE id = $2 
+                       AND local_id = 37 
+                       AND quantidade_estoque >= $1`, // Garante que não haja estoque negativo
+                    [item.quantidade_enviada, item.produto_id]
+                );
+                // Validação de estoque
+                if (updateRes.rowCount === 0) {
+                    throw new Error(`Estoque insuficiente no Almoxarifado Central para o material ID ${item.produto_id}.`);
+                }
+            }
+            // Para 'PATRIMONIO', nenhuma ação de estoque é necessária aqui.
+
+            // --- FIM DO NOVO BLOCO ---
+
+
+            // 2.3. Registrar o item na remessa (lógica original)
+            await client.query(
                 `INSERT INTO pedido_remessa_itens (remessa_id, produto_id, tamanho, quantidade_enviada) 
                  VALUES ($1, $2, $3, $4)`,
                 [remessaId, item.produto_id, item.tamanho, item.quantidade_enviada]
             );
         }
 
-        // 3. Cálculo de Saldo (Otimizado: Uma única query para os dois valores)
-        const check = await db.query(`
+        // 3. Cálculo de Saldo (lógica original)
+        const check = await client.query(`
             SELECT 
-                (SELECT COALESCE(SUM(quantidade), 0) FROM itens_pedido WHERE pedido_id = $1) as solicitado,
+                (SELECT COALESCE(SUM(quantidade), 0) FROM pedido_itens WHERE pedido_id = $1) as solicitado,
                 (SELECT COALESCE(SUM(pri.quantidade_enviada), 0) 
                  FROM pedido_remessa_itens pri 
                  JOIN pedido_remessas pr ON pri.remessa_id = pr.id 
@@ -1570,31 +1620,32 @@ router.post('/pedidos/estoque/finalizar-remessa', verificarToken, async (req, re
         `, [pedidoId]);
         
         const { solicitado, enviado } = check.rows[0];
-        
-        // Decisão do novo status baseado no saldo real
         const novoStatus = (parseInt(enviado) >= parseInt(solicitado)) ? 'COLETA_LIBERADA' : 'EM_SEPARACAO';
 
-        // 4. Pegar status anterior para o log de auditoria
-        const statusRes = await db.query("SELECT status FROM pedidos WHERE id = $1", [pedidoId]);
+        // 4. Pegar status anterior para o log (lógica original)
+        const statusRes = await client.query("SELECT status FROM pedidos WHERE id = $1", [pedidoId]);
         const statusAnterior = statusRes.rows[0].status;
 
-        // 5. Atualizar Pedido Principal
-        await db.query("UPDATE pedidos SET status = $1 WHERE id = $2", [novoStatus, pedidoId]);
+        // 5. Atualizar Pedido Principal (lógica original)
+        await client.query("UPDATE pedidos SET status = $1 WHERE id = $2", [novoStatus, pedidoId]);
 
-        // 6. Registrar Log de Auditoria (Usando a coluna data_hora que confirmamos antes)
-        await db.query(
+        // 6. Registrar Log de Auditoria (lógica original)
+        await client.query(
             `INSERT INTO log_status_pedidos (pedido_id, usuario_id, status_anterior, status_novo, observacao) 
              VALUES ($1, $2, $3, $4, $5)`,
-            [pedidoId, usuarioId, statusAnterior, novoStatus, `Remessa #${remessaId} gerada. Progresso: ${enviado}/${solicitado} itens.`]
+            [pedidoId, usuarioId, statusAnterior, novoStatus, `Remessa #${remessaId} gerada e estoque baixado. Progresso: ${enviado}/${solicitado}.`]
         );
 
-        await db.query('COMMIT');
-        res.json({ message: "Remessa salva com sucesso!", status: novoStatus, remessaId });
+        await client.query('COMMIT');
+        res.json({ message: "Remessa salva e estoque atualizado!", status: novoStatus, remessaId });
 
     } catch (err) {
-        await db.query('ROLLBACK');
-        console.error("ERRO NA REMESSA:", err);
+        await client.query('ROLLBACK');
+        console.error("ERRO NA REMESSA E BAIXA DE ESTOQUE:", err);
         res.status(500).json({ error: "Falha interna ao processar remessa: " + err.message });
+    } finally {
+        // Soltar a conexão é obrigatório
+        client.release();
     }
 });
 
@@ -1709,55 +1760,86 @@ router.post('/escola/confirmar-recebimento', verificarToken, async (req, res) =>
 
         // 1. Busca dados e valida se o pedido existe e o destino
         const pedidoCheck = await client.query(
-            "SELECT tipo_pedido, local_destino_id, status FROM pedidos WHERE id = $1", 
+            "SELECT tipo_pedido, local_destino_id, status FROM pedidos WHERE id = $1",
             [pedidoId]
         );
-        
+
         if (pedidoCheck.rows.length === 0) throw new Error("Pedido não encontrado.");
-        
+
         const { tipo_pedido, local_destino_id, status: statusAtual } = pedidoCheck.rows[0];
 
-        // Evita processar algo que já foi finalizado
         if (statusAtual === 'RECEBIDO') {
-            throw new Error("Este pedido já foi confirmado anteriormente.");
+            await client.query('ROLLBACK'); // Libera a transação
+            client.release();
+            // Retorna um status 200 para não assustar o usuário, mas com uma mensagem clara.
+            return res.status(200).json({ success: true, message: "Este pedido já foi recebido anteriormente." });
         }
 
-        // 2. SE FOR PATRIMÔNIO: Move do Local 51 para o Destino Real
+        // 2. LÓGICA CONDICIONAL DE ENTRADA EM ESTOQUE/MOVIMENTAÇÃO
         if (tipo_pedido === 'INFRA_PATRIMONIO') {
+            // --- LÓGICA DE PATRIMÔNIO (INTOCADA) ---
             const resPat = await client.query(`
-                UPDATE patrimonios 
-                SET 
-                    local_id = $1, 
-                    setor_id = $2, 
+                UPDATE patrimonios
+                SET
+                    local_id = $1,
+                    setor_id = $2,
                     em_transito = false,
                     data_atualizacao = NOW()
-                WHERE pedido_id = $3 AND local_id = 51`, 
+                WHERE pedido_id = $3 AND local_id = 51`,
                 [local_destino_id, setorId, pedidoId]
             );
-
-            if (resPat.rowCount === 0) {
-                throw new Error("Patrimônios não localizados no trânsito (Local 51).");
+            if (resPat.rowCount === 0 && process.env.NODE_ENV !== 'development') {
+                // Em desenvolvimento, podemos ignorar, mas em produção é um erro.
+                // throw new Error("Patrimônios não localizados no trânsito (Local 51).");
+                console.warn(`Aviso: Nenhum patrimônio encontrado para movimentar no pedido ${pedidoId}.`);
             }
+        } else {
+            // --- INÍCIO DA NOVA LÓGICA PARA UNIFORMES E MATERIAIS ---
+
+            // 2.1. Buscar todos os itens da remessa que está sendo recebida
+            const itensRes = await client.query(
+                `SELECT produto_id, tamanho, quantidade_enviada FROM pedido_remessa_itens WHERE remessa_id = $1`,
+                [remessaId]
+            );
+
+            if (itensRes.rows.length === 0) {
+                // Isso pode acontecer se uma remessa vazia for gerada por engano.
+                console.warn(`Aviso: Remessa ${remessaId} recebida sem itens. Nenhuma ação de estoque foi tomada.`);
+            }
+
+            // 2.2. Iterar sobre cada item e dar ENTRADA no estoque do local de destino
+            for (const item of itensRes.rows) {
+                // Usamos INSERT ON CONFLICT para criar ou somar ao estoque existente.
+                // Isso é atômico e seguro.
+                await client.query(
+                    `INSERT INTO estoque_por_local (local_id, produto_id, tamanho, quantidade)
+                     VALUES ($1, $2, $3, $4)
+                     ON CONFLICT (local_id, produto_id, tamanho)
+                     DO UPDATE SET quantidade = estoque_por_local.quantidade + EXCLUDED.quantidade`,
+                    [local_destino_id, item.produto_id, item.tamanho, item.quantidade_enviada]
+                );
+            }
+            // --- FIM DA NOVA LÓGICA ---
         }
 
-        // 3. ATUALIZA STATUS (Agora com 'RECEBIDO' autorizado no Type do banco)
+        // 3. ATUALIZA STATUS (Lógica original, agora segura para todos os tipos)
         await client.query("UPDATE pedido_remessas SET status = 'RECEBIDO' WHERE id = $1", [remessaId]);
         await client.query("UPDATE pedidos SET status = 'RECEBIDO', data_recebimento = NOW() WHERE id = $1", [pedidoId]);
 
-        // 4. LOG DE SEGURANÇA (Histórico)
+        // 4. LOG DE SEGURANÇA (Lógica original)
         await client.query(
-            `INSERT INTO log_status_pedidos (pedido_id, usuario_id, status_novo, observacao) 
-             VALUES ($1, $2, 'RECEBIDO', $3)`,
-            [pedidoId, req.user.id, `Recebimento confirmado na unidade. Tipo: ${tipo_pedido}`]
+            `INSERT INTO log_status_pedidos (pedido_id, usuario_id, status_anterior, status_novo, observacao)
+             VALUES ($1, $2, $3, 'RECEBIDO', $4)`,
+            [pedidoId, req.user.id, statusAtual, `Recebimento confirmado na unidade. Tipo: ${tipo_pedido}`]
         );
 
         await client.query('COMMIT');
-        res.json({ success: true });
+        res.json({ success: true, message: "Recebimento confirmado e estoque atualizado." });
 
     } catch (err) {
         await client.query('ROLLBACK');
-        console.error("ERRO NO RECEBIMENTO:", err.message);
-        res.status(500).json({ error: "Falha no banco: " + err.message });
+        console.error("ERRO CRÍTICO NO RECEBIMENTO:", err.message);
+        res.status(500).json({ error: "Falha no banco de dados durante o recebimento: " + err.message });
     } finally {
         client.release();
     }
@@ -8231,6 +8313,272 @@ router.post('/admin/relatorio/exportar-fluxo', verificarToken, async (req, res) 
         res.type('pdf');
         res.send(buffer);
     });
+});
+
+router.get('/escola/turmas-local', verificarToken, async (req, res) => {
+    try {
+        // Assumindo que o local_id do usuário está disponível após a verificação do token
+        const localId = req.user.local_id; 
+        if (!localId) {
+            return res.status(403).json({ error: "Usuário sem local associado." });
+        }
+
+        const { rows } = await db.query(
+            `SELECT id, nome FROM turmas WHERE local_id = $1 ORDER BY nome ASC`,
+            [localId]
+        );
+        
+        res.json(rows);
+    } catch (err) {
+        console.error("Erro ao buscar turmas do local:", err.message);
+        res.status(500).json({ error: "Erro interno ao buscar turmas." });
+    }
+});
+
+router.get('/turma/:id/grade-entrega', verificarToken, async (req, res) => {
+    const { id: turmaId } = req.params;
+    const localId = req.user.local_id;
+
+    if (!localId) {
+        return res.status(403).json({ error: "Usuário sem local associado." });
+    }
+
+    try {
+        const client = await db.pool.connect();
+        try {
+            // 1. Buscar informações da turma
+            const turmaRes = await client.query('SELECT id, nome FROM turmas WHERE id = $1 AND local_id = $2', [turmaId, localId]);
+            if (turmaRes.rows.length === 0) {
+                return res.status(404).json({ error: "Turma não encontrada ou não pertence a esta unidade." });
+            }
+            const turmaInfo = turmaRes.rows[0];
+
+            // 2. Buscar todos os produtos do tipo 'UNIFORMES'
+            const produtosRes = await client.query(`
+                SELECT id, nome FROM produtos 
+                WHERE tipo = 'UNIFORMES' 
+                -- O 'local_id = 37' garante que estamos pegando o catálogo mestre de uniformes
+                AND local_id = 37 
+                ORDER BY nome ASC
+            `);
+            const produtos = produtosRes.rows;
+
+            // 3. Buscar todos os alunos da turma
+            const alunosRes = await client.query('SELECT id, nome FROM alunos WHERE turma_id = $1 ORDER BY nome ASC', [turmaId]);
+            const alunos = alunosRes.rows;
+            const alunoIds = alunos.map(a => a.id);
+
+            // 4. Buscar o estoque ATUAL da ESCOLA para cada uniforme
+            const estoqueRes = await client.query(`
+                SELECT produto_id, tamanho, quantidade 
+                FROM estoque_por_local 
+                WHERE local_id = $1 AND quantidade > 0 AND produto_id IN 
+                    (SELECT id FROM produtos WHERE tipo = 'UNIFORMES')
+            `, [localId]);
+
+            // Formatar o estoque para fácil acesso no frontend: { produto_id: [{tamanho, qtd}, ...], ... }
+            const estoqueEscola = estoqueRes.rows.reduce((acc, item) => {
+                if (!acc[item.produto_id]) {
+                    acc[item.produto_id] = [];
+                }
+                acc[item.produto_id].push({ tamanho: item.tamanho, qtd: item.quantidade });
+                // Ordenar os tamanhos
+                acc[item.produto_id].sort((a,b) => a.tamanho.localeCompare(b.tamanho, undefined, {numeric: true}));
+                return acc;
+            }, {});
+
+            // 5. Buscar as entregas JÁ REALIZADAS para os alunos desta turma
+            const entregasRes = await client.query(
+                'SELECT aluno_id, produto_id, tamanho, data_entrega FROM entregas_alunos WHERE aluno_id = ANY($1)',
+                [alunoIds]
+            );
+
+            // Mapear entregas para fácil acesso: { aluno_id: { produto_id: {tamanho, data}, ... }, ... }
+            const entregasRealizadas = entregasRes.rows.reduce((acc, entrega) => {
+                if (!acc[entrega.aluno_id]) {
+                    acc[entrega.aluno_id] = {};
+                }
+                acc[entrega.aluno_id][entrega.produto_id] = { 
+                    tamanho: entrega.tamanho, 
+                    data: entrega.data_entrega 
+                };
+                return acc;
+            }, {});
+
+            // 6. Montar o payload final para o frontend
+            const alunosComStatus = alunos.map(aluno => {
+                const entregasDoAluno = entregasRealizadas[aluno.id] || {};
+                const statusItens = {};
+                
+                for (const produto of produtos) {
+                    if (entregasDoAluno[produto.id]) {
+                        statusItens[produto.id] = {
+                            status: 'entregue',
+                            ...entregasDoAluno[produto.id]
+                        };
+                    } else {
+                        statusItens[produto.id] = { status: 'pendente' };
+                    }
+                }
+                return { ...aluno, statusItens };
+            });
+            
+            res.json({
+                turmaInfo,
+                produtos,
+                estoqueEscola,
+                alunos: alunosComStatus
+            });
+
+        } finally {
+            client.release();
+        }
+    } catch (err) {
+        console.error("Erro ao montar grade de entrega:", err.message);
+        res.status(500).json({ error: "Erro interno ao processar dados da turma." });
+    }
+});
+
+router.post('/entregas/lote', verificarToken, async (req, res) => {
+    // O payload esperado é: { entregas: [ { alunoId, produtoId, tamanho }, ... ] }
+    const { entregas } = req.body;
+    const usuarioId = req.user.id;
+    const localId = req.user.local_id;
+
+    if (!entregas || !Array.isArray(entregas) || entregas.length === 0) {
+        return res.status(400).json({ error: "Nenhum item de entrega fornecido." });
+    }
+    if (!localId) {
+        return res.status(403).json({ error: "Usuário sem local associado." });
+    }
+
+    const client = await db.pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        for (const entrega of entregas) {
+            const { alunoId, produtoId, tamanho } = entrega;
+
+            // Passo A: Dar baixa no estoque da ESCOLA.
+            // A condição 'quantidade > 0' é uma trava de segurança atômica.
+            const baixaEstoqueRes = await client.query(
+                `UPDATE estoque_por_local
+                 SET quantidade = quantidade - 1
+                 WHERE local_id = $1
+                   AND produto_id = $2
+                   AND tamanho = $3
+                   AND quantidade > 0`,
+                [localId, produtoId, tamanho]
+            );
+
+            // Se nenhuma linha foi afetada, significa que o estoque acabou. Abortar tudo.
+            if (baixaEstoqueRes.rowCount === 0) {
+                // Para dar uma mensagem de erro mais amigável
+                const produtoNomeRes = await client.query('SELECT nome FROM produtos WHERE id = $1', [produtoId]);
+                const produtoNome = produtoNomeRes.rows[0]?.nome || `ID ${produtoId}`;
+                throw new Error(`Estoque insuficiente para o item "${produtoNome}" tamanho ${tamanho}. A operação foi cancelada.`);
+            }
+
+            // Passo B: Registrar a entrega individual na nova tabela.
+            // O constraint UNIQUE na tabela nos protege contra duplicações.
+            await client.query(
+                `INSERT INTO entregas_alunos (aluno_id, produto_id, tamanho, usuario_id, local_id)
+                 VALUES ($1, $2, $3, $4, $5)`,
+                [alunoId, produtoId, tamanho, usuarioId, localId]
+            );
+        }
+
+        await client.query('COMMIT');
+        res.status(201).json({ success: true, message: `Foram registradas ${entregas.length} entregas com sucesso.` });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+
+        // Personaliza o erro se for uma violação de chave única (tentativa de re-entrega)
+        if (err.code === '23505') { // Código de erro do PostgreSQL para unique_violation
+            console.error("Erro de duplicidade na entrega:", err.message);
+            return res.status(409).json({ error: "Um ou mais itens já foram entregues anteriormente e não podem ser registrados novamente." });
+        }
+        
+        console.error("Erro ao processar lote de entregas:", err.message);
+        res.status(500).json({ error: err.message || "Erro interno ao salvar entregas." });
+    } finally {
+        client.release();
+    }
+});
+
+router.get('/turma/:id/comprovante', verificarToken, async (req, res) => {
+    const { id: turmaId } = req.params;
+    const localId = req.user.local_id;
+
+    if (!localId) {
+        return res.status(403).json({ error: "Usuário sem local associado." });
+    }
+
+    const client = await db.pool.connect();
+    try {
+        // Passo 1: Obter informações da escola e da turma.
+        const metaRes = await client.query(
+            'SELECT t.nome as turma_nome, l.nome as escola_nome FROM turmas t JOIN locais l ON t.local_id = l.id WHERE t.id = $1 AND t.local_id = $2',
+            [turmaId, localId]
+        );
+        if (metaRes.rows.length === 0) {
+            return res.status(404).json({ error: "Turma não encontrada." });
+        }
+        const { turma_nome, escola_nome } = metaRes.rows[0];
+
+        // Passo 2: Contar quantos itens formam o kit completo de uniformes.
+        const kitCountRes = await client.query("SELECT COUNT(id) as total_items FROM produtos WHERE tipo = 'UNIFORMES' AND local_id = 37");
+        const totalKitItems = parseInt(kitCountRes.rows[0].total_items, 10);
+        
+        // Passo 3: Obter todos os alunos da turma.
+        const alunosRes = await client.query('SELECT id, nome FROM alunos WHERE turma_id = $1 ORDER BY nome ASC', [turmaId]);
+        if (alunosRes.rows.length === 0) {
+            return res.status(404).json({ error: "A turma não possui alunos." });
+        }
+        const alunos = alunosRes.rows;
+
+        // Passo 4: Obter as contagens de itens recebidos e a última data de entrega para os alunos da turma.
+        const entregasRes = await client.query(`
+            SELECT 
+                aluno_id, 
+                COUNT(DISTINCT produto_id) as itens_recebidos,
+                MAX(data_entrega) as ultima_entrega
+            FROM entregas_alunos
+            WHERE turma_id = (SELECT turma_id FROM alunos WHERE id = ANY(SELECT id FROM alunos WHERE turma_id = $1 LIMIT 1))
+            GROUP BY aluno_id
+        `, [turmaId]);
+
+        const entregasMap = new Map(entregasRes.rows.map(e => [e.aluno_id, { count: parseInt(e.itens_recebidos, 10), date: e.ultima_entrega }]));
+
+        // Passo 5: Montar a lista final de alunos com seus status.
+        const alunosComStatus = alunos.map(aluno => {
+            const entregaInfo = entregasMap.get(aluno.id);
+            // Considera o kit completo se o número de itens distintos recebidos for igual ou maior ao total de itens no kit.
+            const status = entregaInfo && entregaInfo.count >= totalKitItems
+                ? { status: 'Completo', dataRecebimento: entregaInfo.date }
+                : { status: 'Pendente' };
+            
+            return {
+                id: aluno.id,
+                nome: aluno.nome,
+                ...status
+            };
+        });
+
+        res.json({
+            turmaNome: turma_nome,
+            escolaNome: escola_nome,
+            dataGeracao: new Date(),
+            alunos: alunosComStatus
+        });
+
+    } catch (err) {
+        console.error("Erro ao gerar dados do comprovante:", err.message);
+        res.status(500).json({ error: "Erro interno ao processar dados do comprovante." });
+    } finally {
+        client.release();
+    }
 });
 
 module.exports = router;

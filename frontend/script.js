@@ -6715,65 +6715,46 @@ async function abrirTelaConferenciaItens(pedidoId) {
 async function salvarRemessa(pedidoId) {
     const inputs = document.querySelectorAll('.qtd-envio');
     const itensRemessa = [];
-    let erroValidacao = false;
 
     inputs.forEach(input => {
         const qtd = parseInt(input.value) || 0;
-        const maxPermitido = parseInt(input.dataset.max);
-
-        if (qtd > maxPermitido) {
-            notificar(`Erro: Você tentou enviar ${qtd} unidades, mas o saldo pendente é de apenas ${maxPermitido}.`);
-            erroValidacao = true;
-            return;
-        }
-
         if (qtd > 0) {
-            // --- INÍCIO DA CORREÇÃO ---
             const tamanhoOriginal = input.dataset.tam;
-            // Se o tamanho for a string "null" (vindo de um material), converte para o valor null real.
             const tamanhoCorrigido = tamanhoOriginal === 'null' ? null : tamanhoOriginal;
-            // --- FIM DA CORREÇÃO ---
 
             itensRemessa.push({
                 produto_id: input.dataset.prodId,
-                tamanho: tamanhoCorrigido, // <--- Usa a variável corrigida
+                tamanho: tamanhoCorrigido,
                 quantidade_enviada: qtd
             });
         }
     });
 
-    if (erroValidacao) return;
-    if (itensRemessa.length === 0) return notificar("Informe a quantidade de pelo menos um item.");
+    if (itensRemessa.length === 0) {
+        return notificar("Informe a quantidade de pelo menos um item para a remessa.", "aviso");
+    }
 
     if (!confirm("Confirmar o registro desta remessa de saída?")) return;
 
     try {
         const res = await fetch(`${API_URL}/pedidos/estoque/finalizar-remessa`, {
             method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${TOKEN}` 
-            },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
             body: JSON.stringify({ pedidoId, itens: itensRemessa })
         });
-        if (res.ok) {
-            const data = await res.json();
-            
-            setTimeout(() => {
-                if (confirm(`✅ Remessa #${data.remessaId} Salva!\n\nDeseja compartilhar o Romaneio via WhatsApp agora?`)) {
-                    gerarECompartilharRomaneio(data.remessaId);
-                }
-                telaEstoquePedidosPendentes();
-            }, 300);
 
-        } else {
-            const data = await res.json();
-            // Lança o erro para ser capturado pelo bloco catch
+        const data = await res.json();
+        
+        if (!res.ok) {
             throw new Error(data.error || "Erro desconhecido no servidor.");
         }
+
+        // Ação simplificada: Apenas notifica o sucesso e recarrega a tela.
+        notificar(`✅ Remessa #${data.remessaId} foi registrada com sucesso!`, "sucesso");
+        telaEstoquePedidosPendentes(); // Recarrega a fila de pedidos pendentes.
+
     } catch (err) {
-        // Agora o 'notificar' captura o erro corretamente
-        notificar("Erro: " + err.message, "erro");
+        notificar("Erro ao salvar remessa: " + err.message, "erro");
     }
 }
 
@@ -18264,6 +18245,13 @@ async function telaEscolaConsultaEstoque() {
         });
         const estoque = await res.json();
 
+        // Mapeia os tipos de item para cores para uma melhor visualização
+        const coresTipo = {
+            PATRIMONIO: '#eab308',
+            UNIFORMES: '#00d4ff',
+            MATERIAL: '#10b981'
+        };
+
         container.innerHTML = `
             <div class="painel-vidro" style="max-width: 1000px; margin: auto; padding: 25px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
@@ -18272,29 +18260,34 @@ async function telaEscolaConsultaEstoque() {
                 </div>
 
                 <div style="margin-bottom:20px;">
-                    <input type="text" id="busca-estoque-escola" placeholder="🔍 Digite o nome do produto ou lote..." 
+                    <input type="text" id="busca-estoque-escola" placeholder="🔍 Digite para filtrar..." 
                            style="width:100%; padding:12px; border-radius:8px; border:1px solid rgba(255,255,255,0.2); background:rgba(0,0,0,0.2); color:white;"
                            onkeyup="filtrarTabelaEstoque()">
                 </div>
 
                 <div style="background:rgba(0,0,0,0.2); border-radius:15px; overflow:hidden;">
-                    <table id="tabela-estoque-corpo" style="width:100%; border-collapse:collapse; color:white;">
+                    <table id="tabela-estoque-escola" style="width:100%; border-collapse:collapse; color:white;">
                         <thead>
                             <tr style="background:rgba(255,255,255,0.05); text-align:left; font-size:0.8rem; color:rgba(255,255,255,0.5);">
                                 <th style="padding:15px;">PRODUTO</th>
-                                <th style="padding:15px;">IDENTIFICAÇÃO / LOTE</th>
-                                <th style="padding:15px;">DATA ENTRADA</th>
-                                <th style="padding:15px; text-align:center;">STATUS</th>
+                                <th style="padding:15px;">DETALHE (Série/Tamanho)</th>
+                                <th style="padding:15px; text-align:center;">QTD</th>
+                                <th style="padding:15px;">STATUS</th>
                             </tr>
                         </thead>
                         <tbody>
                             ${estoque.length === 0 ? `<tr><td colspan="4" style="padding:40px; text-align:center; opacity:0.5;">Nenhum item em estoque no momento.</td></tr>` : 
                             estoque.map(item => `
-                                <tr class="linha-estoque" style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                                    <td style="padding:15px; font-weight:bold;">${item.produto.toUpperCase()}</td>
-                                    <td style="padding:15px; font-family:monospace; color:#fbbf24;">${item.numero_serie}</td>
-                                    <td style="padding:15px; font-size:0.85rem;">${new Date(item.data_entrada).toLocaleDateString()}</td>
-                                    <td style="padding:15px; text-align:center;">
+                                <tr class="linha-estoque">
+                                    <td style="padding:15px; font-weight:bold;">
+                                        <span style="display:block;">${item.produto.toUpperCase()}</span>
+                                        <span style="font-size: 0.7rem; background: ${coresTipo[item.tipo_item] || '#777'}; padding: 2px 6px; border-radius: 4px; color: #001a2c;">
+                                            ${item.tipo_item}
+                                        </span>
+                                    </td>
+                                    <td style="padding:15px; font-family:monospace; color:#fbbf24;">${item.detalhe || 'N/A'}</td>
+                                    <td style="padding:15px; text-align:center; font-weight:bold; font-size:1.1rem;">${item.quantidade}</td>
+                                    <td style="padding:15px;">
                                         <span style="background:${item.status === 'DISPONIVEL' ? '#064e3b' : '#7f1d1d'}; 
                                                      color:${item.status === 'DISPONIVEL' ? '#34d399' : '#f87171'}; 
                                                      padding:4px 10px; border-radius:20px; font-size:0.7rem; font-weight:bold;">
@@ -18316,12 +18309,17 @@ async function telaEscolaConsultaEstoque() {
 // Função de filtro em tempo real (Sem refresh)
 function filtrarTabelaEstoque() {
     const input = document.getElementById('busca-estoque-escola');
-    const filter = input.value.toUpperCase();
-    const rows = document.getElementsByClassName('linha-estoque');
+    const filtro = input.value.toUpperCase();
+    const tabela = document.getElementById('tabela-estoque-escola');
+    const linhas = tabela.getElementsByTagName('tr');
 
-    for (let i = 0; i < rows.length; i++) {
-        const txtValue = rows[i].textContent || rows[i].innerText;
-        rows[i].style.display = txtValue.toUpperCase().indexOf(filter) > -1 ? "" : "none";
+    for (let i = 1; i < linhas.length; i++) { // Começa em 1 para pular o cabeçalho
+        const textoLinha = linhas[i].textContent || linhas[i].innerText;
+        if (textoLinha.toUpperCase().indexOf(filtro) > -1) {
+            linhas[i].style.display = "";
+        } else {
+            linhas[i].style.display = "none";
+        }
     }
 }
 

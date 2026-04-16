@@ -6719,7 +6719,7 @@ async function salvarRemessa(pedidoId) {
 
     inputs.forEach(input => {
         const qtd = parseInt(input.value) || 0;
-        const maxPermitido = parseInt(input.dataset.max); // Pega o que ainda falta enviar
+        const maxPermitido = parseInt(input.dataset.max);
 
         if (qtd > maxPermitido) {
             notificar(`Erro: Você tentou enviar ${qtd} unidades, mas o saldo pendente é de apenas ${maxPermitido}.`);
@@ -6728,15 +6728,21 @@ async function salvarRemessa(pedidoId) {
         }
 
         if (qtd > 0) {
+            // --- INÍCIO DA CORREÇÃO ---
+            const tamanhoOriginal = input.dataset.tam;
+            // Se o tamanho for a string "null" (vindo de um material), converte para o valor null real.
+            const tamanhoCorrigido = tamanhoOriginal === 'null' ? null : tamanhoOriginal;
+            // --- FIM DA CORREÇÃO ---
+
             itensRemessa.push({
                 produto_id: input.dataset.prodId,
-                tamanho: input.dataset.tam,
+                tamanho: tamanhoCorrigido, // <--- Usa a variável corrigida
                 quantidade_enviada: qtd
             });
         }
     });
 
-    if (erroValidacao) return; // Interrompe se houver erro
+    if (erroValidacao) return;
     if (itensRemessa.length === 0) return notificar("Informe a quantidade de pelo menos um item.");
 
     if (!confirm("Confirmar o registro desta remessa de saída?")) return;
@@ -6753,20 +6759,21 @@ async function salvarRemessa(pedidoId) {
         if (res.ok) {
             const data = await res.json();
             
-            // Pequeno delay para o usuário respirar após o clique
             setTimeout(() => {
                 if (confirm(`✅ Remessa #${data.remessaId} Salva!\n\nDeseja compartilhar o Romaneio via WhatsApp agora?`)) {
                     gerarECompartilharRomaneio(data.remessaId);
                 }
-                telaEstoquePedidosPendentes(); // Recarrega a fila
+                telaEstoquePedidosPendentes();
             }, 300);
 
         } else {
             const data = await res.json();
-            notificar("Erro: " + data.error);
+            // Lança o erro para ser capturado pelo bloco catch
+            throw new Error(data.error || "Erro desconhecido no servidor.");
         }
     } catch (err) {
-        notificar("Erro de conexão.");
+        // Agora o 'notificar' captura o erro corretamente
+        notificar("Erro: " + err.message, "erro");
     }
 }
 

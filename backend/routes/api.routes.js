@@ -6880,30 +6880,52 @@ router.get('/admin/dashboard/itens/:pedidoId', verificarToken, async (req, res) 
 
 // ROTA: Buscar estoque exclusivo da unidade escolar
 router.get('/escola/meu-estoque', verificarToken, async (req, res) => {
-    // Pegamos o local_id do token (mais seguro) ou via query param
     const localId = req.query.localId || req.user?.local_id;
-
     if (!localId) {
         return res.status(400).json({ error: "Identificação da unidade não fornecida." });
     }
 
     try {
+        // Esta query combina o estoque patrimonial e o de consumo em uma única visão
         const sql = `
-            SELECT 
+            -- Parte 1: Busca itens patrimoniais (individuais)
+            SELECT
+                'PATRIMONIO' as tipo_item,
                 p.nome as produto,
-                ei.numero_serie,
+                ei.numero_serie as detalhe,
+                1 as quantidade,
                 ei.status,
-                ei.data_entrada,
-                p.categoria_id
+                ei.data_entrada
             FROM estoque_individual ei
             JOIN produtos p ON ei.produto_id = p.id
             WHERE ei.local_id = $1
-            ORDER BY ei.data_entrada DESC;
+
+            UNION ALL
+
+            -- Parte 2: Busca itens de consumo (UNIFORMES/MATERIAL)
+            SELECT
+                p.tipo as tipo_item,
+                p.nome as produto,
+                epl.tamanho as detalhe,
+                epl.quantidade,
+                CASE WHEN epl.quantidade > 0 THEN 'DISPONIVEL' ELSE 'ESGOTADO' END as status,
+                -- A tabela estoque_por_local não tem data de entrada, usamos a data do pedido.
+                (SELECT p.data_recebimento FROM pedidos p 
+                 JOIN pedido_remessas pr ON pr.pedido_id = p.id 
+                 JOIN pedido_remessa_itens pri ON pri.remessa_id = pr.id 
+                 WHERE pri.produto_id = epl.produto_id AND p.local_destino_id = epl.local_id
+                 ORDER BY p.data_recebimento DESC LIMIT 1) as data_entrada
+            FROM estoque_por_local epl
+            JOIN produtos p ON epl.produto_id = p.id
+            WHERE epl.local_id = $1 AND epl.quantidade > 0
+
+            -- Ordena o resultado final
+            ORDER BY produto, detalhe;
         `;
         const { rows } = await db.query(sql, [localId]);
         res.json(rows);
     } catch (err) {
-        console.error("Erro ao consultar estoque local:", err.message);
+        console.error("Erro ao consultar estoque local unificado:", err.message);
         res.status(500).json({ error: "Erro interno ao buscar estoque." });
     }
 });

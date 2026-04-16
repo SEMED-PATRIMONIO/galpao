@@ -417,7 +417,7 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()">
                 <i>🔑</i><span>ALTERAR MINHA SENHA</span>
             </button>    
-            <button class="btn-grande btn-vidro" onclick="telaEntregaUniformes()">
+            <button class="btn-grande btn-vidro" onclick="telaEscolaConfirmarRecebimento()">
                 <i>🚚</i><span>CONFIRMAR RECEBIMENTO</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="telaSolicitarUniforme()">
@@ -435,10 +435,10 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="telaEscolaConsultaEstoque()">
                 <i>📦</i><span>CONSULTAR MEU ESTOQUE</span>
             </button>
-            <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaEscolaEntregaMaterial()">
+            <button class="btn-grande btn-vidro" onclick="telaEntregaUniformes()">
                 <i>🎁</i><span>ENTREGA DE UNIFORMES</span>
             </button>
-            <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaEscolaRelatorios()">
+            <button class="btn-grande btn-vidro" onclick="telaRelatoriosUniformes()">
                 <i>📊</i><span>RELATÓRIOS ESCOLARES</span>
             </button>               
         `; 
@@ -20196,6 +20196,110 @@ async function confirmarEntregasTurma(turmaId) {
         // Garante que o botão volte ao normal mesmo em caso de erro
         btn.disabled = false;
         btn.innerHTML = btnOriginalText;
+    }
+}
+
+function telaRelatoriosUniformes() {
+    const app = document.getElementById('app-content');
+    app.innerHTML = `
+        <div class="header-animado animate__animated animate__fadeIn">
+            <button class="btn-voltar-vidro" onclick="carregarDashboard()">
+                <i class="fas fa-arrow-left"></i> VOLTAR
+            </button>
+            <h2 class="titulo-sessao" style="color: white;">Relatórios de Uniformes</h2>
+            <p style="color: rgba(255,255,255,0.7);">Selecione um tipo de relatório para visualizar o status das entregas.</p>
+        </div>
+
+        <div class="animate__animated animate__fadeInUp" style="padding: 20px; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+            
+            <!-- Card 1: Status Geral por Turma -->
+            <div class="glass-panel" style="padding: 20px;">
+                <h3 style="color: #00d4ff;">Status por Turma</h3>
+                <p style="color: rgba(255,255,255,0.6); font-size: 0.9rem;">Veja o progresso geral de entrega para cada turma da sua escola.</p>
+                <button class="btn-vidro" style="width: 100%; margin-top: 15px;" onclick="gerarRelatorioStatusTurmas()">
+                    <i class="fas fa-chart-bar"></i> Visualizar Relatório
+                </button>
+            </div>
+
+            <!-- Card 2: Alunos com Kit Pendente -->
+            <div class="glass-panel" style="padding: 20px;">
+                <h3 style="color: #f59e0b;">Alunos Pendentes</h3>
+                <p style="color: rgba(255,255,255,0.6); font-size: 0.9rem;">Liste todos os alunos que ainda não receberam o kit completo de uniformes.</p>
+                <button class="btn-vidro" style="width: 100%; margin-top: 15px;" onclick="gerarRelatorioAlunosPendentes()">
+                    <i class="fas fa-user-clock"></i> Visualizar Relatório
+                </button>
+            </div>
+            
+            <!-- Card 3: Alunos com Kit Completo -->
+            <div class="glass-panel" style="padding: 20px;">
+                <h3 style="color: #10b981;">Alunos Contemplados</h3>
+                <p style="color: rgba(255,255,255,0.6); font-size: 0.9rem;">Liste todos os alunos que já receberam o kit completo de uniformes.</p>
+                <button class="btn-vidro" style="width: 100%; margin-top: 15px;" onclick="gerarRelatorioAlunosCompletos()">
+                    <i class="fas fa-user-check"></i> Visualizar Relatório
+                </button>
+            </div>
+
+        </div>
+        
+        <!-- Área para exibir o resultado do relatório -->
+        <div id="resultado-relatorio" style="margin-top: 30px; padding: 0 20px;"></div>
+    `;
+}
+
+async function gerarRelatorioStatusTurmas() {
+    const container = document.getElementById('resultado-relatorio');
+    container.innerHTML = `<div class="loading-spinner"></div>`;
+
+    try {
+        const res = await fetch(`${API_URL}/relatorios/status-turmas`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const turmas = await res.json();
+        
+        if (!res.ok) throw new Error(turmas.error || 'Falha ao carregar relatório.');
+        if (turmas.length === 0) {
+            container.innerHTML = `<p style="text-align:center; color:white;">Nenhuma turma encontrada ou nenhum dado de entrega disponível.</p>`;
+            return;
+        }
+
+        container.innerHTML = `
+            <h3 style="color:white; border-bottom: 2px solid #00d4ff; padding-bottom: 10px;">Progresso de Entregas por Turma</h3>
+            <div class="tabela-entrega-container" style="max-height: none;">
+                <table class="tabela-entrega">
+                    <thead>
+                        <tr>
+                            <th style="text-align:left;">TURMA</th>
+                            <th>TOTAL DE ALUNOS</th>
+                            <th>ALUNOS COM KIT COMPLETO</th>
+                            <th>PROGRESSO</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${turmas.map(t => {
+                            const totalAlunos = parseInt(t.total_alunos, 10);
+                            const kitCompleto = parseInt(t.alunos_kit_completo, 10);
+                            const percentual = totalAlunos > 0 ? ((kitCompleto / totalAlunos) * 100).toFixed(1) : 0;
+                            
+                            return `
+                            <tr>
+                                <td style="text-align:left;">${t.turma_nome}</td>
+                                <td>${totalAlunos}</td>
+                                <td>${kitCompleto}</td>
+                                <td>
+                                    <div class="barra-progresso-container">
+                                        <div class="barra-progresso" style="width: ${percentual}%;"></div>
+                                        <span>${percentual}%</span>
+                                    </div>
+                                </td>
+                            </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    } catch (err) {
+        container.innerHTML = `<p style="color: #ff4d4d;">${err.message}</p>`;
     }
 }
 

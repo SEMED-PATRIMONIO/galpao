@@ -2369,3 +2369,32 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     gap: 15px;
     background: linear-gradient(to top, rgba(0, 26, 44, 1), transparent);
 }
+
+.barra-progresso-container {
+    width: 100%;
+    max-width: 200px;
+    margin: 0 auto;
+    background-color: rgba(0,0,0,0.3);
+    border-radius: 10px;
+    position: relative;
+    height: 20px;
+    border: 1px solid rgba(255,255,255,0.2);
+}
+
+.barra-progresso {
+    height: 100%;
+    background: linear-gradient(90deg, #10b981, #00d4ff);
+    border-radius: 10px;
+    transition: width 0.5s ease-in-out;
+}
+
+.barra-progresso-container span {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    font-size: 0.8rem;
+    font-weight: bold;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+}

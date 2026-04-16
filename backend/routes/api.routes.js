@@ -8581,4 +8581,52 @@ router.get('/turma/:id/comprovante', verificarToken, async (req, res) => {
     }
 });
 
+router.get('/relatorios/status-turmas', verificarToken, async (req, res) => {
+    const localId = req.user.local_id;
+    if (!localId) return res.status(403).json({ error: "Usuário sem local associado." });
+
+    try {
+        const client = await db.pool.connect();
+        try {
+            // Contar quantos itens formam o kit completo.
+            const kitCountRes = await client.query("SELECT COUNT(id) as total_items FROM produtos WHERE tipo = 'UNIFORMES' AND local_id = 37");
+            const totalKitItems = parseInt(kitCountRes.rows[0].total_items, 10);
+            if (totalKitItems === 0) return res.json([]); // Evita divisão por zero
+
+            // Consulta principal que agrega todos os dados.
+            const query = `
+                SELECT
+                    t.id as turma_id,
+                    t.nome as turma_nome,
+                    COUNT(DISTINCT a.id) as total_alunos,
+                    COUNT(DISTINCT ea.aluno_id) FILTER (WHERE ea.aluno_id IS NOT NULL) as alunos_com_algum_item,
+                    SUM(CASE WHEN sub.itens_recebidos >= $2 THEN 1 ELSE 0 END) as alunos_kit_completo
+                FROM turmas t
+                LEFT JOIN alunos a ON a.turma_id = t.id
+                LEFT JOIN entregas_alunos ea ON ea.aluno_id = a.id
+                LEFT JOIN (
+                    SELECT 
+                        al.id as aluno_id, 
+                        COUNT(DISTINCT e_al.produto_id) as itens_recebidos
+                    FROM alunos al
+                    JOIN entregas_alunos e_al ON al.id = e_al.aluno_id
+                    WHERE al.turma_id IN (SELECT id FROM turmas WHERE local_id = $1)
+                    GROUP BY al.id
+                ) as sub ON sub.aluno_id = a.id
+                WHERE t.local_id = $1
+                GROUP BY t.id, t.nome
+                ORDER BY t.nome;
+            `;
+            const { rows } = await client.query(query, [localId, totalKitItems]);
+            res.json(rows);
+
+        } finally {
+            client.release();
+        }
+    } catch (err) {
+        console.error("Erro no relatório de status por turma:", err.message);
+        res.status(500).json({ error: "Erro interno ao gerar relatório." });
+    }
+});
+
 module.exports = router;

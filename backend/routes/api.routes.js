@@ -6250,17 +6250,14 @@ router.post('/entrada', async (req, res) => {
 // Sugestão de implementação (Node.js/Express)
 router.post('/estoque/entrada-lote', async (req, res) => {
     const { itens, usuario_id, observacoes } = req.body;
-    
-    // Conexão via pool para garantir alta performance
     const client = await db.pool.connect(); 
 
     try {
         await client.query('BEGIN');
 
-        // Calcula o total geral somando todos os itens do lote
         const totalGeral = itens.reduce((acc, item) => acc + (parseInt(item.qtd_total) || 0), 0);
 
-        // 1. Registro no histórico MESTRE
+        // 1. Registro no histórico MESTRE (inalterado, está correto)
         const resMaster = await client.query(
             `INSERT INTO historico (usuario_id, acao, quantidade_total, observacoes, local_id, tipo) 
              VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
@@ -6268,51 +6265,53 @@ router.post('/estoque/entrada-lote', async (req, res) => {
         );
         const historicoId = resMaster.rows[0].id;
 
+        // --- INÍCIO DO BLOCO DE CORREÇÃO ---
         for (const item of itens) {
-            // 2. Atualiza saldo geral na tabela de produtos (comum para Material e Uniforme)
-            await client.query(
-                `UPDATE produtos SET quantidade_estoque = quantidade_estoque + $1 WHERE id = $2`,
-                [item.qtd_total, item.produto_id]
-            );
-
-            // 3. Processamento específico por tipo
             if (item.tipo === 'MATERIAL') {
-                // Registro direto no detalhe sem tamanho
+                // Para MATERIAL, damos entrada na nova tabela com tamanho NULL
                 await client.query(
-                    `INSERT INTO historico_detalhes (historico_id, produto_id, quantidade, tipo_produto, tamanho) 
-                     VALUES ($1, $2, $3, $4, NULL)`,
-                    [historicoId, item.produto_id, item.qtd_total, 'MATERIAL']
+                    `INSERT INTO estoque_por_local (local_id, produto_id, tamanho, quantidade)
+                     VALUES (37, $1, NULL, $2)
+                     ON CONFLICT (local_id, produto_id, tamanho) 
+                     DO UPDATE SET quantidade = estoque_por_local.quantidade + EXCLUDED.quantidade;`,
+                    [item.produto_id, item.qtd_total]
                 );
+                
+                // Registra no detalhe do histórico (inalterado)
+                await client.query(
+                    `INSERT INTO historico_detalhes (historico_id, produto_id, quantidade, tipo_produto) VALUES ($1, $2, $3, 'MATERIAL')`,
+                    [historicoId, item.produto_id, item.qtd_total]
+                );
+
             } else if (item.tipo === 'UNIFORMES') {
-                // Itera sobre a grade de tamanhos do uniforme
                 for (const [tamanho, qtd] of Object.entries(item.grade)) {
                     if (qtd > 0) {
-                        // Registra no detalhe do histórico com o tamanho
+                        // Para UNIFORMES, damos entrada na nova tabela com o tamanho específico
                         await client.query(
-                            `INSERT INTO historico_detalhes (historico_id, produto_id, quantidade, tamanho, tipo_produto) 
-                             VALUES ($1, $2, $3, $4, $5)`,
-                            [historicoId, item.produto_id, qtd, tamanho, 'UNIFORMES']
-                        );
-                        
-                        // 4. Atualiza ou Insere na tabela de grade de tamanhos
-                        await client.query(
-                            `INSERT INTO estoque_tamanhos (produto_id, tamanho, quantidade)
-                             VALUES ($1, $2, $3)
-                             ON CONFLICT (produto_id, tamanho) 
-                             DO UPDATE SET quantidade = estoque_tamanhos.quantidade + EXCLUDED.quantidade`,
+                            `INSERT INTO estoque_por_local (local_id, produto_id, tamanho, quantidade)
+                             VALUES (37, $1, $2, $3)
+                             ON CONFLICT (local_id, produto_id, tamanho) 
+                             DO UPDATE SET quantidade = estoque_por_local.quantidade + EXCLUDED.quantidade;`,
                             [item.produto_id, tamanho, qtd]
+                        );
+
+                        // Registra no detalhe do histórico com o tamanho (inalterado)
+                        await client.query(
+                            `INSERT INTO historico_detalhes (historico_id, produto_id, quantidade, tamanho, tipo_produto) VALUES ($1, $2, $3, $4, 'UNIFORMES')`,
+                            [historicoId, item.produto_id, qtd, tamanho]
                         );
                     }
                 }
             }
         }
+        // --- FIM DO BLOCO DE CORREÇÃO ---
 
         await client.query('COMMIT');
-        res.status(200).json({ success: true });
+        res.status(200).json({ success: true, message: "Estoque de consumo atualizado com sucesso." });
 
     } catch (err) {
         await client.query('ROLLBACK');
-        console.error("ERRO CRÍTICO NA ENTRADA EM LOTE:", err.message);
+        console.error("ERRO CRÍTICO NA ENTRADA EM LOTE (v2):", err.message);
         res.status(500).json({ success: false, error: "Erro ao processar entrada no banco de dados." });
     } finally {
         client.release();
@@ -6355,33 +6354,31 @@ router.get('/estoque/consulta-exclusiva', async (req, res) => {
                 p.id, 
                 p.nome, 
                 p.tipo, 
-                p.quantidade_estoque, 
                 p.alerta_minimo,
+                -- Busca o estoque TOTAL do produto somando todas as grades/quantidades no local 37
+                COALESCE((SELECT SUM(quantidade) FROM estoque_por_local WHERE produto_id = p.id AND local_id = 37), 0) as quantidade_estoque,
+                -- Monta a grade de tamanhos buscando diretamente da nova tabela de estoque por local
                 COALESCE(
                     (SELECT json_agg(
-                        json_build_object('tamanho', et.tamanho, 'quantidade', et.quantidade) 
-                        ORDER BY et.id ASC
+                        json_build_object('tamanho', epl.tamanho, 'quantidade', epl.quantidade) 
+                        ORDER BY epl.tamanho ASC
                     )
-                     FROM estoque_tamanhos et 
-                     WHERE et.produto_id = p.id), 
-                    '[]'
+                     FROM estoque_por_local epl
+                     WHERE epl.produto_id = p.id AND epl.local_id = 37 AND epl.tamanho IS NOT NULL), 
+                    '[]'::json
                 ) AS grade
             FROM produtos p
-            WHERE p.local_id = 37
+            WHERE p.local_id = 37 -- Busca apenas o catálogo de produtos do Almoxarifado Central
               AND p.tipo != 'PATRIMONIO'
             ORDER BY 
-                CASE 
-                    WHEN p.tipo = 'MATERIAL' THEN 1 
-                    WHEN p.tipo = 'UNIFORMES' THEN 2 
-                    ELSE 3 
-                END ASC, 
+                CASE WHEN p.tipo = 'MATERIAL' THEN 1 ELSE 2 END, 
                 p.nome ASC;
         `;
 
         const { rows } = await db.query(sql); 
         res.json(rows);
     } catch (err) {
-        console.error("ERRO NA ROTA EXCLUSIVA:", err);
+        console.error("ERRO NA ROTA EXCLUSIVA (v2):", err.message);
         res.status(500).json({ error: "Erro ao processar consulta de estoque no banco." });
     }
 });
@@ -8615,6 +8612,214 @@ router.get('/relatorios/status-turmas', verificarToken, async (req, res) => {
     } catch (err) {
         console.error("Erro no relatório de status por turma:", err.message);
         res.status(500).json({ error: "Erro interno ao gerar relatório." });
+    }
+});
+
+router.get('/turma/:id/grade-entrega-material', verificarToken, async (req, res) => {
+    const { id: turmaId } = req.params;
+    const localId = req.user.local_id;
+
+    if (!localId) return res.status(403).json({ error: "Usuário sem local associado." });
+
+    const client = await db.pool.connect();
+    try {
+        // 1. Busca os produtos do tipo 'MATERIAL'
+        const produtosRes = await client.query(
+            "SELECT id, nome FROM produtos WHERE tipo = 'MATERIAL' AND local_id = 37 ORDER BY nome ASC"
+        );
+        const produtosMaterial = produtosRes.rows;
+
+        // 2. Busca os alunos da turma
+        const alunosRes = await client.query('SELECT id, nome FROM alunos WHERE turma_id = $1 ORDER BY nome ASC', [turmaId]);
+        const alunos = alunosRes.rows;
+        const alunoIds = alunos.map(a => a.id);
+
+        // 3. Busca o estoque ATUAL da ESCOLA para cada kit de material
+        const estoqueRes = await client.query(
+            `SELECT produto_id, quantidade FROM estoque_por_local 
+             WHERE local_id = $1 AND quantidade > 0 AND produto_id = ANY($2::int[])`,
+            [localId, produtosMaterial.map(p => p.id)]
+        );
+        const estoqueEscola = new Map(estoqueRes.rows.map(item => [item.produto_id, item.quantidade]));
+
+        // 4. Busca as entregas de MATERIAL JÁ REALIZADAS para os alunos desta turma
+        const entregasRes = await client.query(`
+            SELECT ea.aluno_id, ea.produto_id, p.nome as produto_nome
+            FROM entregas_alunos ea
+            JOIN produtos p ON ea.produto_id = p.id
+            WHERE ea.aluno_id = ANY($1::int[]) AND p.tipo = 'MATERIAL'
+        `, [alunoIds]);
+        const entregasRealizadas = new Map(entregasRes.rows.map(e => [e.aluno_id, { produto_id: e.produto_id, produto_nome: e.produto_nome }]));
+
+        // 5. Monta o payload final
+        const alunosComStatus = alunos.map(aluno => {
+            const entrega = entregasRealizadas.get(aluno.id);
+            return {
+                id: aluno.id,
+                nome: aluno.nome,
+                status: entrega ? 'entregue' : 'pendente',
+                entregaInfo: entrega || null
+            };
+        });
+        
+        res.json({
+            produtos: produtosMaterial,
+            estoqueEscola: Object.fromEntries(estoqueEscola), // Converte Map para Objeto
+            alunos: alunosComStatus
+        });
+
+    } catch (err) {
+        console.error("Erro ao montar grade de entrega de material:", err.message);
+        res.status(500).json({ error: "Erro interno ao processar dados." });
+    } finally {
+        client.release();
+    }
+});
+
+router.get('/relatorios/alunos-status', verificarToken, async (req, res) => {
+    const localId = req.user.local_id;
+    const { tipoProduto, status } = req.query;
+
+    if (!localId || !tipoProduto || !status) {
+        return res.status(400).json({ error: "Parâmetros 'tipoProduto' e 'status' são obrigatórios." });
+    }
+
+    try {
+        let query;
+        if (status === 'pendente') {
+            // Busca todos os alunos que NÃO estão na lista de entregas para aquele tipo de produto.
+            query = `
+                SELECT a.nome as aluno_nome, t.nome as turma_nome
+                FROM alunos a
+                JOIN turmas t ON a.turma_id = t.id
+                WHERE a.local_id = $1 AND a.id NOT IN (
+                    SELECT DISTINCT ea.aluno_id
+                    FROM entregas_alunos ea
+                    JOIN produtos p ON ea.produto_id = p.id
+                    WHERE p.tipo = $2
+                )
+                ORDER BY t.nome, a.nome;
+            `;
+        } else { // status === 'completo'
+            // Busca todos os alunos que JÁ estão na lista de entregas.
+            query = `
+                SELECT a.nome as aluno_nome, t.nome as turma_nome, p.nome as produto_recebido, ea.data_entrega
+                FROM entregas_alunos ea
+                JOIN alunos a ON ea.aluno_id = a.id
+                JOIN turmas t ON a.turma_id = t.id
+                JOIN produtos p ON ea.produto_id = p.id
+                WHERE a.local_id = $1 AND p.tipo = $2
+                ORDER BY t.nome, a.nome;
+            `;
+        }
+
+        const { rows } = await db.query(query, [localId, tipoProduto]);
+        res.json(rows);
+
+    } catch (err) {
+        console.error(`Erro no relatório de status de alunos [${tipoProduto}/${status}]:`, err.message);
+        res.status(500).json({ error: "Erro interno ao gerar relatório de alunos." });
+    }
+});
+
+router.get('/relatorios/consolidado-geral', verificarToken, async (req, res) => {
+    // Adicionar verificação de perfil de administrador se necessário
+    
+    try {
+        const query = `
+            WITH EntregasPorTipo AS (
+                SELECT
+                    a.local_id,
+                    p.tipo,
+                    COUNT(DISTINCT ea.aluno_id) as total_recebido
+                FROM entregas_alunos ea
+                JOIN produtos p ON ea.produto_id = p.id
+                JOIN alunos a ON ea.aluno_id = a.id
+                GROUP BY a.local_id, p.tipo
+            ),
+            TotaisAlunos AS (
+                SELECT
+                    local_id,
+                    COUNT(*) as total_alunos
+                FROM alunos
+                GROUP BY local_id
+            )
+            SELECT
+                l.id as local_id,
+                l.nome as local_nome,
+                COALESCE(ta.total_alunos, 0) as total_alunos,
+                (SELECT COUNT(*) FROM turmas t WHERE t.local_id = l.id) as total_turmas,
+                COALESCE(e_uni.total_recebido, 0) as uniformes_recebidos,
+                (COALESCE(ta.total_alunos, 0) - COALESCE(e_uni.total_recebido, 0)) as uniformes_pendentes,
+                COALESCE(e_mat.total_recebido, 0) as material_recebido,
+                (COALESCE(ta.total_alunos, 0) - COALESCE(e_mat.total_recebido, 0)) as material_pendentes
+            FROM locais l
+            LEFT JOIN TotaisAlunos ta ON ta.local_id = l.id
+            LEFT JOIN EntregasPorTipo e_uni ON e_uni.local_id = l.id AND e_uni.tipo = 'UNIFORMES'
+            LEFT JOIN EntregasPorTipo e_mat ON e_mat.local_id = l.id AND e_mat.tipo = 'MATERIAL'
+            WHERE l.id != 37 -- Exclui o Almoxarifado Central
+            ORDER BY l.nome;
+        `;
+        const { rows } = await db.query(query);
+        res.json(rows);
+    } catch (err) {
+        console.error("Erro no relatório consolidado geral:", err.message);
+        res.status(500).json({ error: "Erro interno ao gerar relatório consolidado." });
+    }
+});
+
+router.get('/estoque/historico-produto/:id', verificarToken, async (req, res) => {
+    const { id: produtoId } = req.params;
+
+    try {
+        // Query para buscar ENTRADAS (do histórico de entrada em lote)
+        const entradasSql = `
+            SELECT 
+                h.data AS data_hora, 
+                h.observacoes,
+                hd.quantidade,
+                hd.tamanho,
+                u.nome as nome_usuario
+            FROM historico h
+            JOIN historico_detalhes hd ON h.id = hd.historico_id
+            JOIN usuarios u ON h.usuario_id = u.id
+            WHERE hd.produto_id = $1 AND h.tipo = 'ENTRADA' AND h.local_id = 37
+            ORDER BY h.data DESC
+            LIMIT 20;
+        `;
+
+        // Query para buscar SAÍDAS (das remessas para as escolas)
+        const saidasSql = `
+            SELECT 
+                pr.data_criacao as data_hora,
+                l.nome as observacoes, -- Nome da escola como observação
+                pri.quantidade_enviada as quantidade,
+                pri.tamanho,
+                u.nome as nome_usuario -- Usuário que criou o pedido
+            FROM pedido_remessa_itens pri
+            JOIN pedido_remessas pr ON pri.remessa_id = pr.id
+            JOIN pedidos p ON pr.pedido_id = p.id
+            JOIN locais l ON p.local_destino_id = l.id
+            LEFT JOIN usuarios u ON p.usuario_origem_id = u.id
+            WHERE pri.produto_id = $1
+            ORDER BY pr.data_criacao DESC
+            LIMIT 20;
+        `;
+
+        // Executa as duas consultas em paralelo
+        const [entradasRes, saidasRes] = await Promise.all([
+            db.query(entradasSql, [produtoId]),
+            db.query(saidasSql, [produtoId])
+        ]);
+        
+        res.json({
+            entradas: entradasRes.rows,
+            saidas: saidasRes.rows
+        });
+
+    } catch (err) {
+        console.error("ERRO AO BUSCAR HISTÓRICO DE PRODUTO:", err.message);
+        res.status(500).json({ error: "Erro ao carregar histórico do produto." });
     }
 });
 

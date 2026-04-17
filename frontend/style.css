@@ -2294,7 +2294,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .empty-msg { color: rgba(255,255,255,0.4); text-align: center; padding: 10px; font-size: 0.8rem; }
 
 .tabela-entrega-container {
-    max-height: 65vh; /* Altura máxima antes de rolar */
+    max-height: 70vh; /* Aumentei um pouco a altura para mais visibilidade */
     overflow: auto;
     background: rgba(0, 26, 44, 0.5);
     border: 1px solid rgba(255, 255, 255, 0.1);
@@ -2306,22 +2306,25 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     width: 100%;
     border-collapse: collapse;
     color: white;
+    table-layout: fixed; /* Isso ajuda o navegador a calcular melhor a largura das colunas */
 }
 
 .tabela-entrega th, .tabela-entrega td {
-    padding: 12px 15px;
+    padding: 8px; /* Reduzi o padding para ganhar espaço */
     text-align: center;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    min-width: 120px;
+    /* A largura agora é calculada automaticamente */
 }
 
 .tabela-entrega thead th {
     background: rgba(0, 212, 255, 0.1);
-    font-size: 0.8rem;
-    letter-spacing: 1px;
+    font-size: 0.75rem; /* Um pouco menor para caber melhor */
+    letter-spacing: 0.5px;
     position: sticky;
     top: 0;
     z-index: 2;
+    word-wrap: break-word; /* Permite que nomes longos como "CASACO MASCULINO" quebrem a linha */
+    vertical-align: middle;
 }
 
 .tabela-entrega .sticky-col {
@@ -2331,12 +2334,11 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     z-index: 1;
     text-align: left;
     font-weight: bold;
-    min-width: 250px;
+    width: 200px; /* Largura fixa para a coluna de nome do aluno */
 }
 .tabela-entrega thead .sticky-col {
     z-index: 3;
 }
-
 
 .celula-entregue {
     font-size: 0.9rem;
@@ -2398,3 +2400,4 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     font-weight: bold;
     text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
 }
+

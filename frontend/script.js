@@ -19944,13 +19944,9 @@ async function renderizarMatrizEntrega(turmaId, turmaNome) {
         const res = await fetch(`${API_URL}/turma/${turmaId}/grade-entrega`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
-        if (!res.ok) {
-            const errData = await res.json();
-            throw new Error(errData.error || 'Falha ao carregar dados da turma.');
-        }
+        if (!res.ok) throw new Error((await res.json()).error || 'Falha ao carregar dados.');
         const data = await res.json();
         
-        // Se não houver alunos ou produtos, mostre uma mensagem amigável.
         if (data.alunos.length === 0) {
             app.innerHTML = `<div class="glass-panel" style="text-align:center; padding: 40px;"><h2>A turma "${turmaNome}" não possui alunos cadastrados.</h2><button class="btn-voltar-vidro" onclick="telaEntregaUniformes()">Voltar</button></div>`;
             return;
@@ -19962,7 +19958,7 @@ async function renderizarMatrizEntrega(turmaId, turmaNome) {
                     <i class="fas fa-arrow-left"></i> TROCAR TURMA
                 </button>
                 <h2 class="titulo-sessao" style="color: white;">Entregas para: ${turmaNome}</h2>
-                <p style="color: rgba(255,255,255,0.7);">Selecione os tamanhos para cada aluno e confirme a entrega.</p>
+                <p style="color: rgba(255,255,255,0.7);">Selecione um tamanho na linha "TODOS" para aplicar à coluna inteira.</p>
             </div>
 
             <div class="tabela-entrega-container animate__animated animate__fadeInUp">
@@ -19972,35 +19968,34 @@ async function renderizarMatrizEntrega(turmaId, turmaNome) {
                             <th class="sticky-col">ALUNO</th>
                             ${data.produtos.map(p => `<th>${p.nome.toUpperCase()}</th>`).join('')}
                         </tr>
+                        <!-- NOVA LINHA "TODOS" -->
+                        <tr class="linha-todos">
+                            <th class="sticky-col">TODOS</th>
+                            ${data.produtos.map(produto => `
+                                <td>
+                                    <select class="select-todos" data-produto-id="${produto.id}">
+                                        <option value="">--</option>
+                                        ${(data.estoqueEscola[produto.id] || []).map(e => 
+                                            `<option value="${e.tamanho}">${e.tamanho} (${e.qtd})</option>`
+                                        ).join('')}
+                                    </select>
+                                </td>
+                            `).join('')}
+                        </tr>
                     </thead>
                     <tbody>
                         ${data.alunos.map(aluno => `
                             <tr id="aluno-row-${aluno.id}">
                                 <td class="sticky-col">${aluno.nome}</td>
                                 ${data.produtos.map(produto => {
+                                    // Lógica para renderizar célula do aluno (inalterada)
+                                    // ... (o código que você já tem aqui) ...
                                     const status = aluno.statusItens[produto.id];
                                     const estoqueDisponivel = data.estoqueEscola[produto.id] || [];
-
                                     if (status.status === 'entregue') {
-                                        return `
-                                            <td class="celula-entregue">
-                                                <i class="fas fa-check-circle"></i> ${status.tamanho}
-                                                <small>${new Date(status.data).toLocaleDateString()}</small>
-                                            </td>
-                                        `;
+                                        return `<td class="celula-entregue"><i class="fas fa-check-circle"></i> ${status.tamanho}<small>${new Date(status.data).toLocaleDateString()}</small></td>`;
                                     } else {
-                                        return `
-                                            <td>
-                                                <select class="select-tamanho-entrega" 
-                                                        data-aluno-id="${aluno.id}" 
-                                                        data-produto-id="${produto.id}">
-                                                    <option value="">--</option>
-                                                    ${estoqueDisponivel.map(e => 
-                                                        `<option value="${e.tamanho}">${e.tamanho} (${e.qtd})</option>`
-                                                    ).join('')}
-                                                </select>
-                                            </td>
-                                        `;
+                                        return `<td><select class="select-tamanho-entrega" data-aluno-id="${aluno.id}" data-produto-id="${produto.id}"><option value="">--</option>${estoqueDisponivel.map(e => `<option value="${e.tamanho}">${e.tamanho} (${e.qtd})</option>`).join('')}</select></td>`;
                                     }
                                 }).join('')}
                             </tr>
@@ -20010,20 +20005,57 @@ async function renderizarMatrizEntrega(turmaId, turmaNome) {
             </div>
             
             <div id="footer-acoes-entrega" class="animate__animated animate__fadeIn">
-                <button class="btn-imprimir-comprovante" onclick="gerarComprovanteTurma(${turmaId})">
-                    <i class="fas fa-print"></i> GERAR COMPROVANTE
-                </button>
-                <button class="btn-confirmar-entrega" onclick="confirmarEntregasTurma(${turmaId})">
-                    <i class="fas fa-check"></i> CONFIRMAR ENTREGAS SELECIONADAS
-                </button>
+                <button class="btn-imprimir-comprovante" onclick="gerarComprovanteTurma(${turmaId})"><i class="fas fa-print"></i> GERAR COMPROVANTE</button>
+                <button class="btn-confirmar-entrega" onclick="confirmarEntregasTurma(${turmaId})"><i class="fas fa-check"></i> CONFIRMAR ENTREGAS SELECIONADAS</button>
             </div>
         `;
+        
+        // Ativa a nova funcionalidade
+        configurarAcoesEmMassa();
+
     } catch (err) {
         console.error("Erro ao renderizar matriz de entrega:", err);
         notificar(`Erro: ${err.message}`, 'erro');
-        // Opção de voltar em caso de erro
         app.innerHTML = `<div class="glass-panel" style="text-align:center; padding: 40px;"><h2>Ocorreu um erro ao carregar os dados.</h2><p>${err.message}</p><button class="btn-voltar-vidro" onclick="telaEntregaUniformes()">Voltar</button></div>`;
     }
+}
+
+function configurarAcoesEmMassa() {
+    const selectsTodos = document.querySelectorAll('.select-todos');
+
+    selectsTodos.forEach(selectMaster => {
+        selectMaster.addEventListener('change', (event) => {
+            const produtoId = event.target.dataset.produtoId;
+            const tamanhoSelecionado = event.target.value;
+            
+            // Encontra todos os selects de alunos para este produto
+            const selectsAlunos = document.querySelectorAll(`.select-tamanho-entrega[data-produto-id="${produtoId}"]`);
+
+            // Se a opção selecionada for "--", limpa todos os selects da coluna
+            if (tamanhoSelecionado === "") {
+                selectsAlunos.forEach(s => s.value = "");
+                return;
+            }
+            
+            // Validação de estoque antes de preencher
+            const optionSelecionada = event.target.options[event.target.selectedIndex];
+            const textoOpcao = optionSelecionada.textContent; // Ex: "M (15)"
+            const match = textoOpcao.match(/\((\d+)\)/); // Pega o número dentro dos parênteses
+            const estoqueDisponivel = match ? parseInt(match[1], 10) : 0;
+            
+            if (selectsAlunos.length > estoqueDisponivel) {
+                alert(`Atenção: Você está tentando atribuir o tamanho ${tamanhoSelecionado} para ${selectsAlunos.length} alunos, mas só há ${estoqueDisponivel} unidades em estoque. A confirmação irá falhar. \n\nAjuste as quantidades manualmente.`);
+            }
+
+            // Aplica o tamanho selecionado a todos os alunos da coluna
+            selectsAlunos.forEach(s => {
+                // Verifica se a opção de tamanho existe no select do aluno antes de atribuir
+                if (Array.from(s.options).some(opt => opt.value === tamanhoSelecionado)) {
+                    s.value = tamanhoSelecionado;
+                }
+            });
+        });
+    });
 }
 
 async function gerarComprovanteTurma(turmaId) {
@@ -20307,6 +20339,8 @@ async function gerarRelatorioStatusTurmas() {
         container.innerHTML = `<p style="color: #ff4d4d;">${err.message}</p>`;
     }
 }
+
+
 
 window.telaVisualizarEstoque = telaVisualizarEstoque;
 window.telaAbastecerEstoque = telaAbastecerEstoque;

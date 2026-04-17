@@ -17662,34 +17662,48 @@ async function carregarConsultaEstoque() {
     } catch (err) { console.error("Erro:", err); }
 }
 
-async function abrirModalHistorico(produtoId, nome) {
+async function abrirModalHistorico(produtoId, nomeProduto) {
     const modal = document.getElementById('modal-historico-prod');
-    const listaEntradas = document.getElementById('hist-lista-entradas');
-    const listaSaidas = document.getElementById('hist-lista-saidas');
-    
-    document.getElementById('hist-nome-produto').innerText = nome;
+    const nomeEl = document.getElementById('hist-nome-produto');
+    const entradasEl = document.getElementById('hist-lista-entradas');
+    const saidasEl = document.getElementById('hist-lista-saidas');
+
+    nomeEl.innerText = nomeProduto;
+    entradasEl.innerHTML = '<div class="spinner-small"></div>';
+    saidasEl.innerHTML = '<div class="spinner-small"></div>';
     modal.style.display = 'flex';
-    
-    listaEntradas.innerHTML = '...';
-    listaSaidas.innerHTML = '...';
 
     try {
-        const res = await fetch(`${API_URL}/estoque/movimentacoes/${produtoId}`, {
+        const res = await fetch(`${API_URL}/estoque/historico-produto/${produtoId}`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
-        const dados = await res.json(); // Espera { entradas: [], saidas: [] }
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
 
-        const formatarItem = (h) => `
-            <div class="item-mov">
-                <span>${new Date(h.data).toLocaleDateString()}</span>
-                <strong style="color: ${h.acao === 'ENTRADA' ? '#10b981' : '#ff4d4d'}">${h.quantidade}</strong>
-            </div>`;
+        // Renderiza as entradas
+        entradasEl.innerHTML = data.entradas.length ? data.entradas.map(e => `
+            <div class="hist-item">
+                <p><strong>${e.quantidade} un. ${e.tamanho ? `(${e.tamanho})` : ''}</strong></p>
+                <small>${new Date(e.data_hora).toLocaleString('pt-BR')}</small>
+                <small>Por: ${e.nome_usuario}</small>
+                <small>Obs: ${e.observacoes || 'N/A'}</small>
+            </div>
+        `).join('') : '<p class="empty-msg">Nenhuma entrada registrada.</p>';
 
-        listaEntradas.innerHTML = dados.entradas.length ? dados.entradas.map(formatarItem).join('') : 'Sem registros';
-        listaSaidas.innerHTML = dados.saidas.length ? dados.saidas.map(formatarItem).join('') : 'Sem registros';
-        
+        // Renderiza as saídas
+        saidasEl.innerHTML = data.saidas.length ? data.saidas.map(s => `
+            <div class="hist-item">
+                <p><strong>${s.quantidade} un. ${s.tamanho ? `(${s.tamanho})` : ''}</strong></p>
+                <small>${new Date(s.data_hora).toLocaleString('pt-BR')}</small>
+                <small>Destino: ${s.observacoes}</small>
+                <small>Pedido por: ${s.nome_usuario || 'N/A'}</small>
+            </div>
+        `).join('') : '<p class="empty-msg">Nenhuma saída registrada.</p>';
+
     } catch (err) {
-        console.error(err);
+        notificar(`Erro ao carregar histórico: ${err.message}`, 'erro');
+        entradasEl.innerHTML = '<p class="text-danger">Erro ao carregar.</p>';
+        saidasEl.innerHTML = '<p class="text-danger">Erro ao carregar.</p>';
     }
 }
 
@@ -20340,7 +20354,303 @@ async function gerarRelatorioStatusTurmas() {
     }
 }
 
+function telaEntregaMaterial() {
+    // Reutilizamos a tela de seleção de turma, mas mudamos a função do botão
+    telaEntregaUniformes(); // Mostra o seletor de turma
+    
+    // Pequeno hack para ajustar o título e a função do botão
+    setTimeout(() => {
+        document.querySelector('.titulo-sessao').innerText = 'ENTREGA DE MATERIAL ESCOLAR';
+        document.querySelector('p[style*="color: rgba(255,255,255,0.7)"]').innerText = 'Selecione uma turma para registrar a entrega dos kits de material.';
+        const btn = document.getElementById('btn-iniciar-entrega');
+        if(btn) btn.setAttribute('onclick', 'carregarGradeDeEntregaMaterial()');
+    }, 100);
+}
 
+// Função para pegar o ID da turma e chamar a renderização da matriz
+function carregarGradeDeEntregaMaterial() {
+    const turmaId = document.getElementById('select-turma').value;
+    if (!turmaId) {
+        notificar('Por favor, selecione uma turma.', 'aviso');
+        return;
+    }
+    renderizarMatrizEntregaMaterial(turmaId);
+}
+
+// A função que constrói a matriz de entrega de MATERIAL
+async function renderizarMatrizEntregaMaterial(turmaId) {
+    const app = document.getElementById('app-content');
+    app.innerHTML = `<div class="loading-spinner"></div>`;
+
+    const turmaNome = document.getElementById('select-turma').options[document.getElementById('select-turma').selectedIndex].text;
+
+    try {
+        const res = await fetch(`${API_URL}/turma/${turmaId}/grade-entrega-material`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        if (!res.ok) throw new Error((await res.json()).error || 'Falha ao carregar dados.');
+        const data = await res.json();
+
+        app.innerHTML = `
+            <div class="header-animado animate__animated animate__fadeIn">
+                <button class="btn-voltar-vidro" onclick="telaEntregaMaterial()"><i class="fas fa-arrow-left"></i> TROCAR TURMA</button>
+                <h2 class="titulo-sessao" style="color: white;">Entregas de Material para: ${turmaNome}</h2>
+                <p style="color: rgba(255,255,255,0.7);">Marque o kit entregue para cada aluno.</p>
+            </div>
+
+            <div class="tabela-entrega-container animate__animated animate__fadeInUp">
+                <table class="tabela-entrega">
+                    <thead>
+                        <tr>
+                            <th class="sticky-col">ALUNO</th>
+                            ${data.produtos.map(p => `<th>${p.nome.toUpperCase()}<br><small>(${data.estoqueEscola[p.id] || 0} em estoque)</small></th>`).join('')}
+                        </tr>
+                        <!-- Linha "TODOS" para MATERIAL -->
+                        <tr class="linha-todos">
+                            <th class="sticky-col">TODOS</th>
+                            ${data.produtos.map(produto => `
+                                <td class="celula-radio">
+                                    <input type="radio" name="radio-todos" class="radio-todos" data-produto-id="${produto.id}" id="todos-${produto.id}">
+                                    <label for="todos-${produto.id}"></label>
+                                </td>
+                            `).join('')}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${data.alunos.map(aluno => `
+                            <tr id="aluno-row-${aluno.id}">
+                                <td class="sticky-col">${aluno.nome}</td>
+                                ${data.produtos.map(produto => {
+                                    if (aluno.status === 'entregue') {
+                                        return (aluno.entregaInfo.produto_id === produto.id) 
+                                            ? `<td class="celula-entregue"><i class="fas fa-check-circle"></i><small>${aluno.entregaInfo.produto_nome}</small></td>`
+                                            : `<td class="celula-bloqueada"></td>`;
+                                    } else {
+                                        return `
+                                            <td class="celula-radio">
+                                                <input type="radio" name="radio_aluno_${aluno.id}" class="radio-aluno" 
+                                                       data-aluno-id="${aluno.id}" data-produto-id="${produto.id}" id="aluno${aluno.id}-prod${produto.id}">
+                                                <label for="aluno${aluno.id}-prod${produto.id}"></label>
+                                            </td>
+                                        `;
+                                    }
+                                }).join('')}
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+            <div id="footer-acoes-entrega" class="animate__animated animate__fadeIn">
+                <button class="btn-confirmar-entrega" onclick="confirmarEntregasMaterial(${turmaId})"><i class="fas fa-check"></i> CONFIRMAR ENTREGAS MARCADAS</button>
+            </div>
+        `;
+        configurarAcoesEmMassaMaterial(data.estoqueEscola);
+    } catch (err) {
+        console.error("Erro ao renderizar matriz de material:", err);
+        notificar(`Erro: ${err.message}`, 'erro');
+    }
+}
+
+// Lógica de ações em massa para os Radio Buttons
+function configurarAcoesEmMassaMaterial(estoque) {
+    document.querySelectorAll('.radio-todos').forEach(radioMaster => {
+        radioMaster.addEventListener('click', (event) => {
+            const produtoId = event.target.dataset.produtoId;
+            const isChecked = event.target.checked;
+            
+            if (!isChecked) return; // Só age quando está marcando
+            
+            const estoqueDisponivel = estoque[produtoId] || 0;
+            const alunosPendentes = document.querySelectorAll('.radio-aluno[name^="radio_aluno_"]');
+            const numAlunos = new Set(Array.from(alunosPendentes).map(r => r.dataset.alunoId)).size;
+
+            if (numAlunos > estoqueDisponivel) {
+                alert(`Atenção: Você está tentando atribuir este kit para ${numAlunos} alunos, mas só há ${estoqueDisponivel} unidades em estoque. A confirmação irá falhar.`);
+            }
+
+            // Desmarca todos os outros radios de alunos
+            document.querySelectorAll('.radio-aluno').forEach(r => r.checked = false);
+            // Marca apenas os radios da coluna selecionada
+            document.querySelectorAll(`.radio-aluno[data-produto-id="${produtoId}"]`).forEach(r => r.checked = true);
+        });
+    });
+}
+
+// Função para salvar as entregas de material
+async function confirmarEntregasMaterial(turmaId) {
+    const radiosMarcados = document.querySelectorAll('.radio-aluno:checked');
+    const entregasParaEnviar = Array.from(radiosMarcados).map(radio => ({
+        alunoId: radio.dataset.alunoId,
+        produtoId: radio.dataset.produtoId,
+        tamanho: null // Material não tem tamanho
+    }));
+
+    if (entregasParaEnviar.length === 0) {
+        return notificar('Nenhum kit de material foi marcado para entrega.', 'aviso');
+    }
+    
+    // A rota POST /entregas/lote é genérica e já funciona para isso!
+    // Reutilizamos a lógica da função confirmarEntregasTurma, apenas mudando a função de recarregamento
+    if (!confirm(`Confirmar a entrega de ${entregasParaEnviar.length} kit(s) de material?`)) return;
+
+    const btn = document.querySelector('.btn-confirmar-entrega');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> PROCESSANDO...';
+
+    try {
+        const res = await fetch(`${API_URL}/entregas/lote`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ entregas: entregasParaEnviar })
+        });
+        const resultado = await res.json();
+        if (!res.ok) throw new Error(resultado.error || 'Falha no servidor.');
+
+        notificar(resultado.message, 'sucesso');
+        renderizarMatrizEntregaMaterial(turmaId); // Recarrega a tela de material
+
+    } catch (err) {
+        notificar(`Erro: ${err.message}`, 'erro');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-check"></i> CONFIRMAR ENTREGAS MARCADAS';
+    }
+}
+
+function telaRelatoriosGeral() {
+    const app = document.getElementById('app-content');
+    app.innerHTML = `
+        <div class="header-animado animate__animated animate__fadeIn">
+            <button class="btn-voltar-vidro" onclick="carregarDashboard()"><i class="fas fa-arrow-left"></i> VOLTAR</button>
+            <h2 class="titulo-sessao" style="color: white;">Painel de Relatórios</h2>
+            <p style="color: rgba(255,255,255,0.7);">Selecione um relatório para visualizar o status das entregas.</p>
+        </div>
+
+        <!-- Seção de UNIFORMES -->
+        <div class="secao-relatorio">
+            <h3 class="titulo-secao-relatorio"><i class="fas fa-tshirt"></i> UNIFORMES</h3>
+            <div class="grid-relatorios">
+                <button class="btn-relatorio" onclick="gerarRelatorioAlunos('UNIFORMES', 'pendente')">
+                    <i class="fas fa-user-clock"></i><span>Alunos Pendentes</span>
+                </button>
+                <button class="btn-relatorio" onclick="gerarRelatorioAlunos('UNIFORMES', 'completo')">
+                    <i class="fas fa-user-check"></i><span>Alunos Contemplados</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Seção de MATERIAL -->
+        <div class="secao-relatorio">
+            <h3 class="titulo-secao-relatorio"><i class="fas fa-pencil-ruler"></i> MATERIAL ESCOLAR</h3>
+            <div class="grid-relatorios">
+                 <button class="btn-relatorio" onclick="gerarRelatorioAlunos('MATERIAL', 'pendente')">
+                    <i class="fas fa-user-clock"></i><span>Alunos Pendentes</span>
+                </button>
+                <button class="btn-relatorio" onclick="gerarRelatorioAlunos('MATERIAL', 'completo')">
+                    <i class="fas fa-user-check"></i><span>Alunos Contemplados</span>
+                </button>
+            </div>
+        </div>
+
+        <div id="resultado-relatorio" style="margin-top: 20px; padding: 0 20px;"></div>
+    `;
+}
+
+async function gerarRelatorioAlunos(tipoProduto, status) {
+    const container = document.getElementById('resultado-relatorio');
+    container.innerHTML = `<div class="loading-spinner"></div>`;
+
+    const titulo = `Relatório: Alunos com Kit ${tipoProduto} ${status === 'pendente' ? 'PENDENTE' : 'COMPLETO'}`;
+    const isPendente = status === 'pendente';
+
+    try {
+        const res = await fetch(`${API_URL}/relatorios/alunos-status?tipoProduto=${tipoProduto}&status=${status}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const alunos = await res.json();
+        if (!res.ok) throw new Error(alunos.error || 'Falha ao carregar.');
+
+        container.innerHTML = `
+            <div class="painel-vidro animate__animated animate__fadeInUp" style="padding:20px;">
+                <h3 style="color:white;">${titulo} (${alunos.length} alunos)</h3>
+                <div class="tabela-entrega-container" style="max-height: 50vh;">
+                    <table class="tabela-entrega">
+                        <thead>
+                            <tr>
+                                <th style="text-align:left;">ALUNO</th>
+                                <th style="text-align:left;">TURMA</th>
+                                ${!isPendente ? '<th style="text-align:left;">ITEM / DATA</th>' : ''}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${alunos.length === 0 ? `<tr><td colspan="3" style="text-align:center; padding:20px;">Nenhum aluno encontrado.</td></tr>` :
+                            alunos.map(aluno => `
+                                <tr>
+                                    <td style="text-align:left;">${aluno.aluno_nome}</td>
+                                    <td style="text-align:left;">${aluno.turma_nome}</td>
+                                    ${!isPendente ? `<td style="text-align:left;">${aluno.produto_recebido}<br><small>${new Date(aluno.data_entrega).toLocaleDateString()}</small></td>` : ''}
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+    } catch (err) {
+        container.innerHTML = `<p style="color:#ff4d4d;">${err.message}</p>`;
+    }
+}
+
+async function telaRelatorioConsolidado() {
+    const app = document.getElementById('app-content');
+    app.innerHTML = `<div class="loading-spinner"></div>`;
+
+    try {
+        const res = await fetch(`${API_URL}/relatorios/consolidado-geral`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const dados = await res.json();
+        if (!res.ok) throw new Error(dados.error);
+
+        app.innerHTML = `
+            <div class="header-animado animate__animated animate__fadeIn">
+                <button class="btn-voltar-vidro" onclick="carregarDashboard()"><i class="fas fa-arrow-left"></i> VOLTAR</button>
+                <h2 class="titulo-sessao" style="color: white;">Relatório Consolidado por Escola</h2>
+            </div>
+
+            <div class="tabela-entrega-container animate__animated animate__fadeInUp" style="margin: 20px;">
+                <table class="tabela-entrega">
+                    <thead>
+                        <tr>
+                            <th style="text-align:left;">ESCOLA</th>
+                            <th>TURMAS</th>
+                            <th>ALUNOS</th>
+                            <th>UNIF. RECEBIDOS</th>
+                            <th>UNIF. PENDENTES</th>
+                            <th>MAT. RECEBIDOS</th>
+                            <th>MAT. PENDENTES</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${dados.map(d => `
+                            <tr>
+                                <td style="text-align:left;">${d.local_nome}</td>
+                                <td>${d.total_turmas}</td>
+                                <td>${d.total_alunos}</td>
+                                <td style="color: #10b981;">${d.uniformes_recebidos}</td>
+                                <td style="color: #f59e0b;">${d.uniformes_pendentes}</td>
+                                <td style="color: #10b981;">${d.material_recebido}</td>
+                                <td style="color: #f59e0b;">${d.material_pendentes}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    } catch (err) {
+        notificar(`Erro: ${err.message}`, 'erro');
+    }
+}
 
 window.telaVisualizarEstoque = telaVisualizarEstoque;
 window.telaAbastecerEstoque = telaAbastecerEstoque;

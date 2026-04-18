@@ -8602,22 +8602,51 @@ router.get('/turma/:id/grade-entrega-material', verificarToken, async (req, res)
     const { id: turmaId } = req.params;
     const localId = req.user.local_id;
 
-    if (!localId) return res.status(403).json({ error: "Usuário sem local associado." });
+    if (!localId) {
+        return res.status(403).json({ error: "Usuário sem local associado." });
+    }
 
     const client = await db.pool.connect();
     try {
-        // 1. Busca os produtos do tipo 'MATERIAL'
+        // 1. Busca informações da turma
+        const turmaRes = await client.query('SELECT nome FROM turmas WHERE id = $1 AND local_id = $2', [turmaId, localId]);
+        if (turmaRes.rows.length === 0) {
+            return res.status(404).json({ error: "Turma não encontrada ou não pertence a esta unidade." });
+        }
+        const turmaNome = turmaRes.rows[0].nome;
+
+        // 2. Busca os produtos do tipo 'MATERIAL'
         const produtosRes = await client.query(
             "SELECT id, nome FROM produtos WHERE tipo = 'MATERIAL' AND local_id = 37 ORDER BY nome ASC"
         );
         const produtosMaterial = produtosRes.rows;
 
-        // 2. Busca os alunos da turma
+        // Se não houver kits de material, retorna uma resposta válida mas vazia.
+        if (produtosMaterial.length === 0) {
+            return res.json({
+                turmaInfo: { id: turmaId, nome: turmaNome },
+                produtos: [],
+                estoqueEscola: {},
+                alunos: []
+            });
+        }
+
+        // 3. Busca os alunos da turma
         const alunosRes = await client.query('SELECT id, nome FROM alunos WHERE turma_id = $1 ORDER BY nome ASC', [turmaId]);
         const alunos = alunosRes.rows;
+        
+        // Se não houver alunos, também retorna uma resposta válida mas vazia.
+        if (alunos.length === 0) {
+            return res.json({
+                turmaInfo: { id: turmaId, nome: turmaNome },
+                produtos: produtosMaterial,
+                estoqueEscola: {},
+                alunos: []
+            });
+        }
         const alunoIds = alunos.map(a => a.id);
 
-        // 3. Busca o estoque ATUAL da ESCOLA para cada kit de material
+        // 4. Busca o estoque ATUAL da ESCOLA para cada kit de material
         const estoqueRes = await client.query(
             `SELECT produto_id, quantidade FROM estoque_por_local 
              WHERE local_id = $1 AND quantidade > 0 AND produto_id = ANY($2::int[])`,
@@ -8625,7 +8654,7 @@ router.get('/turma/:id/grade-entrega-material', verificarToken, async (req, res)
         );
         const estoqueEscola = new Map(estoqueRes.rows.map(item => [item.produto_id, item.quantidade]));
 
-        // 4. Busca as entregas de MATERIAL JÁ REALIZADAS para os alunos desta turma
+        // 5. Busca as entregas de MATERIAL JÁ REALIZADAS para os alunos desta turma
         const entregasRes = await client.query(`
             SELECT ea.aluno_id, ea.produto_id, p.nome as produto_nome
             FROM entregas_alunos ea
@@ -8634,7 +8663,7 @@ router.get('/turma/:id/grade-entrega-material', verificarToken, async (req, res)
         `, [alunoIds]);
         const entregasRealizadas = new Map(entregasRes.rows.map(e => [e.aluno_id, { produto_id: e.produto_id, produto_nome: e.produto_nome }]));
 
-        // 5. Monta o payload final
+        // 6. Monta o payload final
         const alunosComStatus = alunos.map(aluno => {
             const entrega = entregasRealizadas.get(aluno.id);
             return {
@@ -8646,8 +8675,9 @@ router.get('/turma/:id/grade-entrega-material', verificarToken, async (req, res)
         });
         
         res.json({
+            turmaInfo: { id: turmaId, nome: turmaNome },
             produtos: produtosMaterial,
-            estoqueEscola: Object.fromEntries(estoqueEscola), // Converte Map para Objeto
+            estoqueEscola: Object.fromEntries(estoqueEscola),
             alunos: alunosComStatus
         });
 

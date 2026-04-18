@@ -177,21 +177,20 @@ router.get('/pedidos/detalhes-estoque/:id', async (req, res) => {
     try {
         const sql = `
             SELECT 
+                ip.id as item_id, -- Importante para a edição
                 ip.produto_id,
                 p.nome AS produto,
                 p.tipo,
-                TRIM(ip.tamanho) AS tamanho,
+                ip.tamanho,
                 ip.quantidade AS solicitado,
-                CASE 
-                    WHEN p.tipo = 'MATERIAL' THEN p.quantidade_estoque
-                    WHEN p.tipo = 'UNIFORMES' THEN (
-                        SELECT COALESCE(SUM(et.quantidade), 0) 
-                        FROM estoque_tamanhos et 
-                        WHERE et.produto_id = ip.produto_id 
-                          AND TRIM(UPPER(et.tamanho)) = TRIM(UPPER(ip.tamanho))
-                    )
-                    ELSE 0 
-                END AS em_estoque
+                -- LÓGICA CORRIGIDA para buscar o estoque do lugar certo
+                COALESCE((
+                    SELECT epl.quantidade 
+                    FROM estoque_por_local epl
+                    WHERE epl.produto_id = ip.produto_id
+                      AND epl.local_id = 37 -- Sempre do Almoxarifado Central
+                      AND epl.tamanho IS NOT DISTINCT FROM ip.tamanho
+                ), 0) AS em_estoque
             FROM itens_pedido ip
             JOIN produtos p ON ip.produto_id = p.id
             WHERE ip.pedido_id = $1
@@ -200,7 +199,7 @@ router.get('/pedidos/detalhes-estoque/:id', async (req, res) => {
         const { rows } = await db.query(sql, [req.params.id]);
         res.json(rows);
     } catch (err) {
-        console.error("ERRO NA ANÁLISE DE ESTOQUE:", err.message);
+        console.error("ERRO NA ANÁLISE DE ESTOQUE (v2):", err.message);
         res.status(500).json({ error: "Erro interno ao processar comparação." });
     }
 });
@@ -232,43 +231,24 @@ router.post('/pedidos/admin/autorizar', verificarToken, async (req, res) => {
     const admin_id = req.userId;
 
     try {
-        await db.query('BEGIN');
-
-        // 1. Busca os itens para verificar e subtrair saldo
-        const itens = await db.query(
-            "SELECT produto_id, tamanho, quantidade FROM itens_pedido WHERE pedido_id = $1",
-            [pedidoId]
-        );
-
-        for (const item of itens.rows) {
-            // Subtrai do estoque apenas se houver saldo (segurança contra furos)
-            const baixa = await db.query(
-                `UPDATE estoque_grades 
-                 SET quantidade = quantidade - $1 
-                 WHERE produto_id = $2 AND tamanho = $3 AND quantidade >= $1`,
-                [item.quantidade, item.produto_id, item.tamanho]
-            );
-
-            if (baixa.rowCount === 0) {
-                throw new Error(`Saldo insuficiente para o produto ${item.produto_id} tam ${item.tamanho}`);
-            }
-        }
-
-        // 2. Atualiza o pedido: Status muda para 'AGUARDANDO_SEPARACAO'
-        await db.query(
+        // A ÚNICA RESPONSABILIDADE DESTA ROTA AGORA É MUDAR O STATUS
+        // A baixa de estoque foi movida para a finalização da remessa, o que é mais correto.
+        const updateResult = await db.query(
             `UPDATE pedidos 
             SET status = 'APROVADO', 
                 autorizado_por = $1, 
-                 data_autorizacao = NOW() 
-            WHERE id = $2`,
+                data_autorizacao = NOW() 
+            WHERE id = $2 AND status = 'AGUARDANDO_AUTORIZACAO'`, // Garante que não se aprove duas vezes
             [admin_id, pedidoId]
         );
 
-        await db.query('COMMIT');
-        res.json({ message: "Pedido autorizado e enviado para a fila de separação!" });
+        if (updateResult.rowCount === 0) {
+            throw new Error("Pedido não encontrado ou já processado.");
+        }
+
+        res.json({ message: "Pedido autorizado e enviado para a fila de separação do estoque!" });
 
     } catch (err) {
-        await db.query('ROLLBACK');
         res.status(500).json({ error: err.message });
     }
 });
@@ -6425,71 +6405,74 @@ router.post('/estoque/saida-pedido', async (req, res) => {
     try {
         await client.query('BEGIN');
 
-        // 1. Criar o Pedido (Status APROVADO conforme seu ENUM)
-        // Removida a coluna local_origem_id que não existe no seu banco
+        // 1. Criar o Pedido com status APROVADO
         const resPedido = await client.query(
-            `INSERT INTO pedidos 
-                (usuario_origem_id, local_destino_id, status, data_criacao, data_autorizacao, autorizado_por, tipo_pedido) 
+            `INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, data_criacao, data_autorizacao, autorizado_por, tipo_pedido) 
              VALUES ($1, $2, 'APROVADO', NOW(), NOW(), $1, 'SAIDA_DIRETA') 
              RETURNING id`,
             [usuario_id, local_destino_id]
         );
         const pedidoId = resPedido.rows[0].id;
 
-        // 2. Registro Mestre no Histórico (Local 37 - Almoxarifado Central)
+        // 2. Registro Mestre no Histórico (Lógica original mantida)
         const totalGeral = itens.reduce((acc, item) => acc + Number(item.qtd_total), 0);
         const resHist = await client.query(
             `INSERT INTO historico (usuario_id, acao, quantidade_total, local_id, tipo, observacoes) 
              VALUES ($1, $2, $3, $4, 'SAIDA', $5) RETURNING id`,
-            [usuario_id, 'PEDIDO', totalGeral, 37, `Saída Ref. Pedido #${pedidoId}`]
+            [usuario_id, 'PEDIDO', totalGeral, 37, `Saída Direta Ref. Pedido #${pedidoId}`]
         );
         const historicoId = resHist.rows[0].id;
 
         for (const item of itens) {
-            // 3. Baixa no Estoque Global (tabela produtos)
-            await client.query(
-                `UPDATE produtos SET quantidade_estoque = quantidade_estoque - $1 WHERE id = $2`,
-                [item.qtd_total, item.produto_id]
-            );
+            // --- INÍCIO DO BLOCO DE CORREÇÃO ---
 
             if (item.tipo === 'MATERIAL') {
-                // 4. Registro em itens_pedido (nome correto da sua tabela)
+                // Baixa UNIFICADA no estoque por local
+                const updateRes = await client.query(
+                    `UPDATE estoque_por_local 
+                     SET quantidade = quantidade - $1 
+                     WHERE local_id = 37 AND produto_id = $2 AND tamanho IS NULL AND quantidade >= $1`,
+                    [item.qtd_total, item.produto_id]
+                );
+                if (updateRes.rowCount === 0) throw new Error(`Estoque insuficiente para o material ID ${item.produto_id}.`);
+
+                // Insere o item no pedido
                 await client.query(
-                    `INSERT INTO itens_pedido (pedido_id, produto_id, quantidade) 
-                     VALUES ($1, $2, $3)`,
+                    `INSERT INTO itens_pedido (pedido_id, produto_id, quantidade) VALUES ($1, $2, $3)`,
                     [pedidoId, item.produto_id, item.qtd_total]
                 );
-                // 5. Histórico Detalhado
+                // Histórico detalhado
                 await client.query(
-                    `INSERT INTO historico_detalhes (historico_id, produto_id, quantidade, tipo_produto) 
-                     VALUES ($1, $2, $3, 'MATERIAL')`,
+                    `INSERT INTO historico_detalhes (historico_id, produto_id, quantidade, tipo_produto) VALUES ($1, $2, $3, 'MATERIAL')`,
                     [historicoId, item.produto_id, item.qtd_total]
                 );
-            } else {
-                // UNIFORMES: Processar grade de tamanhos
+
+            } else if (item.tipo === 'UNIFORMES') {
                 for (const [tamanho, qtd] of Object.entries(item.grade)) {
                     if (qtd > 0) {
-                        // Baixa na Grade específica
-                        await client.query(
-                            `UPDATE estoque_tamanhos SET quantidade = quantidade - $1 
-                             WHERE produto_id = $2 AND tamanho = $3`,
+                        // Baixa UNIFICADA no estoque por local
+                        const updateRes = await client.query(
+                            `UPDATE estoque_por_local 
+                             SET quantidade = quantidade - $1 
+                             WHERE local_id = 37 AND produto_id = $2 AND tamanho = $3 AND quantidade >= $1`,
                             [qtd, item.produto_id, tamanho]
                         );
-                        // Registro em itens_pedido com tamanho
+                        if (updateRes.rowCount === 0) throw new Error(`Estoque insuficiente para o uniforme ID ${item.produto_id} (Tam: ${tamanho}).`);
+                        
+                        // Insere o item no pedido
                         await client.query(
-                            `INSERT INTO itens_pedido (pedido_id, produto_id, quantidade, tamanho) 
-                             VALUES ($1, $2, $3, $4)`,
+                            `INSERT INTO itens_pedido (pedido_id, produto_id, quantidade, tamanho) VALUES ($1, $2, $3, $4)`,
                             [pedidoId, item.produto_id, qtd, tamanho]
                         );
-                        // Registro em historico_detalhes
+                        // Histórico detalhado
                         await client.query(
-                            `INSERT INTO historico_detalhes (historico_id, produto_id, quantidade, tamanho, tipo_produto) 
-                             VALUES ($1, $2, $3, $4, 'UNIFORMES')`,
+                            `INSERT INTO historico_detalhes (historico_id, produto_id, quantidade, tamanho, tipo_produto) VALUES ($1, $2, $3, $4, 'UNIFORMES')`,
                             [historicoId, item.produto_id, qtd, tamanho]
                         );
                     }
                 }
             }
+             // --- FIM DO BLOCO DE CORREÇÃO ---
         }
 
         await client.query('COMMIT');
@@ -6497,8 +6480,8 @@ router.post('/estoque/saida-pedido', async (req, res) => {
 
     } catch (err) {
         await client.query('ROLLBACK');
-        console.error("ERRO NA OPERAÇÃO:", err.message);
-        res.status(500).json({ error: "Erro ao processar baixa: " + err.message });
+        console.error("ERRO NA OPERAÇÃO DE SAÍDA DIRETA:", err.message);
+        res.status(500).json({ error: "Erro ao processar saída direta: " + err.message });
     } finally {
         client.release();
     }

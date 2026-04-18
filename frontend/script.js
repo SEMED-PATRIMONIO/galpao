@@ -436,11 +436,17 @@ async function carregarDashboard() {
                 <i>📦</i><span>CONSULTAR MEU ESTOQUE</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="telaEntregaUniformes()">
-                <i>🎁</i><span>ENTREGA DE UNIFORMES</span>
+                <i>👕</i><span>ENTREGA DE UNIFORMES</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="telaEntregaMaterial()">
+                <i>✏️</i><span>ENTREGA DE MATERIAL</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="telaRelatoriosUniformes()">
                 <i>📊</i><span>RELATÓRIOS ESCOLARES</span>
-            </button>               
+            </button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatoriosGeral()">
+                <i>📈</i><span>RELATÓRIOS DE ENTREGAS</span>
+            </button>
         `; 
     }
 
@@ -501,8 +507,6 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('RELATÓRIOS')">
                 <i>📊</i><span>RELATÓRIOS</span>
             </button>
-
-
             <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()">
                 <i>🔑</i><span>ALTERAR MINHA SENHA</span>
             </button>
@@ -574,6 +578,9 @@ function abrirSubmenuVitrificado(titulo) {
             <button class="btn-grande btn-vidro" onclick="telaRelatorioTransferenciasExternas()">
                 <i>🚚</i><span>TRANSFERÊNCIAS DE BENS ENTRE UNIDADES</span>
             </button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioConsolidado()">
+                <i>🏢</i><span>CONSOLIDADO POR ESCOLA</span>
+            </button>            
             `;
         }
     }
@@ -603,6 +610,9 @@ function abrirSubmenuVitrificado(titulo) {
             <button onclick="telaVisualizarRomaneios()" class="btn-vidro" style="background:#3b82f6;">
                 📂 ARQUIVO DE ROMANEIOS
             </button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioConsolidado()">
+                <i>🏢</i><span>CONSOLIDADO POR ESCOLA</span>
+            </button>            
             `;
         }
     }

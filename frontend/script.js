@@ -439,7 +439,7 @@ async function carregarDashboard() {
                 <i>👕</i><span>ENTREGA DE UNIFORMES</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="telaEntregaMaterial()">
-                <i>✏️</i><span>ENTREGA DE MATERIAL</span>
+                <i>✏️</i><span>ENTREGA DE KITS</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="telaRelatoriosUniformes()">
                 <i>📊</i><span>RELATÓRIOS ESCOLARES</span>
@@ -20392,14 +20392,38 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
     const app = document.getElementById('app-content');
     app.innerHTML = `<div class="loading-spinner"></div>`;
 
-    const turmaNome = document.getElementById('select-turma').options[document.getElementById('select-turma').selectedIndex].text;
-
     try {
         const res = await fetch(`${API_URL}/turma/${turmaId}/grade-entrega-material`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
-        if (!res.ok) throw new Error((await res.json()).error || 'Falha ao carregar dados.');
         const data = await res.json();
+        
+        if (!res.ok) {
+            throw new Error(data.error || 'Falha ao carregar dados da turma.');
+        }
+
+        const turmaNome = data.turmaInfo.nome;
+
+        // Se a API não retornar produtos, significa que não há kits de material cadastrados
+        if (!data.produtos || data.produtos.length === 0) {
+            app.innerHTML = `
+                <div class="glass-panel" style="text-align:center; padding: 40px; margin: 20px;">
+                    <h2>Nenhum Kit de Material Escolar Encontrado</h2>
+                    <p style="color: rgba(255,255,255,0.7); margin-bottom: 20px;">Não há produtos do tipo 'MATERIAL' cadastrados no sistema.</p>
+                    <button class="btn-voltar-vidro" onclick="telaEntregaMaterial()">Voltar</button>
+                </div>`;
+            return;
+        }
+
+        // Se não houver alunos, mostre uma mensagem amigável.
+        if (!data.alunos || data.alunos.length === 0) {
+            app.innerHTML = `
+                <div class="glass-panel" style="text-align:center; padding: 40px; margin: 20px;">
+                    <h2>A turma "${turmaNome}" não possui alunos cadastrados.</h2>
+                    <button class="btn-voltar-vidro" onclick="telaEntregaMaterial()">Voltar</button>
+                </div>`;
+            return;
+        }
 
         app.innerHTML = `
             <div class="header-animado animate__animated animate__fadeIn">
@@ -20415,7 +20439,6 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
                             <th class="sticky-col">ALUNO</th>
                             ${data.produtos.map(p => `<th>${p.nome.toUpperCase()}<br><small>(${data.estoqueEscola[p.id] || 0} em estoque)</small></th>`).join('')}
                         </tr>
-                        <!-- Linha "TODOS" para MATERIAL -->
                         <tr class="linha-todos">
                             <th class="sticky-col">TODOS</th>
                             ${data.produtos.map(produto => `
@@ -20454,10 +20477,14 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
                 <button class="btn-confirmar-entrega" onclick="confirmarEntregasMaterial(${turmaId})"><i class="fas fa-check"></i> CONFIRMAR ENTREGAS MARCADAS</button>
             </div>
         `;
+        
         configurarAcoesEmMassaMaterial(data.estoqueEscola);
+
     } catch (err) {
-        console.error("Erro ao renderizar matriz de material:", err);
+        console.error("Erro ao renderizar matriz de material:", err.message);
         notificar(`Erro: ${err.message}`, 'erro');
+        // Adiciona uma mensagem de erro mais informativa na tela
+        app.innerHTML = `<div class="painel-vidro" style="margin:20px; padding:20px; color: #ff4d4d; text-align:center;"><h2>Ocorreu um erro</h2><p>${err.message}</p><button class="btn-voltar-vidro" onclick="telaEntregaMaterial()">Tentar Novamente</button></div>`;
     }
 }
 

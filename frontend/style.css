@@ -2471,3 +2471,51 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 }
 .btn-relatorio i { font-size: 1.5rem; color: #00d4ff; }
 .btn-relatorio span { font-size: 1rem; font-weight: bold; }
+
+.grid-tres-colunas {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr); /* 3 colunas */
+    gap: 15px; /* Espaçamento menor */
+    padding: 0 15px;
+}
+
+/* Ajuste no tamanho do botão para caber 3 colunas */
+.grid-tres-colunas .btn-grande {
+    height: 110px; /* Altura um pouco menor */
+    padding: 10px;
+}
+
+/* Ajuste no tamanho do ícone e do texto dentro do botão menor */
+.grid-tres-colunas .btn-grande i {
+    font-size: 2rem; /* Ícone um pouco menor */
+}
+.grid-tres-colunas .btn-grande span {
+    font-size: 0.7rem; /* Texto um pouco menor */
+    margin-top: 5px;
+}
+
+/* O Badge de Alerta (você já tem a animação, esta é a estilização) */
+.badge-alerta-entrega {
+    position: absolute;
+    top: 5px; /* Posição ajustada para o novo tamanho do botão */
+    right: 5px;
+    background: #ef4444;
+    color: white;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    font-weight: 900;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    box-shadow: 0 0 15px rgba(239, 68, 68, 0.6);
+    animation: pulse-vermelho 1.5s infinite; /* Usando a animação que você já tem */
+    z-index: 10;
+}
+
+/* Garante que o botão seja relativo para o badge se posicionar corretamente */
+.btn-grande {
+    position: relative;
+}

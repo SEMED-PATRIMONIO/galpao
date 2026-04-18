@@ -8836,4 +8836,131 @@ router.get('/estoque/historico-produto/:id', verificarToken, async (req, res) =>
     }
 });
 
+router.get('/relatorios/status-turmas-geral', verificarToken, async (req, res) => {
+    const localId = req.user.local_id;
+    if (!localId) return res.status(403).json({ error: "Usuário sem local associado." });
+
+    try {
+        // Contar quantos itens formam o kit completo de UNIFORMES.
+        const kitUniformesCountRes = await db.query("SELECT COUNT(id) as total FROM produtos WHERE tipo = 'UNIFORMES' AND local_id = 37");
+        const totalKitUniformes = parseInt(kitUniformesCountRes.rows[0]?.total, 10) || 1; // Usa 1 para evitar divisão por zero
+
+        // Consulta principal que agrega todos os dados de uma vez usando subconsultas correlacionadas.
+        const query = `
+            SELECT
+                t.id as turma_id,
+                t.nome as turma_nome,
+                -- Total de Alunos na Turma
+                (SELECT COUNT(*) FROM alunos a WHERE a.turma_id = t.id) as total_alunos,
+                
+                -- Contagem de Alunos com Kit UNIFORMES Completo
+                (SELECT COUNT(DISTINCT sub.aluno_id)
+                    FROM (
+                        SELECT ea.aluno_id
+                        FROM entregas_alunos ea
+                        JOIN produtos p ON ea.produto_id = p.id
+                        JOIN alunos a_sub ON ea.aluno_id = a_sub.id
+                        WHERE a_sub.turma_id = t.id AND p.tipo = 'UNIFORMES'
+                        GROUP BY ea.aluno_id
+                        HAVING COUNT(DISTINCT ea.produto_id) >= $2
+                    ) as sub
+                ) as uniformes_completos,
+
+                -- Contagem de Alunos que receberam o Kit MATERIAL
+                (SELECT COUNT(DISTINCT ea.aluno_id)
+                    FROM entregas_alunos ea
+                    JOIN produtos p ON ea.produto_id = p.id
+                    JOIN alunos a_sub ON ea.aluno_id = a_sub.id
+                    WHERE a_sub.turma_id = t.id AND p.tipo = 'MATERIAL'
+                ) as material_recebido
+
+            FROM turmas t
+            WHERE t.local_id = $1
+            ORDER BY t.nome;
+        `;
+        
+        const { rows } = await db.query(query, [localId, totalKitUniformes]);
+        res.json(rows);
+        
+    } catch (err) {
+        console.error("Erro no relatório de status por turma GERAL:", err.message);
+        res.status(500).json({ error: "Erro interno ao gerar relatório geral." });
+    }
+});
+
+router.get('/relatorios/progresso-geral-escolas', verificarToken, async (req, res) => {
+    // Aqui você pode adicionar uma verificação de perfil se apenas gestores puderem ver
+    // if (req.user.perfil !== 'ADMIN') return res.status(403).json({ error: "Acesso negado." });
+
+    try {
+        // Contar quantos itens formam o kit completo de UNIFORMES.
+        const kitUniformesCountRes = await db.query("SELECT COUNT(id) as total FROM produtos WHERE tipo = 'UNIFORMES' AND local_id = 37");
+        const totalKitUniformes = parseInt(kitUniformesCountRes.rows[0]?.total, 10) || 1;
+
+        // A super query que consolida tudo
+        const query = `
+            SELECT
+                l.id as local_id,
+                l.nome as local_nome,
+                -- Total de turmas por local
+                (SELECT COUNT(*) FROM turmas t WHERE t.local_id = l.id) as total_turmas,
+                -- Total de alunos por local
+                (SELECT COUNT(*) FROM alunos a WHERE a.local_id = l.id) as total_alunos,
+                
+                -- Contagem de Alunos com Kit UNIFORMES Completo por local
+                (SELECT COUNT(DISTINCT sub.aluno_id)
+                    FROM (
+                        SELECT ea.aluno_id
+                        FROM entregas_alunos ea
+                        JOIN produtos p ON ea.produto_id = p.id
+                        JOIN alunos a_sub ON ea.aluno_id = a_sub.id
+                        WHERE a_sub.local_id = l.id AND p.tipo = 'UNIFORMES'
+                        GROUP BY ea.aluno_id
+                        HAVING COUNT(DISTINCT ea.produto_id) >= $1
+                    ) as sub
+                ) as uniformes_completos,
+
+                -- Contagem de Alunos que receberam o Kit MATERIAL por local
+                (SELECT COUNT(DISTINCT ea.aluno_id)
+                    FROM entregas_alunos ea
+                    JOIN produtos p ON ea.produto_id = p.id
+                    JOIN alunos a_sub ON ea.aluno_id = a_sub.id
+                    WHERE a_sub.local_id = l.id AND p.tipo = 'MATERIAL'
+                ) as material_recebido
+            FROM locais l
+            -- Filtro de locais conforme sua regra de negócio
+            WHERE l.id BETWEEN 1 AND 40 AND l.id NOT IN (37, 38)
+            ORDER BY l.nome;
+        `;
+        
+        const { rows } = await db.query(query, [totalKitUniformes]);
+        res.json(rows);
+        
+    } catch (err) {
+        console.error("Erro no relatório de progresso por escolas:", err.message);
+        res.status(500).json({ error: "Erro interno ao gerar relatório consolidado." });
+    }
+});
+
+router.get('/escola/alertas/entregas', verificarToken, async (req, res) => {
+    const localId = req.user.local_id;
+    if (!localId) {
+        return res.json({ count: 0 }); // Retorna 0 se o usuário não tiver local
+    }
+    
+    try {
+        const query = `
+            SELECT COUNT(DISTINCT pr.id) as total
+            FROM pedido_remessas pr
+            JOIN pedidos p ON pr.pedido_id = p.id
+            WHERE p.local_destino_id = $1 AND pr.status = 'EM_TRANSPORTE'
+        `;
+        const { rows } = await db.query(query, [localId]);
+        res.json({ count: parseInt(rows[0].total, 10) || 0 });
+    } catch (err) {
+        console.error("Erro ao buscar alerta de entregas:", err.message);
+        res.status(500).json({ error: "Erro ao verificar entregas." });
+    }
+});
+
 module.exports = router;

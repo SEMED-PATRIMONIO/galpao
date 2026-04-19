@@ -9045,4 +9045,26 @@ router.get('/estoque/alertas/infra-pendentes', verificarToken, async (req, res) 
     }
 });
 
+router.get('/estoque/alertas/prontos-transporte', verificarToken, async (req, res) => {
+    // evita cache/304 em endpoint dinâmico
+    res.set('Cache-Control', 'no-store');
+
+    if (!['estoque', 'admin', 'super'].includes(req.user.perfil)) {
+        return res.status(403).json({ error: "Acesso negado." });
+    }
+
+    try {
+        const query = `
+            SELECT COUNT(*) as total
+            FROM pedido_remessas
+            WHERE status = 'PRONTO'
+        `;
+        const { rows } = await db.query(query);
+        res.json({ count: parseInt(rows[0].total, 10) || 0 });
+    } catch (err) {
+        console.error("Erro ao buscar alerta de prontos (transporte):", err.message);
+        res.status(500).json({ error: "Erro ao verificar prontos." });
+    }
+});
+
 module.exports = router;

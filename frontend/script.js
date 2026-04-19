@@ -277,25 +277,58 @@ async function carregarDashboard() {
     <style>
         @keyframes pulse-vermelho {
             0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
-            70% { transform: scale(1.1); box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
+            70% { transform: scale(1.15); box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
             100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
         }
-        .badge-alerta-entrega {
-            position: absolute; top: 5px; right: 5px; background: #ef4444; color: white;
-            width: 28px; height: 28px; border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 0.8rem; font-weight: 900; border: 2px solid rgba(255, 255, 255, 0.3);
-            box-shadow: 0 0 15px rgba(239, 68, 68, 0.6); animation: pulse-vermelho 1.5s infinite; z-index: 10;
-        }
+
         .grid-tres-colunas {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-            gap: 15px; padding: 0 15px;
+            display: grid !important;
+            grid-template-columns: repeat(3, 1fr) !important;
+            gap: 12px !important;
+            padding: 15px !important;
         }
-        .grid-tres-colunas .btn-grande { height: 110px; padding: 10px; }
-        .grid-tres-colunas .btn-grande i { font-size: 2rem; }
-        .grid-tres-colunas .btn-grande span { font-size: 0.7rem; margin-top: 5px; }
-        .btn-grande { position: relative; }
+
+        /* ---- INÍCIO DAS MUDANÇAS ---- */
+
+        .btn-grande {
+            position: relative;
+            height: 110px; /* Mantém a altura */
+            padding: 10px 5px; /* Ajusta o padding */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border-radius: 14px;
+            text-align: center; /* Garante que o texto quebre corretamente */
+        }
+
+        .btn-grande i {
+            font-size: 2.8rem; /* Ícones significativamente maiores */
+            margin-bottom: 8px; /* Mais espaço entre o ícone e o texto */
+            line-height: 1; /* Garante alinhamento vertical do ícone */
+        }
+        
+        .btn-grande span {
+            font-size: 0.65rem; /* Fonte do texto menor */
+            line-height: 1.2;    /* Melhora a legibilidade do texto se quebrar em duas linhas */
+            font-weight: 600;
+        }
+
+        /* O badge de alerta permanece o mesmo, já está bem posicionado */
+        .badge-alerta-entrega {
+            position: absolute;
+            top: 6px; right: 6px;
+            background: #ef4444; color: white;
+            width: 26px; height: 26px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 0.75rem; font-weight: 900;
+            border: 2px solid white;
+            box-shadow: 0 0 12px rgba(239, 68, 68, 0.8);
+            animation: pulse-vermelho 1.8s infinite;
+            z-index: 10;
+        }
+
+        /* ---- FIM DAS MUDANÇAS ---- */
     </style>
     `;
 
@@ -340,10 +373,28 @@ async function carregarDashboard() {
     }
     // --- PERFIL: LOGISTICA ---
     else if (perfil === 'logistica') {
+        let contagemColetas = 0;
+        try {
+            // Busca a contagem de coletas liberadas ANTES de renderizar
+            const res = await fetch(`${API_URL}/logistica/alertas/coleta-liberada`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+            if (res.ok) {
+                contagemColetas = (await res.json()).count;
+            }
+        } catch (err) {
+            console.error("Falha ao buscar alerta de coletas:", err);
+        }
+
         html += `
-            <button class="btn-grande btn-vidro" onclick="telaSaidaTransferencia37()"><i>🏛️</i><span>SOLICITAR PATRIMÔNIO</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaRelatorioColetaLiberada()"><i>🚚</i><span>PEDIDOS PARA ENTREGA</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()"><i>🔑</i><span>ALTERAR SENHA</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaSaidaTransferencia37()">
+                <i>🏛️</i><span>SOLICITAR PATRIMÔNIO</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioColetaLiberada()">
+                ${contagemColetas > 0 ? `<div class="badge-alerta-entrega">${contagemColetas}</div>` : ''}
+                <i>🚚</i><span>PEDIDOS PARA ENTREGA</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()">
+                <i>🔑</i><span>ALTERAR MINHA SENHA</span>
+            </button>
         `;
     }
     // --- PERFIL: HUMANOS ---
@@ -388,13 +439,30 @@ async function carregarDashboard() {
     }
     // --- PERFIL: ESTOQUE ---
     else if (perfil === 'estoque') {
+        let contagemAprovados = 0;
+        try {
+            // Busca a contagem de pedidos aprovados ANTES de renderizar
+            const res = await fetch(`${API_URL}/estoque/alertas/aprovados`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+            if (res.ok) {
+                contagemAprovados = (await res.json()).count;
+            }
+        } catch (err) {
+            console.error("Falha ao buscar alerta de pedidos aprovados:", err);
+        }
+        
+        // A função 'getBotoesSubmenu' será ajustada para receber a contagem
+        const botoesPedidos = getBotoesSubmenu('estoque', 'PEDIDOS', contagemAprovados);
+
         html += `
             <button class="btn-grande btn-vidro" onclick="infra_telaPendentes()">
                 <div id="badge-infra-count" class="badge-alerta-entrega" style="display:none;">0</div>
                 <i>🏗️</i><span>SOLIC. INFRA</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="abrirMenuPatrimonioAlmoxarifado()"><i>🏛️</i><span>PATRIMÔNIO</span></button>
-            <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('PEDIDOS', getBotoesSubmenu('estoque', 'PEDIDOS'))"><i>📝</i><span>PEDIDOS</span></button>
+            <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('PEDIDOS', getBotoesSubmenu('estoque', 'PEDIDOS', ${contagemAprovados}))">
+                ${contagemAprovados > 0 ? `<div class="badge-alerta-entrega">${contagemAprovados}</div>` : ''}
+                <i>📝</i><span>PEDIDOS</span>
+            </button>
             <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()"><i>📈</i><span>PAINEL GERAL</span></button>
             <button class="btn-grande btn-vidro" onclick="telaCadastrosBase()"><i>💻</i><span>CADASTROS BASE</span></button>
             <button class="btn-grande btn-vidro" onclick="abrirTelaEntrada()"><i>📥</i><span>ENTRADA ESTOQUE</span></button>
@@ -407,9 +475,6 @@ async function carregarDashboard() {
     html += `</div>`; // Fecha a div da grelha
     container.innerHTML = html;
 
-    if (perfil === 'estoque' && typeof verificarAlertasPatrimonio === 'function') {
-        verificarAlertasPatrimonio();
-    }
 }
 
 
@@ -454,10 +519,13 @@ function renderSubmenuChamadosEscola() {
     abrirSubmenuVitrificado('SUPORTE E CHAMADOS', botoes);
 }
 
-function getBotoesSubmenu(perfil, titulo) {
+function getBotoesSubmenu(perfil, titulo, contagem = 0) { 
     if (perfil === 'estoque') {
         if (titulo === 'PEDIDOS') return `
-            <button class="btn-grande btn-vidro" onclick="telaEstoquePedidosPendentes()"><i>📦</i><span>SEPARAÇÃO</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaEstoquePedidosPendentes()">
+                ${contagem > 0 ? `<div class="badge-alerta-entrega">${contagem}</div>` : ''}
+                <i>📦</i><span>SEPARAÇÃO</span>
+            </button>
             <button class="btn-grande btn-vidro" onclick="telaLogisticaEntregas()"><i>🚚</i><span>LIBERAR TRANSPORTE</span></button>
             <button class="btn-grande btn-vidro" onclick="listarDevolucoesLogistica()"><i>↩️</i><span>RECEBER DEVOLUÇÃO</span></button>
             <button class="btn-grande btn-vidro" onclick="listarDevolucoesEstoque()"><i>🔄</i><span>CONCLUIR DEVOLUÇÃO</span></button>
@@ -469,9 +537,13 @@ function getBotoesSubmenu(perfil, titulo) {
             <button class="btn-grande btn-vidro" onclick="telaRelatorioTransferenciasExternas()"><i>✈️</i><span>TRANSFERÊNCIAS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaRelatorioConsolidado()"><i>🏢</i><span>CONSOLIDADO</span></button>`;
     }
+
     if (perfil === 'admin') {
         if (titulo === 'PEDIDOS') return `
-            <button class="btn-grande btn-vidro" onclick="telaAdminGerenciarSolicitacoes()"><i>⚖️</i><span>AUTORIZAR</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaAdminGerenciarSolicitacoes()">
+                ${contagem > 0 ? `<div class="badge-alerta-entrega">${contagem}</div>` : ''}
+                <i>⚖️</i><span>AUTORIZAR</span>
+            </button>
             <button class="btn-grande btn-vidro" onclick="listarDevolucoesAdmin()"><i>🔄</i><span>DEVOLUÇÕES</span></button>
             <button class="btn-grande btn-vidro" onclick="abrirTelaSaidaPedido()"><i>➕</i><span>CRIAR PEDIDO</span></button>`;
         if (titulo === 'RELATÓRIOS') return `

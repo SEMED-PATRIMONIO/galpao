@@ -8964,6 +8964,7 @@ router.get('/escola/alertas/entregas', verificarToken, async (req, res) => {
 });
 
 router.get('/admin/alertas/solicitacoes', verificarToken, async (req, res) => {
+    res.set('Cache-Control', 'no-store');
     if (req.user.perfil !== 'admin' && req.user.perfil !== 'super') {
         return res.status(403).json({ error: "Acesso negado." });
     }
@@ -8984,7 +8985,7 @@ router.get('/admin/alertas/solicitacoes', verificarToken, async (req, res) => {
 });
 
 router.get('/logistica/alertas/coleta-liberada', verificarToken, async (req, res) => {
-    // Verificação de segurança: Apenas perfis relevantes podem acessar
+    res.set('Cache-Control', 'no-store');
     if (!['logistica', 'admin', 'super'].includes(req.user.perfil)) {
         return res.status(403).json({ error: "Acesso negado." });
     }
@@ -9004,7 +9005,7 @@ router.get('/logistica/alertas/coleta-liberada', verificarToken, async (req, res
 });
 
 router.get('/estoque/alertas/aprovados', verificarToken, async (req, res) => {
-    // Verificação de segurança: Apenas perfis relevantes
+    res.set('Cache-Control', 'no-store');
     if (!['estoque', 'admin', 'super'].includes(req.user.perfil)) {
         return res.status(403).json({ error: "Acesso negado." });
     }
@@ -9024,6 +9025,7 @@ router.get('/estoque/alertas/aprovados', verificarToken, async (req, res) => {
 });
 
 router.get('/estoque/alertas/infra-pendentes', verificarToken, async (req, res) => {
+    res.set('Cache-Control', 'no-store');
     if (!['estoque', 'admin', 'super'].includes(req.user.perfil)) {
         return res.status(403).json({ error: "Acesso negado." });
     }

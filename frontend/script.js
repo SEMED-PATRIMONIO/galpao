@@ -504,7 +504,7 @@ function renderSubmenuUniformesKits() {
 
 function renderSubmenuRelatoriosEscola() {
     const botoes = `
-        <button class="btn-grande btn-vidro" onclick="gerarRelatorioStatusTurmas()"><i>📊</i><span>PROGRESSO POR TURMA</span></button>
+        <button class="btn-grande btn-vidro" onclick="gerarRelatorioStatusTurmasEmTelaCheia()"><i>📊</i><span>PROGRESSO POR TURMA</span></button>
         <button class="btn-grande btn-vidro" onclick="telaRelatoriosGeral()"><i>📈</i><span>ENTREGAS DETALHADAS</span></button>
     `;
     abrirSubmenuVitrificado('RELATÓRIOS', botoes);
@@ -20264,11 +20264,16 @@ function telaRelatoriosUniformes() {
 }
 
 async function gerarRelatorioStatusTurmas() {
+    // Agora o container já existe na tela, nós apenas o selecionamos.
     const container = document.getElementById('resultado-relatorio');
+    if (!container) {
+        console.error("Container 'resultado-relatorio' não encontrado na tela.");
+        return;
+    }
+    
     container.innerHTML = `<div class="loading-spinner"></div>`;
 
     try {
-        // Chama a nova rota que traz os dados completos
         const res = await fetch(`${API_URL}/relatorios/status-turmas-geral`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
@@ -20294,14 +20299,9 @@ async function gerarRelatorioStatusTurmas() {
                     </thead>
                     <tbody>
                         ${turmas.map(t => {
-                            // --- LINHA CORRIGIDA ---
                             const totalAlunos = parseInt(t.total_alunos, 10);
-                            
-                            // Cálculo para Uniformes
                             const uniformesCompletos = parseInt(t.uniformes_completos, 10);
                             const percUniformes = totalAlunos > 0 ? ((uniformesCompletos / totalAlunos) * 100).toFixed(0) : 0;
-
-                            // Cálculo para Material
                             const materialRecebido = parseInt(t.material_recebido, 10);
                             const percMaterial = totalAlunos > 0 ? ((materialRecebido / totalAlunos) * 100).toFixed(0) : 0;
                             
@@ -20310,14 +20310,12 @@ async function gerarRelatorioStatusTurmas() {
                                 <td style="text-align:left; font-weight:bold;">${t.turma_nome}</td>
                                 <td style="font-size: 1.2rem; font-weight:bold;">${totalAlunos}</td>
                                 <td>
-                                    <!-- Barra de Progresso para Uniformes -->
                                     <div class="barra-progresso-container">
                                         <div class="barra-progresso" style="width: ${percUniformes}%; background: linear-gradient(90deg, #0284c7, #00d4ff);"></div>
                                         <span>${uniformesCompletos} / ${totalAlunos} (${percUniformes}%)</span>
                                     </div>
                                 </td>
                                 <td>
-                                    <!-- Barra de Progresso para Material -->
                                     <div class="barra-progresso-container">
                                         <div class="barra-progresso" style="width: ${percMaterial}%; background: linear-gradient(90deg, #15803d, #10b981);"></div>
                                         <span>${materialRecebido} / ${totalAlunos} (${percMaterial}%)</span>
@@ -20732,6 +20730,24 @@ async function telaProgressoGeralEscolas() {
     }
 }
 
+async function gerarRelatorioStatusTurmasEmTelaCheia() {
+    const app = document.getElementById('app-content');
+    
+    // 1. Prepara a estrutura da tela cheia com um header e um contêiner para o relatório
+    app.innerHTML = `
+        <div class="header-animado animate__animated animate__fadeIn">
+            <button class="btn-voltar-vidro" onclick="carregarDashboard()">
+                <i class="fas fa-arrow-left"></i> VOLTAR AO PAINEL
+            </button>
+        </div>
+        <div id="resultado-relatorio" style="padding: 0 20px;">
+            <!-- O conteúdo do relatório será inserido aqui -->
+        </div>
+    `;
+    
+    // 2. Chama a função de relatório original para preencher o contêiner
+    await gerarRelatorioStatusTurmas();
+}
 
 window.telaVisualizarEstoque = telaVisualizarEstoque;
 window.telaAbastecerEstoque = telaAbastecerEstoque;

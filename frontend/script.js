@@ -473,6 +473,16 @@ async function carregarDashboard() {
     }
     // --- PERFIL: ESTOQUE ---
     else if (perfil === 'estoque') {
+        let contagemProntos = 0;
+        try {
+            const res = await fetch(`${API_URL}/estoque/alertas/prontos-transporte?ts=${Date.now()}`, {
+                cache: 'no-store',
+                headers: { 'Authorization': `Bearer ${TOKEN}` }
+            });
+            if (res.ok) contagemProntos = Number((await res.json()).count) || 0;
+        } catch (err) {
+            console.error("Falha ao buscar alerta de PRONTOS p/ transporte:", err);
+        }
         let contagemAprovados = 0;
         try {
             const res = await fetch(`${API_URL}/estoque/alertas/aprovados`, {
@@ -506,7 +516,7 @@ async function carregarDashboard() {
 
             <button class="btn-grande btn-vidro" onclick="abrirMenuPatrimonioAlmoxarifado()"><i>🏛️</i><span>PATRIMÔNIO</span></button>
 
-            <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('PEDIDOS', getBotoesSubmenu('estoque', 'PEDIDOS', ${contagemAprovados}))">
+            <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('PEDIDOS', getBotoesSubmenu('estoque', 'PEDIDOS', ${contagemAprovados}, ${contagemProntos}))"
                 ${contagemAprovados > 0 ? `<div class="badge-alerta-entrega">${contagemAprovados}</div>` : ''}
                 <i>📝</i><span>PEDIDOS</span>
             </button>
@@ -563,7 +573,10 @@ function getBotoesSubmenu(perfil, titulo, contagem = 0) {
                 ${contagem > 0 ? `<div class="badge-alerta-entrega">${contagem}</div>` : ''}
                 <i>📦</i><span>SEPARAÇÃO</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="telaLogisticaEntregas()"><i>🚚</i><span>LIBERAR TRANSPORTE</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaLogisticaEntregas()">
+                ${contagemProntos > 0 ? `<div class="badge-alerta-entrega">${contagemProntos}</div>` : ''}
+                <i>🚚</i><span>LIBERAR TRANSPORTE</span>
+            </button>
             <button class="btn-grande btn-vidro" onclick="listarDevolucoesLogistica()"><i>↩️</i><span>RECEBER DEVOLUÇÃO</span></button>
             <button class="btn-grande btn-vidro" onclick="listarDevolucoesEstoque()"><i>🔄</i><span>CONCLUIR DEVOLUÇÃO</span></button>
             <button class="btn-grande btn-vidro" onclick="abrirCalculadoraConversao()"><i>🧮</i><span>CALCULADORA</span></button>`;

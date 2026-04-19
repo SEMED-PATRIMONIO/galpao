@@ -351,14 +351,17 @@ async function carregarDashboard() {
         } catch (err) { console.error("Falha ao buscar alerta de entregas:", err); }
 
         html += `
-            <button class="btn-grande btn-vidro" onclick="renderSubmenuCadastrosEscola()"><i>📝</i><span>CADASTROS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaSolicitarServicoImpressora('recarga')"><i>💧</i><span>SOLICITAR RECARGA</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaSolicitarServicoImpressora('manutencao')"><i>🛠️</i><span>SOLICITAR MANUTENÇÃO IMPRESSORA</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaSolicitarManutencaoPC('')"><i>💻</i><span>SOLICITAR MANUTENÇÃO INFORMÁTICA</span></button>
+            <button class="btn-grande btn-vidro" onclick="renderSubmenuCadastrosEscola()"><i>📝</i><span>TURMAS E ALUNOS</span></button>
+            <button class="btn-grande btn-vidro" onclick="abrirMenuPatrimonioEscola()"><i>🏛️</i><span>PATRIMÔNIO</span></button>
+            <button class="btn-grande btn-vidro" onclick="renderSubmenuUniformesKits()"><i>👕</i><span>UNIFORMES & KITS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaEscolaConfirmarRecebimento()">
                 ${contagemEntregas > 0 ? `<div class="badge-alerta-entrega">${contagemEntregas}</div>` : ''}
                 <i>🚚</i><span>ENTREGAS A CAMINHO</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="renderSubmenuUniformesKits()"><i>👕</i><span>UNIFORMES & KITS</span></button>
             <button class="btn-grande btn-vidro" onclick="renderSubmenuRelatoriosEscola()"><i>📊</i><span>RELATÓRIOS</span></button>
-            <button class="btn-grande btn-vidro" onclick="renderSubmenuChamadosEscola()"><i>🛠️</i><span>SUPORTE</span></button>
             <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()"><i>🔑</i><span>ALTERAR SENHA</span></button>
         `; 
     }
@@ -366,8 +369,8 @@ async function carregarDashboard() {
     else if (perfil === 'super') {
         html += `
             <button class="btn-grande btn-vidro" onclick="telaGerenciarUsuarios()"><i>👥</i><span>GERENCIAR USUÁRIOS</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaProgressoGeralEscolas()"><i>🌐</i><span>PROGRESSO GERAL</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()"><i>📈</i><span>PAINEL DE PEDIDOS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaProgressoGeralEscolas()"><i>🌐</i><span>ENTREGA DE UNIFORMES E KITS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()"><i>📈</i><span>FLUXO DE PEDIDOS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()"><i>🔑</i><span>ALTERAR SENHA</span></button>
         `; 
     }
@@ -386,11 +389,11 @@ async function carregarDashboard() {
 
         html += `
             <button class="btn-grande btn-vidro" onclick="telaSaidaTransferencia37()">
-                <i>🏛️</i><span>SOLICITAR PATRIMÔNIO</span>
+                <i>🏛️</i><span>SOLICITAR AO PATRIMÔNIO</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="telaRelatorioColetaLiberada()">
                 ${contagemColetas > 0 ? `<div class="badge-alerta-entrega">${contagemColetas}</div>` : ''}
-                <i>🚚</i><span>PEDIDOS PARA ENTREGA</span>
+                <i>🚚</i><span>LIBERADO PARA ENTREGA</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()">
                 <i>🔑</i><span>ALTERAR MINHA SENHA</span>
@@ -401,20 +404,20 @@ async function carregarDashboard() {
     else if (perfil === 'humanos') {
         html += `
             <button class="btn-grande btn-vidro" onclick="telaSolicitarServicoImpressora('recarga')"><i>💧</i><span>SOLICITAR RECARGA</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaSolicitarManutencaoPC('')"><i>💻</i><span>MANUTENÇÃO PC</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaSolicitarManutencaoPC('')"><i>💻</i><span>MANUTENÇÃO INFORMÁTICA</span></button>
             <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()"><i>🔑</i><span>ALTERAR SENHA</span></button>
         `;
     }
     // --- PERFIL: DTI ---
     else if (perfil === 'dti') {
         html += `
-            <button class="btn-grande btn-vidro" onclick="telaListarChamadosPC_DTI()"><i>💻</i><span>CHAMADOS PC</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaDashboardComputadores()"><i>📈</i><span>ATENDIMENTOS PC</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaFilaAtendimentoImpressoras()"><i>🖨️</i><span>CHAMADOS IMP.</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaDashboardImpressoras()"><i>📈</i><span>ATENDIMENTOS IMP.</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaConsumoImpressoras()"><i>📊</i><span>CONSUMO IMP.</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaCadastroImpressoras()"><i>📋</i><span>CADASTRAR IMP.</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaRelatorioGeralAtivos()"><i>📋</i><span>STATUS IMPRESSORAS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaListarChamadosPC_DTI()"><i>💻</i><span>FILA DE CHAMADOS INFORMÁTICA</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaDashboardComputadores()"><i>📈</i><span>ATENDIMENTOS REALIZADOS INFORMÁTICA</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaFilaAtendimentoImpressoras()"><i>🖨️</i><span>FILA DE CHAMADOS IMPRESSORA</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaDashboardImpressoras()"><i>📈</i><span>ATENDIMENTOS REALIZADOS IMPRESSORA</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaConsumoImpressoras()"><i>📊</i><span>CONSUMO DAS IMPRESSORAS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaCadastroImpressoras()"><i>📋</i><span>CADASTRAR NOVA IMPRESSORA</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioGeralAtivos()"><i>📋</i><span>STATUS TUAL DAS IMPRESSORAS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()"><i>🔑</i><span>ALTERAR SENHA</span></button>
         `;
     }
@@ -422,8 +425,8 @@ async function carregarDashboard() {
     else if (perfil === 'impres') {
         html += `
             <button class="btn-grande btn-vidro" onclick="telaListarChamadosAbertos()"><i>🖨️</i><span>FILA DE CHAMADOS</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaDashboardImpressoras()"><i>📈</i><span>ATENDIMENTOS</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaRelatorioGeralAtivos()"><i>📋</i><span>STATUS IMPRESSORAS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaDashboardImpressoras()"><i>📈</i><span>ATENDIMENTOS REALIZADOS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioGeralAtivos()"><i>📋</i><span>STATUS ATUAL DAS IMPRESSORAS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()"><i>🔑</i><span>ALTERAR SENHA</span></button>
         `; 
     }
@@ -432,7 +435,6 @@ async function carregarDashboard() {
         html += `
             <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('PEDIDOS', getBotoesSubmenu('admin', 'PEDIDOS'))"><i>📝</i><span>PEDIDOS</span></button>
             <button class="btn-grande btn-vidro" onclick="carregarConsultaEstoque()"><i>🔎</i><span>CONSULTA ESTOQUE</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()"><i>📈</i><span>PAINEL DE PEDIDOS</span></button>
             <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('RELATÓRIOS', getBotoesSubmenu('admin', 'RELATÓRIOS'))"><i>📊</i><span>RELATÓRIOS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()"><i>🔑</i><span>ALTERAR SENHA</span></button>
         `; 
@@ -463,8 +465,7 @@ async function carregarDashboard() {
                 ${contagemAprovados > 0 ? `<div class="badge-alerta-entrega">${contagemAprovados}</div>` : ''}
                 <i>📝</i><span>PEDIDOS</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()"><i>📈</i><span>PAINEL GERAL</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaCadastrosBase()"><i>💻</i><span>CADASTROS BASE</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaCadastrosBase()"><i>💻</i><span>CADASTROS BÁSICOS</span></button>
             <button class="btn-grande btn-vidro" onclick="abrirTelaEntrada()"><i>📥</i><span>ENTRADA ESTOQUE</span></button>
             <button class="btn-grande btn-vidro" onclick="carregarConsultaEstoque()"><i>🔎</i><span>CONSULTA ESTOQUE</span></button>
             <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('RELATÓRIOS', getBotoesSubmenu('estoque', 'RELATÓRIOS'))"><i>📊</i><span>RELATÓRIOS</span></button>
@@ -484,9 +485,8 @@ async function carregarDashboard() {
 
 function renderSubmenuCadastrosEscola() {
     const botoes = `
-        <button class="btn-grande btn-vidro" onclick="telaEscolaGestaoTurmas()"><i>🏫</i><span>GESTÃO DE TURMAS</span></button>
-        <button class="btn-grande btn-vidro" onclick="telaEscolaGestaoAlunos()"><i>👥</i><span>GESTÃO DE ALUNOS</span></button>
-        <button class="btn-grande btn-vidro" onclick="abrirMenuPatrimonioEscola()"><i>🏛️</i><span>PATRIMÔNIO</span></button>
+        <button class="btn-grande btn-vidro" onclick="telaEscolaGestaoTurmas()"><i>🏫</i><span>CADASTRO DE TURMAS</span></button>
+        <button class="btn-grande btn-vidro" onclick="telaEscolaGestaoAlunos()"><i>👥</i><span>CADASTRO DE ALUNOS</span></button>
     `;
     abrirSubmenuVitrificado('CADASTROS', botoes);
 }
@@ -504,19 +504,10 @@ function renderSubmenuUniformesKits() {
 
 function renderSubmenuRelatoriosEscola() {
     const botoes = `
-        <button class="btn-grande btn-vidro" onclick="gerarRelatorioStatusTurmasEmTelaCheia()"><i>📊</i><span>PROGRESSO POR TURMA</span></button>
+        <button class="btn-grande btn-vidro" onclick="gerarRelatorioStatusTurmasEmTelaCheia()"><i>📊</i><span>ENTREGAS POR TURMA</span></button>
         <button class="btn-grande btn-vidro" onclick="telaRelatoriosGeral()"><i>📈</i><span>ENTREGAS DETALHADAS</span></button>
     `;
     abrirSubmenuVitrificado('RELATÓRIOS', botoes);
-}
-
-function renderSubmenuChamadosEscola() {
-    const botoes = `
-        <button class="btn-grande btn-vidro" onclick="telaSolicitarServicoImpressora('recarga')"><i>💧</i><span>SOLICITAR RECARGA</span></button>
-        <button class="btn-grande btn-vidro" onclick="telaSolicitarServicoImpressora('manutencao')"><i>🛠️</i><span>MANUTENÇÃO IMP.</span></button>
-        <button class="btn-grande btn-vidro" onclick="telaSolicitarManutencaoPC('')"><i>💻</i><span>MANUTENÇÃO PC</span></button>
-    `;
-    abrirSubmenuVitrificado('SUPORTE E CHAMADOS', botoes);
 }
 
 function getBotoesSubmenu(perfil, titulo, contagem = 0) { 
@@ -532,24 +523,26 @@ function getBotoesSubmenu(perfil, titulo, contagem = 0) {
             <button class="btn-grande btn-vidro" onclick="abrirCalculadoraConversao()"><i>🧮</i><span>CALCULADORA</span></button>`;
         if (titulo === 'RELATÓRIOS') return `
             <button class="btn-grande btn-vidro" onclick="telaRelatorioLogStatus()"><i>🕵️</i><span>AUDITORIA</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaProgressoGeralEscolas()"><i>🌐</i><span>PROGRESSO GERAL</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaProgressoGeralEscolas()"><i>🌐</i><span>ENTREGA DE UNIFORMES E KITS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()"><i>📈</i><span>PAINEL GERAL</span></button>            
             <button class="btn-grande btn-vidro" onclick="telaAuditoriaPedidos()"><i>🔍</i><span>HISTÓRICO</span></button>
             <button class="btn-grande btn-vidro" onclick="telaRelatorioTransferenciasExternas()"><i>✈️</i><span>TRANSFERÊNCIAS</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaRelatorioConsolidado()"><i>🏢</i><span>CONSOLIDADO</span></button>`;
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioConsolidado()"><i>🏢</i><span>LISTAGEM RECEBIDO/FALTA RECEBER</span></button>`;
     }
 
     if (perfil === 'admin') {
         if (titulo === 'PEDIDOS') return `
             <button class="btn-grande btn-vidro" onclick="telaAdminGerenciarSolicitacoes()">
                 ${contagem > 0 ? `<div class="badge-alerta-entrega">${contagem}</div>` : ''}
-                <i>⚖️</i><span>AUTORIZAR</span>
+                <i>⚖️</i><span>SOLICITAÇÕES DAS ESCOLAS</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="listarDevolucoesAdmin()"><i>🔄</i><span>DEVOLUÇÕES</span></button>
-            <button class="btn-grande btn-vidro" onclick="abrirTelaSaidaPedido()"><i>➕</i><span>CRIAR PEDIDO</span></button>`;
+            <button class="btn-grande btn-vidro" onclick="abrirTelaSaidaPedido()"><i>➕</i><span>CRIAR PEDIDO</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()"><i>📈</i><span>PAINEL DE PEDIDOS</span></button>
+            <button class="btn-grande btn-vidro" onclick="listarDevolucoesAdmin()"><i>🔄</i><span>DEVOLUÇÕES</span></button>`;
         if (titulo === 'RELATÓRIOS') return `
-            <button class="btn-grande btn-vidro" onclick="telaRelatorioLogStatus()"><i>🕵️</i><span>AUDITORIA</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaProgressoGeralEscolas()"><i>🌐</i><span>PROGRESSO GERAL</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaRelatorioConsolidado()"><i>🏢</i><span>CONSOLIDADO</span></button>`;
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioLogStatus()"><i>🕵️</i><span>HISTÓRICO</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaProgressoGeralEscolas()"><i>🌐</i><span>ENTREGA DE UNIFORMES E KITS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioConsolidado()"><i>🏢</i><span>LISTAGEM RECEBIDO/FALTA RECEBER</span></button>`;
     }
     return '';
 }

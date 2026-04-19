@@ -8970,11 +8970,16 @@ router.get('/admin/alertas/solicitacoes', verificarToken, async (req, res) => {
     }
     
     try {
+        // --- INÍCIO DA CORREÇÃO ---
+        // A consulta agora filtra para corresponder exatamente à tela de autorização.
         const query = `
             SELECT COUNT(id) as total
             FROM pedidos
             WHERE status = 'AGUARDANDO_AUTORIZACAO'
+              AND tipo_pedido != 'INFRA_PATRIMONIO' 
         `;
+        // --- FIM DA CORREÇÃO ---
+        
         const { rows } = await db.query(query);
         res.json({ count: parseInt(rows[0].total, 10) || 0 });
     } catch (err) {

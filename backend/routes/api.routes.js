@@ -8963,4 +8963,64 @@ router.get('/escola/alertas/entregas', verificarToken, async (req, res) => {
     }
 });
 
+router.get('/admin/alertas/solicitacoes', verificarToken, async (req, res) => {
+    // Verificação de segurança: Apenas admins podem acessar
+    if (req.user.perfil !== 'admin' && req.user.perfil !== 'super') {
+        return res.status(403).json({ error: "Acesso negado." });
+    }
+    
+    try {
+        const query = `
+            SELECT COUNT(id) as total
+            FROM pedidos
+            WHERE status = 'AGUARDANDO_AUTORIZACAO'
+        `;
+        const { rows } = await db.query(query);
+        res.json({ count: parseInt(rows[0].total, 10) || 0 });
+    } catch (err) {
+        console.error("Erro ao buscar alerta de solicitações:", err.message);
+        res.status(500).json({ error: "Erro ao verificar solicitações." });
+    }
+});
+
+router.get('/logistica/alertas/coleta-liberada', verificarToken, async (req, res) => {
+    // Verificação de segurança: Apenas perfis relevantes podem acessar
+    if (!['logistica', 'admin', 'super'].includes(req.user.perfil)) {
+        return res.status(403).json({ error: "Acesso negado." });
+    }
+    
+    try {
+        const query = `
+            SELECT COUNT(id) as total
+            FROM pedidos
+            WHERE status = 'COLETA_LIBERADA'
+        `;
+        const { rows } = await db.query(query);
+        res.json({ count: parseInt(rows[0].total, 10) || 0 });
+    } catch (err) {
+        console.error("Erro ao buscar alerta de coletas liberadas:", err.message);
+        res.status(500).json({ error: "Erro ao verificar coletas." });
+    }
+});
+
+router.get('/estoque/alertas/aprovados', verificarToken, async (req, res) => {
+    // Verificação de segurança: Apenas perfis relevantes
+    if (!['estoque', 'admin', 'super'].includes(req.user.perfil)) {
+        return res.status(403).json({ error: "Acesso negado." });
+    }
+    
+    try {
+        const query = `
+            SELECT COUNT(id) as total
+            FROM pedidos
+            WHERE status = 'APROVADO'
+        `;
+        const { rows } = await db.query(query);
+        res.json({ count: parseInt(rows[0].total, 10) || 0 });
+    } catch (err) {
+        console.error("Erro ao buscar alerta de pedidos aprovados:", err.message);
+        res.status(500).json({ error: "Erro ao verificar pedidos aprovados." });
+    }
+});
+
 module.exports = router;

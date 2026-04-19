@@ -346,10 +346,11 @@ async function carregarDashboard() {
     if (perfil === 'escola') {
         let contagemEntregas = 0;
         try {
-            const res = await fetch(`${API_URL}/escola/alertas/entregas`, {
-                headers: { 'Authorization': `Bearer ${TOKEN}` }
+            const res = await fetch(`${API_URL}/escola/alertas/entregas?ts=${Date.now()}`, {
+            method: 'GET',
+            cache: 'no-store',
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
             });
-
             if (res.ok) {
                 const data = await res.json();
                 contagemEntregas = Number(data.count) || 0;

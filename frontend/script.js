@@ -495,7 +495,7 @@ function renderSubmenuUniformesKits() {
     const botoes = `
         <button class="btn-grande btn-vidro" onclick="telaEscolaConsultaEstoque()"><i>📦</i><span>MEU ESTOQUE</span></button>
         <button class="btn-grande btn-vidro" onclick="telaSolicitarUniforme()"><i>📝</i><span>SOLICITAR</span></button>
-        <button class="btn-grande btn-vidro" onclick="telaEntregaUniformes()"><i>🎁</i><span>ENTREGA DE UNIFORMES</span></button>
+        <button class="btn-grande btn-vidro" onclick="telaEntregaUniformes()"><i>👕</i><span>ENTREGA DE UNIFORMES</span></button>
         <button class="btn-grande btn-vidro" onclick="telaEntregaMaterial()"><i>✏️</i><span>ENTREGA DE KITS</span></button>
         <button class="btn-grande btn-vidro" onclick="telaDevolucaoUniforme()"><i>🔄</i><span>DEVOLVER</span></button>
     `;

@@ -474,7 +474,7 @@ async function carregarDashboard() {
     // --- PERFIL: ESTOQUE ---
     else if (perfil === 'estoque') {
 
-        // 1) Alerta: PRONTOS para liberar transporte (pedido_remessas.status = 'PRONTO')
+        // Alerta: PRONTOS para liberar transporte (pedido_remessas.status = 'PRONTO')
         let contagemProntos = 0;
         try {
             const res = await fetch(`${API_URL}/estoque/alertas/prontos-transporte?ts=${Date.now()}`, {
@@ -488,7 +488,7 @@ async function carregarDashboard() {
             console.error("Falha ao buscar alerta de PRONTOS p/ transporte:", err);
         }
 
-        // 2) Alerta: APROVADOS (pedidos.status = 'APROVADO') -> badge no botão PEDIDOS e no botão SEPARAÇÃO (submenu)
+        // Alerta: APROVADOS (pedidos.status = 'APROVADO')
         let contagemAprovados = 0;
         try {
             const res = await fetch(`${API_URL}/estoque/alertas/aprovados?ts=${Date.now()}`, {
@@ -502,7 +502,7 @@ async function carregarDashboard() {
             console.error("Falha ao buscar alerta de pedidos aprovados:", err);
         }
 
-        // 3) Alerta: INFRA pendente (pedidos.status='AGUARDANDO_AUTORIZACAO' AND tipo_pedido='INFRA_PATRIMONIO')
+        // Alerta: INFRA pendente (se você já criou essa rota)
         let contagemInfra = 0;
         try {
             const res = await fetch(`${API_URL}/estoque/alertas/infra-pendentes?ts=${Date.now()}`, {
@@ -590,7 +590,7 @@ function renderSubmenuRelatoriosEscola() {
     abrirSubmenuVitrificado('RELATÓRIOS', botoes);
 }
 
-function getBotoesSubmenu(perfil, titulo, contagem = 0) { 
+function getBotoesSubmenu(perfil, titulo, contagem = 0, contagemProntos = 0) {
     if (perfil === 'estoque') {
         if (titulo === 'PEDIDOS') return `
             <button class="btn-grande btn-vidro" onclick="telaEstoquePedidosPendentes()">
@@ -603,17 +603,9 @@ function getBotoesSubmenu(perfil, titulo, contagem = 0) {
                 <i>🚚</i><span>LIBERAR TRANSPORTE</span>
             </button>
 
-            <button class="btn-grande btn-vidro" onclick="listarDevolucoesLogistica()">
-                <i>↩️</i><span>RECEBER DEVOLUÇÃO</span>
-            </button>
-
-            <button class="btn-grande btn-vidro" onclick="listarDevolucoesEstoque()">
-                <i>🔄</i><span>CONCLUIR DEVOLUÇÃO</span>
-            </button>
-
-            <button class="btn-grande btn-vidro" onclick="abrirCalculadoraConversao()">
-                <i>🧮</i><span>CALCULADORA</span>
-            </button>
+            <button class="btn-grande btn-vidro" onclick="listarDevolucoesLogistica()"><i>↩️</i><span>RECEBER DEVOLUÇÃO</span></button>
+            <button class="btn-grande btn-vidro" onclick="listarDevolucoesEstoque()"><i>🔄</i><span>CONCLUIR DEVOLUÇÃO</span></button>
+            <button class="btn-grande btn-vidro" onclick="abrirCalculadoraConversao()"><i>🧮</i><span>CALCULADORA</span></button>
         `;
 
         if (titulo === 'RELATÓRIOS') return `
@@ -634,11 +626,13 @@ function getBotoesSubmenu(perfil, titulo, contagem = 0) {
             </button>
             <button class="btn-grande btn-vidro" onclick="abrirTelaSaidaPedido()"><i>➕</i><span>CRIAR PEDIDO</span></button>
             <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()"><i>📈</i><span>PAINEL DE PEDIDOS</span></button>
-            <button class="btn-grande btn-vidro" onclick="listarDevolucoesAdmin()"><i>🔄</i><span>DEVOLUÇÕES</span></button>`;
+            <button class="btn-grande btn-vidro" onclick="listarDevolucoesAdmin()"><i>🔄</i><span>DEVOLUÇÕES</span></button>
+        `;
         if (titulo === 'RELATÓRIOS') return `
             <button class="btn-grande btn-vidro" onclick="telaRelatorioLogStatus()"><i>🕵️</i><span>HISTÓRICO</span></button>
             <button class="btn-grande btn-vidro" onclick="telaProgressoGeralEscolas()"><i>🌐</i><span>ENTREGA DE UNIFORMES E KITS</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaRelatorioConsolidado()"><i>🏢</i><span>LISTAGEM RECEBIDO/FALTA RECEBER</span></button>`;
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioConsolidado()"><i>🏢</i><span>LISTAGEM RECEBIDO/FALTA RECEBER</span></button>
+        `;
     }
     return '';
 }

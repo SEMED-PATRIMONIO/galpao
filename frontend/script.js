@@ -346,9 +346,19 @@ async function carregarDashboard() {
     if (perfil === 'escola') {
         let contagemEntregas = 0;
         try {
-            const res = await fetch(`${API_URL}/escola/alertas/entregas`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
-            if (res.ok) contagemEntregas = (await res.json()).count;
-        } catch (err) { console.error("Falha ao buscar alerta de entregas:", err); }
+            const res = await fetch(`${API_URL}/escola/alertas/entregas`, {
+                headers: { 'Authorization': `Bearer ${TOKEN}` }
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                contagemEntregas = Number(data.count) || 0;
+            } else {
+                console.warn('Alerta entregas (escola) - HTTP:', res.status);
+            }
+        } catch (err) {
+            console.error("Falha ao buscar alerta de entregas:", err);
+        }
 
         html += `
             <button class="btn-grande btn-vidro" onclick="telaSolicitarServicoImpressora('recarga')"><i>💧</i><span>SOLICITAR RECARGA</span></button>
@@ -363,7 +373,7 @@ async function carregarDashboard() {
             </button>
             <button class="btn-grande btn-vidro" onclick="renderSubmenuRelatoriosEscola()"><i>📊</i><span>RELATÓRIOS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()"><i>🔑</i><span>ALTERAR SENHA</span></button>
-        `; 
+        `;
     }
     // --- PERFIL: SUPER ---
     else if (perfil === 'super') {
@@ -432,39 +442,74 @@ async function carregarDashboard() {
     }
     // --- PERFIL: ADMIN ---
     else if (perfil === 'admin') {
+        let contagemSolicitacoes = 0;
+
+        try {
+            const res = await fetch(`${API_URL}/admin/alertas/solicitacoes`, {
+                headers: { 'Authorization': `Bearer ${TOKEN}` }
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                contagemSolicitacoes = Number(data.count) || 0;
+            } else {
+                console.warn('Alerta solicitações (admin) - HTTP:', res.status);
+            }
+        } catch (err) {
+            console.error("Falha ao buscar alerta de solicitações (admin):", err);
+        }
+
         html += `
-            <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('PEDIDOS', getBotoesSubmenu('admin', 'PEDIDOS'))"><i>📝</i><span>PEDIDOS</span></button>
+            <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('PEDIDOS', getBotoesSubmenu('admin', 'PEDIDOS', ${contagemSolicitacoes}))">
+                ${contagemSolicitacoes > 0 ? `<div class="badge-alerta-entrega">${contagemSolicitacoes}</div>` : ''}
+                <i>📝</i><span>PEDIDOS</span>
+            </button>
+
             <button class="btn-grande btn-vidro" onclick="carregarConsultaEstoque()"><i>🔎</i><span>CONSULTA ESTOQUE</span></button>
             <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('RELATÓRIOS', getBotoesSubmenu('admin', 'RELATÓRIOS'))"><i>📊</i><span>RELATÓRIOS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()"><i>🔑</i><span>ALTERAR SENHA</span></button>
-        `; 
+        `;
     }
     // --- PERFIL: ESTOQUE ---
     else if (perfil === 'estoque') {
         let contagemAprovados = 0;
         try {
-            // Busca a contagem de pedidos aprovados ANTES de renderizar
-            const res = await fetch(`${API_URL}/estoque/alertas/aprovados`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
-            if (res.ok) {
-                contagemAprovados = (await res.json()).count;
-            }
+            const res = await fetch(`${API_URL}/estoque/alertas/aprovados`, {
+                headers: { 'Authorization': `Bearer ${TOKEN}` }
+            });
+            if (res.ok) contagemAprovados = Number((await res.json()).count) || 0;
+            else console.warn('Alerta aprovados (estoque) - HTTP:', res.status);
         } catch (err) {
             console.error("Falha ao buscar alerta de pedidos aprovados:", err);
         }
-        
-        // A função 'getBotoesSubmenu' será ajustada para receber a contagem
+
+        // >>> NOVO: contagem INFRA pendente de autorização
+        let contagemInfra = 0;
+        try {
+            const res = await fetch(`${API_URL}/estoque/alertas/infra-pendentes`, {
+                headers: { 'Authorization': `Bearer ${TOKEN}` }
+            });
+            if (res.ok) contagemInfra = Number((await res.json()).count) || 0;
+            else console.warn('Alerta infra (estoque) - HTTP:', res.status);
+        } catch (err) {
+            console.error("Falha ao buscar alerta de INFRA pendente:", err);
+        }
+
         const botoesPedidos = getBotoesSubmenu('estoque', 'PEDIDOS', contagemAprovados);
 
         html += `
             <button class="btn-grande btn-vidro" onclick="infra_telaPendentes()">
-                <div id="badge-infra-count" class="badge-alerta-entrega" style="display:none;">0</div>
+                <div id="badge-infra-count" class="badge-alerta-entrega" style="display:${contagemInfra > 0 ? 'flex' : 'none'};">${contagemInfra}</div>
                 <i>🏗️</i><span>SOLIC. INFRA</span>
             </button>
+
             <button class="btn-grande btn-vidro" onclick="abrirMenuPatrimonioAlmoxarifado()"><i>🏛️</i><span>PATRIMÔNIO</span></button>
+
             <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('PEDIDOS', getBotoesSubmenu('estoque', 'PEDIDOS', ${contagemAprovados}))">
                 ${contagemAprovados > 0 ? `<div class="badge-alerta-entrega">${contagemAprovados}</div>` : ''}
                 <i>📝</i><span>PEDIDOS</span>
             </button>
+
             <button class="btn-grande btn-vidro" onclick="telaCadastrosBase()"><i>💻</i><span>CADASTROS BÁSICOS</span></button>
             <button class="btn-grande btn-vidro" onclick="abrirTelaEntrada()"><i>📥</i><span>ENTRADA ESTOQUE</span></button>
             <button class="btn-grande btn-vidro" onclick="carregarConsultaEstoque()"><i>🔎</i><span>CONSULTA ESTOQUE</span></button>

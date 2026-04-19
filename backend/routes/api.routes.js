@@ -8964,22 +8964,17 @@ router.get('/escola/alertas/entregas', verificarToken, async (req, res) => {
 });
 
 router.get('/admin/alertas/solicitacoes', verificarToken, async (req, res) => {
-    // Verificação de segurança: Apenas admins podem acessar
     if (req.user.perfil !== 'admin' && req.user.perfil !== 'super') {
         return res.status(403).json({ error: "Acesso negado." });
     }
-    
+
     try {
-        // --- INÍCIO DA CORREÇÃO ---
-        // A consulta agora filtra para corresponder exatamente à tela de autorização.
         const query = `
             SELECT COUNT(id) as total
             FROM pedidos
             WHERE status = 'AGUARDANDO_AUTORIZACAO'
-              AND tipo_pedido != 'INFRA_PATRIMONIO' 
+              AND tipo_pedido = 'SOLICITACAO'
         `;
-        // --- FIM DA CORREÇÃO ---
-        
         const { rows } = await db.query(query);
         res.json({ count: parseInt(rows[0].total, 10) || 0 });
     } catch (err) {
@@ -9025,6 +9020,26 @@ router.get('/estoque/alertas/aprovados', verificarToken, async (req, res) => {
     } catch (err) {
         console.error("Erro ao buscar alerta de pedidos aprovados:", err.message);
         res.status(500).json({ error: "Erro ao verificar pedidos aprovados." });
+    }
+});
+
+router.get('/estoque/alertas/infra-pendentes', verificarToken, async (req, res) => {
+    if (!['estoque', 'admin', 'super'].includes(req.user.perfil)) {
+        return res.status(403).json({ error: "Acesso negado." });
+    }
+
+    try {
+        const query = `
+            SELECT COUNT(id) as total
+            FROM pedidos
+            WHERE status = 'AGUARDANDO_AUTORIZACAO'
+              AND tipo_pedido = 'INFRA_PATRIMONIO'
+        `;
+        const { rows } = await db.query(query);
+        res.json({ count: parseInt(rows[0].total, 10) || 0 });
+    } catch (err) {
+        console.error("Erro ao buscar alerta de infra pendente:", err.message);
+        res.status(500).json({ error: "Erro ao verificar infra." });
     }
 });
 

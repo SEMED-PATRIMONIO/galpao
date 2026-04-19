@@ -473,19 +473,27 @@ async function carregarDashboard() {
     }
     // --- PERFIL: ESTOQUE ---
     else if (perfil === 'estoque') {
+
+        // 1) Alerta: PRONTOS para liberar transporte (pedido_remessas.status = 'PRONTO')
         let contagemProntos = 0;
         try {
             const res = await fetch(`${API_URL}/estoque/alertas/prontos-transporte?ts=${Date.now()}`, {
+                method: 'GET',
                 cache: 'no-store',
                 headers: { 'Authorization': `Bearer ${TOKEN}` }
             });
             if (res.ok) contagemProntos = Number((await res.json()).count) || 0;
+            else console.warn('Alerta prontos-transporte (estoque) - HTTP:', res.status);
         } catch (err) {
             console.error("Falha ao buscar alerta de PRONTOS p/ transporte:", err);
         }
+
+        // 2) Alerta: APROVADOS (pedidos.status = 'APROVADO') -> badge no botão PEDIDOS e no botão SEPARAÇÃO (submenu)
         let contagemAprovados = 0;
         try {
-            const res = await fetch(`${API_URL}/estoque/alertas/aprovados`, {
+            const res = await fetch(`${API_URL}/estoque/alertas/aprovados?ts=${Date.now()}`, {
+                method: 'GET',
+                cache: 'no-store',
                 headers: { 'Authorization': `Bearer ${TOKEN}` }
             });
             if (res.ok) contagemAprovados = Number((await res.json()).count) || 0;
@@ -494,19 +502,19 @@ async function carregarDashboard() {
             console.error("Falha ao buscar alerta de pedidos aprovados:", err);
         }
 
-        // >>> NOVO: contagem INFRA pendente de autorização
+        // 3) Alerta: INFRA pendente (pedidos.status='AGUARDANDO_AUTORIZACAO' AND tipo_pedido='INFRA_PATRIMONIO')
         let contagemInfra = 0;
         try {
-            const res = await fetch(`${API_URL}/estoque/alertas/infra-pendentes`, {
+            const res = await fetch(`${API_URL}/estoque/alertas/infra-pendentes?ts=${Date.now()}`, {
+                method: 'GET',
+                cache: 'no-store',
                 headers: { 'Authorization': `Bearer ${TOKEN}` }
             });
             if (res.ok) contagemInfra = Number((await res.json()).count) || 0;
-            else console.warn('Alerta infra (estoque) - HTTP:', res.status);
+            else console.warn('Alerta infra-pendentes (estoque) - HTTP:', res.status);
         } catch (err) {
             console.error("Falha ao buscar alerta de INFRA pendente:", err);
         }
-
-        const botoesPedidos = getBotoesSubmenu('estoque', 'PEDIDOS', contagemAprovados);
 
         html += `
             <button class="btn-grande btn-vidro" onclick="infra_telaPendentes()">
@@ -514,21 +522,37 @@ async function carregarDashboard() {
                 <i>🏗️</i><span>SOLIC. INFRA</span>
             </button>
 
-            <button class="btn-grande btn-vidro" onclick="abrirMenuPatrimonioAlmoxarifado()"><i>🏛️</i><span>PATRIMÔNIO</span></button>
+            <button class="btn-grande btn-vidro" onclick="abrirMenuPatrimonioAlmoxarifado()">
+                <i>🏛️</i><span>PATRIMÔNIO</span>
+            </button>
 
-            <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('PEDIDOS', getBotoesSubmenu('estoque', 'PEDIDOS', ${contagemAprovados}, ${contagemProntos}))"
+            <button class="btn-grande btn-vidro"
+                    onclick="abrirSubmenuVitrificado('PEDIDOS', getBotoesSubmenu('estoque', 'PEDIDOS', ${contagemAprovados}, ${contagemProntos}))">
                 ${contagemAprovados > 0 ? `<div class="badge-alerta-entrega">${contagemAprovados}</div>` : ''}
                 <i>📝</i><span>PEDIDOS</span>
             </button>
 
-            <button class="btn-grande btn-vidro" onclick="telaCadastrosBase()"><i>💻</i><span>CADASTROS BÁSICOS</span></button>
-            <button class="btn-grande btn-vidro" onclick="abrirTelaEntrada()"><i>📥</i><span>ENTRADA ESTOQUE</span></button>
-            <button class="btn-grande btn-vidro" onclick="carregarConsultaEstoque()"><i>🔎</i><span>CONSULTA ESTOQUE</span></button>
-            <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('RELATÓRIOS', getBotoesSubmenu('estoque', 'RELATÓRIOS'))"><i>📊</i><span>RELATÓRIOS</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()"><i>🔑</i><span>ALTERAR SENHA</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaCadastrosBase()">
+                <i>💻</i><span>CADASTROS BÁSICOS</span>
+            </button>
+
+            <button class="btn-grande btn-vidro" onclick="abrirTelaEntrada()">
+                <i>📥</i><span>ENTRADA ESTOQUE</span>
+            </button>
+
+            <button class="btn-grande btn-vidro" onclick="carregarConsultaEstoque()">
+                <i>🔎</i><span>CONSULTA ESTOQUE</span>
+            </button>
+
+            <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('RELATÓRIOS', getBotoesSubmenu('estoque', 'RELATÓRIOS'))">
+                <i>📊</i><span>RELATÓRIOS</span>
+            </button>
+
+            <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()">
+                <i>🔑</i><span>ALTERAR SENHA</span>
+            </button>
         `;
     }
-
     html += `</div>`; // Fecha a div da grelha
     container.innerHTML = html;
 
@@ -573,20 +597,33 @@ function getBotoesSubmenu(perfil, titulo, contagem = 0) {
                 ${contagem > 0 ? `<div class="badge-alerta-entrega">${contagem}</div>` : ''}
                 <i>📦</i><span>SEPARAÇÃO</span>
             </button>
+
             <button class="btn-grande btn-vidro" onclick="telaLogisticaEntregas()">
                 ${contagemProntos > 0 ? `<div class="badge-alerta-entrega">${contagemProntos}</div>` : ''}
                 <i>🚚</i><span>LIBERAR TRANSPORTE</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="listarDevolucoesLogistica()"><i>↩️</i><span>RECEBER DEVOLUÇÃO</span></button>
-            <button class="btn-grande btn-vidro" onclick="listarDevolucoesEstoque()"><i>🔄</i><span>CONCLUIR DEVOLUÇÃO</span></button>
-            <button class="btn-grande btn-vidro" onclick="abrirCalculadoraConversao()"><i>🧮</i><span>CALCULADORA</span></button>`;
+
+            <button class="btn-grande btn-vidro" onclick="listarDevolucoesLogistica()">
+                <i>↩️</i><span>RECEBER DEVOLUÇÃO</span>
+            </button>
+
+            <button class="btn-grande btn-vidro" onclick="listarDevolucoesEstoque()">
+                <i>🔄</i><span>CONCLUIR DEVOLUÇÃO</span>
+            </button>
+
+            <button class="btn-grande btn-vidro" onclick="abrirCalculadoraConversao()">
+                <i>🧮</i><span>CALCULADORA</span>
+            </button>
+        `;
+
         if (titulo === 'RELATÓRIOS') return `
             <button class="btn-grande btn-vidro" onclick="telaRelatorioLogStatus()"><i>🕵️</i><span>AUDITORIA</span></button>
             <button class="btn-grande btn-vidro" onclick="telaProgressoGeralEscolas()"><i>🌐</i><span>ENTREGA DE UNIFORMES E KITS</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()"><i>📈</i><span>PAINEL GERAL</span></button>            
+            <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()"><i>📈</i><span>PAINEL GERAL</span></button>
             <button class="btn-grande btn-vidro" onclick="telaAuditoriaPedidos()"><i>🔍</i><span>HISTÓRICO</span></button>
             <button class="btn-grande btn-vidro" onclick="telaRelatorioTransferenciasExternas()"><i>✈️</i><span>TRANSFERÊNCIAS</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaRelatorioConsolidado()"><i>🏢</i><span>LISTAGEM RECEBIDO/FALTA RECEBER</span></button>`;
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioConsolidado()"><i>🏢</i><span>LISTAGEM RECEBIDO/FALTA RECEBER</span></button>
+        `;
     }
 
     if (perfil === 'admin') {

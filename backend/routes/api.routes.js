@@ -4401,57 +4401,48 @@ router.get('/devolucoes/estoque/recebimentos-pendentes', verificarToken, async (
 });
 
 router.post('/devolucoes/estoque/finalizar-entrada', verificarToken, async (req, res) => {
-    const { pedidoId, itens } = req.body;
+  const { pedidoId, itens } = req.body;
 
-    // DIAGNÓSTICO 1: Verificar se os dados chegaram
-    if (!pedidoId || !itens || !Array.isArray(itens)) {
-        return res.status(400).json({ 
-            error: "Dados incompletos ou formato inválido.",
-            recebido: { pedidoId, itens } 
-        });
+  if (!pedidoId || !Array.isArray(itens)) {
+    return res.status(400).json({
+      error: "Dados incompletos ou formato inválido.",
+      recebido: { pedidoId, itens }
+    });
+  }
+
+  const LOCAL_ALMOX = 37;
+
+  try {
+    await db.query('BEGIN');
+
+    for (const item of itens) {
+      const qtd = parseInt(item.quantidade, 10) || 0;
+      const pId = parseInt(item.produto_id, 10);
+      const tam = (item.tamanho && String(item.tamanho).trim()) ? String(item.tamanho).trim() : 'UNICO';
+
+      if (!Number.isFinite(pId)) throw new Error(`produto_id inválido: ${item.produto_id}`);
+      if (qtd <= 0) continue;
+
+      await db.query(`
+        INSERT INTO estoque_por_local (local_id, produto_id, tamanho, quantidade)
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT (local_id, produto_id, tamanho)
+        DO UPDATE SET quantidade = estoque_por_local.quantidade + EXCLUDED.quantidade
+      `, [LOCAL_ALMOX, pId, tam, qtd]);
     }
 
-    try {
-        await db.query('BEGIN');
+    await db.query(
+      "UPDATE pedidos SET status = $1::status_pedido, data_recebimento = NOW() WHERE id = $2",
+      ['DEVOLVIDO', parseInt(pedidoId, 10)]
+    );
 
-        for (const item of itens) {
-            // DIAGNÓSTICO 2: Proteção contra valores nulos/NaN
-            const qtd = parseInt(item.quantidade) || 0;
-            const pId = parseInt(item.produto_id);
-            const tam = item.tamanho;
+    await db.query('COMMIT');
+    res.json({ success: true });
 
-            if (isNaN(pId) || !tam) throw new Error(`Item inválido: Produto ${pId}, Tam ${tam}`);
-
-            await db.query(
-                "UPDATE estoque_grades SET quantidade = quantidade + $1 WHERE produto_id = $2 AND tamanho = $3",
-                [qtd, pId, tam]
-            );
-
-            await db.query(
-                "UPDATE produtos SET quantidade_estoque = quantidade_estoque + $1 WHERE id = $2",
-                [qtd, pId]
-            );
-        }
-
-        // DIAGNÓSTICO 3: O SQL do status com cast explícito
-        await db.query(
-            "UPDATE pedidos SET status = $1::status_pedido, data_recebimento = NOW() WHERE id = $2",
-            ['DEVOLVIDO', parseInt(pedidoId)]
-        );
-
-        await db.query('COMMIT');
-        res.json({ success: true });
-
-    } catch (err) {
-        await db.query('ROLLBACK');
-        console.error("🚨 ERRO NO BANCO:", err.message);
-        // Retornamos o erro REAL do Postgres para o Frontend ver
-        res.status(500).json({ 
-            error: "Falha no Banco de Dados", 
-            message: err.message,
-            stack: err.stack // Ajuda a ver em qual linha do código deu erro
-        });
-    }
+  } catch (err) {
+    await db.query('ROLLBACK');
+    res.status(500).json({ error: "Falha no Banco de Dados", message: err.message });
+  }
 });
 
 // ROTA EXCLUSIVA: Criar Solicitação de Patrimônio
@@ -7211,16 +7202,25 @@ router.get('/admin/relatorios/coleta-liberada', verificarToken, async (req, res)
             JOIN locais l ON p.local_destino_id = l.id
             JOIN usuarios u ON p.usuario_origem_id = u.id
             WHERE p.status = 'COLETA_LIBERADA'
-            ORDER BY p.data_separacao ASC; -- O que foi separado há mais tempo primeiro
+            ORDER BY p.data_separacao ASC NULLS LAST, p.data_criacao ASC;
         `;
         const { rows } = await db.query(sql);
 
+        const registros = rows.map(r => {
+            // Preferir data_separacao; se nula, usar data_criacao
+            const pronto_desde = r.data_separacao || r.data_criacao;
+            return {
+                ...r,
+                pronto_desde
+            };
+        });
+
         const stats = {
-            totalPedidos: rows.length,
+            totalPedidos: registros.length,
             totalVolumes: rows.reduce((acc, curr) => acc + (curr.volumes || 0), 0)
         };
 
-        res.json({ registros: rows, stats });
+        res.json({ registros, stats });
     } catch (err) {
         res.status(500).json({ error: "Erro ao carregar mapa de coleta: " + err.message });
     }

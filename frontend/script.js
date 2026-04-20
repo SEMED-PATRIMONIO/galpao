@@ -4097,7 +4097,7 @@ async function abrirModalConferencia(pedidoId) {
 
     modal.style.display = 'flex';
     modal.innerHTML = `
-        <div style="background:white; padding:30px; border-radius:15px; width:90%; max-width:800px; max-height:90vh; overflow-y:auto;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
             <h2 style="color:#1e3a8a;">📦 CONFERÊNCIA DE SAÍDA</h2>
             <p style="color:#64748b;">Confirme as quantidades que estão saindo agora.</p>
             
@@ -6722,6 +6722,7 @@ async function abrirTelaConferenciaItens(pedidoId) {
         container.innerHTML = `
             <div style="padding:20px;">
                 <h2 style="color:#1e3a8a;">📝 CONFERÊNCIA DE SAÍDA - PEDIDO #${pedidoId}</h2>
+                <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
                 <table style="width:100%; border-collapse:collapse; background:white;">
                     <thead>
                         <tr style="background:#f8fafc; border-bottom:2px solid #eee;">
@@ -19344,14 +19345,10 @@ async function telaRelatorioColetaLiberada() {
                 </div>
             </div>
 
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; margin-bottom:25px;">
+            <div style="display:grid; grid-template-columns: 1fr; gap:20px; margin-bottom:25px;">
                 <div class="painel-vidro" style="text-align:center; border-left: 5px solid #3b82f6;">
                     <h3 id="exp-total-pedidos" style="font-size:2rem; margin:0;">0</h3>
                     <small style="color:rgba(255,255,255,0.6);">PEDIDOS AGUARDANDO COLETA</small>
-                </div>
-                <div class="painel-vidro" style="text-align:center; border-left: 5px solid #fbbf24;">
-                    <h3 id="exp-total-volumes" style="font-size:2rem; margin:0;">0</h3>
-                    <small style="color:rgba(255,255,255,0.6);">TOTAL DE VOLUMES (CAIXAS/FARDOS)</small>
                 </div>
             </div>
 
@@ -19362,12 +19359,11 @@ async function telaRelatorioColetaLiberada() {
                             <th style="padding:15px; text-align:left;">ID PEDIDO</th>
                             <th style="padding:15px; text-align:left;">DESTINO</th>
                             <th style="padding:15px; text-align:left;">TIPO</th>
-                            <th style="padding:15px; text-align:center;">VOLUMES</th>
                             <th style="padding:15px; text-align:left;">PRONTO DESDE</th>
                         </tr>
                     </thead>
                     <tbody id="corpo-tabela-coleta">
-                        <tr><td colspan="5" style="padding:40px; text-align:center; opacity:0.5;">Verificando doca de expedição...</td></tr>
+                        <tr><td colspan="4" style="padding:40px; text-align:center; opacity:0.5;">Verificando doca de expedição...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -19385,23 +19381,39 @@ async function carregarDadosColetaLiberada() {
         cacheColeta = registros;
 
         document.getElementById('exp-total-pedidos').innerText = stats.totalPedidos;
-        document.getElementById('exp-total-volumes').innerText = stats.totalVolumes;
 
-        if (registros.length === 0) {
-            document.getElementById('corpo-tabela-coleta').innerHTML = `
-                <tr><td colspan="5" style="padding:40px; text-align:center; opacity:0.5;">✅ Tudo certo! Nenhuma carga pendente de coleta.</td></tr>`;
+        const corpo = document.getElementById('corpo-tabela-coleta');
+
+        if (!registros || registros.length === 0) {
+            corpo.innerHTML = `
+                <tr><td colspan="4" style="padding:40px; text-align:center; opacity:0.5;">
+                    ✅ Tudo certo! Nenhuma carga pendente de coleta.
+                </td></tr>`;
             return;
         }
 
-        document.getElementById('corpo-tabela-coleta').innerHTML = registros.map(r => `
-            <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                <td style="padding:15px; font-weight:bold; color:#fbbf24;">#${r.id}</td>
-                <td style="padding:15px;">${r.unidade_destino.toUpperCase()}</td>
-                <td style="padding:15px; font-size:0.8rem;">${r.tipo_pedido || 'DIVERSOS'}</td>
-                <td style="padding:15px; text-align:center; font-weight:bold;">${r.volumes}</td>
-                <td style="padding:15px; font-size:0.8rem; opacity:0.7;">${new Date(r.data_separacao).toLocaleString('pt-BR')}</td>
-            </tr>
-        `).join('');
+        corpo.innerHTML = registros.map(r => {
+            // Se já vier pronto_desde da API, use-o; senão, use data_separacao/data_criacao
+            const baseDate = r.pronto_desde || r.data_separacao || r.data_criacao;
+            let textoData = '-';
+
+            if (baseDate) {
+                const d = new Date(baseDate);
+                // Evita 1969/1970 ou datas inválidas
+                if (!isNaN(d.getTime()) && d.getFullYear() > 1970) {
+                    textoData = d.toLocaleString('pt-BR');
+                }
+            }
+
+            return `
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                    <td style="padding:15px; font-weight:bold; color:#fbbf24;">#${r.id}</td>
+                    <td style="padding:15px;">${(r.unidade_destino || '').toUpperCase()}</td>
+                    <td style="padding:15px; font-size:0.8rem;">${r.tipo_pedido || 'DIVERSOS'}</td>
+                    <td style="padding:15px; font-size:0.8rem; opacity:0.7;">${textoData}</td>
+                </tr>
+            `;
+        }).join('');
     } catch (err) {
         notificar("Erro ao carregar mapa de expedição.", "erro");
     }
@@ -20347,7 +20359,6 @@ function telaRelatoriosUniformes() {
 }
 
 async function gerarRelatorioStatusTurmas() {
-    // Agora o container já existe na tela, nós apenas o selecionamos.
     const container = document.getElementById('resultado-relatorio');
     if (!container) {
         console.error("Container 'resultado-relatorio' não encontrado na tela.");
@@ -20815,20 +20826,23 @@ async function telaProgressoGeralEscolas() {
 
 async function gerarRelatorioStatusTurmasEmTelaCheia() {
     const app = document.getElementById('app-content');
-    
-    // 1. Prepara a estrutura da tela cheia com um header e um contêiner para o relatório
+
+    // Monta a estrutura da tela cheia
     app.innerHTML = `
         <div class="header-animado animate__animated animate__fadeIn">
             <button class="btn-voltar-vidro" onclick="carregarDashboard()">
                 <i class="fas fa-arrow-left"></i> VOLTAR AO PAINEL
             </button>
+            <h2 class="titulo-sessao" style="color: white;">
+                Progresso Geral de Entregas por Turma
+            </h2>
         </div>
         <div id="resultado-relatorio" style="padding: 0 20px;">
-            <!-- O conteúdo do relatório será inserido aqui -->
+            <div class="loading-spinner"></div>
         </div>
     `;
-    
-    // 2. Chama a função de relatório original para preencher o contêiner
+
+    // Agora que o container existe na tela, chamamos a função que você já tem
     await gerarRelatorioStatusTurmas();
 }
 

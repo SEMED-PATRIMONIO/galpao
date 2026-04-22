@@ -5728,6 +5728,7 @@ function dispararEnvioSolicitacao() {
     const inputs = document.querySelectorAll('.input-qtd-uniforme');
     const itens = [];
 
+    // 1. Coleta tudo que foi digitado
     inputs.forEach(input => {
         const qtd = parseInt(input.value) || 0;
         if (qtd > 0) {
@@ -5739,14 +5740,18 @@ function dispararEnvioSolicitacao() {
         }
     });
 
+    // 2. Validação se o usuário não digitou nada
     if (itens.length === 0) {
-        return notificar("⚠️ Por favor, preencha a quantidade de algum item.");
+        return notificar("⚠️ Por favor, preencha a quantidade de pelo menos um uniforme.");
     }
 
-    // Alimenta a variável que sua função original 'enviarPedidoEscola' usa
-    window.carrinhoSolicitacao = itens;
+    // 3. A CORREÇÃO MÁGICA: Em vez de criar um carrinho novo, 
+    // nós esvaziamos o original e injetamos os itens dentro dele.
+    // Isso evita qualquer problema de escopo (let/const/var).
+    carrinhoSolicitacao.length = 0; 
+    itens.forEach(item => carrinhoSolicitacao.push(item));
 
-    // Chama a sua função original que faz o POST e salva no banco
+    // 4. Dispara a sua função original
     enviarPedidoEscola('SOLICITACAO');
 }
 

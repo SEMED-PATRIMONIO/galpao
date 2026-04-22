@@ -6391,6 +6391,7 @@ router.post('/estoque/saida-pedido', async (req, res) => {
         await client.query('BEGIN');
 
         // 1. Criar o Pedido com status APROVADO
+        // O status permanece APROVADO conforme seu código, para que o outro usuário o processe.
         const resPedido = await client.query(
             `INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, data_criacao, data_autorizacao, autorizado_por, tipo_pedido) 
              VALUES ($1, $2, 'APROVADO', NOW(), NOW(), $1, 'SAIDA_DIRETA') 
@@ -6399,34 +6400,24 @@ router.post('/estoque/saida-pedido', async (req, res) => {
         );
         const pedidoId = resPedido.rows[0].id;
 
-        // 2. Registro Mestre no Histórico (Lógica original mantida)
+        // 2. Registro Mestre no Histórico
         const totalGeral = itens.reduce((acc, item) => acc + Number(item.qtd_total), 0);
         const resHist = await client.query(
             `INSERT INTO historico (usuario_id, acao, quantidade_total, local_id, tipo, observacoes) 
              VALUES ($1, $2, $3, $4, 'SAIDA', $5) RETURNING id`,
-            [usuario_id, 'PEDIDO', totalGeral, 37, `Saída Direta Ref. Pedido #${pedidoId}`]
+            [usuario_id, 'PEDIDO', totalGeral, 37, `Pedido de Saída Gerado #${pedidoId}`]
         );
         const historicoId = resHist.rows[0].id;
 
         for (const item of itens) {
-            // --- INÍCIO DO BLOCO DE CORREÇÃO ---
-
             if (item.tipo === 'MATERIAL') {
-                // Baixa UNIFICADA no estoque por local
-                const updateRes = await client.query(
-                    `UPDATE estoque_por_local 
-                     SET quantidade = quantidade - $1 
-                     WHERE local_id = 37 AND produto_id = $2 AND tamanho IS NULL AND quantidade >= $1`,
-                    [item.qtd_total, item.produto_id]
-                );
-                if (updateRes.rowCount === 0) throw new Error(`Estoque insuficiente para o material ID ${item.produto_id}.`);
-
-                // Insere o item no pedido
+                // APENAS INSERE O ITEM NO PEDIDO E NO HISTÓRICO
+                // A atualização de saldo (UPDATE estoque_por_local) foi removida daqui.
                 await client.query(
                     `INSERT INTO itens_pedido (pedido_id, produto_id, quantidade) VALUES ($1, $2, $3)`,
                     [pedidoId, item.produto_id, item.qtd_total]
                 );
-                // Histórico detalhado
+
                 await client.query(
                     `INSERT INTO historico_detalhes (historico_id, produto_id, quantidade, tipo_produto) VALUES ($1, $2, $3, 'MATERIAL')`,
                     [historicoId, item.produto_id, item.qtd_total]
@@ -6435,21 +6426,13 @@ router.post('/estoque/saida-pedido', async (req, res) => {
             } else if (item.tipo === 'UNIFORMES') {
                 for (const [tamanho, qtd] of Object.entries(item.grade)) {
                     if (qtd > 0) {
-                        // Baixa UNIFICADA no estoque por local
-                        const updateRes = await client.query(
-                            `UPDATE estoque_por_local 
-                             SET quantidade = quantidade - $1 
-                             WHERE local_id = 37 AND produto_id = $2 AND tamanho = $3 AND quantidade >= $1`,
-                            [qtd, item.produto_id, tamanho]
-                        );
-                        if (updateRes.rowCount === 0) throw new Error(`Estoque insuficiente para o uniforme ID ${item.produto_id} (Tam: ${tamanho}).`);
-                        
-                        // Insere o item no pedido
+                        // APENAS INSERE O ITEM NO PEDIDO E NO HISTÓRICO
+                        // A atualização de saldo (UPDATE estoque_por_local) foi removida daqui.
                         await client.query(
                             `INSERT INTO itens_pedido (pedido_id, produto_id, quantidade, tamanho) VALUES ($1, $2, $3, $4)`,
                             [pedidoId, item.produto_id, qtd, tamanho]
                         );
-                        // Histórico detalhado
+
                         await client.query(
                             `INSERT INTO historico_detalhes (historico_id, produto_id, quantidade, tamanho, tipo_produto) VALUES ($1, $2, $3, $4, 'UNIFORMES')`,
                             [historicoId, item.produto_id, qtd, tamanho]
@@ -6457,7 +6440,6 @@ router.post('/estoque/saida-pedido', async (req, res) => {
                     }
                 }
             }
-             // --- FIM DO BLOCO DE CORREÇÃO ---
         }
 
         await client.query('COMMIT');
@@ -6465,8 +6447,8 @@ router.post('/estoque/saida-pedido', async (req, res) => {
 
     } catch (err) {
         await client.query('ROLLBACK');
-        console.error("ERRO NA OPERAÇÃO DE SAÍDA DIRETA:", err.message);
-        res.status(500).json({ error: "Erro ao processar saída direta: " + err.message });
+        console.error("ERRO AO REGISTRAR PEDIDO:", err.message);
+        res.status(500).json({ error: "Erro ao processar registro do pedido: " + err.message });
     } finally {
         client.release();
     }

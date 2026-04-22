@@ -1174,7 +1174,7 @@ async function finalizarAutorizacao(pedidoId) {
         const resultado = await res.json();
 
         if (resultado.success) {
-            notificar("✅ Pedido Autorizado! O estoque foi atualizado e o histórico registrado.");
+            notificar("✅ Pedido Autorizado!");
             document.getElementById('modal-analise').style.display = 'none';
             // Recarrega a fila de pedidos ou dashboard
             if (typeof carregarFilaPedidos === 'function') telaAdminGerenciarSolicitacoes();
@@ -5701,7 +5701,7 @@ async function telaSolicitarUniforme() {
 
             <div class="painel-vidro" style="max-width: 1100px; margin: auto;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                    <button onclick="renderSubmenuUniformesKits()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                    <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
                     <h2 style="color:white; margin:0; font-size:1.2rem;">👕 SOLICITAÇÃO DE UNIFORMES</h2>
                     <div style="width:80px;"></div>
                 </div>

@@ -5652,7 +5652,7 @@ async function telaSolicitarUniforme() {
     const container = document.getElementById('app-content');
     if (!container) return;
     
-    container.innerHTML = '<div class="spinner" style="margin: 50px auto;"></div>';
+    container.innerHTML = '<div style="padding:20px; color:white; text-align:center;">🔄 Carregando uniformes...</div>';
 
     try {
         const res = await fetch(`${API_URL}/produtos/tipo/UNIFORMES`, {
@@ -5662,34 +5662,31 @@ async function telaSolicitarUniforme() {
 
         container.innerHTML = `
             <style>
-                .grid-solicitacao { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; padding: 10px; }
-                .card-uniforme { background: rgba(255, 255, 255, 0.05); border-radius: 15px; padding: 20px; border: 1px solid rgba(255,255,255,0.1); transition: 0.3s; }
-                .card-uniforme:hover { background: rgba(255, 255, 255, 0.08); border-color: #00d4ff; }
-                .titulo-produto { color: #00d4ff; font-size: 1rem; font-weight: bold; margin-bottom: 15px; display: block; text-transform: uppercase; border-bottom: 1px solid rgba(0,212,255,0.2); padding-bottom: 8px; }
-                .grade-inputs { display: grid; grid-template-columns: repeat(auto-fill, minmax(60px, 1fr)); gap: 8px; }
-                .caixa-tamanho { background: rgba(0,0,0,0.3); padding: 8px 4px; border-radius: 8px; text-align: center; border: 1px solid rgba(255,255,255,0.05); }
-                .label-tam { display: block; font-size: 0.65rem; color: #aaa; margin-bottom: 4px; font-weight: bold; }
-                .input-qtd-sol { width: 100%; background: transparent; border: none; border-bottom: 2px solid #555; color: white; text-align: center; font-size: 0.9rem; outline: none; }
-                .input-qtd-sol:focus { border-bottom-color: #10b981; }
-                .input-qtd-sol::placeholder { color: rgba(255,255,255,0.1); }
-                /* Remover setas do input number */
-                .input-qtd-sol::-webkit-inner-spin-button { -webkit-appearance: none; }
+                .grid-solicitacao { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px; padding: 10px; }
+                .card-uniforme { background: rgba(255, 255, 255, 0.05); border-radius: 12px; padding: 15px; border: 1px solid rgba(255,255,255,0.1); cursor: pointer; transition: 0.2s; }
+                .card-uniforme:hover { background: rgba(255, 255, 255, 0.08); }
+                .titulo-produto { color: white; font-weight: bold; font-size: 1rem; text-transform: uppercase; }
+                .grade-expansivel { display: none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1); }
+                .grade-inputs { display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 10px; }
+                .caixa-tamanho { background: rgba(0,0,0,0.3); padding: 8px; border-radius: 8px; text-align: center; }
+                .label-tam { display: block; font-size: 0.65rem; color: #00d4ff; margin-bottom: 4px; }
+                .input-qtd-sol { width: 100%; background: transparent; border: none; border-bottom: 1px solid #10b981; color: white; text-align: center; outline: none; }
             </style>
 
-            <div class="painel-vidro" style="max-width: 1200px; margin: auto; padding: 25px;">
+            <div class="painel-vidro" style="max-width: 1100px; margin: auto; padding: 25px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:25px;">
                     <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
-                    <h2 style="color:white; margin:0; font-size:1.4rem;">👕 SOLICITAÇÃO DE UNIFORMES</h2>
-                    <div style="width: 100px;"></div>
+                    <h2 style="color:white; margin:0; font-size:1.3rem;">👕 SOLICITAÇÃO DE UNIFORMES</h2>
+                    <div style="width: 80px;"></div>
                 </div>
 
-                <div style="margin-bottom:25px;">
-                    <input type="text" id="busca-uniforme" placeholder="🔍 Qual uniforme você procura?" 
-                           style="width:100%; padding:14px; border-radius:10px; border:1px solid rgba(255,255,255,0.1); background:rgba(0,0,0,0.3); color:white; font-size:1rem;"
-                           onkeyup="filtrarCardsUniforme()">
+                <div style="margin-bottom:20px;">
+                    <input type="text" id="busca-uniforme" placeholder="🔍 Buscar uniforme..." 
+                           style="width:100%; padding:12px; border-radius:8px; border:1px solid rgba(255,255,255,0.1); background:rgba(0,0,0,0.2); color:white;"
+                           onkeyup="filtrarUniformes()">
                 </div>
 
-                <div class="grid-solicitacao" id="container-uniformes">
+                <div class="grid-solicitacao">
                     ${produtos.map(p => {
                         const isTenis = p.nome.toUpperCase().includes('TENIS') || p.nome.toUpperCase().includes('TÊNIS');
                         const grade = isTenis 
@@ -5697,32 +5694,33 @@ async function telaSolicitarUniforme() {
                             : ['2', '4', '6', '8', '10', '12', '14', '16', 'PP', 'P', 'M', 'G', 'GG', 'EGG'];
 
                         return `
-                            <div class="card-uniforme item-busca">
-                                <span class="titulo-produto">${p.nome}</span>
-                                <div class="grade-inputs">
-                                    ${grade.map(tam => `
-                                        <div class="caixa-tamanho">
-                                            <span class="label-tam">${tam}</span>
-                                            <input type="number" 
-                                                   class="input-qtd-sol" 
-                                                   data-id="${p.id}" 
-                                                   data-nome="${p.nome}" 
-                                                   data-tamanho="${tam}" 
-                                                   placeholder="0" 
-                                                   min="0"
-                                                   oninput="validarPositivo(this)">
-                                        </div>
-                                    `).join('')}
+                            <div class="card-uniforme item-busca" onclick="toggleGradeSolicitacao(${p.id})">
+                                <div style="display:flex; justify-content:space-between; align-items:center;">
+                                    <span class="titulo-produto">${p.nome}</span>
+                                    <span style="color:#00d4ff; font-size:0.8rem;">Expandir ▾</span>
+                                </div>
+                                
+                                <div id="grade-sol-${p.id}" class="grade-expansivel" onclick="event.stopPropagation()">
+                                    <div class="grade-inputs">
+                                        ${grade.map(tam => `
+                                            <div class="caixa-tamanho">
+                                                <span class="label-tam">${tam}</span>
+                                                <input type="number" class="input-qtd-sol" 
+                                                       data-id="${p.id}" data-tamanho="${tam}" 
+                                                       placeholder="0" min="0">
+                                            </div>
+                                        `).join('')}
+                                    </div>
                                 </div>
                             </div>
                         `;
                     }).join('')}
                 </div>
 
-                <div style="position: sticky; bottom: 20px; margin-top: 40px; text-align: right;">
-                    <button onclick="coletarEEnviarSolicitacao()" 
-                            style="padding: 18px 50px; border-radius: 40px; border: none; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; font-weight: bold; cursor: pointer; font-size: 1rem; box-shadow: 0 10px 20px rgba(16,185,129,0.3);">
-                        🚀 ENVIAR SOLICITAÇÃO
+                <div style="margin-top:30px; text-align:right;">
+                    <button onclick="processarEnvioSolicitacao()" 
+                            style="padding:15px 40px; border-radius:30px; background:#10b981; color:white; border:none; font-weight:bold; cursor:pointer; box-shadow:0 10px 20px rgba(16,185,129,0.2);">
+                        ✅ CONFIRMAR SOLICITAÇÃO
                     </button>
                 </div>
             </div>
@@ -5730,8 +5728,56 @@ async function telaSolicitarUniforme() {
 
     } catch (err) {
         console.error(err);
-        notificar("Erro ao carregar uniformes.", "erro");
+        notificar("Erro ao carregar uniformes.");
     }
+}
+
+// Alternar visualização da grade
+function toggleGradeSolicitacao(id) {
+    const grade = document.getElementById(`grade-sol-${id}`);
+    const estaVisivel = grade.style.display === 'block';
+    
+    // Opcional: Fecha todas as outras antes de abrir a atual (efeito sanfona)
+    document.querySelectorAll('.grade-expansivel').forEach(el => el.style.display = 'none');
+    
+    grade.style.display = estaVisivel ? 'none' : 'block';
+}
+
+// Filtro de busca
+function filtrarUniformes() {
+    const termo = document.getElementById('busca-uniforme').value.toUpperCase();
+    document.querySelectorAll('.item-busca').forEach(card => {
+        card.style.display = card.innerText.toUpperCase().includes(termo) ? 'block' : 'none';
+    });
+}
+
+// Coleta os dados e chama a sua função original de envio
+async function processarEnvioSolicitacao() {
+    const inputs = document.querySelectorAll('.input-qtd-sol');
+    const itensParaCarrinho = [];
+
+    inputs.forEach(input => {
+        const qtd = parseInt(input.value) || 0;
+        if (qtd > 0) {
+            itensParaCarrinho.push({
+                produto_id: parseInt(input.dataset.id),
+                tamanho: input.dataset.tamanho,
+                quantidade: qtd
+            });
+        }
+    });
+
+    if (itensParaCarrinho.length === 0) {
+        return notificar("⚠️ Informe ao menos uma quantidade!");
+    }
+
+    if (!confirm("Deseja enviar esta solicitação de uniformes?")) return;
+
+    // Alimenta a variável global que sua função enviarPedidoEscola utiliza
+    window.carrinhoSolicitacao = itensParaCarrinho;
+
+    // Chama a sua função original para garantir que o status AGUARDANDO_AUTORIZACAO seja gravado
+    await enviarPedidoEscola('SOLICITACAO');
 }
 
 // Funções de suporte (Lógica)

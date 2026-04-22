@@ -928,7 +928,6 @@ async function telaAdminGerenciarSolicitacoes() {
 
 async function analisarPedidoEstoque(pedidoId) {
     const modal = document.getElementById('modal-analise');
-    // Busca os dados da rota que acabamos de corrigir
     const res = await fetch(`${API_URL}/pedidos/detalhes-estoque/${pedidoId}`, { 
         headers: { 'Authorization': `Bearer ${TOKEN}` } 
     });
@@ -936,11 +935,9 @@ async function analisarPedidoEstoque(pedidoId) {
 
     let saldoSuficiente = true;
     const linhas = itens.map(i => {
-        // Garantindo que a comparação seja numérica
         const solicitado = parseInt(i.solicitado) || 0;
         const emEstoque = parseInt(i.em_estoque) || 0;
         const falta = solicitado > emEstoque;
-        
         if (falta) saldoSuficiente = false;
 
         return `
@@ -955,16 +952,17 @@ async function analisarPedidoEstoque(pedidoId) {
     }).join('');
 
     modal.style.display = 'flex';
+    // Ajuste aqui: max-height e overflow para permitir rolagem
     modal.innerHTML = `
-        <div style="background:white; padding:30px; border-radius:15px; width:100%; max-width:800px; box-shadow: 0 20px 25px rgba(0,0,0,0.2);">
+        <div style="background:white; padding:30px; border-radius:15px; width:100%; max-width:800px; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 25px rgba(0,0,0,0.2);">
             <h3 style="color:#1e3a8a; margin-top:0;">📋 Comparação Pedido vs Estoque</h3>
             <table style="width:100%; border-collapse:collapse; margin:20px 0;">
-                <thead style="background:#f1f5f9; color:#1e3a8a;">
+                <thead style="background:#f1f5f9; color:#1e3a8a; position: sticky; top: 0;">
                     <tr><th style="text-align:left; padding:15px;">PRODUTO</th><th>PEDIDO</th><th>ESTOQUE</th><th>STATUS</th></tr>
                 </thead>
                 <tbody>${linhas}</tbody>
             </table>
-            <div style="display:flex; gap:15px;">
+            <div style="display:flex; gap:15px; position: sticky; bottom: 0; background: white; padding-top: 15px; border-top: 1px solid #eee;">
                 <button onclick="editarQuantidades(${pedidoId})" style="flex:1; background:#f59e0b; color:white; border:none; padding:15px; border-radius:8px; font-weight:bold; cursor:pointer;">✏️ EDITAR QUANTIDADES</button>
                 <button ${!saldoSuficiente ? 'disabled style="opacity:0.4; cursor:not-allowed;"' : ''} 
                         onclick="finalizarAutorizacao(${pedidoId})" 
@@ -1024,19 +1022,19 @@ async function analisarPedido(id) {
 
 async function editarQuantidades(pedidoId) {
     const modal = document.getElementById('modal-analise');
-    // Buscamos os dados novamente para garantir que estamos editando a versão mais recente
     const res = await fetch(`${API_URL}/pedidos/detalhes-estoque/${pedidoId}`, { 
         headers: { 'Authorization': `Bearer ${TOKEN}` } 
     });
     const itens = await res.json();
 
+    // Ajuste aqui: max-height: 90vh e overflow-y: auto
     modal.innerHTML = `
-        <div style="background:white; padding:30px; border-radius:15px; width:90%; max-width:750px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+        <div style="background:white; padding:30px; border-radius:15px; width:95%; max-width:750px; max-height: 90vh; overflow-y: auto; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
             <h3 style="color:#1e3a8a; margin-top:0; border-bottom: 2px solid #e2e8f0; padding-bottom:10px;">✏️ EDITAR QUANTIDADES - PEDIDO #${pedidoId}</h3>
             <p style="color:#64748b; margin-bottom:20px;">Ajuste as quantidades para que fiquem dentro do limite disponível em estoque.</p>
             
             <table style="width:100%; border-collapse:collapse; margin-bottom:25px;">
-                <thead style="background:#f1f5f9; color:#1e3a8a;">
+                <thead style="background:#f1f5f9; color:#1e3a8a; position: sticky; top: -30px; z-index: 1;">
                     <tr>
                         <th style="text-align:left; padding:12px;">PRODUTO / TAMANHO</th>
                         <th style="padding:12px;">ESTOQUE</th>
@@ -1057,7 +1055,7 @@ async function editarQuantidades(pedidoId) {
                 </tbody>
             </table>
             
-            <div style="display:flex; gap:15px;">
+            <div style="display:flex; gap:15px; position: sticky; bottom: -30px; background: white; padding: 15px 0;">
                 <button onclick="salvarEdicaoPedido(${pedidoId})" style="flex:2; background:#1e40af; color:white; border:none; padding:15px; border-radius:8px; font-weight:bold; cursor:pointer; font-size:1rem;">
                     💾 SALVAR ALTERAÇÕES
                 </button>

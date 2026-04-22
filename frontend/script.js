@@ -3985,9 +3985,9 @@ async function renderizarFormSolicitacaoUniforme() {
                     <tbody></tbody>
                 </table>
             </div>
-
-            <button onclick="enviarPedidoEscolaFinal()" class="btn-success" style="width:100%; margin-top:20px; display:none;" id="btn-enviar-pedido">
-                ENVIAR SOLICITAÇÃO PARA ADMINISTRAÇÃO
+            <button id="btnEnviarSolicitacao" onclick="enviarPedidoEscola('SOLICITACAO')" disabled 
+                style="width:100%; padding:15px; background:#1e40af; color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer; opacity:0.5;">
+                🚀 ENVIAR SOLICITAÇÃO COMPLETA
             </button>
         </div>
     `;
@@ -4032,7 +4032,7 @@ async function enviarPedidoEscola(tipo) {
 }
 
 function ordenarTamanhos(lista) {
-    const ordemLetras = { 'PP': 1, 'P': 2, 'M': 3, 'G': 4, 'GG': 5, 'EXG': 6, 'UNICO': 7 };
+    const ordemLetras = { 'PP': 1, 'P': 2, 'M': 3, 'G': 4, 'GG': 5, 'EGG': 6, 'UNICO': 7 };
     return lista.sort((a, b) => {
         const tA = String(a.tamanho || a);
         const tB = String(b.tamanho || b);

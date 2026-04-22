@@ -20631,15 +20631,16 @@ async function gerarRelatorioStatusTurmas() {
         console.error("Container 'resultado-relatorio' não encontrado na tela.");
         return;
     }
-    
+
     container.innerHTML = `<div class="loading-spinner"></div>`;
 
     try {
         const res = await fetch(`${API_URL}/relatorios/status-turmas-geral`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
+
         const turmas = await res.json();
-        
+
         if (!res.ok) throw new Error(turmas.error || 'Falha ao carregar relatório.');
         if (turmas.length === 0) {
             container.innerHTML = `<p style="text-align:center; color:white;">Nenhuma turma encontrada nesta unidade.</p>`;
@@ -20647,7 +20648,10 @@ async function gerarRelatorioStatusTurmas() {
         }
 
         container.innerHTML = `
-            <h3 style="color:white; border-bottom: 2px solid #00d4ff; padding-bottom: 10px;">Progresso Geral de Entregas por Turma</h3>
+            <h3 style="color:white; border-bottom: 2px solid #00d4ff; padding-bottom: 10px;">
+                Progresso Geral de Entregas por Turma
+            </h3>
+
             <div class="tabela-entrega-container" style="max-height: none;">
                 <table class="tabela-entrega">
                     <thead>
@@ -20660,29 +20664,48 @@ async function gerarRelatorioStatusTurmas() {
                     </thead>
                     <tbody>
                         ${turmas.map(t => {
-                            const totalAlunos = parseInt(t.total_alunos, 10);
-                            const uniformesCompletos = parseInt(t.uniformes_completos, 10);
-                            const percUniformes = totalAlunos > 0 ? ((uniformesCompletos / totalAlunos) * 100).toFixed(0) : 0;
-                            const materialRecebido = parseInt(t.material_recebido, 10);
-                            const percMaterial = totalAlunos > 0 ? ((materialRecebido / totalAlunos) * 100).toFixed(0) : 0;
-                            
+                            const totalAlunos = parseInt(t.total_alunos, 10) || 0;
+
+                            const uniformesCompletos = parseInt(t.uniformes_completos, 10) || 0;
+                            const uniformesParciais = parseInt(t.uniformes_parciais, 10) || 0;
+                            const uniformesPendentes = parseInt(t.uniformes_pendentes, 10) || 0;
+
+                            const materialRecebido = parseInt(t.material_recebido, 10) || 0;
+                            const materialPendentes = parseInt(t.material_pendentes, 10) || 0;
+
+                            const percUniformes = totalAlunos > 0
+                                ? ((uniformesCompletos / totalAlunos) * 100).toFixed(0)
+                                : 0;
+
+                            const percMaterial = totalAlunos > 0
+                                ? ((materialRecebido / totalAlunos) * 100).toFixed(0)
+                                : 0;
+
                             return `
-                            <tr>
-                                <td style="text-align:left; font-weight:bold;">${t.turma_nome}</td>
-                                <td style="font-size: 1.2rem; font-weight:bold;">${totalAlunos}</td>
-                                <td>
-                                    <div class="barra-progresso-container">
-                                        <div class="barra-progresso" style="width: ${percUniformes}%; background: linear-gradient(90deg, #0284c7, #00d4ff);"></div>
-                                        <span>${uniformesCompletos} / ${totalAlunos} (${percUniformes}%)</span>
-                                    </div>
-                                </td>
-                                <td>
-                                    <div class="barra-progresso-container">
-                                        <div class="barra-progresso" style="width: ${percMaterial}%; background: linear-gradient(90deg, #15803d, #10b981);"></div>
-                                        <span>${materialRecebido} / ${totalAlunos} (${percMaterial}%)</span>
-                                    </div>
-                                </td>
-                            </tr>
+                                <tr>
+                                    <td style="text-align:left; font-weight:bold;">${t.turma_nome}</td>
+                                    <td style="font-size: 1.2rem; font-weight:bold;">${totalAlunos}</td>
+
+                                    <td>
+                                        <div class="barra-progresso-container">
+                                            <div class="barra-progresso" style="width: ${percUniformes}%; background: linear-gradient(90deg, #0284c7, #00d4ff);"></div>
+                                            <span>${uniformesCompletos} / ${totalAlunos} (${percUniformes}%)</span>
+                                        </div>
+                                        <small style="display:block; margin-top:6px; color: rgba(255,255,255,0.7);">
+                                            Parciais: ${uniformesParciais} | Pendentes: ${uniformesPendentes}
+                                        </small>
+                                    </td>
+
+                                    <td>
+                                        <div class="barra-progresso-container">
+                                            <div class="barra-progresso" style="width: ${percMaterial}%; background: linear-gradient(90deg, #15803d, #10b981);"></div>
+                                            <span>${materialRecebido} / ${totalAlunos} (${percMaterial}%)</span>
+                                        </div>
+                                        <small style="display:block; margin-top:6px; color: rgba(255,255,255,0.7);">
+                                            Pendentes: ${materialPendentes}
+                                        </small>
+                                    </td>
+                                </tr>
                             `;
                         }).join('')}
                     </tbody>
@@ -20897,33 +20920,54 @@ function telaRelatoriosGeral() {
     const app = document.getElementById('app-content');
     app.innerHTML = `
         <div class="header-animado animate__animated animate__fadeIn">
-            <button class="btn-voltar-vidro" onclick="carregarDashboard()"><i class="fas fa-arrow-left"></i> VOLTAR</button>
+            <button class="btn-voltar-vidro" onclick="carregarDashboard()">
+                <i class="fas fa-arrow-left"></i> VOLTAR
+            </button>
             <h2 class="titulo-sessao" style="color: white;">Painel de Relatórios</h2>
-            <p style="color: rgba(255,255,255,0.7);">Selecione um relatório para visualizar o status das entregas.</p>
+            <p style="color: rgba(255,255,255,0.7);">
+                Selecione um relatório para visualizar o status das entregas.
+            </p>
         </div>
 
         <!-- Seção de UNIFORMES -->
         <div class="secao-relatorio">
-            <h3 class="titulo-secao-relatorio"><i class="fas fa-tshirt"></i> UNIFORMES</h3>
+            <h3 class="titulo-secao-relatorio">
+                <i class="fas fa-tshirt"></i> UNIFORMES
+            </h3>
             <div class="grid-relatorios">
                 <button class="btn-relatorio" onclick="gerarRelatorioAlunos('UNIFORMES', 'pendente')">
-                    <i class="fas fa-user-clock"></i><span>Alunos Pendentes</span>
+                    <i class="fas fa-user-clock"></i>
+                    <span>Pendentes</span>
+                    <small style="color:rgba(255,255,255,0.6);">Não recebeu nenhuma peça</small>
+                </button>
+                <button class="btn-relatorio" onclick="gerarRelatorioAlunos('UNIFORMES', 'parcial')">
+                    <i class="fas fa-user-minus"></i>
+                    <span>Parcialmente Contemplados</span>
+                    <small style="color:rgba(255,255,255,0.6);">Recebeu apenas algumas peças</small>
                 </button>
                 <button class="btn-relatorio" onclick="gerarRelatorioAlunos('UNIFORMES', 'completo')">
-                    <i class="fas fa-user-check"></i><span>Alunos Contemplados</span>
+                    <i class="fas fa-user-check"></i>
+                    <span>Completamente Contemplados</span>
+                    <small style="color:rgba(255,255,255,0.6);">Recebeu todas as peças</small>
                 </button>
             </div>
         </div>
 
         <!-- Seção de MATERIAL -->
         <div class="secao-relatorio">
-            <h3 class="titulo-secao-relatorio"><i class="fas fa-pencil-ruler"></i> MATERIAL ESCOLAR</h3>
+            <h3 class="titulo-secao-relatorio">
+                <i class="fas fa-pencil-ruler"></i> MATERIAL ESCOLAR
+            </h3>
             <div class="grid-relatorios">
-                 <button class="btn-relatorio" onclick="gerarRelatorioAlunos('MATERIAL', 'pendente')">
-                    <i class="fas fa-user-clock"></i><span>Alunos Pendentes</span>
+                <button class="btn-relatorio" onclick="gerarRelatorioAlunos('MATERIAL', 'pendente')">
+                    <i class="fas fa-user-clock"></i>
+                    <span>Pendentes</span>
+                    <small style="color:rgba(255,255,255,0.6);">Não recebeu o kit</small>
                 </button>
                 <button class="btn-relatorio" onclick="gerarRelatorioAlunos('MATERIAL', 'completo')">
-                    <i class="fas fa-user-check"></i><span>Alunos Contemplados</span>
+                    <i class="fas fa-user-check"></i>
+                    <span>Contemplados</span>
+                    <small style="color:rgba(255,255,255,0.6);">Recebeu o kit</small>
                 </button>
             </div>
         </div>
@@ -20936,44 +20980,93 @@ async function gerarRelatorioAlunos(tipoProduto, status) {
     const container = document.getElementById('resultado-relatorio');
     container.innerHTML = `<div class="loading-spinner"></div>`;
 
-    const titulo = `Relatório: Alunos com Kit ${tipoProduto} ${status === 'pendente' ? 'PENDENTE' : 'COMPLETO'}`;
-    const isPendente = status === 'pendente';
+    const rotulos = {
+        pendente: { texto: 'PENDENTE',                cor: '#f59e0b', icone: 'fa-user-clock'  },
+        parcial:  { texto: 'PARCIALMENTE CONTEMPLADO', cor: '#3b82f6', icone: 'fa-user-minus'  },
+        completo: { texto: 'COMPLETAMENTE CONTEMPLADO', cor: '#10b981', icone: 'fa-user-check' }
+    };
+
+    const rotulo     = rotulos[status] || { texto: status.toUpperCase(), cor: 'white', icone: 'fa-user' };
+    const mostrarItens = status !== 'pendente';
+    const titulo     = `Relatório: Alunos com Kit ${tipoProduto} — ${rotulo.texto}`;
 
     try {
-        const res = await fetch(`${API_URL}/relatorios/alunos-status?tipoProduto=${tipoProduto}&status=${status}`, {
-            headers: { 'Authorization': `Bearer ${TOKEN}` }
-        });
+        const res = await fetch(
+            `${API_URL}/relatorios/alunos-status?tipoProduto=${tipoProduto}&status=${status}`,
+            { headers: { 'Authorization': `Bearer ${TOKEN}` } }
+        );
+
         const alunos = await res.json();
         if (!res.ok) throw new Error(alunos.error || 'Falha ao carregar.');
 
         container.innerHTML = `
-            <div class="painel-vidro animate__animated animate__fadeInUp" style="padding:20px;">
-                <h3 style="color:white;">${titulo} (${alunos.length} alunos)</h3>
-                <div class="tabela-entrega-container" style="max-height: 50vh;">
+            <div class="painel-vidro animate__animated animate__fadeInUp" style="padding: 20px;">
+                <h3 style="color: ${rotulo.cor}; display: flex; align-items: center; gap: 10px;">
+                    <i class="fas ${rotulo.icone}"></i>
+                    ${titulo}
+                    <span style="
+                        background: rgba(255,255,255,0.1);
+                        border-radius: 20px;
+                        padding: 2px 12px;
+                        font-size: 0.9rem;
+                        color: white;
+                    ">${alunos.length} alunos</span>
+                </h3>
+
+                <div class="tabela-entrega-container" style="max-height: 55vh;">
                     <table class="tabela-entrega">
                         <thead>
                             <tr>
-                                <th style="text-align:left;">ALUNO</th>
-                                <th style="text-align:left;">TURMA</th>
-                                ${!isPendente ? '<th style="text-align:left;">ITEM / DATA</th>' : ''}
+                                <th style="text-align: left;">#</th>
+                                <th style="text-align: left;">ALUNO</th>
+                                <th style="text-align: left;">TURMA</th>
+                                ${mostrarItens
+                                    ? '<th style="text-align: left;">ITENS RECEBIDOS / ÚLTIMA ENTREGA</th>'
+                                    : ''}
                             </tr>
                         </thead>
                         <tbody>
-                            ${alunos.length === 0 ? `<tr><td colspan="3" style="text-align:center; padding:20px;">Nenhum aluno encontrado.</td></tr>` :
-                            alunos.map(aluno => `
-                                <tr>
-                                    <td style="text-align:left;">${aluno.aluno_nome}</td>
-                                    <td style="text-align:left;">${aluno.turma_nome}</td>
-                                    ${!isPendente ? `<td style="text-align:left;">${aluno.produto_recebido}<br><small>${new Date(aluno.data_entrega).toLocaleDateString()}</small></td>` : ''}
-                                </tr>
-                            `).join('')}
+                            ${alunos.length === 0
+                                ? `<tr>
+                                       <td colspan="${mostrarItens ? 4 : 3}"
+                                           style="text-align: center; padding: 20px; color: rgba(255,255,255,0.5);">
+                                           Nenhum aluno encontrado nesta categoria.
+                                       </td>
+                                   </tr>`
+                                : alunos.map((aluno, i) => `
+                                    <tr>
+                                        <td style="text-align: left; color: rgba(255,255,255,0.4);">
+                                            ${i + 1}
+                                        </td>
+                                        <td style="text-align: left;">${aluno.aluno_nome}</td>
+                                        <td style="text-align: left;">${aluno.turma_nome}</td>
+                                        ${mostrarItens ? `
+                                            <td style="text-align: left;">
+                                                <span style="font-size: 0.85rem;">
+                                                    ${aluno.produto_recebido || '—'}
+                                                </span>
+                                                ${aluno.data_entrega ? `
+                                                    <br>
+                                                    <small style="color: rgba(255,255,255,0.5);">
+                                                        Última entrega:
+                                                        ${new Date(aluno.data_entrega).toLocaleDateString('pt-BR')}
+                                                    </small>
+                                                ` : ''}
+                                            </td>
+                                        ` : ''}
+                                    </tr>
+                                `).join('')}
                         </tbody>
                     </table>
                 </div>
             </div>
         `;
     } catch (err) {
-        container.innerHTML = `<p style="color:#ff4d4d;">${err.message}</p>`;
+        container.innerHTML = `
+            <div style="color: #ff4d4d; padding: 20px; text-align: center;">
+                <i class="fas fa-exclamation-triangle"></i> ${err.message}
+            </div>
+        `;
     }
 }
 
@@ -20988,38 +21081,89 @@ async function telaRelatorioConsolidado() {
         const dados = await res.json();
         if (!res.ok) throw new Error(dados.error);
 
+        // Totalizadores
+        const totais = dados.reduce((acc, d) => {
+            acc.turmas     += Number(d.total_turmas);
+            acc.alunos     += Number(d.total_alunos);
+            acc.unifRec    += Number(d.uniformes_recebidos);
+            acc.unifParc   += Number(d.uniformes_parciais);
+            acc.unifPend   += Number(d.uniformes_pendentes);
+            acc.matRec     += Number(d.material_recebido);
+            acc.matPend    += Number(d.material_pendentes);
+            return acc;
+        }, {
+            turmas: 0, alunos: 0,
+            unifRec: 0, unifParc: 0, unifPend: 0,
+            matRec: 0, matPend: 0
+        });
+
         app.innerHTML = `
             <div class="header-animado animate__animated animate__fadeIn">
-                <button class="btn-voltar-vidro" onclick="carregarDashboard()"><i class="fas fa-arrow-left"></i> VOLTAR</button>
-                <h2 class="titulo-sessao" style="color: white;">Relatório Consolidado por Escola</h2>
+                <button class="btn-voltar-vidro" onclick="carregarDashboard()">
+                    <i class="fas fa-arrow-left"></i> VOLTAR
+                </button>
+                <h2 class="titulo-sessao" style="color: white;">
+                    Relatório Consolidado por Escola
+                </h2>
             </div>
 
-            <div class="tabela-entrega-container animate__animated animate__fadeInUp" style="margin: 20px;">
+            <div class="tabela-entrega-container animate__animated animate__fadeInUp"
+                 style="margin: 20px;">
                 <table class="tabela-entrega">
                     <thead>
                         <tr>
-                            <th style="text-align:left;">ESCOLA</th>
+                            <th style="text-align: left;">ESCOLA</th>
                             <th>TURMAS</th>
                             <th>ALUNOS</th>
-                            <th>UNIF. RECEBIDOS</th>
-                            <th>UNIF. PENDENTES</th>
-                            <th>MAT. RECEBIDOS</th>
-                            <th>MAT. PENDENTES</th>
+                            <th style="color: #10b981;">UNIF. COMPLETOS</th>
+                            <th style="color: #3b82f6;">UNIF. PARCIAIS</th>
+                            <th style="color: #f59e0b;">UNIF. PENDENTES</th>
+                            <th style="color: #10b981;">MAT. RECEBIDOS</th>
+                            <th style="color: #f59e0b;">MAT. PENDENTES</th>
                         </tr>
                     </thead>
                     <tbody>
                         ${dados.map(d => `
                             <tr>
-                                <td style="text-align:left;">${d.local_nome}</td>
+                                <td style="text-align: left;">${d.local_nome}</td>
                                 <td>${d.total_turmas}</td>
                                 <td>${d.total_alunos}</td>
-                                <td style="color: #10b981;">${d.uniformes_recebidos}</td>
-                                <td style="color: #f59e0b;">${d.uniformes_pendentes}</td>
-                                <td style="color: #10b981;">${d.material_recebido}</td>
-                                <td style="color: #f59e0b;">${d.material_pendentes}</td>
+                                <td style="color: #10b981; font-weight: bold;">
+                                    ${d.uniformes_recebidos}
+                                </td>
+                                <td style="color: #3b82f6; font-weight: bold;">
+                                    ${d.uniformes_parciais}
+                                </td>
+                                <td style="color: #f59e0b; font-weight: bold;">
+                                    ${d.uniformes_pendentes}
+                                </td>
+                                <td style="color: #10b981; font-weight: bold;">
+                                    ${d.material_recebido}
+                                </td>
+                                <td style="color: #f59e0b; font-weight: bold;">
+                                    ${d.material_pendentes}
+                                </td>
                             </tr>
                         `).join('')}
                     </tbody>
+
+                    <!-- Linha de totais -->
+                    <tfoot>
+                        <tr style="
+                            border-top: 2px solid rgba(255,255,255,0.3);
+                            font-weight: bold;
+                            font-size: 1rem;
+                        ">
+                            <td style="text-align: left;">TOTAL GERAL</td>
+                            <td>${totais.turmas}</td>
+                            <td>${totais.alunos}</td>
+                            <td style="color: #10b981;">${totais.unifRec}</td>
+                            <td style="color: #3b82f6;">${totais.unifParc}</td>
+                            <td style="color: #f59e0b;">${totais.unifPend}</td>
+                            <td style="color: #10b981;">${totais.matRec}</td>
+                            <td style="color: #f59e0b;">${totais.matPend}</td>
+                        </tr>
+                    </tfoot>
                 </table>
             </div>
         `;
@@ -21103,7 +21247,6 @@ async function telaProgressoGeralEscolas() {
 async function gerarRelatorioStatusTurmasEmTelaCheia() {
     const app = document.getElementById('app-content');
 
-    // Monta a estrutura da tela cheia
     app.innerHTML = `
         <div class="header-animado animate__animated animate__fadeIn">
             <button class="btn-voltar-vidro" onclick="carregarDashboard()">
@@ -21118,7 +21261,6 @@ async function gerarRelatorioStatusTurmasEmTelaCheia() {
         </div>
     `;
 
-    // Agora que o container existe na tela, chamamos a função que você já tem
     await gerarRelatorioStatusTurmas();
 }
 

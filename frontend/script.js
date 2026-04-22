@@ -17925,7 +17925,7 @@ async function abrirTelaSaidaPedido() {
         </div>
         
         <div id="lista-saida-produtos">
-            <p style="color: white; padding: 20px;">Sincronizando produtos e saldos...</p>
+            <p style="color: white; padding: 20px;">Sincronizando produtos...</p>
         </div>
 
         <div id="footer-acoes" style="position: sticky; bottom: 20px; display: flex; justify-content: flex-end; margin-top: 30px;">
@@ -18092,7 +18092,7 @@ async function processarSaidaPedido() {
         const resultado = await res.json();
 
         if (res.ok) {
-            notificar("✅ Pedido APROVADO! Estoque atualizado e histórico registrado.");
+            notificar("✅ Pedido APROVADO!");
             carregarDashboard();
         } else {
             throw new Error(resultado.error);

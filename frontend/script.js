@@ -5695,7 +5695,7 @@ async function telaSolicitarUniforme() {
 
             <div class="painel-vidro" style="max-width: 1100px; margin: auto;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                    <button onclick="renderSubmenuUniformesKits()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                    <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
                     <h2 style="color:white; margin:0; font-size:1.2rem;">👕 SOLICITAÇÃO DE UNIFORMES</h2>
                     <div style="width:80px;"></div>
                 </div>

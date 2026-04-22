@@ -612,7 +612,8 @@ function getBotoesSubmenu(perfil, titulo, contagem = 0, contagemProntos = 0) {
             <button class="btn-grande btn-vidro" onclick="telaRelatorioLogStatus()"><i>🕵️</i><span>AUDITORIA</span></button>
             <button class="btn-grande btn-vidro" onclick="telaProgressoGeralEscolas()"><i>🌐</i><span>ENTREGA DE UNIFORMES E KITS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()"><i>📈</i><span>PAINEL GERAL</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaAuditoriaPedidos()"><i>🔍</i><span>HISTÓRICO</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaAuditoriaPedidos()"><i>🔍</i><span>FLUXO DO PEDIDO</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioLogStatus()"><i>🕵️</i><span>HISTÓRICO</span></button>
             <button class="btn-grande btn-vidro" onclick="telaRelatorioTransferenciasExternas()"><i>✈️</i><span>TRANSFERÊNCIAS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaRelatorioConsolidado()"><i>🏢</i><span>LISTAGEM RECEBIDO/FALTA RECEBER</span></button>
         `;
@@ -629,7 +630,8 @@ function getBotoesSubmenu(perfil, titulo, contagem = 0, contagemProntos = 0) {
             <button class="btn-grande btn-vidro" onclick="listarDevolucoesAdmin()"><i>🔄</i><span>DEVOLUÇÕES</span></button>
         `;
         if (titulo === 'RELATÓRIOS') return `
-            <button class="btn-grande btn-vidro" onclick="telaRelatorioLogStatus()"><i>🕵️</i><span>HISTÓRICO</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaAuditoriaPedidos()"><i>🔍</i><span>FLUXO DO PEDIDO</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioLogStatus()"><i>🕵️</i><span>HISTÓRICO</span></button>    
             <button class="btn-grande btn-vidro" onclick="telaProgressoGeralEscolas()"><i>🌐</i><span>ENTREGA DE UNIFORMES E KITS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaRelatorioConsolidado()"><i>🏢</i><span>LISTAGEM RECEBIDO/FALTA RECEBER</span></button>
         `;
@@ -1114,7 +1116,7 @@ async function finalizarPedido(pedidoId) {
         });
 
         if (res.ok) {
-            notificar("✅ Autorizado! O estoque foi atualizado e o pedido seguiu para SEPARAÇÃO.");
+            notificar("✅ Autorizado! O pedido seguiu para SEPARAÇÃO.");
             document.getElementById('modal-analise').style.display = 'none';
             telaAdminGerenciarSolicitacoes(); // Recarrega a lista
         } else {
@@ -8554,7 +8556,7 @@ async function telaAdminDashboard() {
             <div class="painel-vidro" style="max-width: 1100px; margin: auto; padding: 25px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid rgba(255,255,255,0.1); padding-bottom:15px; margin-bottom:25px;">
                     <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
-                    <h2 style="color:white; margin:0; font-size:1.4rem;">📊 PAINEL GERENCIAL DE PEDIDOS</h2>
+                    <h2 style="color:white; margin:0; font-size:1.4rem;">📊 PAINEL DE PEDIDOS</h2>
                 </div>
 
                 <div style="background:rgba(0,0,0,0.2); border-radius:15px; padding: 30px;">
@@ -8568,8 +8570,8 @@ async function telaAdminDashboard() {
                         ${renderCirculo('A CAMINHO', s.qtd_transporte, '🚚', '#06b6d4')}
                         ${renderCirculo('ENTREGUE', s.qtd_entregue, '🏠', '#10b981')}
                         
-                        ${renderCirculo('TRANSFERÊNCIA (50)', s.qtd_transferencia, '🔄', '#ec4899')}
-                        ${renderCirculo('TRÂNSITO (51)', s.qtd_limbo, '📍', '#94a3b8')}
+                        ${renderCirculo(' EM TRANSFERÊNCIA', s.qtd_transferencia, '🔄', '#ec4899')}
+                        ${renderCirculo('EM TRÂNSITO', s.qtd_limbo, '📍', '#94a3b8')}
 
                     </div>
 
@@ -8763,9 +8765,9 @@ window.processarSaidaRemessa = async function(remessaId, tipoPedido) {
             const dadosRemessa = await resDados.json();
 
             // 5. Gera o Romaneio Interno (MODAL) - SEM ABRIR NOVA JANELA
-            if (typeof gerarModalRomaneioA4 === 'function') {
-                gerarModalRomaneioA4(dadosRemessa.pedido_id, remessaId, dadosRemessa);
-            }
+            // if (typeof gerarModalRomaneioA4 === 'function') {
+            //     gerarModalRomaneioA4(dadosRemessa.pedido_id, remessaId, dadosRemessa);
+            // }
 
             // 6. Atualiza a lista de logística que está por baixo
             if (typeof telaLogisticaEntregas === 'function') {
@@ -9378,7 +9380,7 @@ async function efetivarRecebimento(remessaId, pedidoId, tipoPedido) {
         // ---------------------------
 
         // 3. Notifica o usuário e limpa a tela
-        notificar("✨ Recebimento confirmado! O romaneio foi arquivado no servidor.", "sucesso");
+        notificar("✨ Recebimento confirmado!", "sucesso");
         telaEscolaConfirmarRecebimento(); 
 
     } catch (err) {
@@ -20137,109 +20139,374 @@ async function gerarComprovanteTurma(turmaId) {
     notificar('Gerando comprovante...', 'info');
 
     try {
-        // 1. Buscar os dados do comprovante no servidor
         const res = await fetch(`${API_URL}/turma/${turmaId}/comprovante`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
         const data = await res.json();
-        
+
         if (!res.ok) {
             throw new Error(data.error || 'Não foi possível gerar o comprovante.');
         }
 
-        // 2. Construir o HTML da página de impressão
-        const htmlContent = `
+        // ── 1. Monta as linhas da tabela de alunos ──────────────────────────
+        const linhasAlunos = data.alunos.map(aluno => `
+            <tr>
+                <td style="
+                    width: 42%;
+                    border: 1px solid #999;
+                    padding: 5px 6px;
+                    font-size: 9pt;
+                    word-break: break-word;
+                ">${aluno.nome}</td>
+                <td style="
+                    width: 15%;
+                    border: 1px solid #999;
+                    padding: 5px 6px;
+                    font-size: 9pt;
+                    text-align: center;
+                ">${aluno.matricula}</td>
+                <td style="
+                    width: 18%;
+                    border: 1px solid #999;
+                    padding: 5px 6px;
+                    font-size: 9pt;
+                    text-align: center;
+                    color: #aaa;
+                    letter-spacing: 1px;
+                ">____ / ____ / ______</td>
+                <td style="
+                    width: 25%;
+                    border: 1px solid #999;
+                    padding: 5px 6px;
+                "></td>
+            </tr>
+        `).join('');
+
+        // ── 2. Monta o HTML completo do documento A4 ─────────────────────────
+        const htmlDocumento = `
             <!DOCTYPE html>
             <html lang="pt-BR">
             <head>
                 <meta charset="UTF-8">
-                <title>Comprovante de Entrega - ${data.turmaNome}</title>
+                <title>Lista de Entrega de Uniformes - ${data.turmaNome}</title>
                 <style>
-                    body { font-family: 'Segoe UI', sans-serif; margin: 0; color: #333; }
-                    .folha-a4 { width: 210mm; min-height: 297mm; padding: 20mm; margin: 0 auto; background: white; box-sizing: border-box; }
-                    .cabecalho { display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #0056b3; padding-bottom: 15px; }
-                    .cabecalho .logo-txt { display: flex; align-items: center; gap: 15px; }
-                    .cabecalho .logo-txt img { height: 60px; }
-                    .cabecalho .logo-txt p { margin: 0; font-weight: bold; font-size: 1.1rem; }
-                    .cabecalho .info-doc p { margin: 0; text-align: right; font-size: 0.9rem; }
-                    .titulo-doc { text-align: center; margin: 30px 0; }
-                    .titulo-doc h2 { margin: 0; font-size: 1.5rem; }
-                    .tabela-assinaturas { width: 100%; border-collapse: collapse; font-size: 1rem; }
-                    .tabela-assinaturas th, .tabela-assinaturas td { border: 1px solid #ccc; padding: 12px; }
-                    .tabela-assinaturas thead th { background-color: #f2f2f2; }
-                    .td-aluno { width: 40%; }
-                    .td-status { width: 60%; }
-                    .linha-assinatura { border-bottom: 1px solid #555; height: 30px; margin-top: 15px; }
-                    .status-recebido { font-style: italic; color: #555; font-size: 0.9rem; }
-                    .rodape { text-align: center; margin-top: 40px; font-size: 0.8rem; color: #777; border-top: 1px dashed #ccc; padding-top: 15px; }
+                    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+                    body {
+                        font-family: Arial, sans-serif;
+                        background: #fff;
+                        color: #222;
+                    }
+
+                    /* Página A4 com margens de 1cm */
+                    .pagina-a4 {
+                        width: 210mm;
+                        min-height: 297mm;
+                        padding: 1cm;
+                        margin: 0 auto;
+                        background: #fff;
+                    }
+
+                    /* Cabeçalho: logo + textos lado a lado */
+                    .cabecalho {
+                        display: flex;
+                        align-items: center;
+                        gap: 10px;
+                        margin-bottom: 18px;
+                    }
+                    .cabecalho img {
+                        height: 52px;
+                        width: auto;
+                        flex-shrink: 0;
+                    }
+                    .cabecalho-textos {
+                        display: flex;
+                        flex-direction: column;
+                        justify-content: center;
+                        height: 52px;
+                    }
+                    .cabecalho-textos p {
+                        margin: 0;
+                        line-height: 1.35;
+                    }
+                    .cabecalho-textos p:first-child {
+                        font-size: 11pt;
+                        font-weight: bold;
+                    }
+                    .cabecalho-textos p:last-child {
+                        font-size: 10pt;
+                        font-weight: bold;
+                    }
+
+                    /* Título centralizado */
+                    .titulo-documento {
+                        text-align: center;
+                        font-size: 11pt;
+                        font-weight: bold;
+                        margin-bottom: 14px;
+                        letter-spacing: 0.3px;
+                    }
+
+                    /* Tabela de alunos */
+                    .tabela-lista {
+                        width: 100%;
+                        border-collapse: collapse;
+                        margin-bottom: 28px;
+                    }
+                    .tabela-lista thead tr {
+                        background-color: #e8e8e8;
+                    }
+                    .tabela-lista thead th {
+                        border: 1px solid #999;
+                        padding: 6px;
+                        font-size: 9pt;
+                        font-weight: bold;
+                        text-align: center;
+                    }
+                    .tabela-lista thead th:first-child {
+                        width: 42%;
+                        text-align: left;
+                    }
+                    .tabela-lista thead th:nth-child(2) {
+                        width: 15%;
+                    }
+                    .tabela-lista thead th:nth-child(3) {
+                        width: 18%;
+                    }
+                    .tabela-lista thead th:nth-child(4) {
+                        width: 25%;
+                    }
+
+                    /* Área de assinatura do responsável */
+                    .area-responsavel {
+                        display: flex;
+                        flex-direction: column;
+                        align-items: flex-end;
+                        gap: 10px;
+                        margin-top: 10px;
+                    }
+                    .linha-responsavel {
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        width: 220px;
+                    }
+                    .linha-responsavel .underline {
+                        width: 100%;
+                        border-bottom: 1px solid #333;
+                        height: 22px;
+                    }
+                    .linha-responsavel span {
+                        font-size: 8pt;
+                        margin-top: 3px;
+                        color: #444;
+                        text-align: center;
+                    }
+
+                    /* Regras de impressão */
                     @media print {
-                        body { margin: 0; }
-                        .folha-a4 { box-shadow: none; border: none; }
+                        html, body {
+                            width: 210mm;
+                            height: 297mm;
+                            margin: 0;
+                        }
+                        .pagina-a4 {
+                            margin: 0;
+                            box-shadow: none;
+                            border: none;
+                        }
                     }
                 </style>
             </head>
             <body>
-                <div class="folha-a4">
-                    <header class="cabecalho">
-                        <div class="logo-txt">
-                            <img src="braque.png" alt="Logo SEMED"> <!-- Verifique o caminho da sua logo -->
-                            <div>
-                                <p>PREFEITURA MUNICIPAL DE QUEIMADOS</p>
-                                <p>SECRETARIA MUNICIPAL DE EDUCAÇÃO</p>
-                            </div>
-                        </div>
-                        <div class="info-doc">
-                            <p><strong>Escola:</strong> ${data.escolaNome}</p>
-                            <p><strong>Turma:</strong> ${data.turmaNome}</p>
-                            <p><strong>Gerado em:</strong> ${new Date(data.dataGeracao).toLocaleString('pt-BR')}</p>
-                        </div>
-                    </header>
+                <div class="pagina-a4">
 
-                    <div class="titulo-doc">
-                        <h2>LISTA DE CONTROLE DE ENTREGA DE UNIFORMES</h2>
+                    <!-- CABEÇALHO -->
+                    <div class="cabecalho">
+                        <img src="assets/braque.png" alt="Logo Prefeitura">
+                        <div class="cabecalho-textos">
+                            <p>PREFEITURA MUNICIPAL DE QUEIMADOS</p>
+                            <p>SECRETARIA MUNICIPAL DE EDUCAÇÃO</p>
+                        </div>
                     </div>
 
-                    <table class="tabela-assinaturas">
+                    <!-- TÍTULO -->
+                    <div class="titulo-documento">
+                        LISTA DE ENTREGA DE UNIFORMES DA TURMA ${data.turmaNome.toUpperCase()}
+                    </div>
+
+                    <!-- TABELA DE ALUNOS -->
+                    <table class="tabela-lista">
                         <thead>
                             <tr>
-                                <th class="td-aluno">NOME DO ALUNO</th>
-                                <th class="td-status">ASSINATURA DO RESPONSÁVEL</th>
+                                <th>NOME</th>
+                                <th>MATRÍCULA</th>
+                                <th>DATA RECEBIMENTO</th>
+                                <th>ASSINATURA</th>
                             </tr>
                         </thead>
                         <tbody>
-                            ${data.alunos.map(aluno => `
-                                <tr>
-                                    <td class="td-aluno">${aluno.nome}</td>
-                                    <td class="td-status">
-                                        ${aluno.status === 'Pendente' ?
-                                            `<div class="linha-assinatura"></div>` :
-                                            `<div class="status-recebido">Kit completo recebido em: ${new Date(aluno.dataRecebimento).toLocaleDateString('pt-BR')}</div>`
-                                        }
-                                    </td>
-                                </tr>
-                            `).join('')}
+                            ${linhasAlunos}
                         </tbody>
                     </table>
 
-                    <div class="rodape">
-                        <p>Este documento serve como comprovante de entrega dos itens do kit de uniforme escolar para o ano letivo corrente.</p>
+                    <!-- ASSINATURA DO RESPONSÁVEL -->
+                    <div class="area-responsavel">
+                        <div class="linha-responsavel">
+                            <div class="underline"></div>
+                            <span>Assinatura do Responsável pela Entrega</span>
+                        </div>
+                        <div class="linha-responsavel">
+                            <div class="underline"></div>
+                            <span>Matrícula do Responsável</span>
+                        </div>
                     </div>
+
                 </div>
             </body>
             </html>
         `;
 
-        // 3. Abrir em uma nova janela e acionar a impressão
-        const printWindow = window.open('', '_blank');
-        printWindow.document.write(htmlContent);
-        printWindow.document.close(); // Essencial para o carregamento de recursos
-        printWindow.focus(); // Necessário para alguns navegadores
-        
-        // Dá um pequeno tempo para a janela carregar antes de imprimir
-        setTimeout(() => {
-            printWindow.print();
-            // printWindow.close(); // Descomente se quiser que a janela feche após a impressão
-        }, 500);
+        // ── 3. Converte o HTML em Blob PDF via iframe oculto ─────────────────
+        // Cria um Blob com o HTML e gera uma URL temporária
+        const blob = new Blob([htmlDocumento], { type: 'text/html; charset=utf-8' });
+        const blobUrl = URL.createObjectURL(blob);
+
+        // ── 4. Remove modal anterior se existir ──────────────────────────────
+        const modalAnterior = document.getElementById('modal-comprovante-uniforme');
+        if (modalAnterior) modalAnterior.remove();
+
+        // ── 5. Cria o Modal ──────────────────────────────────────────────────
+        const modal = document.createElement('div');
+        modal.id = 'modal-comprovante-uniforme';
+        modal.style.cssText = `
+            position: fixed;
+            top: 0; left: 0;
+            width: 100vw; height: 100vh;
+            background: rgba(0,0,0,0.75);
+            z-index: 99999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            padding-top: 20px;
+        `;
+
+        modal.innerHTML = `
+            <!-- Barra de ações do modal -->
+            <div style="
+                display: flex;
+                gap: 12px;
+                margin-bottom: 14px;
+                align-items: center;
+            ">
+                <span style="color:#fff; font-size:13pt; font-weight:bold; margin-right:10px;">
+                    Comprovante — ${data.turmaNome}
+                </span>
+
+                <!-- Botão Salvar -->
+                <a
+                    id="btn-salvar-comprovante"
+                    href="${blobUrl}"
+                    download="Lista_Entrega_${data.turmaNome.replace(/\s+/g,'_')}.html"
+                    style="
+                        background: #1976d2;
+                        color: #fff;
+                        border: none;
+                        padding: 9px 20px;
+                        border-radius: 6px;
+                        font-size: 10pt;
+                        font-weight: bold;
+                        cursor: pointer;
+                        text-decoration: none;
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 6px;
+                    "
+                ">
+                    <i class="fas fa-download"></i> SALVAR
+                </a>
+
+                <!-- Botão Imprimir -->
+                <button
+                    id="btn-imprimir-comprovante"
+                    style="
+                        background: #388e3c;
+                        color: #fff;
+                        border: none;
+                        padding: 9px 20px;
+                        border-radius: 6px;
+                        font-size: 10pt;
+                        font-weight: bold;
+                        cursor: pointer;
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 6px;
+                    "
+                >
+                    <i class="fas fa-print"></i> IMPRIMIR
+                </button>
+
+                <!-- Botão Fechar -->
+                <button
+                    id="btn-fechar-comprovante"
+                    style="
+                        background: #c62828;
+                        color: #fff;
+                        border: none;
+                        padding: 9px 20px;
+                        border-radius: 6px;
+                        font-size: 10pt;
+                        font-weight: bold;
+                        cursor: pointer;
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 6px;
+                    "
+                >
+                    <i class="fas fa-times"></i> FECHAR
+                </button>
+            </div>
+
+            <!-- Iframe que exibe o documento -->
+            <iframe
+                id="iframe-comprovante"
+                src="${blobUrl}"
+                style="
+                    width: 220mm;
+                    height: 80vh;
+                    border: none;
+                    border-radius: 4px;
+                    background: #fff;
+                    box-shadow: 0 4px 32px rgba(0,0,0,0.5);
+                "
+            ></iframe>
+        `;
+
+        document.body.appendChild(modal);
+
+        // ── 6. Eventos dos botões ────────────────────────────────────────────
+
+        // Imprimir: aciona o print dentro do iframe
+        document.getElementById('btn-imprimir-comprovante').addEventListener('click', () => {
+            const iframe = document.getElementById('iframe-comprovante');
+            iframe.contentWindow.focus();
+            iframe.contentWindow.print();
+        });
+
+        // Fechar: remove o modal e libera a URL do blob
+        document.getElementById('btn-fechar-comprovante').addEventListener('click', () => {
+            URL.revokeObjectURL(blobUrl);
+            modal.remove();
+        });
+
+        // Fechar também ao clicar no fundo escuro (fora do conteúdo)
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                URL.revokeObjectURL(blobUrl);
+                modal.remove();
+            }
+        });
 
     } catch (err) {
         console.error("Erro ao gerar comprovante:", err);
@@ -20537,7 +20804,12 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
                 </table>
             </div>
             <div id="footer-acoes-entrega" class="animate__animated animate__fadeIn">
-                <button class="btn-confirmar-entrega" onclick="confirmarEntregasMaterial(${turmaId})"><i class="fas fa-check"></i> CONFIRMAR ENTREGAS MARCADAS</button>
+                <button class="btn-imprimir-comprovante" onclick="gerarComprovanteTurmaMaterial(${turmaId})">
+                    <i class="fas fa-print"></i> GERAR COMPROVANTE
+                </button>
+                <button class="btn-confirmar-entrega" onclick="confirmarEntregasMaterial(${turmaId})">
+                    <i class="fas fa-check"></i> CONFIRMAR ENTREGAS MARCADAS
+                </button>
             </div>
         `;
         
@@ -20549,6 +20821,10 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
         // Adiciona uma mensagem de erro mais informativa na tela
         app.innerHTML = `<div class="painel-vidro" style="margin:20px; padding:20px; color: #ff4d4d; text-align:center;"><h2>Ocorreu um erro</h2><p>${err.message}</p><button class="btn-voltar-vidro" onclick="telaEntregaMaterial()">Tentar Novamente</button></div>`;
     }
+}
+
+async function gerarComprovanteTurmaMaterial(turmaId) {
+    return gerarComprovanteTurma(turmaId);
 }
 
 // Lógica de ações em massa para os Radio Buttons

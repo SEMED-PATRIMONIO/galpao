@@ -8486,7 +8486,6 @@ router.get('/turma/:id/comprovante', verificarToken, async (req, res) => {
 
     const client = await db.pool.connect();
     try {
-        // Passo 1: Obter informações da escola e da turma.
         const metaRes = await client.query(
             'SELECT t.nome as turma_nome, l.nome as escola_nome FROM turmas t JOIN locais l ON t.local_id = l.id WHERE t.id = $1 AND t.local_id = $2',
             [turmaId, localId]
@@ -8496,50 +8495,25 @@ router.get('/turma/:id/comprovante', verificarToken, async (req, res) => {
         }
         const { turma_nome, escola_nome } = metaRes.rows[0];
 
-        // Passo 2: Contar quantos itens formam o kit completo de uniformes.
-        const kitCountRes = await client.query("SELECT COUNT(id) as total_items FROM produtos WHERE tipo = 'UNIFORMES' AND local_id = 37");
-        const totalKitItems = parseInt(kitCountRes.rows[0].total_items, 10);
-        
-        // Passo 3: Obter todos os alunos da turma.
-        const alunosRes = await client.query('SELECT id, nome FROM alunos WHERE turma_id = $1 ORDER BY nome ASC', [turmaId]);
+        // ALTERAÇÃO: adicionado "matricula" no SELECT
+        const alunosRes = await client.query(
+            'SELECT id, nome, matricula FROM alunos WHERE turma_id = $1 ORDER BY nome ASC',
+            [turmaId]
+        );
         if (alunosRes.rows.length === 0) {
             return res.status(404).json({ error: "A turma não possui alunos." });
         }
-        const alunos = alunosRes.rows;
-
-        // Passo 4: Obter as contagens de itens recebidos e a última data de entrega para os alunos da turma.
-        const entregasRes = await client.query(`
-            SELECT 
-                aluno_id, 
-                COUNT(DISTINCT produto_id) as itens_recebidos,
-                MAX(data_entrega) as ultima_entrega
-            FROM entregas_alunos
-            WHERE turma_id = (SELECT turma_id FROM alunos WHERE id = ANY(SELECT id FROM alunos WHERE turma_id = $1 LIMIT 1))
-            GROUP BY aluno_id
-        `, [turmaId]);
-
-        const entregasMap = new Map(entregasRes.rows.map(e => [e.aluno_id, { count: parseInt(e.itens_recebidos, 10), date: e.ultima_entrega }]));
-
-        // Passo 5: Montar a lista final de alunos com seus status.
-        const alunosComStatus = alunos.map(aluno => {
-            const entregaInfo = entregasMap.get(aluno.id);
-            // Considera o kit completo se o número de itens distintos recebidos for igual ou maior ao total de itens no kit.
-            const status = entregaInfo && entregaInfo.count >= totalKitItems
-                ? { status: 'Completo', dataRecebimento: entregaInfo.date }
-                : { status: 'Pendente' };
-            
-            return {
-                id: aluno.id,
-                nome: aluno.nome,
-                ...status
-            };
-        });
 
         res.json({
             turmaNome: turma_nome,
             escolaNome: escola_nome,
             dataGeracao: new Date(),
-            alunos: alunosComStatus
+            // ALTERAÇÃO: retorna id, nome e matricula de cada aluno
+            alunos: alunosRes.rows.map(a => ({
+                id: a.id,
+                nome: a.nome,
+                matricula: a.matricula || '—'
+            }))
         });
 
     } catch (err) {

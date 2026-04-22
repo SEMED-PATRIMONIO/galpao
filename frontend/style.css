@@ -2519,3 +2519,25 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .btn-grande {
     position: relative;
 }
+
+.input-qtd-uniforme { 
+    width: 100%; 
+    background: transparent; 
+    border: none; 
+    border-bottom: 1px solid #10b981; 
+    color: white; 
+    text-align: center; 
+    outline: none; 
+    font-size: 0.75rem; /* FONTE BEM MENOR */
+    padding: 2px 0;
+}
+
+/* REMOVER AS SETINHAS (SPINNERS) DO INPUT NUMBER */
+.input-qtd-uniforme::-webkit-outer-spin-button,
+.input-qtd-uniforme::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+.input-qtd-uniforme {
+    -moz-appearance: textfield; /* Tira a setinha no Firefox */
+}

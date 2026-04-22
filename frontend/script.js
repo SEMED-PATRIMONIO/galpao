@@ -5724,11 +5724,11 @@ async function telaSolicitarUniforme() {
     }
 }
 
-function dispararEnvioSolicitacao() {
+async function dispararEnvioSolicitacao() {
     const inputs = document.querySelectorAll('.input-qtd-uniforme');
     const itens = [];
 
-    // 1. Coleta tudo que foi digitado
+    // Coleta as quantidades digitadas
     inputs.forEach(input => {
         const qtd = parseInt(input.value) || 0;
         if (qtd > 0) {
@@ -5740,19 +5740,20 @@ function dispararEnvioSolicitacao() {
         }
     });
 
-    // 2. Validação se o usuário não digitou nada
     if (itens.length === 0) {
         return notificar("⚠️ Por favor, preencha a quantidade de pelo menos um uniforme.");
     }
 
-    // 3. A CORREÇÃO MÁGICA: Em vez de criar um carrinho novo, 
-    // nós esvaziamos o original e injetamos os itens dentro dele.
-    // Isso evita qualquer problema de escopo (let/const/var).
+    // Alimenta a variável global do seu sistema sem perder a referência
     carrinhoSolicitacao.length = 0; 
     itens.forEach(item => carrinhoSolicitacao.push(item));
 
-    // 4. Dispara a sua função original
-    enviarPedidoEscola('SOLICITACAO');
+    // Dispara a SUA função e aguarda ela terminar
+    await enviarPedidoEscola('SOLICITACAO');
+
+    // FORÇA O RETORNO PARA O DASHBOARD (encerra o loop)
+    carregarDashboard(); 
+    // OBS: Se preferir voltar para o submenu, troque a linha acima por: renderSubmenuUniformesKits();
 }
 
 // Alternar visualização da grade

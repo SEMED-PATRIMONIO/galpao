@@ -5671,21 +5671,27 @@ async function telaSolicitarUniforme() {
                 .caixa-item { background: rgba(0,0,0,0.2); padding: 5px; border-radius: 6px; text-align: center; border: 1px solid rgba(255,255,255,0.05); }
                 .label-t { display: block; font-size: 0.6rem; color: #aaa; margin-bottom: 2px; }
                 
-                /* Ajustes solicitados para visibilidade das quantidades */
+                /* Ajuste de visibilidade: fundo cinza médio e fonte otimizada */
                 .input-qtd-uniforme { 
                     width: 100%; 
-                    background: transparent; 
+                    background: #666 !important; /* Cinza médio solicitado */
                     border: none; 
-                    border-bottom: 1px solid #10b981; 
-                    color: white; 
+                    border-bottom: 2px solid #10b981; 
+                    color: white !important; 
                     text-align: center; 
                     outline: none; 
-                    font-size: 0.75rem; /* Fonte reduzida para caber 3 dígitos */
-                    padding: 2px 0;
-                    -moz-appearance: textfield; /* Remove setas no Firefox */
+                    font-size: 0.75rem; 
+                    padding: 4px 0;
+                    border-radius: 4px 4px 0 0;
+                    -moz-appearance: textfield; 
                 }
 
-                /* Remove setas (spinners) no Chrome, Safari e Edge para ganhar espaço */
+                /* Garante que o fundo permaneça cinza ao clicar/digitar */
+                .input-qtd-uniforme:focus {
+                    background: #777 !important;
+                    box-shadow: 0 0 5px rgba(16,185,129,0.5);
+                }
+
                 .input-qtd-uniforme::-webkit-outer-spin-button,
                 .input-qtd-uniforme::-webkit-inner-spin-button {
                     -webkit-appearance: none;
@@ -5695,7 +5701,7 @@ async function telaSolicitarUniforme() {
 
             <div class="painel-vidro" style="max-width: 1100px; margin: auto;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                    <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                    <button onclick="renderSubmenuUniformesKits()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
                     <h2 style="color:white; margin:0; font-size:1.2rem;">👕 SOLICITAÇÃO DE UNIFORMES</h2>
                     <div style="width:80px;"></div>
                 </div>

@@ -6334,7 +6334,6 @@ router.get('/estoque/consulta-exclusiva', async (req, res) => {
                 COALESCE(
                     (SELECT json_agg(
                         json_build_object('tamanho', epl.tamanho, 'quantidade', epl.quantidade) 
-                        ORDER BY epl.tamanho ASC
                     )
                      FROM estoque_por_local epl
                      WHERE epl.produto_id = p.id AND epl.local_id = 37 AND epl.tamanho IS NOT NULL), 

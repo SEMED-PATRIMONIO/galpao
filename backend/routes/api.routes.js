@@ -6230,7 +6230,6 @@ router.post('/estoque/entrada-lote', async (req, res) => {
 
         const totalGeral = itens.reduce((acc, item) => acc + (parseInt(item.qtd_total) || 0), 0);
 
-        // 1. Registro no histórico MESTRE (inalterado, está correto)
         const resMaster = await client.query(
             `INSERT INTO historico (usuario_id, acao, quantidade_total, observacoes, local_id, tipo) 
              VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
@@ -6238,10 +6237,8 @@ router.post('/estoque/entrada-lote', async (req, res) => {
         );
         const historicoId = resMaster.rows[0].id;
 
-        // --- INÍCIO DO BLOCO DE CORREÇÃO ---
         for (const item of itens) {
             if (item.tipo === 'MATERIAL') {
-                // Para MATERIAL, damos entrada na nova tabela com tamanho NULL
                 await client.query(
                     `INSERT INTO estoque_por_local (local_id, produto_id, tamanho, quantidade)
                      VALUES (37, $1, NULL, $2)
@@ -6250,7 +6247,6 @@ router.post('/estoque/entrada-lote', async (req, res) => {
                     [item.produto_id, item.qtd_total]
                 );
                 
-                // Registra no detalhe do histórico (inalterado)
                 await client.query(
                     `INSERT INTO historico_detalhes (historico_id, produto_id, quantidade, tipo_produto) VALUES ($1, $2, $3, 'MATERIAL')`,
                     [historicoId, item.produto_id, item.qtd_total]
@@ -6259,7 +6255,6 @@ router.post('/estoque/entrada-lote', async (req, res) => {
             } else if (item.tipo === 'UNIFORMES') {
                 for (const [tamanho, qtd] of Object.entries(item.grade)) {
                     if (qtd > 0) {
-                        // Para UNIFORMES, damos entrada na nova tabela com o tamanho específico
                         await client.query(
                             `INSERT INTO estoque_por_local (local_id, produto_id, tamanho, quantidade)
                              VALUES (37, $1, $2, $3)
@@ -6268,7 +6263,6 @@ router.post('/estoque/entrada-lote', async (req, res) => {
                             [item.produto_id, tamanho, qtd]
                         );
 
-                        // Registra no detalhe do histórico com o tamanho (inalterado)
                         await client.query(
                             `INSERT INTO historico_detalhes (historico_id, produto_id, quantidade, tamanho, tipo_produto) VALUES ($1, $2, $3, $4, 'UNIFORMES')`,
                             [historicoId, item.produto_id, qtd, tamanho]
@@ -6277,7 +6271,6 @@ router.post('/estoque/entrada-lote', async (req, res) => {
                 }
             }
         }
-        // --- FIM DO BLOCO DE CORREÇÃO ---
 
         await client.query('COMMIT');
         res.status(200).json({ success: true, message: "Estoque de consumo atualizado com sucesso." });
@@ -6858,46 +6851,26 @@ router.get('/escola/meu-estoque', verificarToken, async (req, res) => {
     }
 
     try {
-        // Esta query combina o estoque patrimonial e o de consumo em uma única visão
         const sql = `
-            -- Parte 1: Busca itens patrimoniais (individuais)
             SELECT
-                'PATRIMONIO' as tipo_item,
-                p.nome as produto,
-                ei.numero_serie as detalhe,
-                1 as quantidade,
-                ei.status,
-                ei.data_entrada
-            FROM estoque_individual ei
-            JOIN produtos p ON ei.produto_id = p.id
-            WHERE ei.local_id = $1
-
-            UNION ALL
-
-            -- Parte 2: Busca itens de consumo (UNIFORMES/MATERIAL)
-            SELECT
+                p.id,
                 p.tipo as tipo_item,
                 p.nome as produto,
-                epl.tamanho as detalhe,
-                epl.quantidade,
-                CASE WHEN epl.quantidade > 0 THEN 'DISPONIVEL' ELSE 'ESGOTADO' END as status,
-                -- A tabela estoque_por_local não tem data de entrada, usamos a data do pedido.
-                (SELECT p.data_recebimento FROM pedidos p 
-                 JOIN pedido_remessas pr ON pr.pedido_id = p.id 
-                 JOIN pedido_remessa_itens pri ON pri.remessa_id = pr.id 
-                 WHERE pri.produto_id = epl.produto_id AND p.local_destino_id = epl.local_id
-                 ORDER BY p.data_recebimento DESC LIMIT 1) as data_entrada
+                SUM(epl.quantidade) as quantidade,
+                CASE WHEN SUM(epl.quantidade) > 0 THEN 'DISPONIVEL' ELSE 'ESGOTADO' END as status,
+                json_agg(
+                    json_build_object('tamanho', epl.tamanho, 'quantidade', epl.quantidade)
+                ) AS grade
             FROM estoque_por_local epl
             JOIN produtos p ON epl.produto_id = p.id
             WHERE epl.local_id = $1 AND epl.quantidade > 0
-
-            -- Ordena o resultado final
-            ORDER BY produto, detalhe;
+            GROUP BY p.id, p.nome, p.tipo
+            ORDER BY produto;
         `;
         const { rows } = await db.query(sql, [localId]);
         res.json(rows);
     } catch (err) {
-        console.error("Erro ao consultar estoque local unificado:", err.message);
+        console.error("Erro ao consultar estoque local:", err.message);
         res.status(500).json({ error: "Erro interno ao buscar estoque." });
     }
 });

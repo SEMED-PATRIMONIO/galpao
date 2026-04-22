@@ -17592,7 +17592,6 @@ async function carregarConsultaEstoque() {
             .coluna-estoque { background: rgba(255, 255, 255, 0.05); border-radius: 15px; padding: 15px; border: 1px solid rgba(255,255,255,0.1); }
             .coluna-titulo { color: #00d4ff; font-size: 0.9rem; font-weight: bold; margin-bottom: 15px; border-bottom: 1px solid rgba(0,212,255,0.2); padding-bottom: 5px; text-transform: uppercase; }
             
-            /* Card como seletor total */
             .card-consulta { 
                 cursor: pointer; 
                 user-select: none; 
@@ -17664,7 +17663,26 @@ async function carregarConsultaEstoque() {
         const gerarCard = (p) => {
             const nivelBaixo = p.quantidade_estoque <= p.alerta_minimo;
             const isUniforme = p.tipo === 'UNIFORMES';
+            const isTenis = p.nome.toUpperCase().includes('TENIS');
             
+            // Lógica de ordenação da grade
+            let gradeOrdenada = p.grade || [];
+            if (isUniforme && !isTenis && gradeOrdenada.length > 0) {
+                const ordemDefinida = ['2', '4', '6', '8', '10', '12', '14', '16', 'PP', 'P', 'M', 'G', 'GG', 'EGG'];
+                gradeOrdenada = [...gradeOrdenada].sort((a, b) => {
+                    const idxA = ordemDefinida.indexOf(a.tamanho.toUpperCase());
+                    const idxB = ordemDefinida.indexOf(b.tamanho.toUpperCase());
+                    
+                    // Se ambos os tamanhos estão na lista de ordem definida
+                    if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+                    // Se apenas um está, ele vem primeiro
+                    if (idxA !== -1) return -1;
+                    if (idxB !== -1) return 1;
+                    // Caso contrário (tamanhos extras), ordem alfabética
+                    return a.tamanho.localeCompare(b.tamanho);
+                });
+            }
+
             return `
                 <div class="card-consulta glass-panel" 
                      onclick="gerenciarCliquesProduto(event, ${p.id}, '${p.nome}', ${isUniforme})"
@@ -17678,10 +17696,10 @@ async function carregarConsultaEstoque() {
                             <span style="font-weight: 900; color: ${nivelBaixo ? '#ff4d4d' : '#00d4ff'};">${p.quantidade_estoque}</span>
                         </div>
                     </div>
-                    ${isUniforme && p.grade && p.grade.length > 0 ? `
+                    ${isUniforme && gradeOrdenada.length > 0 ? `
                         <div id="grade-${p.id}" class="grade-expansivel" style="display:none; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1);">
                             <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(45px, 1fr)); gap: 8px;">
-                                ${p.grade.map(g => `
+                                ${gradeOrdenada.map(g => `
                                     <div style="background: rgba(255,255,255,0.1); padding: 4px; border-radius: 5px; text-align: center;">
                                         <small style="display: block; font-size: 0.55rem; color: #00d4ff;">${g.tamanho}</small>
                                         <strong style="font-size: 0.8rem; color: #ffffff;">${g.quantidade}</strong>
@@ -17698,7 +17716,6 @@ async function carregarConsultaEstoque() {
         divMateriais.innerHTML = materiais.length ? materiais.map(gerarCard).join('') : '<p class="empty-msg">Sem materiais</p>';
     };
 
-    // Restante do código do fetch e busca...
     try {
         const res = await fetch(`${API_URL}/estoque/consulta-exclusiva`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }

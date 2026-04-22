@@ -18096,7 +18096,7 @@ async function abrirTelaSaidaPedido() {
 
                         ${!isUniforme ? `
                             <div style="text-align: right;">
-                                <small style="display: block; font-size: 0.65rem; opacity: 0.6; margin-bottom: 5px;">QTD SAÍDA</small>
+                                <small style="display: block; font-size: 0.50rem; opacity: 0.6; margin-bottom: 5px;">QTD SAÍDA</small>
                                 <input type="number" class="input-saida-qtd" data-id="${p.id}" data-tipo="MATERIAL" data-max="${p.quantidade_estoque}"
                                        onchange="validarEstoqueMax(this)"
                                        style="width: 80px; background: rgba(0,0,0,0.3); border: 1px solid #ff4d4d; color: white; padding: 8px; border-radius: 8px; text-align: center;"
@@ -18115,8 +18115,8 @@ async function abrirTelaSaidaPedido() {
                             <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px;">
                                 ${p.grade.map(g => `
                                     <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; text-align: center;">
-                                        <small style="display: block; font-size: 0.6rem; color: #00d4ff;">${g.tamanho}</small>
-                                        <small style="display: block; font-size: 0.55rem; color: #777;">Saldo: ${g.quantidade}</small>
+                                        <small style="display: block; font-size: 0.50rem; color: #00d4ff;">${g.tamanho}</small>
+                                        <small style="display: block; font-size: 0.50rem; color: #777;">Saldo: ${g.quantidade}</small>
                                         <input type="number" class="input-saida-qtd" 
                                                data-id="${p.id}" data-tipo="UNIFORMES" data-tamanho="${g.tamanho}" data-max="${g.quantidade}"
                                                oninput="atualizarTotalGradeSaida(${p.id})" onchange="validarEstoqueMax(this)"

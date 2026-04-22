@@ -2525,10 +2525,10 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     background: transparent; 
     border: none; 
     border-bottom: 1px solid #10b981; 
-    color: white; 
+    color: black; 
     text-align: center; 
     outline: none; 
-    font-size: 0.75rem; /* FONTE BEM MENOR */
+    font-size: 0.50rem; /* FONTE BEM MENOR */
     padding: 2px 0;
 }
 

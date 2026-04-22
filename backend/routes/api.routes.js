@@ -6,6 +6,8 @@ const XLSX = require('xlsx');
 const pdf = require('html-pdf'); // Instale com: npm install html-pdf
 const path = require('path');
 const fs = require('fs');
+const EXCLUSIVOS_UNIFORME_MASCULINO = ['CALCA MAS', 'SHORT'];
+const EXCLUSIVOS_UNIFORME_FEMININO  = ['CALCA FEM', 'SHORT SAIA', 'SAIA'];
 
 // ALTERAR STATUS DO USUÁRIO (Ativar/Inativar)
 router.patch('/usuarios/:id/status', verificarToken, async (req, res) => {
@@ -8664,91 +8666,266 @@ router.get('/turma/:id/grade-entrega-material', verificarToken, async (req, res)
 });
 
 router.get('/relatorios/alunos-status', verificarToken, async (req, res) => {
-    const localId = req.user.local_id;
-    const { tipoProduto, status } = req.query;
+    const localId    = req.user.local_id;
+    const tipoProduto = (req.query.tipoProduto || '').trim().toUpperCase();
+    const status      = (req.query.status      || '').trim().toLowerCase();
 
     if (!localId || !tipoProduto || !status) {
-        return res.status(400).json({ error: "Parâmetros 'tipoProduto' e 'status' são obrigatórios." });
+        return res.status(400).json({
+            error: "Parâmetros 'tipoProduto' e 'status' são obrigatórios."
+        });
     }
 
     try {
-        let query;
-        if (status === 'pendente') {
-            // Busca todos os alunos que NÃO estão na lista de entregas para aquele tipo de produto.
-            query = `
-                SELECT a.nome as aluno_nome, t.nome as turma_nome
-                FROM alunos a
-                JOIN turmas t ON a.turma_id = t.id
-                WHERE a.local_id = $1 AND a.id NOT IN (
-                    SELECT DISTINCT ea.aluno_id
+
+        // ─────────────────────────────────────────────────────
+        // MATERIAL — lógica simples: recebeu ou não recebeu
+        // ─────────────────────────────────────────────────────
+        if (tipoProduto === 'MATERIAL') {
+
+            if (!['pendente', 'completo'].includes(status)) {
+                return res.status(400).json({
+                    error: "Para MATERIAL os status válidos são 'pendente' e 'completo'."
+                });
+            }
+
+            const query = `
+                WITH alunos_base AS (
+                    SELECT
+                        a.id,
+                        a.nome                          AS aluno_nome,
+                        COALESCE(t.nome, 'SEM TURMA')   AS turma_nome
+                    FROM alunos a
+                    LEFT JOIN turmas t ON a.turma_id = t.id
+                    WHERE a.local_id = $1
+                ),
+                entregas_material AS (
+                    SELECT
+                        ea.aluno_id,
+                        array_to_string(
+                            array_agg(DISTINCT p.nome ORDER BY p.nome), ', '
+                        )                               AS produto_recebido,
+                        MAX(ea.data_entrega)            AS data_entrega
                     FROM entregas_alunos ea
                     JOIN produtos p ON ea.produto_id = p.id
-                    WHERE p.tipo = $2
+                    WHERE p.tipo = 'MATERIAL'
+                    GROUP BY ea.aluno_id
                 )
-                ORDER BY t.nome, a.nome;
+                SELECT
+                    ab.aluno_nome,
+                    ab.turma_nome,
+                    em.produto_recebido,
+                    em.data_entrega
+                FROM alunos_base ab
+                LEFT JOIN entregas_material em ON em.aluno_id = ab.id
+                WHERE
+                    ($2 = 'pendente'  AND em.aluno_id IS NULL)
+                    OR
+                    ($2 = 'completo'  AND em.aluno_id IS NOT NULL)
+                ORDER BY ab.turma_nome, ab.aluno_nome;
             `;
-        } else { // status === 'completo'
-            // Busca todos os alunos que JÁ estão na lista de entregas.
-            query = `
-                SELECT a.nome as aluno_nome, t.nome as turma_nome, p.nome as produto_recebido, ea.data_entrega
-                FROM entregas_alunos ea
-                JOIN alunos a ON ea.aluno_id = a.id
-                JOIN turmas t ON a.turma_id = t.id
-                JOIN produtos p ON ea.produto_id = p.id
-                WHERE a.local_id = $1 AND p.tipo = $2
-                ORDER BY t.nome, a.nome;
-            `;
+
+            const { rows } = await db.query(query, [localId, status]);
+            return res.json(rows);
         }
 
-        const { rows } = await db.query(query, [localId, tipoProduto]);
-        res.json(rows);
+        // ─────────────────────────────────────────────────────
+        // UNIFORMES — três classificações:
+        //   completo | parcial | pendente
+        // ─────────────────────────────────────────────────────
+        if (tipoProduto === 'UNIFORMES') {
+
+            if (!['pendente', 'parcial', 'completo'].includes(status)) {
+                return res.status(400).json({
+                    error: "Para UNIFORMES os status válidos são 'pendente', 'parcial' e 'completo'."
+                });
+            }
+
+            const regras = await obterRegrasUniforme();
+
+            const query = `
+                WITH alunos_base AS (
+                    SELECT
+                        a.id,
+                        a.nome                          AS aluno_nome,
+                        COALESCE(t.nome, 'SEM TURMA')   AS turma_nome
+                    FROM alunos a
+                    LEFT JOIN turmas t ON a.turma_id = t.id
+                    WHERE a.local_id = $1
+                ),
+                entregas_uniforme AS (
+                    SELECT
+                        ea.aluno_id,
+                        array_agg(
+                            DISTINCT UPPER(TRIM(p.nome))
+                            ORDER BY UPPER(TRIM(p.nome))
+                        )                               AS itens_recebidos,
+                        array_to_string(
+                            array_agg(DISTINCT p.nome ORDER BY p.nome), ', '
+                        )                               AS produto_recebido,
+                        MAX(ea.data_entrega)            AS data_entrega
+                    FROM entregas_alunos ea
+                    JOIN produtos p ON ea.produto_id = p.id
+                    WHERE p.tipo = 'UNIFORMES'
+                    GROUP BY ea.aluno_id
+                ),
+                classificacao AS (
+                    SELECT
+                        ab.aluno_nome,
+                        ab.turma_nome,
+                        COALESCE(eu.produto_recebido, '')       AS produto_recebido,
+                        eu.data_entrega,
+                        CASE
+                            -- Nenhum item recebido
+                            WHEN COALESCE(cardinality(eu.itens_recebidos), 0) = 0
+                                THEN 'pendente'
+
+                            -- Kit masculino completo:
+                            --   contém todos os itens do kit masculino
+                            --   E não contém nenhum item exclusivo feminino
+                            WHEN (
+                                eu.itens_recebidos @> $2::text[]
+                                AND NOT (eu.itens_recebidos && $3::text[])
+                            )
+                                THEN 'completo'
+
+                            -- Kit feminino completo:
+                            --   contém todos os itens do kit feminino
+                            --   E não contém nenhum item exclusivo masculino
+                            WHEN (
+                                eu.itens_recebidos @> $4::text[]
+                                AND NOT (eu.itens_recebidos && $5::text[])
+                            )
+                                THEN 'completo'
+
+                            -- Recebeu algo mas não completou nenhum kit válido
+                            ELSE 'parcial'
+                        END AS status_uniforme
+                    FROM alunos_base ab
+                    LEFT JOIN entregas_uniforme eu ON eu.aluno_id = ab.id
+                )
+                SELECT
+                    aluno_nome,
+                    turma_nome,
+                    produto_recebido,
+                    data_entrega
+                FROM classificacao
+                WHERE status_uniforme = $6
+                ORDER BY turma_nome, aluno_nome;
+            `;
+
+            const { rows } = await db.query(query, [
+                localId,
+                regras.kitMasculino,            // $2
+                regras.invalidosKitMasculino,   // $3
+                regras.kitFeminino,             // $4
+                regras.invalidosKitFeminino,    // $5
+                status                          // $6
+            ]);
+
+            return res.json(rows);
+        }
+
+        return res.status(400).json({ error: 'tipoProduto inválido.' });
 
     } catch (err) {
-        console.error(`Erro no relatório de status de alunos [${tipoProduto}/${status}]:`, err.message);
+        console.error(
+            `Erro no relatório de status [${tipoProduto}/${status}]:`,
+            err.message
+        );
         res.status(500).json({ error: "Erro interno ao gerar relatório de alunos." });
     }
 });
 
 router.get('/relatorios/consolidado-geral', verificarToken, async (req, res) => {
-    // Adicionar verificação de perfil de administrador se necessário
-    
     try {
+        const regras = await obterRegrasUniforme();
+
         const query = `
-            WITH EntregasPorTipo AS (
-                SELECT
-                    a.local_id,
-                    p.tipo,
-                    COUNT(DISTINCT ea.aluno_id) as total_recebido
-                FROM entregas_alunos ea
-                JOIN produtos p ON ea.produto_id = p.id
-                JOIN alunos a ON ea.aluno_id = a.id
-                GROUP BY a.local_id, p.tipo
-            ),
-            TotaisAlunos AS (
+            WITH turmas_por_local AS (
                 SELECT
                     local_id,
-                    COUNT(*) as total_alunos
-                FROM alunos
+                    COUNT(*)    AS total_turmas
+                FROM turmas
                 GROUP BY local_id
+            ),
+            alunos_base AS (
+                SELECT
+                    a.id        AS aluno_id,
+                    a.local_id
+                FROM alunos a
+            ),
+            entregas_por_aluno AS (
+                SELECT
+                    ab.aluno_id,
+                    ab.local_id,
+                    -- Array de itens de UNIFORMES recebidos (uppercase, sem espaços)
+                    COALESCE(
+                        array_agg(
+                            DISTINCT UPPER(TRIM(p.nome))
+                            ORDER BY UPPER(TRIM(p.nome))
+                        ) FILTER (WHERE p.tipo = 'UNIFORMES'),
+                        ARRAY[]::text[]
+                    )           AS itens_uniforme,
+                    -- Qtd de kits de MATERIAL recebidos
+                    COUNT(DISTINCT p.id)
+                        FILTER (WHERE p.tipo = 'MATERIAL')
+                                AS qtd_material
+                FROM alunos_base ab
+                LEFT JOIN entregas_alunos ea ON ea.aluno_id = ab.aluno_id
+                LEFT JOIN produtos p         ON ea.produto_id = p.id
+                GROUP BY ab.aluno_id, ab.local_id
+            ),
+            classificacao AS (
+                SELECT
+                    epa.aluno_id,
+                    epa.local_id,
+                    CASE
+                        WHEN COALESCE(cardinality(epa.itens_uniforme), 0) = 0
+                            THEN 'pendente'
+                        WHEN (
+                            epa.itens_uniforme @> $1::text[]
+                            AND NOT (epa.itens_uniforme && $2::text[])
+                        ) OR (
+                            epa.itens_uniforme @> $3::text[]
+                            AND NOT (epa.itens_uniforme && $4::text[])
+                        )
+                            THEN 'completo'
+                        ELSE 'parcial'
+                    END         AS status_uniforme,
+                    CASE
+                        WHEN epa.qtd_material > 0 THEN 'completo'
+                        ELSE 'pendente'
+                    END         AS status_material
+                FROM entregas_por_aluno epa
             )
             SELECT
-                l.id as local_id,
-                l.nome as local_nome,
-                COALESCE(ta.total_alunos, 0) as total_alunos,
-                (SELECT COUNT(*) FROM turmas t WHERE t.local_id = l.id) as total_turmas,
-                COALESCE(e_uni.total_recebido, 0) as uniformes_recebidos,
-                (COALESCE(ta.total_alunos, 0) - COALESCE(e_uni.total_recebido, 0)) as uniformes_pendentes,
-                COALESCE(e_mat.total_recebido, 0) as material_recebido,
-                (COALESCE(ta.total_alunos, 0) - COALESCE(e_mat.total_recebido, 0)) as material_pendentes
+                l.id                                                        AS local_id,
+                l.nome                                                      AS local_nome,
+                COALESCE(tpl.total_turmas, 0)                               AS total_turmas,
+                COUNT(c.aluno_id)                                           AS total_alunos,
+                COUNT(*) FILTER (WHERE c.status_uniforme = 'completo')      AS uniformes_recebidos,
+                COUNT(*) FILTER (WHERE c.status_uniforme = 'parcial')       AS uniformes_parciais,
+                COUNT(*) FILTER (WHERE c.status_uniforme = 'pendente')      AS uniformes_pendentes,
+                COUNT(*) FILTER (WHERE c.status_material = 'completo')      AS material_recebido,
+                COUNT(*) FILTER (WHERE c.status_material = 'pendente')      AS material_pendentes
             FROM locais l
-            LEFT JOIN TotaisAlunos ta ON ta.local_id = l.id
-            LEFT JOIN EntregasPorTipo e_uni ON e_uni.local_id = l.id AND e_uni.tipo = 'UNIFORMES'
-            LEFT JOIN EntregasPorTipo e_mat ON e_mat.local_id = l.id AND e_mat.tipo = 'MATERIAL'
-            WHERE l.id != 37 -- Exclui o Almoxarifado Central
+            LEFT JOIN turmas_por_local tpl  ON tpl.local_id = l.id
+            LEFT JOIN classificacao c       ON c.local_id   = l.id
+            WHERE l.id != 37
+            GROUP BY l.id, l.nome, tpl.total_turmas
             ORDER BY l.nome;
         `;
-        const { rows } = await db.query(query);
+
+        const { rows } = await db.query(query, [
+            regras.kitMasculino,            // $1
+            regras.invalidosKitMasculino,   // $2
+            regras.kitFeminino,             // $3
+            regras.invalidosKitFeminino     // $4
+        ]);
+
         res.json(rows);
+
     } catch (err) {
         console.error("Erro no relatório consolidado geral:", err.message);
         res.status(500).json({ error: "Erro interno ao gerar relatório consolidado." });
@@ -8812,50 +8989,103 @@ router.get('/estoque/historico-produto/:id', verificarToken, async (req, res) =>
 
 router.get('/relatorios/status-turmas-geral', verificarToken, async (req, res) => {
     const localId = req.user.local_id;
-    if (!localId) return res.status(403).json({ error: "Usuário sem local associado." });
+
+    if (!localId) {
+        return res.status(403).json({ error: "Usuário sem local associado." });
+    }
 
     try {
-        // Contar quantos itens formam o kit completo de UNIFORMES.
-        const kitUniformesCountRes = await db.query("SELECT COUNT(id) as total FROM produtos WHERE tipo = 'UNIFORMES' AND local_id = 37");
-        const totalKitUniformes = parseInt(kitUniformesCountRes.rows[0]?.total, 10) || 1; // Usa 1 para evitar divisão por zero
+        const regras = await obterRegrasUniforme();
 
-        // Consulta principal que agrega todos os dados de uma vez usando subconsultas correlacionadas.
         const query = `
+            WITH alunos_base AS (
+                SELECT
+                    a.id AS aluno_id,
+                    a.turma_id
+                FROM alunos a
+                WHERE a.local_id = $1
+            ),
+            entregas_por_aluno AS (
+                SELECT
+                    ab.aluno_id,
+                    ab.turma_id,
+                    COALESCE(
+                        array_agg(
+                            DISTINCT UPPER(TRIM(p.nome))
+                            ORDER BY UPPER(TRIM(p.nome))
+                        ) FILTER (WHERE p.tipo = 'UNIFORMES'),
+                        ARRAY[]::text[]
+                    ) AS itens_uniforme,
+                    COUNT(DISTINCT p.id) FILTER (WHERE p.tipo = 'MATERIAL') AS qtd_material
+                FROM alunos_base ab
+                LEFT JOIN entregas_alunos ea ON ea.aluno_id = ab.aluno_id
+                LEFT JOIN produtos p ON p.id = ea.produto_id
+                GROUP BY ab.aluno_id, ab.turma_id
+            ),
+            classificacao AS (
+                SELECT
+                    epa.aluno_id,
+                    epa.turma_id,
+                    CASE
+                        WHEN COALESCE(cardinality(epa.itens_uniforme), 0) = 0 THEN 'pendente'
+                        WHEN (
+                            epa.itens_uniforme @> $2::text[]
+                            AND NOT (epa.itens_uniforme && $3::text[])
+                        ) OR (
+                            epa.itens_uniforme @> $4::text[]
+                            AND NOT (epa.itens_uniforme && $5::text[])
+                        ) THEN 'completo'
+                        ELSE 'parcial'
+                    END AS status_uniforme,
+                    CASE
+                        WHEN epa.qtd_material > 0 THEN 'completo'
+                        ELSE 'pendente'
+                    END AS status_material
+                FROM entregas_por_aluno epa
+            )
             SELECT
-                t.id as turma_id,
-                t.nome as turma_nome,
-                -- Total de Alunos na Turma
-                (SELECT COUNT(*) FROM alunos a WHERE a.turma_id = t.id) as total_alunos,
-                
-                -- Contagem de Alunos com Kit UNIFORMES Completo
-                (SELECT COUNT(DISTINCT sub.aluno_id)
-                    FROM (
-                        SELECT ea.aluno_id
-                        FROM entregas_alunos ea
-                        JOIN produtos p ON ea.produto_id = p.id
-                        JOIN alunos a_sub ON ea.aluno_id = a_sub.id
-                        WHERE a_sub.turma_id = t.id AND p.tipo = 'UNIFORMES'
-                        GROUP BY ea.aluno_id
-                        HAVING COUNT(DISTINCT ea.produto_id) >= $2
-                    ) as sub
-                ) as uniformes_completos,
+                t.id AS turma_id,
+                t.nome AS turma_nome,
+                COUNT(ab.aluno_id) AS total_alunos,
 
-                -- Contagem de Alunos que receberam o Kit MATERIAL
-                (SELECT COUNT(DISTINCT ea.aluno_id)
-                    FROM entregas_alunos ea
-                    JOIN produtos p ON ea.produto_id = p.id
-                    JOIN alunos a_sub ON ea.aluno_id = a_sub.id
-                    WHERE a_sub.turma_id = t.id AND p.tipo = 'MATERIAL'
-                ) as material_recebido
+                COUNT(c.aluno_id) FILTER (
+                    WHERE c.status_uniforme = 'completo'
+                ) AS uniformes_completos,
+
+                COUNT(c.aluno_id) FILTER (
+                    WHERE c.status_uniforme = 'parcial'
+                ) AS uniformes_parciais,
+
+                COUNT(c.aluno_id) FILTER (
+                    WHERE c.status_uniforme = 'pendente'
+                ) AS uniformes_pendentes,
+
+                COUNT(c.aluno_id) FILTER (
+                    WHERE c.status_material = 'completo'
+                ) AS material_recebido,
+
+                COUNT(c.aluno_id) FILTER (
+                    WHERE c.status_material = 'pendente'
+                ) AS material_pendentes
 
             FROM turmas t
+            LEFT JOIN alunos_base ab ON ab.turma_id = t.id
+            LEFT JOIN classificacao c ON c.aluno_id = ab.aluno_id
             WHERE t.local_id = $1
+            GROUP BY t.id, t.nome
             ORDER BY t.nome;
         `;
-        
-        const { rows } = await db.query(query, [localId, totalKitUniformes]);
+
+        const { rows } = await db.query(query, [
+            localId,
+            regras.kitMasculino,            // $2
+            regras.invalidosKitMasculino,   // $3
+            regras.kitFeminino,             // $4
+            regras.invalidosKitFeminino     // $5
+        ]);
+
         res.json(rows);
-        
+
     } catch (err) {
         console.error("Erro no relatório de status por turma GERAL:", err.message);
         res.status(500).json({ error: "Erro interno ao gerar relatório geral." });
@@ -9040,5 +9270,29 @@ router.get('/estoque/alertas/prontos-transporte', verificarToken, async (req, re
         res.status(500).json({ error: "Erro ao verificar prontos." });
     }
 });
+
+async function obterRegrasUniforme() {
+    const { rows } = await db.query(`
+        SELECT DISTINCT UPPER(TRIM(nome)) AS nome
+        FROM produtos
+        WHERE tipo = 'UNIFORMES'
+        ORDER BY nome
+    `);
+
+    const catalogo = rows.map(r => r.nome);
+
+    const masculinos = EXCLUSIVOS_UNIFORME_MASCULINO.filter(nome => catalogo.includes(nome));
+    const femininos  = EXCLUSIVOS_UNIFORME_FEMININO.filter(nome => catalogo.includes(nome));
+    const comuns     = catalogo.filter(nome =>
+        !masculinos.includes(nome) && !femininos.includes(nome)
+    );
+
+    return {
+        kitMasculino:          [...comuns, ...masculinos],
+        kitFeminino:           [...comuns, ...femininos],
+        invalidosKitMasculino: femininos,   // femininos são inválidos no kit masc.
+        invalidosKitFeminino:  masculinos   // masculinos são inválidos no kit fem.
+    };
+}
 
 module.exports = router;

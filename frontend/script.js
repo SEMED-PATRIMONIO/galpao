@@ -17332,7 +17332,6 @@ async function abrirTelaEntrada() {
         const listaHtml = document.getElementById('lista-entrada-produtos');
         listaHtml.innerHTML = '';
 
-        // Segue a lógica de ordenação que você já usa [cite: 110]
         const listaOrdenada = produtos.sort((a, b) => {
             if (a.tipo === 'MATERIAL' && b.tipo !== 'MATERIAL') return -1;
             if (a.tipo !== 'MATERIAL' && b.tipo === 'MATERIAL') return 1;
@@ -17341,11 +17340,26 @@ async function abrirTelaEntrada() {
 
         listaOrdenada.forEach(p => {
             const isUniforme = p.tipo === 'UNIFORMES';
-            const corTag = p.tipo === 'MATERIAL' ? '#10b981' : '#00d4ff'; // Verde para Material, Azul para Uniforme
+            const isTenis = p.nome.toUpperCase().includes('TENIS');
+            const corTag = p.tipo === 'MATERIAL' ? '#10b981' : '#00d4ff';
             
+            // Lógica de ordenação da grade para Uniformes (exceto tênis)
+            let gradeOrdenada = p.grade || [];
+            if (isUniforme && !isTenis && gradeOrdenada.length > 0) {
+                const ordemDefinida = ['2', '4', '6', '8', '10', '12', '14', '16', 'PP', 'P', 'M', 'G', 'GG', 'EGG'];
+                gradeOrdenada = [...gradeOrdenada].sort((a, b) => {
+                    const idxA = ordemDefinida.indexOf(String(a.tamanho).toUpperCase());
+                    const idxB = ordemDefinida.indexOf(String(b.tamanho).toUpperCase());
+                    if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+                    if (idxA !== -1) return -1;
+                    if (idxB !== -1) return 1;
+                    return String(a.tamanho).localeCompare(String(b.tamanho));
+                });
+            }
+
             listaHtml.innerHTML += `
                 <div class="card-entrada glass-panel animate__animated animate__fadeInUp" 
-                     style="background: rgba(255,255,255,0.05); margin-bottom: 12px; padding: 18px; border-radius: 15px; color: white; border: 1px solid rgba(255,255,255,0.1);">
+                    style="background: rgba(255,255,255,0.05); margin-bottom: 12px; padding: 18px; border-radius: 15px; color: white; border: 1px solid rgba(255,255,255,0.1);">
                     
                     <div style="display: flex; justify-content: space-between; align-items: center;" 
                          ${isUniforme ? `onclick="toggleGrade(${p.id})"` : ''}>
@@ -17375,13 +17389,13 @@ async function abrirTelaEntrada() {
                     ${isUniforme ? `
                         <div id="grade-${p.id}" class="grade-expansivel" style="display:none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);">
                             <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px;">
-                                ${p.grade.map(g => `
+                                ${gradeOrdenada.map(g => `
                                     <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; text-align: center; border: 1px solid rgba(255,255,255,0.05);">
                                         <small style="display: block; font-size: 0.6rem; color: #00d4ff; margin-bottom: 5px;">${g.tamanho}</small>
                                         <input type="number" class="input-entrada-qtd" 
-                                               data-id="${p.id}" data-tipo="UNIFORMES" data-tamanho="${g.tamanho}"
-                                               style="width: 100%; background: transparent; border: none; border-bottom: 1px solid #00d4ff; color: white; text-align: center;"
-                                               placeholder="0" min="0">
+                                                data-id="${p.id}" data-tipo="UNIFORMES" data-tamanho="${g.tamanho}"
+                                                style="width: 100%; background: transparent; border: none; border-bottom: 1px solid #00d4ff; color: white; text-align: center;"
+                                                placeholder="0" min="0">
                                         <small style="display: block; font-size: 0.55rem; opacity: 0.4; margin-top: 4px;">Atual: ${g.quantidade}</small>
                                     </div>
                                 `).join('')}
@@ -18319,73 +18333,122 @@ window.abrirModalInvestigarItens = async function(pedidoId) {
 async function telaEscolaConsultaEstoque() {
     const container = document.getElementById('app-content');
     const localId = localStorage.getItem('local_id');
-    
-    container.innerHTML = '<div class="spinner" style="margin: 50px auto;"></div>';
+    if (!container) return;
+
+    container.innerHTML = `
+        <style>
+            /* Layout ajustado para 2 colunas */
+            .estoque-colunas { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 25px; padding: 10px; }
+            .coluna-estoque { background: rgba(255, 255, 255, 0.03); border-radius: 15px; padding: 20px; border: 1px solid rgba(255,255,255,0.08); }
+            .coluna-titulo { color: #00d4ff; font-size: 1rem; font-weight: bold; margin-bottom: 20px; border-bottom: 2px solid rgba(0,212,255,0.2); padding-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; }
+            .card-estoque { background: rgba(255,255,255,0.05); border-radius: 12px; padding: 15px; margin-bottom: 12px; border: 1px solid rgba(255,255,255,0.1); transition: transform 0.2s; }
+            .card-estoque:hover { background: rgba(255,255,255,0.08); transform: translateY(-2px); }
+            .badge-status { padding: 3px 10px; border-radius: 12px; font-size: 0.65rem; font-weight: bold; text-transform: uppercase; }
+        </style>
+
+        <div class="painel-vidro" style="max-width: 1100px; margin: auto; padding: 25px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:25px;">
+                <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                <h2 style="color:white; margin:0; font-size:1.3rem; letter-spacing: 1px;">📦 MEU ESTOQUE DE CONSUMO</h2>
+                <div style="width: 80px;"></div>
+            </div>
+
+            <div style="margin-bottom:25px;">
+                <input type="text" id="busca-estoque-escola" placeholder="🔍 Filtrar produtos (ex: Camisa, Lápis...)" 
+                       style="width:100%; padding:14px; border-radius:10px; border:1px solid rgba(255,255,255,0.1); background:rgba(0,0,0,0.3); color:white; font-size: 1rem;">
+            </div>
+
+            <div class="estoque-colunas" id="container-categorias">
+                </div>
+        </div>
+    `;
 
     try {
         const res = await fetch(`${API_URL}/escola/meu-estoque?localId=${localId}`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
-        const estoque = await res.json();
+        const todosItens = await res.json();
 
-        // Mapeia os tipos de item para cores para uma melhor visualização
-        const coresTipo = {
-            PATRIMONIO: '#eab308',
-            UNIFORMES: '#00d4ff',
-            MATERIAL: '#10b981'
+        const renderizarCategorias = (itens) => {
+            const container = document.getElementById('container-categorias');
+            
+            const categorias = {
+                UNIFORMES: itens.filter(i => i.tipo_item === 'UNIFORMES'),
+                MATERIAL: itens.filter(i => i.tipo_item === 'MATERIAL')
+            };
+
+            let html = '';
+
+            const gerarCard = (p) => {
+                const isUniforme = p.tipo_item === 'UNIFORMES';
+                const isTenis = p.produto.toUpperCase().includes('TENIS');
+                
+                let gradeOrdenada = p.grade || [];
+                if (isUniforme && !isTenis && gradeOrdenada.length > 0) {
+                    const ordem = ['2', '4', '6', '8', '10', '12', '14', '16', 'PP', 'P', 'M', 'G', 'GG', 'EGG'];
+                    gradeOrdenada.sort((a, b) => {
+                        const idxA = ordem.indexOf(String(a.tamanho).toUpperCase());
+                        const idxB = ordem.indexOf(String(b.tamanho).toUpperCase());
+                        if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+                        if (idxA !== -1) return -1;
+                        if (idxB !== -1) return 1;
+                        return String(a.tamanho).localeCompare(String(b.tamanho));
+                    });
+                }
+
+                return `
+                    <div class="card-estoque" ${isUniforme ? `onclick="toggleGrade(${p.id})"` : ''} style="cursor:${isUniforme ? 'pointer' : 'default'}">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <div>
+                                <strong style="color:white; display:block; font-size:1rem;">${p.produto.toUpperCase()}</strong>
+                                <small style="color:rgba(255,255,255,0.5)">Qtd Total: ${p.quantidade}</small>
+                            </div>
+                            <span class="badge-status" style="background:${p.status === 'DISPONIVEL' ? '#064e3b' : '#7f1d1d'}; color:#34d399;">
+                                ${p.status}
+                            </span>
+                        </div>
+                        ${isUniforme ? `
+                            <div id="grade-${p.id}" style="display:none; margin-top:12px; border-top:1px solid rgba(255,255,255,0.1); padding-top:12px;">
+                                <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(50px, 1fr)); gap:8px;">
+                                    ${gradeOrdenada.map(g => `
+                                        <div style="text-align:center; background:rgba(0,0,0,0.4); padding:6px; border-radius:6px; border: 1px solid rgba(255,255,255,0.05);">
+                                            <small style="color:#00d4ff; display:block; font-size:0.65rem; margin-bottom:2px;">${g.tamanho}</small>
+                                            <strong style="color:white; font-size:0.9rem;">${g.quantidade}</strong>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            };
+
+            // Coluna Uniformes
+            html += `<div class="coluna-estoque">
+                <div class="coluna-titulo">👕 UNIFORMES</div>
+                ${categorias.UNIFORMES.map(gerarCard).join('') || '<p style="opacity:0.4; font-size:0.85rem; text-align:center; padding:20px;">Nenhum uniforme em estoque.</p>'}
+            </div>`;
+
+            // Coluna Materiais
+            html += `<div class="coluna-estoque">
+                <div class="coluna-titulo">📦 MATERIAIS</div>
+                ${categorias.MATERIAL.map(gerarCard).join('') || '<p style="opacity:0.4; font-size:0.85rem; text-align:center; padding:20px;">Nenhum material em estoque.</p>'}
+            </div>`;
+
+            container.innerHTML = html;
         };
 
-        container.innerHTML = `
-            <div class="painel-vidro" style="max-width: 1000px; margin: auto; padding: 25px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                    <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
-                    <h2 style="color:white; margin:0; font-size:1.2rem;">📦 MEU ESTOQUE DISPONÍVEL</h2>
-                </div>
+        renderizarCategorias(todosItens);
 
-                <div style="margin-bottom:20px;">
-                    <input type="text" id="busca-estoque-escola" placeholder="🔍 Digite para filtrar..." 
-                           style="width:100%; padding:12px; border-radius:8px; border:1px solid rgba(255,255,255,0.2); background:rgba(0,0,0,0.2); color:white;"
-                           onkeyup="filtrarTabelaEstoque()">
-                </div>
+        document.getElementById('busca-estoque-escola').addEventListener('input', (e) => {
+            const termo = e.target.value.toUpperCase();
+            const filtrados = todosItens.filter(i => i.produto.toUpperCase().includes(termo));
+            renderizarCategorias(filtrados);
+        });
 
-                <div style="background:rgba(0,0,0,0.2); border-radius:15px; overflow:hidden;">
-                    <table id="tabela-estoque-escola" style="width:100%; border-collapse:collapse; color:white;">
-                        <thead>
-                            <tr style="background:rgba(255,255,255,0.05); text-align:left; font-size:0.8rem; color:rgba(255,255,255,0.5);">
-                                <th style="padding:15px;">PRODUTO</th>
-                                <th style="padding:15px;">DETALHE (Série/Tamanho)</th>
-                                <th style="padding:15px; text-align:center;">QTD</th>
-                                <th style="padding:15px;">STATUS</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${estoque.length === 0 ? `<tr><td colspan="4" style="padding:40px; text-align:center; opacity:0.5;">Nenhum item em estoque no momento.</td></tr>` : 
-                            estoque.map(item => `
-                                <tr class="linha-estoque">
-                                    <td style="padding:15px; font-weight:bold;">
-                                        <span style="display:block;">${item.produto.toUpperCase()}</span>
-                                        <span style="font-size: 0.7rem; background: ${coresTipo[item.tipo_item] || '#777'}; padding: 2px 6px; border-radius: 4px; color: #001a2c;">
-                                            ${item.tipo_item}
-                                        </span>
-                                    </td>
-                                    <td style="padding:15px; font-family:monospace; color:#fbbf24;">${item.detalhe || 'N/A'}</td>
-                                    <td style="padding:15px; text-align:center; font-weight:bold; font-size:1.1rem;">${item.quantidade}</td>
-                                    <td style="padding:15px;">
-                                        <span style="background:${item.status === 'DISPONIVEL' ? '#064e3b' : '#7f1d1d'}; 
-                                                     color:${item.status === 'DISPONIVEL' ? '#34d399' : '#f87171'}; 
-                                                     padding:4px 10px; border-radius:20px; font-size:0.7rem; font-weight:bold;">
-                                            ${item.status}
-                                        </span>
-                                    </td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        `;
     } catch (err) {
-        notificar("Erro ao carregar estoque: " + err.message, "erro");
+        console.error(err);
+        notificar("Erro ao carregar estoque.", "erro");
     }
 }
 

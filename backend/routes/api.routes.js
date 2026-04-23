@@ -9477,10 +9477,10 @@ router.get('/remessas/:id/romaneio-detalhado', async (req, res) => {
                 p.data_saida,
                 p.tipo_pedido,
                 p.volumes,
-                l.nome_oficial AS escola_nome,
+                -- COALESCE garante que se nome_oficial for nulo, use o nome. Se ambos forem nulos, usa 'Local não identificado'
+                COALESCE(l.nome_oficial, l.nome, 'Local não identificado') AS destino_final,
                 u_origem.nome AS solicitante,
                 u_autoriza.nome AS quem_autorizou,
-                -- Agrupando os itens em um JSON para facilitar o consumo no front
                 (
                     SELECT json_agg(json_build_object(
                         'produto_nome', prod.nome,
@@ -9493,7 +9493,8 @@ router.get('/remessas/:id/romaneio-detalhado', async (req, res) => {
                 ) AS itens
             FROM pedido_remessas r
             JOIN pedidos p ON r.pedido_id = p.id
-            JOIN locais l ON p.local_destino_id = l.id
+            -- LEFT JOIN aqui é mais seguro: se o destino sumir por erro humano, a rota não quebra (retorna nulo mas não dá erro 500)
+            LEFT JOIN locais l ON p.local_destino_id = l.id
             LEFT JOIN usuarios u_origem ON p.usuario_origem_id = u_origem.id
             LEFT JOIN usuarios u_autoriza ON p.autorizado_por = u_autoriza.id
             WHERE r.id = $1;
@@ -9507,18 +9508,18 @@ router.get('/remessas/:id/romaneio-detalhado', async (req, res) => {
 
         const dados = result.rows[0];
 
-        // Formatamos o retorno para bater com o que a função gerarRomaneio espera
+        // Mantemos a estrutura do objeto idêntica para não quebrar o seu Front-end
         res.json({
             pedido: {
                 id: dados.pedido_id,
-                escola_nome: dados.escola_nome,
-                tipo_pedido: dados.tipo_pedido,
+                escola_nome: dados.destino_final, // Agora com a garantia do COALESCE
+                tipo_pedido: dados.tipo_pedido || 'SAÍDA',
                 data_criacao: dados.data_criacao,
                 data_autorizacao: dados.data_autorizacao,
                 data_separacao: dados.data_separacao,
-                solicitante: dados.solicitante,
+                solicitante: dados.solicitante || 'Não informado',
                 quem_autorizou: dados.quem_autorizou,
-                volumes: dados.volumes
+                volumes: dados.volumes || 0
             },
             itens: dados.itens || []
         });

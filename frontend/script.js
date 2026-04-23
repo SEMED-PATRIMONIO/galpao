@@ -8932,13 +8932,12 @@ async function gerarRomaneio(remessaId) {
         const pedido = data.pedido;
         const itens = data.itens;
 
-        // Formatação de Datas Helper
         const formatarData = (d) => d ? new Date(d).toLocaleString('pt-BR') : '---';
 
         const linhasItens = itens.map(i => `
             <tr>
                 <td style="border:1px solid #999; padding:6px; font-size:9pt;">${i.produto_nome}</td>
-                <td style="border:1px solid #999; padding:6px; font-size:9pt; text-align:center;">${i.tamanho}</td>
+                <td style="border:1px solid #999; padding:6px; font-size:9pt; text-align:center;">${i.tamanho || '---'}</td>
                 <td style="border:1px solid #999; padding:6px; font-size:10pt; text-align:center; font-weight:bold;">${i.quantidade_enviada}</td>
             </tr>
         `).join('');
@@ -8951,32 +8950,41 @@ async function gerarRomaneio(remessaId) {
                 <style>
                     * { margin: 0; padding: 0; box-sizing: border-box; font-family: Arial, sans-serif; }
                     .pagina-a4 { width: 210mm; padding: 1cm; margin: 0 auto; background: white; }
-                    .cabecalho { display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 15px; }
-                    .cabecalho img { height: 60px; }
-                    .cabecalho-textos { text-align: center; flex: 1; }
-                    .titulo-doc { text-align: center; font-size: 14pt; font-weight: bold; margin-bottom: 15px; background: #eee; padding: 5px; }
                     
-                    .grid-info { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; border: 1px solid #ccc; padding: 10px; border-radius: 5px; }
+                    /* Ajuste do Cabeçalho conforme solicitado */
+                    .cabecalho { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #ccc; padding-bottom: 5px; margin-bottom: 15px; }
+                    .cabecalho img.logo-esquerda { height: 45px; } /* Ajustado para braque.jpg */
+                    .cabecalho img.logo-direita { height: 40px; }  /* Ajustado para logap.png */
+                    
+                    .cabecalho-textos { text-align: center; flex: 1; }
+                    .cabecalho-textos p { margin: 0; line-height: 1.2; }
+                    .txt-prefeitura { font-size: 10pt; font-weight: normal; } /* Sem negrito e menor */
+                    .txt-secretaria { font-size: 9pt; } /* Menor que a anterior */
+
+                    .titulo-doc { text-align: center; font-size: 12pt; font-weight: bold; margin-bottom: 15px; background: #f2f2f2; padding: 5px; border: 1px solid #ccc; }
+                    
+                    .grid-info { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 20px; border: 1px solid #ccc; padding: 10px; border-radius: 4px; }
                     .info-item { font-size: 8.5pt; color: #333; }
                     .info-item strong { color: #000; }
 
                     table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-                    th { background: #333; color: white; padding: 8px; font-size: 9pt; }
+                    th { background: #444; color: white; padding: 6px; font-size: 8.5pt; text-transform: uppercase; }
                     
-                    .rodape-assinaturas { margin-top: 40px; display: flex; justify-content: center; }
-                    .caixa-assinatura { width: 350px; border-top: 1px solid #000; text-align: center; padding-top: 8px; font-size: 9pt; }
+                    .rodape-assinaturas { margin-top: 60px; display: flex; justify-content: center; }
+                    .caixa-assinatura { width: 400px; border-top: 1px solid #000; text-align: center; padding-top: 5px; font-size: 8.5pt; }
                 </style>
             </head>
             <body>
                 <div class="pagina-a4">
                     <div class="cabecalho">
-                        <img src="assets/braque.jpg">
+                        <img src="assets/braque.png" class="logo-esquerda">
+                        
                         <div class="cabecalho-textos">
-                            <p><strong>PREFEITURA MUNICIPAL DE QUEIMADOS</strong></p>
-                            <p>SECRETARIA MUNICIPAL DE EDUCAÇÃO</p>
-                            <p>${pedido.escola_nome}</p>
+                            <p class="txt-prefeitura">PREFEITURA MUNICIPAL DE QUEIMADOS</p>
+                            <p class="txt-secretaria">SECRETARIA MUNICIPAL DE EDUCAÇÃO</p>
                         </div>
-                        <img src="assets/logap.png">
+
+                        <img src="assets/logap.png" class="logo-direita">
                     </div>
 
                     <div class="titulo-doc">ROMANEIO DE ENTREGA - REMESSA #${remessaId}</div>
@@ -8984,12 +8992,18 @@ async function gerarRomaneio(remessaId) {
                     <div class="grid-info">
                         <div class="info-item"><strong>Pedido:</strong> #${pedido.id}</div>
                         <div class="info-item"><strong>Tipo:</strong> ${pedido.tipo_pedido}</div>
+                        
                         <div class="info-item"><strong>Criação:</strong> ${formatarData(pedido.data_criacao)}</div>
-                        <div class="info-item"><strong>Autorizado por:</strong> ${pedido.quem_autorizou || '---'}</div>
                         <div class="info-item"><strong>Data Autorização:</strong> ${formatarData(pedido.data_autorizacao)}</div>
+                        
                         <div class="info-item"><strong>Data Separação:</strong> ${formatarData(pedido.data_separacao)}</div>
+                        <div class="info-item"><strong>Data Saída:</strong> ${formatarData(new Date())}</div>
+
                         <div class="info-item"><strong>Solicitante:</strong> ${pedido.solicitante}</div>
-                        <div class="info-item"><strong>Volumes:</strong> ${pedido.volumes || 1}</div>
+                        <div class="info-item"><strong>Destino:</strong> ${pedido.escola_nome}</div>
+
+                        <div class="info-item"><strong>Autorizado por:</strong> ${pedido.quem_autorizou || '---'}</div>
+                        <div class="info-item"><strong>Separado por:</strong> ${pedido.quem_autorizou || 'Equipe Logística'}</div>
                     </div>
 
                     <table>
@@ -9003,14 +9017,14 @@ async function gerarRomaneio(remessaId) {
                         <tbody>${linhasItens}</tbody>
                     </table>
 
-                    <div style="margin-top:20px; font-size:8pt; color: #666;">
-                        * Documento gerado em: ${new Date().toLocaleString('pt-BR')}
+                    <div style="margin-top:20px; font-size:7.5pt; color: #777; font-style: italic;">
+                        * Documento gerado eletronicamente em: ${new Date().toLocaleString('pt-BR')}
                     </div>
 
                     <div class="rodape-assinaturas">
                         <div class="caixa-assinatura">
                             <strong>ASSINATURA DO RECEBEDOR (UNIDADE ESCOLAR)</strong><br>
-                            <span style="font-size:8pt; color:#555;">NOME LEGÍVEL E MATRÍCULA/RG</span>
+                            <span>NOME LEGÍVEL E MATRÍCULA/RG</span>
                         </div>
                     </div>
                 </div>
@@ -9018,7 +9032,6 @@ async function gerarRomaneio(remessaId) {
             </html>
         `;
 
-        // Chama o modal de visualização (utilizando a mesma lógica do componente anterior)
         abrirModalComprovante(htmlDocumento, `Romaneio_${remessaId}`);
 
     } catch (err) {

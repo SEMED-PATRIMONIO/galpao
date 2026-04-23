@@ -20605,31 +20605,40 @@ async function gerarComprovanteTurma(turmaId) {
                     .cabecalho {
                         display: flex;
                         align-items: center;
-                        gap: 10px;
+                        justify-content: space-between; /* Alinha os logos nas extremidades */
                         margin-bottom: 18px;
+                        padding-bottom: 10px;
+                        border-bottom: 1px solid #eee; /* Opcional: linha sutil para separar o topo */
                     }
                     .cabecalho img {
-                        height: 52px;
+                        height: 60px; /* Aumentei um pouco para melhor legibilidade */
                         width: auto;
-                        flex-shrink: 0;
+                        object-fit: contain;
                     }
                     .cabecalho-textos {
                         display: flex;
                         flex-direction: column;
                         justify-content: center;
-                        height: 52px;
+                        text-align: center; /* Centraliza o bloco de texto entre as imagens */
+                        flex-grow: 1;
                     }
                     .cabecalho-textos p {
                         margin: 0;
-                        line-height: 1.35;
+                        line-height: 1.2;
                     }
-                    .cabecalho-textos p:first-child {
+                    .cabecalho-textos p:nth-child(1) {
                         font-size: 11pt;
                         font-weight: bold;
                     }
-                    .cabecalho-textos p:last-child {
+                    .cabecalho-textos p:nth-child(2) {
                         font-size: 10pt;
                         font-weight: bold;
+                    }
+                    .cabecalho-textos p:nth-child(3) {
+                        font-size: 10pt;
+                        font-weight: bold;
+                        margin-top: 2px;
+                        text-transform: uppercase; /* Nome da escola em destaque */
                     }
 
                     /* Título centralizado */
@@ -20717,11 +20726,15 @@ async function gerarComprovanteTurma(turmaId) {
 
                     <!-- CABEÇALHO -->
                     <div class="cabecalho">
-                        <img src="assets/braque.png" alt="Logo Prefeitura">
+                        <img src="assets/braque.jpg" alt="Brasão"> 
+                        
                         <div class="cabecalho-textos">
                             <p>PREFEITURA MUNICIPAL DE QUEIMADOS</p>
                             <p>SECRETARIA MUNICIPAL DE EDUCAÇÃO</p>
+                            <p>${data.nomeOficial || data.localNome || 'NOME DA UNIDADE ESCOLAR'}</p>
                         </div>
+
+                        <img src="assets/logap.png" alt="Logo Educação">
                     </div>
 
                     <!-- TÍTULO -->

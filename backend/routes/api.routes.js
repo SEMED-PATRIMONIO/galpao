@@ -1518,18 +1518,40 @@ router.get('/produtos/:id/grade', verificarToken, async (req, res) => {
 });
 
 router.post('/pedidos/estoque/finalizar-remessa', verificarToken, async (req, res) => {
-    // ================== INÍCIO DO BLOCO DE DIAGNÓSTICO ==================
-    console.log('--- PAYLOAD RECEBIDO EM /finalizar-remessa ---');
-    console.log(JSON.stringify(req.body, null, 2));
-    // =================== FIM DO BLOCO DE DIAGNÓSTICO ===================
     const { pedidoId, itens } = req.body;
     const usuarioId = req.userId;
+
+    // Validação básica
+    if (!pedidoId || !Array.isArray(itens) || itens.length === 0) {
+        return res.status(400).json({ 
+            error: "Dados inválidos. pedidoId e itens são obrigatórios." 
+        });
+    }
+
     const client = await db.pool.connect();
 
     try {
         await client.query('BEGIN');
 
-        // 1. Criar cabeçalho da Remessa
+        // ✅ BLINDAGEM: trava o pedido para evitar duplo processamento simultâneo
+        const pedidoRes = await client.query(
+            `SELECT status, tipo_pedido FROM pedidos WHERE id = $1 FOR UPDATE`,
+            [pedidoId]
+        );
+        if (pedidoRes.rows.length === 0) {
+            throw new Error(`Pedido #${pedidoId} não encontrado.`);
+        }
+        const { status: statusAtual, tipo_pedido } = pedidoRes.rows[0];
+
+        // ✅ Impede reprocessamento de pedido já finalizado
+        if (statusAtual === 'COLETA_LIBERADA' || statusAtual === 'ENTREGUE') {
+            throw new Error(
+                `Pedido #${pedidoId} já está com status "${statusAtual}" ` +
+                `e não pode receber nova remessa.`
+            );
+        }
+
+        // 1. Criar cabeçalho da remessa
         const remessaRes = await client.query(
             `INSERT INTO pedido_remessas (pedido_id, status, data_criacao) 
              VALUES ($1, 'PRONTO', NOW()) RETURNING id`,
@@ -1537,66 +1559,147 @@ router.post('/pedidos/estoque/finalizar-remessa', verificarToken, async (req, re
         );
         const remessaId = remessaRes.rows[0].id;
 
-        // 2. Loop para registrar itens E DAR BAIXA UNIFICADA NO ESTOQUE
+        // 2. Loop: registrar itens e baixar estoque
         for (const item of itens) {
-            
-            const produtoInfoRes = await client.query('SELECT nome FROM produtos WHERE id = $1', [item.produto_id]);
-            if (produtoInfoRes.rows.length === 0) throw new Error(`Produto ID ${item.produto_id} não encontrado.`);
-            const { nome: nomeProduto } = produtoInfoRes.rows[0];
+            const { produto_id, quantidade_enviada } = item;
 
-            // --- INÍCIO DA CORREÇÃO FINAL ---
-            // Usando 'IS NOT DISTINCT FROM' para tratar UNIFORMES e MATERIAIS de forma robusta e simples.
-            const updateRes = await client.query(
-                `UPDATE estoque_por_local 
-                 SET quantidade = quantidade - $1 
-                 WHERE local_id = 37 
-                   AND produto_id = $2 
-                   AND tamanho IS NOT DISTINCT FROM $3
-                   AND quantidade >= $1`,
-                [item.quantidade_enviada, item.produto_id, item.tamanho]
-            );
-            // --- FIM DA CORREÇÃO FINAL ---
+            // ✅ Normaliza tamanho — NULL para produtos sem tamanho (MATERIAL, PATRIMÔNIO)
+            const tamanho = (item.tamanho === undefined || item.tamanho === '')
+                ? null
+                : item.tamanho;
 
-            if (updateRes.rowCount === 0) {
-                // Mensagem de erro aprimorada para incluir o nome do produto
-                throw new Error(`Estoque insuficiente no Almoxarifado Central para o produto "${nomeProduto}" (Tam: ${item.tamanho || 'Único'}).`);
+            // Valida quantidade
+            if (!quantidade_enviada || quantidade_enviada <= 0) {
+                throw new Error(`Quantidade inválida para o produto ID ${produto_id}.`);
             }
 
-            // Registrar o item na remessa (lógica original mantida)
+            // Busca nome e tipo do produto para mensagens claras
+            const produtoRes = await client.query(
+                `SELECT nome, tipo FROM produtos WHERE id = $1`,
+                [produto_id]
+            );
+            if (produtoRes.rows.length === 0) {
+                throw new Error(`Produto ID ${produto_id} não encontrado.`);
+            }
+            const { nome: nomeProduto, tipo: tipoProduto } = produtoRes.rows[0];
+
+            console.log(
+                `[REMESSA #${remessaId}] Baixando: "${nomeProduto}" (${tipoProduto}) | ` +
+                `Tam: ${tamanho ?? 'Único'} | Qtd: ${quantidade_enviada}`
+            );
+
+            // ✅ UPDATE blindado com LIMIT 1 via subquery
+            // Resolve o problema de NULL duplicado caso ainda exista em outros ambientes
+            // COALESCE garante que NULL e '' são tratados como a mesma chave
+            const updateRes = await client.query(
+                `UPDATE estoque_por_local
+                 SET quantidade = quantidade - $1
+                 WHERE id = (
+                     SELECT id
+                     FROM estoque_por_local
+                     WHERE local_id = 37
+                       AND produto_id = $2
+                       AND COALESCE(tamanho, '') = COALESCE($3, '')
+                       AND quantidade >= $1
+                     ORDER BY id
+                     LIMIT 1
+                     FOR UPDATE
+                 )
+                 RETURNING id, quantidade`,
+                [quantidade_enviada, produto_id, tamanho]
+            );
+
+            if (updateRes.rowCount === 0) {
+                throw new Error(
+                    `Estoque insuficiente no Almoxarifado Central para ` +
+                    `"${nomeProduto}" (Tamanho: ${tamanho ?? 'Único'}).`
+                );
+            }
+
+            const saldoRestante = updateRes.rows[0].quantidade;
+            console.log(
+                `[REMESSA #${remessaId}] ✅ "${nomeProduto}" (${tamanho ?? 'Único'}) ` +
+                `→ Saldo restante: ${saldoRestante}`
+            );
+
+            // Registra o item na remessa
             await client.query(
-                `INSERT INTO pedido_remessa_itens (remessa_id, produto_id, tamanho, quantidade_enviada) 
+                `INSERT INTO pedido_remessa_itens 
+                    (remessa_id, produto_id, tamanho, quantidade_enviada) 
                  VALUES ($1, $2, $3, $4)`,
-                [remessaId, item.produto_id, item.tamanho, item.quantidade_enviada]
+                [remessaId, produto_id, tamanho, quantidade_enviada]
             );
         }
-        
-        // As etapas 3, 4, 5 e 6 (cálculo de saldo, logs, etc.) continuam iguais
-        const check = await client.query(`
-            SELECT 
-                (SELECT COALESCE(SUM(quantidade), 0) FROM itens_pedido WHERE pedido_id = $1) as solicitado,
-                (SELECT COALESCE(SUM(pri.quantidade_enviada), 0) FROM pedido_remessa_itens pri JOIN pedido_remessas pr ON pri.remessa_id = pr.id WHERE pr.pedido_id = $1) as enviado
+
+        // 3. Calcula progresso para definir novo status do pedido
+        const checkRes = await client.query(`
+            SELECT
+                COALESCE(
+                    (SELECT SUM(quantidade)
+                     FROM itens_pedido
+                     WHERE pedido_id = $1), 0
+                ) AS solicitado,
+                COALESCE(
+                    (SELECT SUM(pri.quantidade_enviada)
+                     FROM pedido_remessa_itens pri
+                     JOIN pedido_remessas pr ON pr.id = pri.remessa_id
+                     WHERE pr.pedido_id = $1), 0
+                ) AS enviado
         `, [pedidoId]);
-        const { solicitado, enviado } = check.rows[0];
-        const novoStatus = (Number(enviado) >= Number(solicitado)) ? 'COLETA_LIBERADA' : 'EM_SEPARACAO';
-        const statusRes = await client.query("SELECT status FROM pedidos WHERE id = $1", [pedidoId]);
-        const statusAnterior = statusRes.rows[0].status;
-        await client.query("UPDATE pedidos SET status = $1 WHERE id = $2", [novoStatus, pedidoId]);
+
+        const solicitado = Number(checkRes.rows[0].solicitado);
+        const enviado = Number(checkRes.rows[0].enviado);
+
+        console.log(
+            `[REMESSA #${remessaId}] Progresso pedido #${pedidoId}: ` +
+            `${enviado}/${solicitado}`
+        );
+
+        const novoStatus = enviado >= solicitado ? 'COLETA_LIBERADA' : 'EM_SEPARACAO';
+
+        // 4. Atualiza status do pedido
         await client.query(
-            `INSERT INTO log_status_pedidos (pedido_id, usuario_id, status_anterior, status_novo, observacao) VALUES ($1, $2, $3, $4, $5)`,
-            [pedidoId, usuarioId, statusAnterior, novoStatus, `Remessa #${remessaId} gerada e estoque baixado. Progresso: ${enviado}/${solicitado}.`]
+            `UPDATE pedidos SET status = $1, data_saida = NOW() WHERE id = $2`,
+            [novoStatus, pedidoId]
+        );
+
+        // 5. Registra log
+        await client.query(
+            `INSERT INTO log_status_pedidos 
+                (pedido_id, usuario_id, status_anterior, status_novo, observacao)
+             VALUES ($1, $2, $3, $4, $5)`,
+            [
+                pedidoId,
+                usuarioId,
+                statusAtual,
+                novoStatus,
+                `Remessa #${remessaId} registrada. ` +
+                `Progresso: ${enviado}/${solicitado} unidades.`
+            ]
         );
 
         await client.query('COMMIT');
-        res.json({ message: "Remessa salva e estoque atualizado!", status: novoStatus, remessaId });
+
+        console.log(`[REMESSA #${remessaId}] ✅ COMMIT realizado com sucesso.`);
+
+        res.status(201).json({
+            message: `Remessa #${remessaId} registrada e estoque atualizado com sucesso!`,
+            remessaId,
+            status: novoStatus,
+            progresso: { enviado, solicitado }
+        });
 
     } catch (err) {
         await client.query('ROLLBACK');
-        console.error("ERRO NA REMESSA E BAIXA DE ESTOQUE:", err);
-        res.status(500).json({ error: "Falha interna ao processar remessa: " + err.message });
+        console.error(`[REMESSA] ❌ ROLLBACK — ${err.message}`);
+        res.status(500).json({ 
+            error: "Falha ao processar remessa: " + err.message 
+        });
     } finally {
         client.release();
     }
 });
+
 
 router.get('/pedidos/dashboard/contagem', verificarToken, async (req, res) => {
     try {

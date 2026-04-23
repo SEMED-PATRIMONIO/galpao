@@ -8271,29 +8271,39 @@ router.get('/turma/:id/grade-entrega', verificarToken, async (req, res) => {
     try {
         const client = await db.pool.connect();
         try {
-            // 1. Buscar informações da turma
-            const turmaRes = await client.query('SELECT id, nome FROM turmas WHERE id = $1 AND local_id = $2', [turmaId, localId]);
+            // 1. Buscar informações da turma (sem alteração)
+            const turmaRes = await client.query(
+                'SELECT id, nome FROM turmas WHERE id = $1 AND local_id = $2',
+                [turmaId, localId]
+            );
             if (turmaRes.rows.length === 0) {
                 return res.status(404).json({ error: "Turma não encontrada ou não pertence a esta unidade." });
             }
             const turmaInfo = turmaRes.rows[0];
 
-            // 2. Buscar todos os produtos do tipo 'UNIFORMES'
+            // 2. Buscar produtos do tipo 'UNIFORMES'
+            // ✅ CORRIGIDO: removido local_id = 37 hard-coded
+            // Produtos de uniforme são globais (sem filtro de local)
+            // Se precisar filtrar por local, use: AND local_id = $1 com [localId]
             const produtosRes = await client.query(`
                 SELECT id, nome FROM produtos 
-                WHERE tipo = 'UNIFORMES' 
-                -- O 'local_id = 37' garante que estamos pegando o catálogo mestre de uniformes
-                AND local_id = 37 
+                WHERE tipo = 'UNIFORMES'
                 ORDER BY nome ASC
             `);
             const produtos = produtosRes.rows;
 
-            // 3. Buscar todos os alunos da turma
-            const alunosRes = await client.query('SELECT id, nome FROM alunos WHERE turma_id = $1 ORDER BY nome ASC', [turmaId]);
+            // 3. Buscar alunos da turma
+            // ✅ CORRIGIDO: adicionado filtro status = 'ATIVO'
+            const alunosRes = await client.query(
+                `SELECT id, nome FROM alunos 
+                 WHERE turma_id = $1 AND status = 'ATIVO' 
+                 ORDER BY nome ASC`,
+                [turmaId]
+            );
             const alunos = alunosRes.rows;
             const alunoIds = alunos.map(a => a.id);
 
-            // 4. Buscar o estoque ATUAL da ESCOLA para cada uniforme
+            // 4. Buscar estoque da escola (sem alteração)
             const estoqueRes = await client.query(`
                 SELECT produto_id, tamanho, quantidade 
                 FROM estoque_por_local 
@@ -8301,40 +8311,40 @@ router.get('/turma/:id/grade-entrega', verificarToken, async (req, res) => {
                     (SELECT id FROM produtos WHERE tipo = 'UNIFORMES')
             `, [localId]);
 
-            // Formatar o estoque para fácil acesso no frontend: { produto_id: [{tamanho, qtd}, ...], ... }
             const estoqueEscola = estoqueRes.rows.reduce((acc, item) => {
-                if (!acc[item.produto_id]) {
-                    acc[item.produto_id] = [];
-                }
+                if (!acc[item.produto_id]) acc[item.produto_id] = [];
                 acc[item.produto_id].push({ tamanho: item.tamanho, qtd: item.quantidade });
-                // Ordenar os tamanhos
-                acc[item.produto_id].sort((a,b) => a.tamanho.localeCompare(b.tamanho, undefined, {numeric: true}));
+                acc[item.produto_id].sort((a, b) => 
+                    a.tamanho.localeCompare(b.tamanho, undefined, { numeric: true })
+                );
                 return acc;
             }, {});
 
-            // 5. Buscar as entregas JÁ REALIZADAS para os alunos desta turma
-            const entregasRes = await client.query(
-                'SELECT aluno_id, produto_id, tamanho, data_entrega FROM entregas_alunos WHERE aluno_id = ANY($1)',
-                [alunoIds]
-            );
+            // 5. Buscar entregas já realizadas
+            // ✅ CORRIGIDO: filtrar apenas entregas de produtos do tipo 'UNIFORMES'
+            // Evita que entrega de MATERIAL apareça como entregue numa coluna de uniforme
+            const entregasRes = await client.query(`
+                SELECT ea.aluno_id, ea.produto_id, ea.tamanho, ea.data_entrega
+                FROM entregas_alunos ea
+                JOIN produtos p ON p.id = ea.produto_id
+                WHERE ea.aluno_id = ANY($1)
+                  AND p.tipo = 'UNIFORMES'
+            `, [alunoIds]);
 
-            // Mapear entregas para fácil acesso: { aluno_id: { produto_id: {tamanho, data}, ... }, ... }
             const entregasRealizadas = entregasRes.rows.reduce((acc, entrega) => {
-                if (!acc[entrega.aluno_id]) {
-                    acc[entrega.aluno_id] = {};
-                }
-                acc[entrega.aluno_id][entrega.produto_id] = { 
-                    tamanho: entrega.tamanho, 
-                    data: entrega.data_entrega 
+                if (!acc[entrega.aluno_id]) acc[entrega.aluno_id] = {};
+                acc[entrega.aluno_id][entrega.produto_id] = {
+                    tamanho: entrega.tamanho,
+                    data: entrega.data_entrega
                 };
                 return acc;
             }, {});
 
-            // 6. Montar o payload final para o frontend
+            // 6. Montar payload final (sem alteração na lógica)
             const alunosComStatus = alunos.map(aluno => {
                 const entregasDoAluno = entregasRealizadas[aluno.id] || {};
                 const statusItens = {};
-                
+
                 for (const produto of produtos) {
                     if (entregasDoAluno[produto.id]) {
                         statusItens[produto.id] = {
@@ -8347,7 +8357,7 @@ router.get('/turma/:id/grade-entrega', verificarToken, async (req, res) => {
                 }
                 return { ...aluno, statusItens };
             });
-            
+
             res.json({
                 turmaInfo,
                 produtos,
@@ -8365,7 +8375,6 @@ router.get('/turma/:id/grade-entrega', verificarToken, async (req, res) => {
 });
 
 router.post('/entregas/lote', verificarToken, async (req, res) => {
-    // O payload esperado é: { entregas: [ { alunoId, produtoId, tamanho }, ... ] }
     const { entregas } = req.body;
     const usuarioId = req.user.id;
     const localId = req.user.local_id;
@@ -8381,51 +8390,106 @@ router.post('/entregas/lote', verificarToken, async (req, res) => {
     try {
         await client.query('BEGIN');
 
+        // ✅ NOVA VALIDAÇÃO: impedir 2º kit de MATERIAL para o mesmo aluno
+        // Pegamos os IDs dos produtos do lote para descobrir quais são MATERIAL
+        const produtoIds = [...new Set(entregas.map(e => parseInt(e.produtoId)))];
+        const tiposRes = await client.query(
+            `SELECT id, tipo, nome FROM produtos WHERE id = ANY($1::int[])`,
+            [produtoIds]
+        );
+        const tipoPorProduto = new Map(tiposRes.rows.map(p => [p.id, p]));
+
+        // Verifica se algum aluno do lote (com produto MATERIAL) já recebeu MATERIAL
+        const alunosMaterialNoLote = entregas
+            .filter(e => tipoPorProduto.get(parseInt(e.produtoId))?.tipo === 'MATERIAL')
+            .map(e => parseInt(e.alunoId));
+
+        if (alunosMaterialNoLote.length > 0) {
+            const jaRecebidos = await client.query(`
+                SELECT ea.aluno_id, a.nome
+                FROM entregas_alunos ea
+                JOIN produtos p ON ea.produto_id = p.id
+                JOIN alunos a ON ea.aluno_id = a.id
+                WHERE ea.aluno_id = ANY($1::int[])
+                  AND p.tipo = 'MATERIAL'
+            `, [alunosMaterialNoLote]);
+
+            if (jaRecebidos.rows.length > 0) {
+                const nomes = jaRecebidos.rows.map(r => r.nome).join(', ');
+                throw new Error(`Os seguintes alunos já receberam kit de material: ${nomes}.`);
+            }
+        }
+
+        // Processa cada entrega
         for (const entrega of entregas) {
             const { alunoId, produtoId, tamanho } = entrega;
+            const produtoInfo = tipoPorProduto.get(parseInt(produtoId));
 
-            // Passo A: Dar baixa no estoque da ESCOLA.
-            // A condição 'quantidade > 0' é uma trava de segurança atômica.
-            const baixaEstoqueRes = await client.query(
-                `UPDATE estoque_por_local
-                 SET quantidade = quantidade - 1
-                 WHERE local_id = $1
-                   AND produto_id = $2
-                   AND tamanho = $3
-                   AND quantidade > 0`,
-                [localId, produtoId, tamanho]
-            );
-
-            // Se nenhuma linha foi afetada, significa que o estoque acabou. Abortar tudo.
-            if (baixaEstoqueRes.rowCount === 0) {
-                // Para dar uma mensagem de erro mais amigável
-                const produtoNomeRes = await client.query('SELECT nome FROM produtos WHERE id = $1', [produtoId]);
-                const produtoNome = produtoNomeRes.rows[0]?.nome || `ID ${produtoId}`;
-                throw new Error(`Estoque insuficiente para o item "${produtoNome}" tamanho ${tamanho}. A operação foi cancelada.`);
+            if (!produtoInfo) {
+                throw new Error(`Produto ID ${produtoId} não encontrado.`);
             }
 
-            // Passo B: Registrar a entrega individual na nova tabela.
-            // O constraint UNIQUE na tabela nos protege contra duplicações.
+            // ✅ AJUSTE: tratar tamanho NULL corretamente no SQL
+            // Para material (sem tamanho) usamos IS NULL
+            // Para uniforme usamos = $3
+            let baixaEstoqueRes;
+            if (tamanho === null || tamanho === undefined || tamanho === '') {
+                baixaEstoqueRes = await client.query(
+                    `UPDATE estoque_por_local
+                     SET quantidade = quantidade - 1
+                     WHERE local_id = $1
+                       AND produto_id = $2
+                       AND (tamanho IS NULL OR tamanho = '')
+                       AND quantidade > 0`,
+                    [localId, produtoId]
+                );
+            } else {
+                baixaEstoqueRes = await client.query(
+                    `UPDATE estoque_por_local
+                     SET quantidade = quantidade - 1
+                     WHERE local_id = $1
+                       AND produto_id = $2
+                       AND tamanho = $3
+                       AND quantidade > 0`,
+                    [localId, produtoId, tamanho]
+                );
+            }
+
+            if (baixaEstoqueRes.rowCount === 0) {
+                throw new Error(
+                    `Estoque insuficiente para "${produtoInfo.nome}"${tamanho ? ` tamanho ${tamanho}` : ''}. Operação cancelada.`
+                );
+            }
+
+            // ✅ AJUSTE: tamanho garantidamente string vazia ou valor (constraint UNIQUE não aceita NULL bem)
+            // Se preferir manter NULL, ajuste a constraint para incluir COALESCE
+            const tamanhoFinal = (tamanho === null || tamanho === undefined) ? '' : tamanho;
+
             await client.query(
-                `INSERT INTO entregas_alunos (aluno_id, produto_id, tamanho, usuario_id, local_id)
+                `INSERT INTO entregas_alunos
+                    (aluno_id, produto_id, tamanho, usuario_id, local_id)
                  VALUES ($1, $2, $3, $4, $5)`,
-                [alunoId, produtoId, tamanho, usuarioId, localId]
+                [alunoId, produtoId, tamanhoFinal, usuarioId, localId]
             );
         }
 
         await client.query('COMMIT');
-        res.status(201).json({ success: true, message: `Foram registradas ${entregas.length} entregas com sucesso.` });
+        res.status(201).json({
+            success: true,
+            message: `Foram registradas ${entregas.length} entrega(s) com sucesso.`
+        });
 
     } catch (err) {
         await client.query('ROLLBACK');
 
-        // Personaliza o erro se for uma violação de chave única (tentativa de re-entrega)
-        if (err.code === '23505') { // Código de erro do PostgreSQL para unique_violation
-            console.error("Erro de duplicidade na entrega:", err.message);
-            return res.status(409).json({ error: "Um ou mais itens já foram entregues anteriormente e não podem ser registrados novamente." });
+        if (err.code === '23505') {
+            console.error("Duplicidade:", err.message);
+            return res.status(409).json({
+                error: "Um ou mais alunos já receberam este item anteriormente."
+            });
         }
-        
-        console.error("Erro ao processar lote de entregas:", err.message);
+
+        console.error("Erro no lote de entregas:", err.message);
         res.status(500).json({ error: err.message || "Erro interno ao salvar entregas." });
     } finally {
         client.release();
@@ -8538,20 +8602,25 @@ router.get('/turma/:id/grade-entrega-material', verificarToken, async (req, res)
 
     const client = await db.pool.connect();
     try {
-        // 1. Busca informações da turma
-        const turmaRes = await client.query('SELECT nome FROM turmas WHERE id = $1 AND local_id = $2', [turmaId, localId]);
+        // 1. Informações da turma
+        const turmaRes = await client.query(
+            'SELECT nome FROM turmas WHERE id = $1 AND local_id = $2',
+            [turmaId, localId]
+        );
         if (turmaRes.rows.length === 0) {
             return res.status(404).json({ error: "Turma não encontrada ou não pertence a esta unidade." });
         }
         const turmaNome = turmaRes.rows[0].nome;
 
-        // 2. Busca os produtos do tipo 'MATERIAL'
+        // 2. Produtos do tipo MATERIAL
+        // ⚠️ AJUSTE: removido o local_id = 37 hard-coded.
+        // Se MATERIAL for global no sistema, deixe sem filtro de local.
+        // Se for por escola, use: AND local_id = $1 com [localId]
         const produtosRes = await client.query(
-            "SELECT id, nome FROM produtos WHERE tipo = 'MATERIAL' AND local_id = 37 ORDER BY nome ASC"
+            "SELECT id, nome FROM produtos WHERE tipo = 'MATERIAL' ORDER BY nome ASC"
         );
         const produtosMaterial = produtosRes.rows;
 
-        // Se não houver kits de material, retorna uma resposta válida mas vazia.
         if (produtosMaterial.length === 0) {
             return res.json({
                 turmaInfo: { id: turmaId, nome: turmaNome },
@@ -8561,11 +8630,15 @@ router.get('/turma/:id/grade-entrega-material', verificarToken, async (req, res)
             });
         }
 
-        // 3. Busca os alunos da turma
-        const alunosRes = await client.query('SELECT id, nome FROM alunos WHERE turma_id = $1 ORDER BY nome ASC', [turmaId]);
+        // 3. Alunos da turma (apenas ATIVOS)
+        const alunosRes = await client.query(
+            `SELECT id, nome FROM alunos
+             WHERE turma_id = $1 AND status = 'ATIVO'
+             ORDER BY nome ASC`,
+            [turmaId]
+        );
         const alunos = alunosRes.rows;
-        
-        // Se não houver alunos, também retorna uma resposta válida mas vazia.
+
         if (alunos.length === 0) {
             return res.json({
                 turmaInfo: { id: turmaId, nome: turmaNome },
@@ -8576,24 +8649,41 @@ router.get('/turma/:id/grade-entrega-material', verificarToken, async (req, res)
         }
         const alunoIds = alunos.map(a => a.id);
 
-        // 4. Busca o estoque ATUAL da ESCOLA para cada kit de material
+        // 4. Estoque da escola (somando, pois material não tem tamanho)
         const estoqueRes = await client.query(
-            `SELECT produto_id, quantidade FROM estoque_por_local 
-             WHERE local_id = $1 AND quantidade > 0 AND produto_id = ANY($2::int[])`,
+            `SELECT produto_id, SUM(quantidade)::int AS quantidade
+             FROM estoque_por_local
+             WHERE local_id = $1
+               AND produto_id = ANY($2::int[])
+             GROUP BY produto_id`,
             [localId, produtosMaterial.map(p => p.id)]
         );
-        const estoqueEscola = new Map(estoqueRes.rows.map(item => [item.produto_id, item.quantidade]));
+        const estoqueEscola = new Map(
+            estoqueRes.rows.map(item => [item.produto_id, item.quantidade])
+        );
 
-        // 5. Busca as entregas de MATERIAL JÁ REALIZADAS para os alunos desta turma
+        // 5. Entregas já realizadas
+        // ⚠️ AJUSTE: agora retornamos também data_entrega
         const entregasRes = await client.query(`
-            SELECT ea.aluno_id, ea.produto_id, p.nome as produto_nome
+            SELECT ea.aluno_id,
+                   ea.produto_id,
+                   ea.data_entrega,
+                   p.nome AS produto_nome
             FROM entregas_alunos ea
             JOIN produtos p ON ea.produto_id = p.id
-            WHERE ea.aluno_id = ANY($1::int[]) AND p.tipo = 'MATERIAL'
+            WHERE ea.aluno_id = ANY($1::int[])
+              AND p.tipo = 'MATERIAL'
         `, [alunoIds]);
-        const entregasRealizadas = new Map(entregasRes.rows.map(e => [e.aluno_id, { produto_id: e.produto_id, produto_nome: e.produto_nome }]));
 
-        // 6. Monta o payload final
+        const entregasRealizadas = new Map(
+            entregasRes.rows.map(e => [e.aluno_id, {
+                produto_id: e.produto_id,
+                produto_nome: e.produto_nome,
+                data_entrega: e.data_entrega
+            }])
+        );
+
+        // 6. Monta payload
         const alunosComStatus = alunos.map(aluno => {
             const entrega = entregasRealizadas.get(aluno.id);
             return {
@@ -8603,7 +8693,7 @@ router.get('/turma/:id/grade-entrega-material', verificarToken, async (req, res)
                 entregaInfo: entrega || null
             };
         });
-        
+
         res.json({
             turmaInfo: { id: turmaId, nome: turmaNome },
             produtos: produtosMaterial,
@@ -9047,53 +9137,74 @@ router.get('/relatorios/status-turmas-geral', verificarToken, async (req, res) =
 });
 
 router.get('/relatorios/progresso-geral-escolas', verificarToken, async (req, res) => {
-    // Aqui você pode adicionar uma verificação de perfil se apenas gestores puderem ver
-    // if (req.user.perfil !== 'ADMIN') return res.status(403).json({ error: "Acesso negado." });
-
     try {
-        // Contar quantos itens formam o kit completo de UNIFORMES.
-        const kitUniformesCountRes = await db.query("SELECT COUNT(id) as total FROM produtos WHERE tipo = 'UNIFORMES' AND local_id = 37");
-        const totalKitUniformes = parseInt(kitUniformesCountRes.rows[0]?.total, 10) || 1;
+        // ✅ FIXO: 7 peças = kit completo de uniformes (regra de negócio)
+        const totalPecasUniformes = 7;
 
-        // A super query que consolida tudo
         const query = `
-            SELECT
-                l.id as local_id,
-                l.nome as local_nome,
-                -- Total de turmas por local
-                (SELECT COUNT(*) FROM turmas t WHERE t.local_id = l.id) as total_turmas,
-                -- Total de alunos por local
-                (SELECT COUNT(*) FROM alunos a WHERE a.local_id = l.id) as total_alunos,
-                
-                -- Contagem de Alunos com Kit UNIFORMES Completo por local
-                (SELECT COUNT(DISTINCT sub.aluno_id)
-                    FROM (
-                        SELECT ea.aluno_id
-                        FROM entregas_alunos ea
-                        JOIN produtos p ON ea.produto_id = p.id
-                        JOIN alunos a_sub ON ea.aluno_id = a_sub.id
-                        WHERE a_sub.local_id = l.id AND p.tipo = 'UNIFORMES'
-                        GROUP BY ea.aluno_id
-                        HAVING COUNT(DISTINCT ea.produto_id) >= $1
-                    ) as sub
-                ) as uniformes_completos,
-
-                -- Contagem de Alunos que receberam o Kit MATERIAL por local
-                (SELECT COUNT(DISTINCT ea.aluno_id)
+            WITH turmas_por_local AS (
+                SELECT local_id, COUNT(*)::int AS total_turmas
+                FROM turmas 
+                GROUP BY local_id
+            ),
+            alunos_ativos_por_local AS (
+                SELECT local_id, COUNT(*)::int AS total_alunos
+                FROM alunos 
+                WHERE status = 'ATIVO'
+                GROUP BY local_id
+            ),
+            material_por_local AS (
+                SELECT a.local_id, 
+                       COUNT(DISTINCT ea.aluno_id)::int AS material_recebido
+                FROM entregas_alunos ea
+                JOIN produtos p ON p.id = ea.produto_id
+                JOIN alunos a ON a.id = ea.aluno_id
+                WHERE p.tipo = 'MATERIAL' AND a.status = 'ATIVO'
+                GROUP BY a.local_id
+            ),
+            uniformes_completos_por_local AS (
+                SELECT sub.local_id, 
+                       COUNT(*)::int AS uniformes_completos
+                FROM (
+                    SELECT a.local_id, ea.aluno_id
                     FROM entregas_alunos ea
-                    JOIN produtos p ON ea.produto_id = p.id
-                    JOIN alunos a_sub ON ea.aluno_id = a_sub.id
-                    WHERE a_sub.local_id = l.id AND p.tipo = 'MATERIAL'
-                ) as material_recebido
+                    JOIN produtos p ON p.id = ea.produto_id
+                    JOIN alunos a ON a.id = ea.aluno_id
+                    WHERE p.tipo = 'UNIFORMES' AND a.status = 'ATIVO'
+                    GROUP BY a.local_id, ea.aluno_id
+                    HAVING COUNT(DISTINCT ea.produto_id) >= $1
+                ) sub
+                GROUP BY sub.local_id
+            )
+            SELECT
+                l.id AS local_id,
+                l.nome AS local_nome,
+                COALESCE(t.total_turmas, 0) AS total_turmas,
+                COALESCE(a.total_alunos, 0) AS total_alunos,
+                COALESCE(u.uniformes_completos, 0) AS uniformes_completos,
+                COALESCE(m.material_recebido, 0) AS material_recebido,
+                -- Calculados no back (mais preciso e performático)
+                GREATEST(a.total_alunos - u.uniformes_completos, 0) AS uniformes_faltantes,
+                GREATEST(a.total_alunos - m.material_recebido, 0) AS material_faltante,
+                -- Percentuais com 1 casa decimal
+                CASE WHEN a.total_alunos > 0 
+                     THEN ROUND((u.uniformes_completos * 100.0) / a.total_alunos, 1)
+                     ELSE 0 END AS perc_uniformes,
+                CASE WHEN a.total_alunos > 0 
+                     THEN ROUND((m.material_recebido * 100.0) / a.total_alunos, 1)
+                     ELSE 0 END AS perc_material
             FROM locais l
-            -- Filtro de locais conforme sua regra de negócio
+            LEFT JOIN turmas_por_local t ON t.local_id = l.id
+            LEFT JOIN alunos_ativos_por_local a ON a.local_id = l.id
+            LEFT JOIN uniformes_completos_por_local u ON u.local_id = l.id
+            LEFT JOIN material_por_local m ON m.local_id = l.id
             WHERE l.id BETWEEN 1 AND 40 AND l.id NOT IN (37, 38)
-            ORDER BY l.nome;
+            ORDER BY l.nome
         `;
-        
-        const { rows } = await db.query(query, [totalKitUniformes]);
+
+        const { rows } = await db.query(query, [totalPecasUniformes]);
         res.json(rows);
-        
+
     } catch (err) {
         console.error("Erro no relatório de progresso por escolas:", err.message);
         res.status(500).json({ error: "Erro interno ao gerar relatório consolidado." });

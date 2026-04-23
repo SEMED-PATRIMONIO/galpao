@@ -9027,6 +9027,65 @@ async function gerarRomaneio(remessaId) {
     }
 }
 
+function abrirModalComprovante(htmlContent, tituloArquivo) {
+    // 1. Cria o fundo escuro do modal
+    const modalOverlay = document.createElement('div');
+    modalOverlay.style = `
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.8); z-index: 10000;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+    `;
+
+    // 2. Cria o container do modal
+    const modalContainer = document.createElement('div');
+    modalContainer.style = `
+        width: 90%; max-width: 900px; height: 90%;
+        background: white; border-radius: 12px; overflow: hidden;
+        display: flex; flex-direction: column; position: relative;
+    `;
+
+    // 3. Barra de ferramentas (Fechar e Imprimir)
+    const toolbar = document.createElement('div');
+    toolbar.style = `
+        padding: 15px; background: #f8fafc; border-bottom: 1px solid #e2e8f0;
+        display: flex; justify-content: space-between; align-items: center;
+    `;
+    toolbar.innerHTML = `
+        <h3 style="margin:0; font-family:sans-serif; color:#1e293b;">Visualizar ${tituloArquivo}</h3>
+        <div>
+            <button id="btn-print-modal" style="padding:8px 16px; background:#0ea5e9; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:bold; margin-right:10px;">
+                🖨️ Imprimir
+            </button>
+            <button id="btn-close-modal" style="padding:8px 16px; background:#ef4444; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:bold;">
+                Fechar
+            </button>
+        </div>
+    `;
+
+    // 4. Iframe para renderizar o HTML do Romaneio
+    const iframe = document.createElement('iframe');
+    iframe.style = "flex-grow: 1; border: none; width: 100%; height: 100%;";
+    
+    modalContainer.appendChild(toolbar);
+    modalContainer.appendChild(iframe);
+    modalOverlay.appendChild(modalContainer);
+    document.body.appendChild(modalOverlay);
+
+    // Injeta o HTML no iframe
+    const doc = iframe.contentWindow.document;
+    doc.open();
+    doc.write(htmlContent);
+    doc.close();
+
+    // Eventos dos botões
+    document.getElementById('btn-close-modal').onclick = () => document.body.removeChild(modalOverlay);
+    
+    document.getElementById('btn-print-modal').onclick = () => {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+    };
+}
+
 window.processarSaidaRemessa = async function(remessaId, tipoPedido) {
     // 1. Previne qualquer comportamento padrão do navegador (como abrir novas janelas)
     if (event) {

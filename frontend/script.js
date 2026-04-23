@@ -6916,47 +6916,82 @@ async function abrirTelaConferenciaItens(pedidoId) {
 
 async function salvarRemessa(pedidoId) {
     const inputs = document.querySelectorAll('.qtd-envio');
-    const itensRemessa = [];
+
+    // ✅ Map para evitar duplicatas (mesmo produto/tamanho aparecendo 2x no DOM)
+    const itensMap = new Map();
 
     inputs.forEach(input => {
         const qtd = parseInt(input.value) || 0;
         if (qtd > 0) {
-            const tamanhoOriginal = input.dataset.tam;
-            const tamanhoCorrigido = tamanhoOriginal === 'null' ? null : tamanhoOriginal;
+            const tamanhoRaw = input.dataset.tam;
+            const tamanho = (tamanhoRaw === 'null' || tamanhoRaw === '') 
+                ? null 
+                : tamanhoRaw;
 
-            itensRemessa.push({
-                produto_id: input.dataset.prodId,
-                tamanho: tamanhoCorrigido,
-                quantidade_enviada: qtd
-            });
+            const chave = `${input.dataset.prodId}_${tamanho ?? 'NULL'}`;
+
+            if (itensMap.has(chave)) {
+                // Soma se vier duplicado no DOM
+                itensMap.get(chave).quantidade_enviada += qtd;
+            } else {
+                itensMap.set(chave, {
+                    produto_id: input.dataset.prodId,
+                    tamanho,
+                    quantidade_enviada: qtd
+                });
+            }
         }
     });
 
-    if (itensRemessa.length === 0) {
-        return notificar("Informe a quantidade de pelo menos um item para a remessa.", "aviso");
+    if (itensMap.size === 0) {
+        return notificar(
+            "Informe a quantidade de pelo menos um item para a remessa.", 
+            "aviso"
+        );
     }
 
     if (!confirm("Confirmar o registro desta remessa de saída?")) return;
 
+    // ✅ Desabilita botão imediatamente para evitar duplo clique
+    const btnSalvar = document.querySelector('[onclick*="salvarRemessa"]');
+    if (btnSalvar) {
+        btnSalvar.disabled = true;
+        btnSalvar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> PROCESSANDO...';
+    }
+
     try {
         const res = await fetch(`${API_URL}/pedidos/estoque/finalizar-remessa`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
-            body: JSON.stringify({ pedidoId, itens: itensRemessa })
+            headers: { 
+                'Content-Type': 'application/json', 
+                'Authorization': `Bearer ${TOKEN}` 
+            },
+            body: JSON.stringify({ 
+                pedidoId, 
+                itens: [...itensMap.values()]
+            })
         });
 
         const data = await res.json();
-        
+
         if (!res.ok) {
             throw new Error(data.error || "Erro desconhecido no servidor.");
         }
 
-        // Ação simplificada: Apenas notifica o sucesso e recarrega a tela.
-        notificar(`✅ Remessa #${data.remessaId} foi registrada com sucesso!`, "sucesso");
-        telaEstoquePedidosPendentes(); // Recarrega a fila de pedidos pendentes.
+        notificar(
+            `✅ Remessa #${data.remessaId} registrada com sucesso!`, 
+            "sucesso"
+        );
+        telaEstoquePedidosPendentes();
 
     } catch (err) {
         notificar("Erro ao salvar remessa: " + err.message, "erro");
+
+        // ✅ Reabilita o botão apenas em caso de erro
+        if (btnSalvar) {
+            btnSalvar.disabled = false;
+            btnSalvar.innerHTML = '<i class="fas fa-check"></i> CONFIRMAR REMESSA';
+        }
     }
 }
 
@@ -20510,10 +20545,10 @@ async function gerarComprovanteTurma(turmaId) {
         const linhasAlunos = data.alunos.map(aluno => `
             <tr>
                 <td style="
-                    width: 42%;
+                    width: 36%;
                     border: 1px solid #999;
                     padding: 5px 6px;
-                    font-size: 9pt;
+                    font-size: 8pt;
                     word-break: break-word;
                 ">${aluno.nome}</td>
                 <td style="
@@ -20524,16 +20559,17 @@ async function gerarComprovanteTurma(turmaId) {
                     text-align: center;
                 ">${aluno.matricula}</td>
                 <td style="
-                    width: 18%;
+                    width: 22%;
                     border: 1px solid #999;
                     padding: 5px 6px;
                     font-size: 9pt;
                     text-align: center;
                     color: #aaa;
                     letter-spacing: 1px;
+                    white-space: nowrap;
                 ">___/ ___/ ____</td>
                 <td style="
-                    width: 25%;
+                    width: 27%;
                     border: 1px solid #999;
                     padding: 5px 6px;
                 "></td>

@@ -2613,6 +2613,32 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     background: rgba(255,255,255,0.03);
 }
 
+.tabela-entrega thead th:first-child {
+    width: 36%;
+    text-align: left;
+}
+
+.tabela-entrega thead th:nth-child(2) {
+    width: 15%;
+}
+
+.tabela-entrega thead th:nth-child(3) {
+    width: 22%;
+}
+
+.tabela-lista thead th:first-child {
+    width: 36%;
+    text-align: left;
+}
+
+.tabela-lista thead th:nth-child(2) {
+    width: 15%;
+}
+
+.tabela-lista thead th:nth-child(3) {
+    width: 22%;
+}
+
 /* Checkbox "Todos" - estilo diferenciado */
 .checkbox-todos {
     width: 18px;

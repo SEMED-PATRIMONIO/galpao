@@ -8866,7 +8866,6 @@ async function telaLogisticaEntregas() {
         });
         
         if (!res.ok) throw new Error("Falha ao carregar remessas.");
-        
         const remessas = await res.json();
 
         container.innerHTML = `
@@ -8880,7 +8879,6 @@ async function telaLogisticaEntregas() {
                             Nenhuma remessa aguardando coleta no momento.
                         </div>` : 
                         remessas.map(r => {
-                            // CORREÇÃO: A lógica fica aqui dentro, antes do return da string
                             const idValido = r.remessa_id || r.id; 
                             
                             return `
@@ -8896,11 +8894,18 @@ async function telaLogisticaEntregas() {
                                             </div>
                                         </div>
                                         
-                                        <button class="btn-coletar-remessa" 
-                                                onclick="processarSaidaRemessa(${idValido}, '${r.tipo_pedido}', event)"
-                                                style="padding:10px 20px; background:#8b5cf6; color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer;">
-                                            🚚 LIBERAR SAÍDA
-                                        </button>
+                                        <div style="display:flex; flex-direction:column; gap:8px; min-width:200px;">
+                                            <button class="btn-coletar-remessa" 
+                                                    onclick="processarSaidaRemessa(${idValido}, '${r.tipo_pedido}', event)"
+                                                    style="padding:10px; background:#8b5cf6; color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer; width:100%;">
+                                                🚚 LIBERAR SAÍDA
+                                            </button>
+
+                                            <button onclick="gerarRomaneio(${idValido})"
+                                                    style="padding:10px; background:#0ea5e9; color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer; width:100%; display:flex; align-items:center; justify-content:center; gap:8px;">
+                                                <i class="fas fa-file-pdf"></i> ROMANEIO
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             `;
@@ -8911,6 +8916,114 @@ async function telaLogisticaEntregas() {
     } catch (err) {
         console.error(err);
         container.innerHTML = `<div style="padding:20px; color:red;">Erro ao carregar logística: ${err.message}</div>`;
+    }
+}
+
+async function gerarRomaneio(remessaId) {
+    notificar('Gerando Romaneio...', 'info');
+
+    try {
+        const res = await fetch(`${API_URL}/remessas/${remessaId}/romaneio-detalhado`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Erro ao obter dados do romaneio.');
+
+        const pedido = data.pedido;
+        const itens = data.itens;
+
+        // Formatação de Datas Helper
+        const formatarData = (d) => d ? new Date(d).toLocaleString('pt-BR') : '---';
+
+        const linhasItens = itens.map(i => `
+            <tr>
+                <td style="border:1px solid #999; padding:6px; font-size:9pt;">${i.produto_nome}</td>
+                <td style="border:1px solid #999; padding:6px; font-size:9pt; text-align:center;">${i.tamanho}</td>
+                <td style="border:1px solid #999; padding:6px; font-size:10pt; text-align:center; font-weight:bold;">${i.quantidade_enviada}</td>
+            </tr>
+        `).join('');
+
+        const htmlDocumento = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <style>
+                    * { margin: 0; padding: 0; box-sizing: border-box; font-family: Arial, sans-serif; }
+                    .pagina-a4 { width: 210mm; padding: 1cm; margin: 0 auto; background: white; }
+                    .cabecalho { display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 15px; }
+                    .cabecalho img { height: 60px; }
+                    .cabecalho-textos { text-align: center; flex: 1; }
+                    .titulo-doc { text-align: center; font-size: 14pt; font-weight: bold; margin-bottom: 15px; background: #eee; padding: 5px; }
+                    
+                    .grid-info { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; border: 1px solid #ccc; padding: 10px; border-radius: 5px; }
+                    .info-item { font-size: 8.5pt; color: #333; }
+                    .info-item strong { color: #000; }
+
+                    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+                    th { background: #333; color: white; padding: 8px; font-size: 9pt; }
+                    
+                    .rodape-assinaturas { margin-top: 40px; display: flex; justify-content: center; }
+                    .caixa-assinatura { width: 350px; border-top: 1px solid #000; text-align: center; padding-top: 8px; font-size: 9pt; }
+                </style>
+            </head>
+            <body>
+                <div class="pagina-a4">
+                    <div class="cabecalho">
+                        <img src="assets/braque.jpg">
+                        <div class="cabecalho-textos">
+                            <p><strong>PREFEITURA MUNICIPAL DE QUEIMADOS</strong></p>
+                            <p>SECRETARIA MUNICIPAL DE EDUCAÇÃO</p>
+                            <p>${pedido.escola_nome}</p>
+                        </div>
+                        <img src="assets/logap.png">
+                    </div>
+
+                    <div class="titulo-doc">ROMANEIO DE ENTREGA - REMESSA #${remessaId}</div>
+
+                    <div class="grid-info">
+                        <div class="info-item"><strong>Pedido:</strong> #${pedido.id}</div>
+                        <div class="info-item"><strong>Tipo:</strong> ${pedido.tipo_pedido}</div>
+                        <div class="info-item"><strong>Criação:</strong> ${formatarData(pedido.data_criacao)}</div>
+                        <div class="info-item"><strong>Autorizado por:</strong> ${pedido.quem_autorizou || '---'}</div>
+                        <div class="info-item"><strong>Data Autorização:</strong> ${formatarData(pedido.data_autorizacao)}</div>
+                        <div class="info-item"><strong>Data Separação:</strong> ${formatarData(pedido.data_separacao)}</div>
+                        <div class="info-item"><strong>Solicitante:</strong> ${pedido.solicitante}</div>
+                        <div class="info-item"><strong>Volumes:</strong> ${pedido.volumes || 1}</div>
+                    </div>
+
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="text-align:left;">DESCRIÇÃO DO ITEM</th>
+                                <th style="width:100px;">TAMANHO</th>
+                                <th style="width:100px;">QTD ENVIADA</th>
+                            </tr>
+                        </thead>
+                        <tbody>${linhasItens}</tbody>
+                    </table>
+
+                    <div style="margin-top:20px; font-size:8pt; color: #666;">
+                        * Documento gerado em: ${new Date().toLocaleString('pt-BR')}
+                    </div>
+
+                    <div class="rodape-assinaturas">
+                        <div class="caixa-assinatura">
+                            <strong>ASSINATURA DO RECEBEDOR (UNIDADE ESCOLAR)</strong><br>
+                            <span style="font-size:8pt; color:#555;">NOME LEGÍVEL E MATRÍCULA/RG</span>
+                        </div>
+                    </div>
+                </div>
+            </body>
+            </html>
+        `;
+
+        // Chama o modal de visualização (utilizando a mesma lógica do componente anterior)
+        abrirModalComprovante(htmlDocumento, `Romaneio_${remessaId}`);
+
+    } catch (err) {
+        console.error(err);
+        notificar(`Erro: ${err.message}`, 'erro');
     }
 }
 

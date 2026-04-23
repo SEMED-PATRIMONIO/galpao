@@ -20167,7 +20167,7 @@ async function exportarFluxoPDF(dados) {
 
 async function telaEntregaUniformes() {
     const app = document.getElementById('app-content');
-    app.innerHTML = `<div class="loading-spinner"></div>`; // Feedback de carregamento
+    app.innerHTML = `<div class="loading-spinner"></div>`;
 
     try {
         const res = await fetch(`${API_URL}/escola/turmas-local`, {
@@ -20211,7 +20211,6 @@ async function telaEntregaUniformes() {
             </div>
         `;
 
-        // Lógica para habilitar o botão apenas quando uma turma é selecionada
         const selectTurma = document.getElementById('select-turma');
         const btnIniciar = document.getElementById('btn-iniciar-entrega');
 
@@ -20239,7 +20238,6 @@ function carregarGradeDeEntrega() {
         notificar('Por favor, selecione uma turma.', 'aviso');
         return;
     }
-    // Chamada para a nova função de renderização
     renderizarMatrizEntrega(turmaId, turmaNome);
 }
 
@@ -20253,11 +20251,24 @@ async function renderizarMatrizEntrega(turmaId, turmaNome) {
         });
         if (!res.ok) throw new Error((await res.json()).error || 'Falha ao carregar dados.');
         const data = await res.json();
-        
-        if (data.alunos.length === 0) {
-            app.innerHTML = `<div class="glass-panel" style="text-align:center; padding: 40px;"><h2>A turma "${turmaNome}" não possui alunos cadastrados.</h2><button class="btn-voltar-vidro" onclick="telaEntregaUniformes()">Voltar</button></div>`;
+
+        if (!data.alunos || data.alunos.length === 0) {
+            app.innerHTML = `
+                <div class="glass-panel" style="text-align:center; padding: 40px; margin: 20px;">
+                    <h2>A turma "${turmaNome}" não possui alunos cadastrados.</h2>
+                    <button class="btn-voltar-vidro" onclick="telaEntregaUniformes()">Voltar</button>
+                </div>`;
             return;
         }
+
+        // ✅ Pré-monta as options de cada produto (evita repetição no template)
+        const opcoesPorProduto = {};
+        data.produtos.forEach(produto => {
+            const estoque = data.estoqueEscola[produto.id] || [];
+            opcoesPorProduto[produto.id] = estoque
+                .map(e => `<option value="${e.tamanho}">${e.tamanho} (${e.qtd})</option>`)
+                .join('');
+        });
 
         app.innerHTML = `
             <div class="header-animado animate__animated animate__fadeIn">
@@ -20265,104 +20276,221 @@ async function renderizarMatrizEntrega(turmaId, turmaNome) {
                     <i class="fas fa-arrow-left"></i> TROCAR TURMA
                 </button>
                 <h2 class="titulo-sessao" style="color: white;">Entregas para: ${turmaNome}</h2>
-                <p style="color: rgba(255,255,255,0.7);">Selecione um tamanho na linha "TODOS" para aplicar à coluna inteira.</p>
+                <p style="color: rgba(255,255,255,0.7);">
+                    Use a linha <strong>"TODOS"</strong> para aplicar um tamanho à coluna inteira.<br>
+                    Selecione <strong>--</strong> no "TODOS" para desfazer apenas o que foi aplicado em massa.
+                </p>
             </div>
 
+            <!-- ✅ Container com scroll vertical - fora fica o footer -->
             <div class="tabela-entrega-container animate__animated animate__fadeInUp">
                 <table class="tabela-entrega">
                     <thead>
+                        <!-- Linha de títulos das colunas -->
                         <tr>
                             <th class="sticky-col">ALUNO</th>
-                            ${data.produtos.map(p => `<th>${p.nome.toUpperCase()}</th>`).join('')}
+                            ${data.produtos.map(p => {
+                                const totalEstoque = (data.estoqueEscola[p.id] || [])
+                                    .reduce((soma, e) => soma + e.qtd, 0);
+                                return `
+                                    <th>
+                                        ${p.nome.toUpperCase()}
+                                        <br>
+                                        <small style="font-weight:normal; opacity:0.7;">
+                                            ${totalEstoque} em estoque
+                                        </small>
+                                    </th>`;
+                            }).join('')}
                         </tr>
-                        <!-- NOVA LINHA "TODOS" -->
+
+                        <!-- ✅ Linha TODOS com célula identificada para feedback visual -->
                         <tr class="linha-todos">
-                            <th class="sticky-col">TODOS</th>
+                            <th class="sticky-col">
+                                TODOS
+                                <br>
+                                <small style="font-weight:normal; opacity:0.7; font-size:0.75em;">
+                                    aplica / desfaz
+                                </small>
+                            </th>
                             ${data.produtos.map(produto => `
-                                <td>
+                                <td class="celula-todos" data-produto-id="${produto.id}">
                                     <select class="select-todos" data-produto-id="${produto.id}">
                                         <option value="">--</option>
-                                        ${(data.estoqueEscola[produto.id] || []).map(e => 
-                                            `<option value="${e.tamanho}">${e.tamanho} (${e.qtd})</option>`
-                                        ).join('')}
+                                        ${opcoesPorProduto[produto.id]}
                                     </select>
                                 </td>
                             `).join('')}
                         </tr>
                     </thead>
+
                     <tbody>
                         ${data.alunos.map(aluno => `
                             <tr id="aluno-row-${aluno.id}">
                                 <td class="sticky-col">${aluno.nome}</td>
                                 ${data.produtos.map(produto => {
-                                    // Lógica para renderizar célula do aluno (inalterada)
-                                    // ... (o código que você já tem aqui) ...
-                                    const status = aluno.statusItens[produto.id];
-                                    const estoqueDisponivel = data.estoqueEscola[produto.id] || [];
-                                    if (status.status === 'entregue') {
-                                        return `<td class="celula-entregue"><i class="fas fa-check-circle"></i> ${status.tamanho}<small>${new Date(status.data).toLocaleDateString()}</small></td>`;
-                                    } else {
-                                        return `<td><select class="select-tamanho-entrega" data-aluno-id="${aluno.id}" data-produto-id="${produto.id}"><option value="">--</option>${estoqueDisponivel.map(e => `<option value="${e.tamanho}">${e.tamanho} (${e.qtd})</option>`).join('')}</select></td>`;
+                                    const status = aluno.statusItens?.[produto.id];
+
+                                    // ✅ Produto não se aplica a este aluno (ex: calça fem para menino)
+                                    if (!status) {
+                                        return `<td class="celula-nao-aplica" title="Não se aplica a este aluno">—</td>`;
                                     }
+
+                                    // ✅ Já recebeu este item
+                                    if (status.status === 'entregue') {
+                                        const dataFormatada = status.data
+                                            ? new Date(status.data).toLocaleDateString('pt-BR')
+                                            : '';
+                                        return `
+                                            <td class="celula-entregue">
+                                                <i class="fas fa-check-circle"></i>
+                                                <br>
+                                                <small>${status.tamanho}</small>
+                                                <br>
+                                                <small style="opacity:0.6;">${dataFormatada}</small>
+                                            </td>`;
+                                    }
+
+                                    // ✅ Pendente - pode selecionar tamanho
+                                    // data-origem controla se foi o "Todos" ou o usuário que preencheu
+                                    return `
+                                        <td>
+                                            <select class="select-tamanho-entrega"
+                                                    data-aluno-id="${aluno.id}"
+                                                    data-produto-id="${produto.id}"
+                                                    data-origem="manual">
+                                                <option value="">--</option>
+                                                ${opcoesPorProduto[produto.id]}
+                                            </select>
+                                        </td>`;
                                 }).join('')}
                             </tr>
                         `).join('')}
                     </tbody>
                 </table>
             </div>
-            
-            <div id="footer-acoes-entrega" class="animate__animated animate__fadeIn">
-                <button class="btn-imprimir-comprovante" onclick="gerarComprovanteTurma(${turmaId})"><i class="fas fa-print"></i> GERAR COMPROVANTE</button>
-                <button class="btn-confirmar-entrega" onclick="confirmarEntregasTurma(${turmaId})"><i class="fas fa-check"></i> CONFIRMAR ENTREGAS SELECIONADAS</button>
+
+            <!-- ✅ Footer FORA do scroll - sempre visível na tela -->
+            <div id="footer-acoes-entrega">
+                <button class="btn-imprimir-comprovante" onclick="gerarComprovanteTurma(${turmaId})">
+                    <i class="fas fa-print"></i> GERAR COMPROVANTE
+                </button>
+                <button class="btn-confirmar-entrega" onclick="confirmarEntregasTurma(${turmaId})">
+                    <i class="fas fa-check"></i> CONFIRMAR ENTREGAS SELECIONADAS
+                </button>
             </div>
         `;
-        
-        // Ativa a nova funcionalidade
+
         configurarAcoesEmMassa();
 
     } catch (err) {
         console.error("Erro ao renderizar matriz de entrega:", err);
         notificar(`Erro: ${err.message}`, 'erro');
-        app.innerHTML = `<div class="glass-panel" style="text-align:center; padding: 40px;"><h2>Ocorreu um erro ao carregar os dados.</h2><p>${err.message}</p><button class="btn-voltar-vidro" onclick="telaEntregaUniformes()">Voltar</button></div>`;
+        app.innerHTML = `
+            <div class="glass-panel" style="text-align:center; padding: 40px; margin: 20px;">
+                <h2>Ocorreu um erro ao carregar os dados.</h2>
+                <p>${err.message}</p>
+                <button class="btn-voltar-vidro" onclick="telaEntregaUniformes()">Voltar</button>
+            </div>`;
     }
 }
 
+// ============================================================
+// ✅ LÓGICA CORRIGIDA DO "TODOS" COM CONTROLE DE ORIGEM
+// ============================================================
 function configurarAcoesEmMassa() {
-    const selectsTodos = document.querySelectorAll('.select-todos');
 
-    selectsTodos.forEach(selectMaster => {
+    // --- Select "TODOS" de cada coluna ---
+    document.querySelectorAll('.select-todos').forEach(selectMaster => {
         selectMaster.addEventListener('change', (event) => {
             const produtoId = event.target.dataset.produtoId;
             const tamanhoSelecionado = event.target.value;
-            
-            // Encontra todos os selects de alunos para este produto
-            const selectsAlunos = document.querySelectorAll(`.select-tamanho-entrega[data-produto-id="${produtoId}"]`);
+            const celulaHeader = document.querySelector(`.celula-todos[data-produto-id="${produtoId}"]`);
+            const selectsAlunos = document.querySelectorAll(
+                `.select-tamanho-entrega[data-produto-id="${produtoId}"]`
+            );
 
-            // Se a opção selecionada for "--", limpa todos os selects da coluna
-            if (tamanhoSelecionado === "") {
-                selectsAlunos.forEach(s => s.value = "");
+            // ✅ DESFAZER: limpa APENAS os que foram marcados pelo "Todos"
+            if (tamanhoSelecionado === '') {
+                selectsAlunos.forEach(s => {
+                    if (s.dataset.origem === 'todos') {
+                        s.value = '';
+                        s.dataset.origem = 'manual';
+                    }
+                });
+                celulaHeader?.classList.remove('coluna-em-massa-ativa');
                 return;
             }
-            
-            // Validação de estoque antes de preencher
-            const optionSelecionada = event.target.options[event.target.selectedIndex];
-            const textoOpcao = optionSelecionada.textContent; // Ex: "M (15)"
-            const match = textoOpcao.match(/\((\d+)\)/); // Pega o número dentro dos parênteses
+
+            // ✅ Validação de estoque (só conta pendentes desta coluna)
+            const totalPendentes = selectsAlunos.length;
+            const textoOpcao = event.target.options[event.target.selectedIndex]?.textContent || '';
+            const match = textoOpcao.match(/\((\d+)\)/);
             const estoqueDisponivel = match ? parseInt(match[1], 10) : 0;
-            
-            if (selectsAlunos.length > estoqueDisponivel) {
-                alert(`Atenção: Você está tentando atribuir o tamanho ${tamanhoSelecionado} para ${selectsAlunos.length} alunos, mas só há ${estoqueDisponivel} unidades em estoque. A confirmação irá falhar. \n\nAjuste as quantidades manualmente.`);
+
+            if (totalPendentes > estoqueDisponivel) {
+                const prosseguir = confirm(
+                    `⚠️ Atenção!\n\n` +
+                    `Tamanho "${tamanhoSelecionado}": apenas ${estoqueDisponivel} unidade(s) em estoque.\n` +
+                    `Alunos pendentes nesta coluna: ${totalPendentes}.\n\n` +
+                    `O estoque pode não ser suficiente para todos.\n` +
+                    `Deseja aplicar assim mesmo e ajustar individualmente?`
+                );
+                if (!prosseguir) {
+                    event.target.value = '';
+                    return;
+                }
             }
 
-            // Aplica o tamanho selecionado a todos os alunos da coluna
+            // ✅ Aplica o tamanho e registra origem como "todos"
             selectsAlunos.forEach(s => {
-                // Verifica se a opção de tamanho existe no select do aluno antes de atribuir
-                if (Array.from(s.options).some(opt => opt.value === tamanhoSelecionado)) {
+                const temOpcao = Array.from(s.options).some(opt => opt.value === tamanhoSelecionado);
+                if (temOpcao) {
                     s.value = tamanhoSelecionado;
+                    s.dataset.origem = 'todos';
                 }
             });
+
+            // ✅ Destaque visual na célula do "Todos" desta coluna
+            celulaHeader?.classList.add('coluna-em-massa-ativa');
         });
     });
+
+    // --- Selects individuais dos alunos ---
+    document.querySelectorAll('.select-tamanho-entrega').forEach(selectAluno => {
+        selectAluno.addEventListener('change', (event) => {
+            // ✅ Ao alterar manualmente, marca como "manual"
+            event.target.dataset.origem = 'manual';
+
+            // ✅ Sincroniza o select "Todos" desta coluna com a realidade
+            const produtoId = event.target.dataset.produtoId;
+            sincronizarSelectTodos(produtoId);
+        });
+    });
+}
+
+function sincronizarSelectTodos(produtoId) {
+    const selectMaster = document.querySelector(`.select-todos[data-produto-id="${produtoId}"]`);
+    const celulaHeader = document.querySelector(`.celula-todos[data-produto-id="${produtoId}"]`);
+    if (!selectMaster) return;
+
+    const selectsAlunos = Array.from(
+        document.querySelectorAll(`.select-tamanho-entrega[data-produto-id="${produtoId}"]`)
+    );
+    if (selectsAlunos.length === 0) return;
+
+    const valores = selectsAlunos.map(s => s.value);
+    const todosPreenchidos = valores.every(v => v !== '');
+    const todosIguais = todosPreenchidos && valores.every(v => v === valores[0]);
+
+    if (todosIguais) {
+        // Todos os alunos desta coluna têm o mesmo tamanho → reflete no "Todos"
+        selectMaster.value = valores[0];
+        celulaHeader?.classList.add('coluna-em-massa-ativa');
+    } else {
+        // Há divergência → "Todos" volta para --
+        selectMaster.value = '';
+        celulaHeader?.classList.remove('coluna-em-massa-ativa');
+    }
 }
 
 async function gerarComprovanteTurma(turmaId) {
@@ -20948,10 +21076,8 @@ async function gerarRelatorioStatusTurmas() {
 }
 
 function telaEntregaMaterial() {
-    // Reutilizamos a tela de seleção de turma, mas mudamos a função do botão
-    telaEntregaUniformes(); // Mostra o seletor de turma
+    telaEntregaUniformes();
     
-    // Pequeno hack para ajustar o título e a função do botão
     setTimeout(() => {
         document.querySelector('.titulo-sessao').innerText = 'ENTREGA DE MATERIAL ESCOLAR';
         document.querySelector('p[style*="color: rgba(255,255,255,0.7)"]').innerText = 'Selecione uma turma para registrar a entrega dos kits de material.';
@@ -20960,7 +21086,6 @@ function telaEntregaMaterial() {
     }, 100);
 }
 
-// Função para pegar o ID da turma e chamar a renderização da matriz
 function carregarGradeDeEntregaMaterial() {
     const turmaId = document.getElementById('select-turma').value;
     if (!turmaId) {
@@ -20970,7 +21095,6 @@ function carregarGradeDeEntregaMaterial() {
     renderizarMatrizEntregaMaterial(turmaId);
 }
 
-// A função que constrói a matriz de entrega de MATERIAL
 async function renderizarMatrizEntregaMaterial(turmaId) {
     const app = document.getElementById('app-content');
     app.innerHTML = `<div class="loading-spinner"></div>`;
@@ -20987,7 +21111,6 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
 
         const turmaNome = data.turmaInfo.nome;
 
-        // Se a API não retornar produtos, significa que não há kits de material cadastrados
         if (!data.produtos || data.produtos.length === 0) {
             app.innerHTML = `
                 <div class="glass-panel" style="text-align:center; padding: 40px; margin: 20px;">
@@ -20998,7 +21121,6 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
             return;
         }
 
-        // Se não houver alunos, mostre uma mensagem amigável.
         if (!data.alunos || data.alunos.length === 0) {
             app.innerHTML = `
                 <div class="glass-panel" style="text-align:center; padding: 40px; margin: 20px;">
@@ -21008,55 +21130,92 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
             return;
         }
 
+        // ====================================================
+        // HTML CORRIGIDO - "Todos" agora usa CHECKBOX
+        // e a tabela fica dentro de um container com rolagem
+        // ====================================================
         app.innerHTML = `
             <div class="header-animado animate__animated animate__fadeIn">
-                <button class="btn-voltar-vidro" onclick="telaEntregaMaterial()"><i class="fas fa-arrow-left"></i> TROCAR TURMA</button>
+                <button class="btn-voltar-vidro" onclick="telaEntregaMaterial()">
+                    <i class="fas fa-arrow-left"></i> TROCAR TURMA
+                </button>
                 <h2 class="titulo-sessao" style="color: white;">Entregas de Material para: ${turmaNome}</h2>
                 <p style="color: rgba(255,255,255,0.7);">Marque o kit entregue para cada aluno.</p>
             </div>
 
-            <div class="tabela-entrega-container animate__animated animate__fadeInUp">
+            <div class="tabela-entrega-container animate__animated animate__fadeInUp"
+                 style="max-height: 60vh; overflow-y: auto; margin: 10px auto; width: 95%;">
                 <table class="tabela-entrega">
-                    <thead>
+                    <thead style="position: sticky; top: 0; z-index: 10;">
                         <tr>
                             <th class="sticky-col">ALUNO</th>
-                            ${data.produtos.map(p => `<th>${p.nome.toUpperCase()}<br><small>(${data.estoqueEscola[p.id] || 0} em estoque)</small></th>`).join('')}
+                            ${data.produtos.map(p => `
+                                <th>${p.nome.toUpperCase()}<br>
+                                    <small>(${data.estoqueEscola[p.id] || 0} em estoque)</small>
+                                </th>
+                            `).join('')}
                         </tr>
                         <tr class="linha-todos">
                             <th class="sticky-col">TODOS</th>
                             ${data.produtos.map(produto => `
                                 <td class="celula-radio">
-                                    <input type="radio" name="radio-todos" class="radio-todos" data-produto-id="${produto.id}" id="todos-${produto.id}">
+                                    <input type="checkbox" 
+                                           class="checkbox-todos" 
+                                           data-produto-id="${produto.id}" 
+                                           id="todos-${produto.id}">
                                     <label for="todos-${produto.id}"></label>
                                 </td>
                             `).join('')}
                         </tr>
                     </thead>
                     <tbody>
-                        ${data.alunos.map(aluno => `
-                            <tr id="aluno-row-${aluno.id}">
-                                <td class="sticky-col">${aluno.nome}</td>
-                                ${data.produtos.map(produto => {
-                                    if (aluno.status === 'entregue') {
-                                        return (aluno.entregaInfo.produto_id === produto.id) 
-                                            ? `<td class="celula-entregue"><i class="fas fa-check-circle"></i><small>${aluno.entregaInfo.produto_nome}</small></td>`
-                                            : `<td class="celula-bloqueada"></td>`;
-                                    } else {
-                                        return `
+                        ${data.alunos.map(aluno => {
+                            if (aluno.status === 'entregue') {
+                                // Aluno já recebeu - linha bloqueada com data
+                                const dataFormatada = aluno.entregaInfo.data_entrega 
+                                    ? new Date(aluno.entregaInfo.data_entrega).toLocaleDateString('pt-BR')
+                                    : '';
+                                return `
+                                    <tr id="aluno-row-${aluno.id}" class="linha-entregue">
+                                        <td class="sticky-col">${aluno.nome}</td>
+                                        ${data.produtos.map(produto => {
+                                            if (aluno.entregaInfo.produto_id === produto.id) {
+                                                return `<td class="celula-entregue">
+                                                    <i class="fas fa-check-circle"></i>
+                                                    <small>${dataFormatada}</small>
+                                                </td>`;
+                                            } else {
+                                                return `<td class="celula-bloqueada"></td>`;
+                                            }
+                                        }).join('')}
+                                    </tr>
+                                `;
+                            } else {
+                                // Aluno pendente - pode selecionar
+                                return `
+                                    <tr id="aluno-row-${aluno.id}">
+                                        <td class="sticky-col">${aluno.nome}</td>
+                                        ${data.produtos.map(produto => `
                                             <td class="celula-radio">
-                                                <input type="radio" name="radio_aluno_${aluno.id}" class="radio-aluno" 
-                                                       data-aluno-id="${aluno.id}" data-produto-id="${produto.id}" id="aluno${aluno.id}-prod${produto.id}">
+                                                <input type="radio" 
+                                                       name="radio_aluno_${aluno.id}" 
+                                                       class="radio-aluno" 
+                                                       data-aluno-id="${aluno.id}" 
+                                                       data-produto-id="${produto.id}" 
+                                                       id="aluno${aluno.id}-prod${produto.id}">
                                                 <label for="aluno${aluno.id}-prod${produto.id}"></label>
                                             </td>
-                                        `;
-                                    }
-                                }).join('')}
-                            </tr>
-                        `).join('')}
+                                        `).join('')}
+                                    </tr>
+                                `;
+                            }
+                        }).join('')}
                     </tbody>
                 </table>
             </div>
-            <div id="footer-acoes-entrega" class="animate__animated animate__fadeIn">
+
+            <div id="footer-acoes-entrega" class="animate__animated animate__fadeIn"
+                 style="text-align: center; padding: 20px 10px; margin-top: 10px;">
                 <button class="btn-imprimir-comprovante" onclick="gerarComprovanteTurmaMaterial(${turmaId})">
                     <i class="fas fa-print"></i> GERAR COMPROVANTE
                 </button>
@@ -21066,60 +21225,136 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
             </div>
         `;
         
-        configurarAcoesEmMassaMaterial(data.estoqueEscola);
+        // Configura toda a lógica de interação
+        configurarAcoesEmMassaMaterial(data.produtos, data.estoqueEscola);
 
     } catch (err) {
         console.error("Erro ao renderizar matriz de material:", err.message);
         notificar(`Erro: ${err.message}`, 'erro');
-        // Adiciona uma mensagem de erro mais informativa na tela
-        app.innerHTML = `<div class="painel-vidro" style="margin:20px; padding:20px; color: #ff4d4d; text-align:center;"><h2>Ocorreu um erro</h2><p>${err.message}</p><button class="btn-voltar-vidro" onclick="telaEntregaMaterial()">Tentar Novamente</button></div>`;
+        app.innerHTML = `
+            <div class="painel-vidro" style="margin:20px; padding:20px; color: #ff4d4d; text-align:center;">
+                <h2>Ocorreu um erro</h2>
+                <p>${err.message}</p>
+                <button class="btn-voltar-vidro" onclick="telaEntregaMaterial()">Tentar Novamente</button>
+            </div>`;
     }
 }
 
+// ============================================================
+// LÓGICA CORRIGIDA DO BOTÃO "TODOS" E INTERAÇÕES
+// ============================================================
+function configurarAcoesEmMassaMaterial(produtos, estoque) {
+
+    // --- 1. Lógica do checkbox "Todos" ---
+    document.querySelectorAll('.checkbox-todos').forEach(chk => {
+        chk.addEventListener('change', (e) => {
+            const produtoId = e.target.dataset.produtoId;
+            const marcar = e.target.checked;
+
+            if (marcar) {
+                // Verificar estoque
+                const estoqueDisponivel = estoque[produtoId] || 0;
+                const alunosPendentes = new Set(
+                    Array.from(document.querySelectorAll('.radio-aluno'))
+                        .map(r => r.dataset.alunoId)
+                );
+                
+                if (alunosPendentes.size > estoqueDisponivel) {
+                    alert(`Atenção: Há ${alunosPendentes.size} alunos pendentes, mas só existem ${estoqueDisponivel} unidades em estoque.`);
+                }
+
+                // Desmarcar os outros checkboxes "Todos" (só 1 coluna por vez)
+                document.querySelectorAll('.checkbox-todos').forEach(outro => {
+                    if (outro !== e.target) outro.checked = false;
+                });
+
+                // Marcar todos os radios desta coluna
+                document.querySelectorAll(`.radio-aluno[data-produto-id="${produtoId}"]`).forEach(r => {
+                    r.checked = true;
+                });
+
+            } else {
+                // DESMARCAR: limpa todos os radios de TODAS as colunas
+                // (porque ao marcar "Todos" já tinha desmarcado os de outras colunas)
+                document.querySelectorAll('.radio-aluno').forEach(r => {
+                    r.checked = false;
+                });
+            }
+        });
+    });
+
+    // --- 2. Clique individual no radio do aluno ---
+    // Permite desmarcar um radio clicando nele de novo
+    // e atualiza o estado do checkbox "Todos"
+    document.querySelectorAll('.radio-aluno').forEach(radio => {
+        // Guardamos o estado anterior para permitir toggle
+        radio.addEventListener('click', (e) => {
+            const aluno = e.target;
+            const alunoId = aluno.dataset.alunoId;
+            const produtoId = aluno.dataset.produtoId;
+
+            // Se já estava marcado no mesmo, desmarcar (toggle)
+            if (aluno.dataset.wasChecked === 'true') {
+                aluno.checked = false;
+                aluno.dataset.wasChecked = 'false';
+            } else {
+                // Marcar este e atualizar o flag de todos do mesmo grupo
+                document.querySelectorAll(`input[name="radio_aluno_${alunoId}"]`).forEach(r => {
+                    r.dataset.wasChecked = 'false';
+                });
+                aluno.dataset.wasChecked = 'true';
+            }
+
+            // Atualizar estado dos checkboxes "Todos"
+            atualizarEstadoCheckboxTodos();
+        });
+    });
+
+    // Inicializa o flag wasChecked em todos os radios
+    document.querySelectorAll('.radio-aluno').forEach(r => {
+        r.dataset.wasChecked = r.checked ? 'true' : 'false';
+    });
+}
+
+// Função auxiliar: verifica se todos da coluna estão marcados
+// e atualiza o checkbox "Todos" correspondente
+function atualizarEstadoCheckboxTodos() {
+    document.querySelectorAll('.checkbox-todos').forEach(chk => {
+        const produtoId = chk.dataset.produtoId;
+        const radiosColuna = document.querySelectorAll(`.radio-aluno[data-produto-id="${produtoId}"]`);
+        
+        if (radiosColuna.length === 0) {
+            chk.checked = false;
+            return;
+        }
+
+        const todosMarcados = Array.from(radiosColuna).every(r => r.checked);
+        chk.checked = todosMarcados;
+    });
+}
+
+// ============================================================
+// COMPROVANTE (sem alteração)
+// ============================================================
 async function gerarComprovanteTurmaMaterial(turmaId) {
     return gerarComprovanteTurma(turmaId);
 }
 
-// Lógica de ações em massa para os Radio Buttons
-function configurarAcoesEmMassaMaterial(estoque) {
-    document.querySelectorAll('.radio-todos').forEach(radioMaster => {
-        radioMaster.addEventListener('click', (event) => {
-            const produtoId = event.target.dataset.produtoId;
-            const isChecked = event.target.checked;
-            
-            if (!isChecked) return; // Só age quando está marcando
-            
-            const estoqueDisponivel = estoque[produtoId] || 0;
-            const alunosPendentes = document.querySelectorAll('.radio-aluno[name^="radio_aluno_"]');
-            const numAlunos = new Set(Array.from(alunosPendentes).map(r => r.dataset.alunoId)).size;
-
-            if (numAlunos > estoqueDisponivel) {
-                alert(`Atenção: Você está tentando atribuir este kit para ${numAlunos} alunos, mas só há ${estoqueDisponivel} unidades em estoque. A confirmação irá falhar.`);
-            }
-
-            // Desmarca todos os outros radios de alunos
-            document.querySelectorAll('.radio-aluno').forEach(r => r.checked = false);
-            // Marca apenas os radios da coluna selecionada
-            document.querySelectorAll(`.radio-aluno[data-produto-id="${produtoId}"]`).forEach(r => r.checked = true);
-        });
-    });
-}
-
-// Função para salvar as entregas de material
+// ============================================================
+// CONFIRMAR ENTREGAS (sem alteração na lógica)
+// ============================================================
 async function confirmarEntregasMaterial(turmaId) {
     const radiosMarcados = document.querySelectorAll('.radio-aluno:checked');
     const entregasParaEnviar = Array.from(radiosMarcados).map(radio => ({
         alunoId: radio.dataset.alunoId,
         produtoId: radio.dataset.produtoId,
-        tamanho: null // Material não tem tamanho
+        tamanho: null
     }));
 
     if (entregasParaEnviar.length === 0) {
         return notificar('Nenhum kit de material foi marcado para entrega.', 'aviso');
     }
     
-    // A rota POST /entregas/lote é genérica e já funciona para isso!
-    // Reutilizamos a lógica da função confirmarEntregasTurma, apenas mudando a função de recarregamento
     if (!confirm(`Confirmar a entrega de ${entregasParaEnviar.length} kit(s) de material?`)) return;
 
     const btn = document.querySelector('.btn-confirmar-entrega');
@@ -21136,7 +21371,7 @@ async function confirmarEntregasMaterial(turmaId) {
         if (!res.ok) throw new Error(resultado.error || 'Falha no servidor.');
 
         notificar(resultado.message, 'sucesso');
-        renderizarMatrizEntregaMaterial(turmaId); // Recarrega a tela de material
+        renderizarMatrizEntregaMaterial(turmaId);
 
     } catch (err) {
         notificar(`Erro: ${err.message}`, 'erro');
@@ -21416,8 +21651,13 @@ async function telaProgressoGeralEscolas() {
 
         app.innerHTML = `
             <div class="header-animado animate__animated animate__fadeIn">
-                <button class="btn-voltar-vidro" onclick="carregarDashboard()"><i class="fas fa-arrow-left"></i> VOLTAR</button>
+                <button class="btn-voltar-vidro" onclick="carregarDashboard()">
+                    <i class="fas fa-arrow-left"></i> VOLTAR
+                </button>
                 <h2 class="titulo-sessao" style="color: white;">Progresso Geral de Entregas por Escola</h2>
+                <p style="color: rgba(255,255,255,0.7); margin-bottom: 20px;">
+                    🟢 &ge;90% | 🟡 60-89% | 🔴 &lt;60% | <strong>Só alunos ATIVOS</strong> • Uniforme = 7 peças distintas
+                </p>
             </div>
 
             <div class="tabela-entrega-container animate__animated animate__fadeInUp" style="margin: 20px;">
@@ -21426,51 +21666,81 @@ async function telaProgressoGeralEscolas() {
                         <tr>
                             <th style="text-align:left;">ESCOLA</th>
                             <th>TURMAS</th>
-                            <th>ALUNOS</th>
-                            <th style="width: 25%;">PROGRESSO UNIFORMES</th>
-                            <th style="width: 25%;">PROGRESSO KIT's</th>
+                            <th>ALUNOS<br><small>(ATIVOS)</small></th>
+                            <th style="width: 28%;">PROGRESSO UNIFORMES</th>
+                            <th style="width: 28%;">PROGRESSO KITS</th>
                         </tr>
                     </thead>
                     <tbody>
-                        ${escolas.length === 0 ? `<tr><td colspan="5" style="padding:40px; text-align:center; color:white;">Nenhum dado de escola encontrado para exibir.</td></tr>` :
-                        escolas.map(e => {
-                            const totalAlunos = parseInt(e.total_alunos, 10);
-                            
-                            // Cálculo para Uniformes
-                            const uniformesCompletos = parseInt(e.uniformes_completos, 10);
-                            const percUniformes = totalAlunos > 0 ? ((uniformesCompletos / totalAlunos) * 100).toFixed(0) : 0;
+                        ${escolas.length === 0 
+                            ? `<tr><td colspan="5" style="padding:40px; text-align:center; color:#ffcccb;">Nenhum dado de escola encontrado.</td></tr>`
+                            : escolas.map(e => {
+                                const totalAlunos = Number(e.total_alunos) || 0;
+                                const totalTurmas = Number(e.total_turmas) || 0;
 
-                            // Cálculo para Material
-                            const materialRecebido = parseInt(e.material_recebido, 10);
-                            const percMaterial = totalAlunos > 0 ? ((materialRecebido / totalAlunos) * 100).toFixed(0) : 0;
-                            
-                            return `
-                            <tr>
-                                <td style="text-align:left; font-weight:bold;">${e.local_nome}</td>
-                                <td>${e.total_turmas}</td>
-                                <td style="font-size: 1.1rem;">${totalAlunos}</td>
-                                <td>
-                                    <div class="barra-progresso-container">
-                                        <div class="barra-progresso" style="width: ${percUniformes}%; background: linear-gradient(90deg, #0284c7, #00d4ff);"></div>
-                                        <span>${uniformesCompletos} de ${totalAlunos} (${percUniformes}%)</span>
-                                    </div>
-                                </td>
-                                <td>
-                                    <div class="barra-progresso-container">
-                                        <div class="barra-progresso" style="width: ${percMaterial}%; background: linear-gradient(90deg, #15803d, #10b981);"></div>
-                                        <span>${materialRecebido} de ${totalAlunos} (${percMaterial}%)</span>
-                                    </div>
-                                </td>
-                            </tr>
-                            `;
-                        }).join('')}
+                                // Dados uniformes
+                                const uniformesCompletos = Number(e.uniformes_completos) || 0;
+                                const uniformesFaltantes = Number(e.uniformes_faltantes) || 0;
+                                const percUniformes = Number(e.perc_uniformes) || 0;
+                                const corUniformes = getCorProgresso(percUniformes);
+
+                                // Dados material
+                                const materialRecebido = Number(e.material_recebido) || 0;
+                                const materialFaltante = Number(e.material_faltante) || 0;
+                                const percMaterial = Number(e.perc_material) || 0;
+                                const corMaterial = getCorProgresso(percMaterial);
+
+                                return `
+                                    <tr>
+                                        <td style="text-align:left; font-weight:bold; font-size: 1.1em;">${e.local_nome}</td>
+                                        <td>${totalTurmas}</td>
+                                        <td style="font-size: 1.2rem; font-weight: bold;">${totalAlunos.toLocaleString()}</td>
+                                        <td>
+                                            <div class="barra-progresso-container ${corUniformes}">
+                                                <div class="barra-progresso" style="width: ${Math.min(percUniformes, 100)}%;">
+                                                    <i class="fas ${corUniformes === 'verde' ? 'fa-check-circle' : corUniformes === 'amarelo' ? 'fa-exclamation-triangle' : 'fa-times-circle'}"></i>
+                                                </div>
+                                                <span>
+                                                    ${uniformesCompletos} completos • ${uniformesFaltantes} faltam<br>
+                                                    <small style="font-weight: bold;">${percUniformes}%</small>
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div class="barra-progresso-container ${corMaterial}">
+                                                <div class="barra-progresso" style="width: ${Math.min(percMaterial, 100)}%;">
+                                                    <i class="fas ${corMaterial === 'verde' ? 'fa-check-circle' : corMaterial === 'amarelo' ? 'fa-exclamation-triangle' : 'fa-times-circle'}"></i>
+                                                </div>
+                                                <span>
+                                                    ${materialRecebido} receberam • ${materialFaltante} faltam<br>
+                                                    <small style="font-weight: bold;">${percMaterial}%</small>
+                                                </span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                `;
+                            }).join('')
+                        }
                     </tbody>
                 </table>
             </div>
         `;
+
+        // Função auxiliar para cor do progresso
+        function getCorProgresso(perc) {
+            if (perc >= 90) return 'verde';
+            if (perc >= 60) return 'amarelo';
+            return 'vermelho';
+        }
+
     } catch (err) {
         notificar("Erro ao carregar relatório: " + err.message, "erro");
-        app.innerHTML = `<div class="painel-vidro" style="margin:20px; padding:20px; color: #ff4d4d; text-align:center;"><h2>Ocorreu um erro</h2><p>${err.message}</p><button class="btn-voltar-vidro" onclick="carregarDashboard()">Voltar</button></div>`;
+        app.innerHTML = `
+            <div class="painel-vidro" style="margin:20px; padding:20px; color: #ff4d4d; text-align:center;">
+                <h2>Ocorreu um erro</h2><p>${err.message}</p>
+                <button class="btn-voltar-vidro" onclick="carregarDashboard()">Voltar</button>
+            </div>
+        `;
     }
 }
 

@@ -9463,4 +9463,70 @@ async function obterRegrasUniforme() {
     };
 }
 
+router.get('/remessas/:id/romaneio-detalhado', async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        const query = `
+            SELECT 
+                r.id AS remessa_id,
+                p.id AS pedido_id,
+                p.data_criacao,
+                p.data_autorizacao,
+                p.data_separacao,
+                p.data_saida,
+                p.tipo_pedido,
+                p.volumes,
+                l.nome_oficial AS escola_nome,
+                u_origem.nome AS solicitante,
+                u_autoriza.nome AS quem_autorizou,
+                -- Agrupando os itens em um JSON para facilitar o consumo no front
+                (
+                    SELECT json_agg(json_build_object(
+                        'produto_nome', prod.nome,
+                        'tamanho', ri.tamanho,
+                        'quantidade_enviada', ri.quantidade_enviada
+                    ))
+                    FROM pedido_remessa_itens ri
+                    JOIN produtos prod ON ri.produto_id = prod.id
+                    WHERE ri.remessa_id = r.id
+                ) AS itens
+            FROM pedido_remessas r
+            JOIN pedidos p ON r.pedido_id = p.id
+            JOIN locais l ON p.local_destino_id = l.id
+            LEFT JOIN usuarios u_origem ON p.usuario_origem_id = u_origem.id
+            LEFT JOIN usuarios u_autoriza ON p.autorizado_por = u_autoriza.id
+            WHERE r.id = $1;
+        `;
+
+        const result = await db.query(query, [id]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: "Remessa não encontrada." });
+        }
+
+        const dados = result.rows[0];
+
+        // Formatamos o retorno para bater com o que a função gerarRomaneio espera
+        res.json({
+            pedido: {
+                id: dados.pedido_id,
+                escola_nome: dados.escola_nome,
+                tipo_pedido: dados.tipo_pedido,
+                data_criacao: dados.data_criacao,
+                data_autorizacao: dados.data_autorizacao,
+                data_separacao: dados.data_separacao,
+                solicitante: dados.solicitante,
+                quem_autorizou: dados.quem_autorizou,
+                volumes: dados.volumes
+            },
+            itens: dados.itens || []
+        });
+
+    } catch (err) {
+        console.error('Erro ao buscar romaneio:', err);
+        res.status(500).json({ error: "Erro interno ao processar o romaneio." });
+    }
+});
+
 module.exports = router;

@@ -20531,7 +20531,7 @@ async function gerarComprovanteTurma(turmaId) {
                     text-align: center;
                     color: #aaa;
                     letter-spacing: 1px;
-                ">____ / ____ / ______</td>
+                ">___/ ___/ ____</td>
                 <td style="
                     width: 25%;
                     border: 1px solid #999;

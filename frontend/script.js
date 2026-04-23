@@ -8919,112 +8919,213 @@ async function telaLogisticaEntregas() {
     }
 }
 
+/**
+ * Gera e exibe o Romaneio de Entrega em formato PDF (via Modal)
+ * @param {number} remessaId - ID da remessa para busca no banco
+ */
 async function gerarRomaneio(remessaId) {
-    notificar('Gerando Romaneio...', 'info');
+    // Notificação visual de progresso (se a função existir no seu sistema)
+    if (typeof notificar === 'function') {
+        notificar('Gerando Romaneio de Entrega...', 'info');
+    }
 
     try {
+        // 1. Busca os dados detalhados da remessa no Backend
         const res = await fetch(`${API_URL}/remessas/${remessaId}/romaneio-detalhado`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
+
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Erro ao obter dados do romaneio.');
+
+        if (!res.ok) {
+            throw new Error(data.error || 'Erro ao obter dados do servidor.');
+        }
 
         const pedido = data.pedido;
-        const itens = data.itens;
+        const itens = data.itens || [];
 
-        const formatarData = (d) => d ? new Date(d).toLocaleString('pt-BR') : '---';
+        // 2. Configurações do QR Code de Autenticidade
+        // NOTA: Ajuste o IP/Domínio e a porta para a rota do seu novo app de validação quando ele estiver pronto.
+        const urlValidacao = `http://validador.paiva.api.br:3030/validar.html?id=${remessaId}`;
+        const qrCodeUrl = `https://quickchart.io/qr?text=${encodeURIComponent(urlValidacao)}&size=100&margin=0`;
 
+        // 3. Formatação Helper para Datas
+        const formatarData = (d) => {
+            if (!d) return '---';
+            return new Date(d).toLocaleString('pt-BR');
+        };
+
+        // 4. Montagem das linhas da tabela de itens
         const linhasItens = itens.map(i => `
             <tr>
-                <td style="border:1px solid #999; padding:6px; font-size:9pt;">${i.produto_nome}</td>
-                <td style="border:1px solid #999; padding:6px; font-size:9pt; text-align:center;">${i.tamanho || '---'}</td>
-                <td style="border:1px solid #999; padding:6px; font-size:10pt; text-align:center; font-weight:bold;">${i.quantidade_enviada}</td>
+                <td style="border: 1px solid #999; padding: 6px; font-size: 9pt;">
+                    ${i.produto_nome || 'Produto não identificado'}
+                </td>
+                <td style="border: 1px solid #999; padding: 6px; font-size: 9pt; text-align: center;">
+                    ${i.tamanho && i.tamanho !== 'null' ? i.tamanho : '---'}
+                </td>
+                <td style="border: 1px solid #999; padding: 6px; font-size: 10pt; text-align: center; font-weight: bold;">
+                    ${i.quantidade_enviada || 0}
+                </td>
             </tr>
         `).join('');
 
+        // 5. Construção do HTML do Documento
         const htmlDocumento = `
             <!DOCTYPE html>
-            <html>
+            <html lang="pt-BR">
             <head>
                 <meta charset="UTF-8">
                 <style>
                     * { margin: 0; padding: 0; box-sizing: border-box; font-family: Arial, sans-serif; }
-                    .pagina-a4 { width: 210mm; padding: 1cm; margin: 0 auto; background: white; }
+                    body { background: #f5f5f5; }
+                    .pagina-a4 { 
+                        width: 210mm; 
+                        min-height: 297mm; 
+                        padding: 1.5cm; 
+                        margin: 0 auto; 
+                        background: white; 
+                        box-shadow: 0 0 10px rgba(0,0,0,0.1);
+                    }
                     
-                    /* Ajuste do Cabeçalho conforme solicitado */
-                    .cabecalho { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #ccc; padding-bottom: 5px; margin-bottom: 15px; }
-                    .cabecalho img.logo-esquerda { height: 45px; } /* Ajustado para braque.jpg */
-                    .cabecalho img.logo-direita { height: 40px; }  /* Ajustado para logap.png */
+                    /* Cabeçalho Ajustado - Altura das imagens sincronizada com o texto */
+                    .cabecalho { 
+                        display: flex; 
+                        align-items: center; 
+                        justify-content: space-between; 
+                        border-bottom: 1px solid #333; 
+                        padding-bottom: 8px; 
+                        margin-bottom: 20px; 
+                    }
+                    .logo-esquerda { height: 45px; width: auto; } /* braque.jpg */
+                    .logo-direita { height: 40px; width: auto; }  /* logap.png */
                     
                     .cabecalho-textos { text-align: center; flex: 1; }
-                    .cabecalho-textos p { margin: 0; line-height: 1.2; }
-                    .txt-prefeitura { font-size: 10pt; font-weight: normal; } /* Sem negrito e menor */
-                    .txt-secretaria { font-size: 9pt; } /* Menor que a anterior */
+                    .txt-prefeitura { font-size: 10pt; font-weight: normal; margin-bottom: 2px; }
+                    .txt-secretaria { font-size: 9pt; font-weight: normal; }
 
-                    .titulo-doc { text-align: center; font-size: 12pt; font-weight: bold; margin-bottom: 15px; background: #f2f2f2; padding: 5px; border: 1px solid #ccc; }
+                    .titulo-doc { 
+                        text-align: center; 
+                        font-size: 12pt; 
+                        font-weight: bold; 
+                        margin-bottom: 20px; 
+                        background: #f2f2f2; 
+                        padding: 8px; 
+                        border: 1px solid #ccc;
+                    }
                     
-                    .grid-info { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 20px; border: 1px solid #ccc; padding: 10px; border-radius: 4px; }
-                    .info-item { font-size: 8.5pt; color: #333; }
+                    /* Bloco de Informações com QR Code lateral */
+                    .container-identificacao {
+                        display: flex;
+                        border: 1px solid #ccc;
+                        border-radius: 4px;
+                        margin-bottom: 20px;
+                        overflow: hidden;
+                    }
+                    .grid-info { 
+                        display: grid; 
+                        grid-template-columns: 1fr 1fr; 
+                        gap: 10px; 
+                        padding: 12px;
+                        flex: 1;
+                    }
+                    .info-item { font-size: 8.5pt; color: #333; line-height: 1.4; }
                     .info-item strong { color: #000; }
-
-                    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-                    th { background: #444; color: white; padding: 6px; font-size: 8.5pt; text-transform: uppercase; }
                     
-                    .rodape-assinaturas { margin-top: 60px; display: flex; justify-content: center; }
-                    .caixa-assinatura { width: 400px; border-top: 1px solid #000; text-align: center; padding-top: 5px; font-size: 8.5pt; }
+                    .qr-code-area {
+                        width: 120px;
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        justify-content: center;
+                        border-left: 1px dashed #ccc;
+                        background: #fafafa;
+                        padding: 10px;
+                    }
+                    .qr-code-area p { font-size: 6pt; color: #666; margin-top: 5px; font-weight: bold; text-align: center; }
+
+                    /* Tabela de Itens */
+                    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+                    th { 
+                        background: #444; 
+                        color: white; 
+                        padding: 8px; 
+                        font-size: 8.5pt; 
+                        text-align: center;
+                    }
+                    
+                    .rodape-assinaturas { 
+                        margin-top: 80px; 
+                        display: flex; 
+                        justify-content: center; 
+                    }
+                    .caixa-assinatura { 
+                        width: 450px; 
+                        border-top: 1px solid #000; 
+                        text-align: center; 
+                        padding-top: 8px; 
+                        font-size: 8.5pt; 
+                    }
+
+                    /* Remove sombras e bordas ao imprimir */
+                    @media print {
+                        body { background: none; }
+                        .pagina-a4 { box-shadow: none; margin: 0; width: 100%; padding: 1cm; }
+                    }
                 </style>
             </head>
             <body>
                 <div class="pagina-a4">
                     <div class="cabecalho">
-                        <img src="assets/braque.png" class="logo-esquerda">
-                        
+                        <img src="assets/braque.jpg" class="logo-esquerda" alt="Brasão">
                         <div class="cabecalho-textos">
                             <p class="txt-prefeitura">PREFEITURA MUNICIPAL DE QUEIMADOS</p>
                             <p class="txt-secretaria">SECRETARIA MUNICIPAL DE EDUCAÇÃO</p>
                         </div>
-
-                        <img src="assets/logap.png" class="logo-direita">
+                        <img src="assets/logap.png" class="logo-direita" alt="Logo Educação">
                     </div>
 
                     <div class="titulo-doc">ROMANEIO DE ENTREGA - REMESSA #${remessaId}</div>
 
-                    <div class="grid-info">
-                        <div class="info-item"><strong>Pedido:</strong> #${pedido.id}</div>
-                        <div class="info-item"><strong>Tipo:</strong> ${pedido.tipo_pedido}</div>
+                    <div class="container-identificacao">
+                        <div class="grid-info">
+                            <div class="info-item"><strong>Pedido:</strong> #${pedido.id}</div>
+                            <div class="info-item"><strong>Tipo:</strong> ${pedido.tipo_pedido || 'SAÍDA'}</div>
+                            
+                            <div class="info-item"><strong>Criação:</strong> ${formatarData(pedido.data_criacao)}</div>
+                            <div class="info-item"><strong>Separação:</strong> ${formatarData(pedido.data_separacao)}</div>
+                            
+                            <div class="info-item"><strong>Solicitante:</strong> ${pedido.solicitante || 'Não informado'}</div>
+                            <div class="info-item"><strong>Destino:</strong> ${pedido.escola_nome || 'Local não identificado'}</div>
+                        </div>
                         
-                        <div class="info-item"><strong>Criação:</strong> ${formatarData(pedido.data_criacao)}</div>
-                        <div class="info-item"><strong>Data Autorização:</strong> ${formatarData(pedido.data_autorizacao)}</div>
-                        
-                        <div class="info-item"><strong>Data Separação:</strong> ${formatarData(pedido.data_separacao)}</div>
-                        <div class="info-item"><strong>Data Saída:</strong> ${formatarData(new Date())}</div>
-
-                        <div class="info-item"><strong>Solicitante:</strong> ${pedido.solicitante}</div>
-                        <div class="info-item"><strong>Destino:</strong> ${pedido.escola_nome}</div>
-
-                        <div class="info-item"><strong>Autorizado por:</strong> ${pedido.quem_autorizou || '---'}</div>
-                        <div class="info-item"><strong>Separado por:</strong> ${pedido.quem_autorizou || 'Equipe Logística'}</div>
+                        <div class="qr-code-area">
+                            <img src="${qrCodeUrl}" alt="QR Code de Validação" style="width: 85px; height: 85px;">
+                            <p>AUTENTICIDADE<br>DIGITAL</p>
+                        </div>
                     </div>
 
                     <table>
                         <thead>
                             <tr>
-                                <th style="text-align:left;">DESCRIÇÃO DO ITEM</th>
-                                <th style="width:100px;">TAMANHO</th>
-                                <th style="width:100px;">QTD ENVIADA</th>
+                                <th style="text-align: left; padding-left: 10px;">DESCRIÇÃO DO ITEM</th>
+                                <th style="width: 100px;">TAMANHO</th>
+                                <th style="width: 110px;">QTD ENVIADA</th>
                             </tr>
                         </thead>
-                        <tbody>${linhasItens}</tbody>
+                        <tbody>
+                            ${linhasItens}
+                        </tbody>
                     </table>
 
-                    <div style="margin-top:20px; font-size:7.5pt; color: #777; font-style: italic;">
-                        * Documento gerado eletronicamente em: ${new Date().toLocaleString('pt-BR')}
+                    <div style="margin-top: 30px; font-size: 7.5pt; color: #666; font-style: italic;">
+                        Documento emitido em: ${new Date().toLocaleString('pt-BR')} | ID Remessa: ${remessaId}
                     </div>
 
                     <div class="rodape-assinaturas">
                         <div class="caixa-assinatura">
                             <strong>ASSINATURA DO RECEBEDOR (UNIDADE ESCOLAR)</strong><br>
-                            <span>NOME LEGÍVEL E MATRÍCULA/RG</span>
+                            <span style="color: #444;">NOME LEGÍVEL E MATRÍCULA OU RG</span>
                         </div>
                     </div>
                 </div>
@@ -9032,11 +9133,23 @@ async function gerarRomaneio(remessaId) {
             </html>
         `;
 
-        abrirModalComprovante(htmlDocumento, `Romaneio_${remessaId}`);
+        // 6. Abre o Modal para Visualização e Impressão
+        if (typeof abrirModalComprovante === 'function') {
+            abrirModalComprovante(htmlDocumento, `Romaneio_${remessaId}`);
+        } else {
+            // Fallback: se a função do modal falhar ou sumir, abre em nova guia
+            const win = window.open('', '_blank');
+            win.document.write(htmlDocumento);
+            win.document.close();
+        }
 
     } catch (err) {
-        console.error(err);
-        notificar(`Erro: ${err.message}`, 'erro');
+        console.error('Erro na geração do romaneio:', err);
+        if (typeof notificar === 'function') {
+            notificar(`Falha ao gerar PDF: ${err.message}`, 'erro');
+        } else {
+            alert(`Erro: ${err.message}`);
+        }
     }
 }
 

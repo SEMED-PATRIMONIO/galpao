@@ -22021,32 +22021,79 @@ async function gerarRelatorioStatusTurmasEmTelaCheia() {
 }
 
 async function abrirHistoricoRemessas() {
-    const mainContainer = document.getElementById('conteudo-principal'); // Ajuste para o ID da sua div principal
-    
-    // 1. Renderiza a estrutura da tela
-    mainContainer.innerHTML = `
-        <div class="container-historico">
-            <h2>Histórico de Remessas</h2>
-            <div class="filtro-datas">
+    // Criamos o HTML da estrutura de busca
+    const htmlHistorico = `
+        <div style="padding: 20px; font-family: sans-serif;">
+            <h2 style="color: #333; margin-bottom: 20px; border-bottom: 2px solid #0ea5e9; padding-bottom: 10px;">
+                🔍 Histórico de Remessas
+            </h2>
+            
+            <div style="display: flex; gap: 10px; align-items: flex-end; margin-bottom: 20px; background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0;">
                 <div>
-                    <label style="display:block; font-size:12px">Data Inicial:</label>
-                    <input type="date" id="data-inicio">
+                    <label style="display:block; font-size:11px; font-weight:bold; color:#64748b; margin-bottom:4px;">DATA INICIAL</label>
+                    <input type="date" id="filtro-inicio" style="padding:8px; border:1px solid #cbd5e1; border-radius:4px;">
                 </div>
                 <div>
-                    <label style="display:block; font-size:12px">Data Final:</label>
-                    <input type="date" id="data-fim">
+                    <label style="display:block; font-size:11px; font-weight:bold; color:#64748b; margin-bottom:4px;">DATA FINAL</label>
+                    <input type="date" id="filtro-fim" style="padding:8px; border:1px solid #cbd5e1; border-radius:4px;">
                 </div>
-                <button onclick="carregarListaRemessas()" class="btn-filtrar">LISTAR</button>
-                <button onclick="window.location.reload()" class="btn-voltar" style="background:#666; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer;">VOLTAR</button>
+                <button onclick="buscarRemessasParaLista()" style="background:#0ea5e9; color:white; border:none; padding:10px 20px; border-radius:4px; cursor:pointer; font-weight:bold;">
+                    FILTRAR
+                </button>
             </div>
-            <div id="lista-remessas-container">
-                <p style="color:#666">Selecione um período ou clique em listar para ver tudo.</p>
+
+            <div id="lista-resultado-remessas" style="max-height: 400px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px;">
+                <p style="padding: 20px; color: #64748b; text-align: center;">Clique em FILTRAR para carregar as remessas.</p>
             </div>
         </div>
     `;
 
-    // Carrega tudo por padrão ao abrir
-    await carregarListaRemessas();
+    // Usamos a função de modal que você já tem no sistema
+    if (typeof abrirModalComprovante === 'function') {
+        abrirModalComprovante(htmlHistorico, 'HistoricoRemessas');
+        // Pequeno delay para garantir que o DOM do modal foi montado antes de buscar
+        setTimeout(() => buscarRemessasParaLista(), 300);
+    } else {
+        alert("Erro: Função abrirModalComprovante não encontrada.");
+    }
+}
+
+// Função que faz a busca real e monta as linhas
+async function buscarRemessasParaLista() {
+    const inicio = document.getElementById('filtro-inicio').value;
+    const fim = document.getElementById('filtro-fim').value;
+    const container = document.getElementById('lista-resultado-remessas');
+
+    container.innerHTML = '<div style="padding:20px; text-align:center;">⏳ Buscando dados...</div>';
+
+    try {
+        const url = `${API_URL}/remessas/listagem?inicio=${inicio}&fim=${fim}`;
+        const res = await fetch(url, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+        const remessas = await res.json();
+
+        if (!remessas || remessas.length === 0) {
+            container.innerHTML = '<div style="padding:20px; text-align:center; color:#ef4444;">Nenhuma remessa encontrada.</div>';
+            return;
+        }
+
+        container.innerHTML = remessas.map(r => `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; border-bottom: 1px solid #f1f5f9; hover: background: #f8fafc;">
+                <div style="flex: 1;">
+                    <div style="font-weight: bold; color: #1e293b;">#${r.remessa_id} - ${r.escola_nome}</div>
+                    <div style="font-size: 11px; color: #64748b;">
+                        Data: ${new Date(r.data_criacao).toLocaleString('pt-BR')} | 
+                        <span style="color: #0284c7; font-weight:bold;">${r.status}</span>
+                    </div>
+                </div>
+                <button onclick="gerarRomaneio(${r.remessa_id})" style="background:#f1f5f9; color:#475569; border:1px solid #cbd5e1; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:11px; font-weight:bold;">
+                    📄 ROMANEIO
+                </button>
+            </div>
+        `).join('');
+
+    } catch (err) {
+        container.innerHTML = `<div style="padding:20px; color:red; text-align:center;">Erro na conexão: ${err.message}</div>`;
+    }
 }
 
 async function carregarListaRemessas() {

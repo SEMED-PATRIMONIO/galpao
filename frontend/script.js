@@ -22021,7 +22021,9 @@ async function gerarRelatorioStatusTurmasEmTelaCheia() {
 }
 
 // Forçamos a função a ser global para o botão do modal encontrá-la
+// 1. Função principal de abertura
 window.abrirHistoricoRemessas = async function() {
+    // Definimos o HTML sem o 'onclick' problemático no botão
     const htmlHistorico = `
         <div style="padding: 20px; font-family: sans-serif;">
             <h2 style="color: #333; margin-bottom: 20px; border-bottom: 2px solid #0ea5e9; padding-bottom: 10px;">
@@ -22037,7 +22039,7 @@ window.abrirHistoricoRemessas = async function() {
                     <label style="display:block; font-size:11px; font-weight:bold; color:#64748b; margin-bottom:4px;">DATA FINAL</label>
                     <input type="date" id="filtro-fim" style="padding:8px; border:1px solid #cbd5e1; border-radius:4px;">
                 </div>
-                <button type="button" onclick="window.buscarRemessasParaLista()" style="background:#0ea5e9; color:white; border:none; padding:10px 20px; border-radius:4px; cursor:pointer; font-weight:bold;">
+                <button type="button" id="btn-executar-filtro" style="background:#0ea5e9; color:white; border:none; padding:10px 20px; border-radius:4px; cursor:pointer; font-weight:bold;">
                     FILTRAR
                 </button>
             </div>
@@ -22051,65 +22053,69 @@ window.abrirHistoricoRemessas = async function() {
     if (typeof abrirModalComprovante === 'function') {
         abrirModalComprovante(htmlHistorico, 'HistoricoRemessas');
         
-        // Aguarda o modal abrir e já dispara a busca inicial (sem datas = traz tudo)
+        // --- O SEGREDO ESTÁ AQUI ---
+        // Aguardamos o modal ser inserido no DOM e anexamos o evento via código, não via string
         setTimeout(() => {
-            window.buscarRemessasParaLista();
-        }, 500);
+            const btnFiltro = document.getElementById('btn-executar-filtro');
+            if (btnFiltro) {
+                btnFiltro.addEventListener('click', window.buscarRemessasParaLista);
+                // Já dispara a primeira busca automaticamente ao abrir
+                window.buscarRemessasParaLista();
+            }
+        }, 400); 
+
     } else {
-        alert("Erro técnico: Função abrirModalComprovante não mapeada.");
+        alert("Erro: Função abrirModalComprovante não encontrada no sistema.");
     }
 };
 
-// Tornamos a busca global também
+// 2. Função de busca (Global)
 window.buscarRemessasParaLista = async function() {
-    // Capturamos os elementos com segurança
+    const container = document.getElementById('lista-resultado-remessas');
     const inputInicio = document.getElementById('filtro-inicio');
     const inputFim = document.getElementById('filtro-fim');
-    const container = document.getElementById('lista-resultado-remessas');
 
-    // Se o container ainda não existir no DOM (modal abrindo), paramos aqui
     if (!container) return;
 
     container.innerHTML = '<div style="padding:20px; text-align:center;">⏳ Buscando dados...</div>';
 
     try {
-        const inicio = inputInicio ? inputInicio.value : '';
-        const fim = inputFim ? inputFim.value : '';
-
-        // Usando a API_URL e TOKEN que já existem no seu script principal
-        const url = `${API_URL}/remessas/listagem?inicio=${inicio}&fim=${fim}`;
-        const res = await fetch(url, { 
-            headers: { 'Authorization': `Bearer ${TOKEN}` } 
+        const queryParams = new URLSearchParams({
+            inicio: inputInicio ? inputInicio.value : '',
+            fim: inputFim ? inputFim.value : ''
         });
+
+        const res = await fetch(`${API_URL}/remessas/listagem?${queryParams.toString()}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+
+        if (!res.ok) throw new Error('Falha na resposta do servidor');
         
         const remessas = await res.json();
 
-        if (!res.ok) throw new Error(remessas.error || 'Erro na consulta');
-
         if (!remessas || remessas.length === 0) {
-            container.innerHTML = '<div style="padding:20px; text-align:center; color:#ef4444;">Nenhuma remessa encontrada para este período.</div>';
+            container.innerHTML = '<div style="padding:20px; text-align:center; color:#64748b;">Nenhuma remessa encontrada.</div>';
             return;
         }
 
-        // Montagem da lista
         container.innerHTML = remessas.map(r => `
             <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; border-bottom: 1px solid #f1f5f9;">
                 <div style="flex: 1;">
-                    <div style="font-weight: bold; color: #1e293b; font-size: 14px;">#${r.remessa_id} - ${r.escola_nome}</div>
+                    <div style="font-weight: bold; color: #1e293b; font-size: 13px;">#${r.remessa_id} - ${r.escola_nome}</div>
                     <div style="font-size: 11px; color: #64748b;">
                         Data: ${new Date(r.data_criacao).toLocaleString('pt-BR')} | 
-                        <span style="color: #0284c7; font-weight:bold; text-transform: uppercase;">${r.status}</span>
+                        <span style="color: #0284c7; font-weight:bold;">${r.status}</span>
                     </div>
                 </div>
-                <button onclick="gerarRomaneio(${r.remessa_id})" style="background:#0ea5e9; color:white; border:none; padding:8px 12px; border-radius:4px; cursor:pointer; font-size:11px; font-weight:bold;">
+                <button onclick="gerarRomaneio(${r.remessa_id})" style="background:#0ea5e9; color:white; border:none; padding:7px 12px; border-radius:4px; cursor:pointer; font-size:11px; font-weight:bold;">
                     📄 ROMANEIO
                 </button>
             </div>
         `).join('');
 
     } catch (err) {
-        console.error('Erro ao listar:', err);
-        container.innerHTML = `<div style="padding:20px; color:red; text-align:center;">Erro: ${err.message}</div>`;
+        console.error('Erro na listagem:', err);
+        container.innerHTML = `<div style="padding:20px; color:#ef4444; text-align:center;">Erro ao carregar: ${err.message}</div>`;
     }
 };
 

@@ -1563,9 +1563,11 @@ router.post('/pedidos/estoque/finalizar-remessa', verificarToken, async (req, re
         for (const item of itens) {
             const { produto_id, quantidade_enviada } = item;
 
-            // ✅ Normaliza tamanho — NULL para produtos sem tamanho (MATERIAL, PATRIMÔNIO)
-            const tamanho = (item.tamanho === undefined || item.tamanho === '')
-                ? null
+            // 🟢 CORREÇÃO CRÍTICA AQUI:
+            // Sincronizando com a Entrada: Se for MATERIAL (sem tamanho), usamos 'N/A'
+            // Se o front enviar 'Único', vazio ou undefined, normalizamos para 'N/A'
+            const tamanho = (item.tamanho === undefined || item.tamanho === '' || item.tamanho === 'Único' || item.tamanho === '10')
+                ? 'N/A'
                 : item.tamanho;
 
             // Valida quantidade
@@ -1585,12 +1587,10 @@ router.post('/pedidos/estoque/finalizar-remessa', verificarToken, async (req, re
 
             console.log(
                 `[REMESSA #${remessaId}] Baixando: "${nomeProduto}" (${tipoProduto}) | ` +
-                `Tam: ${tamanho ?? 'Único'} | Qtd: ${quantidade_enviada}`
+                `Tam: ${tamanho} | Qtd: ${quantidade_enviada}`
             );
 
-            // ✅ UPDATE blindado com LIMIT 1 via subquery
-            // Resolve o problema de NULL duplicado caso ainda exista em outros ambientes
-            // COALESCE garante que NULL e '' são tratados como a mesma chave
+            // ✅ UPDATE sincronizado com o padrão 'N/A'
             const updateRes = await client.query(
                 `UPDATE estoque_por_local
                  SET quantidade = quantidade - $1
@@ -1599,7 +1599,7 @@ router.post('/pedidos/estoque/finalizar-remessa', verificarToken, async (req, re
                      FROM estoque_por_local
                      WHERE local_id = 37
                        AND produto_id = $2
-                       AND COALESCE(tamanho, '') = COALESCE($3, '')
+                       AND tamanho = $3
                        AND quantidade >= $1
                      ORDER BY id
                      LIMIT 1
@@ -1612,17 +1612,17 @@ router.post('/pedidos/estoque/finalizar-remessa', verificarToken, async (req, re
             if (updateRes.rowCount === 0) {
                 throw new Error(
                     `Estoque insuficiente no Almoxarifado Central para ` +
-                    `"${nomeProduto}" (Tamanho: ${tamanho ?? 'Único'}).`
+                    `"${nomeProduto}" (Tamanho: ${tamanho}).`
                 );
             }
 
             const saldoRestante = updateRes.rows[0].quantidade;
             console.log(
-                `[REMESSA #${remessaId}] ✅ "${nomeProduto}" (${tamanho ?? 'Único'}) ` +
+                `[REMESSA #${remessaId}] ✅ "${nomeProduto}" (${tamanho}) ` +
                 `→ Saldo restante: ${saldoRestante}`
             );
 
-            // Registra o item na remessa
+            // Registra o item na remessa (usando o tamanho normalizado 'N/A')
             await client.query(
                 `INSERT INTO pedido_remessa_itens 
                     (remessa_id, produto_id, tamanho, quantidade_enviada) 
@@ -1699,7 +1699,6 @@ router.post('/pedidos/estoque/finalizar-remessa', verificarToken, async (req, re
         client.release();
     }
 });
-
 
 router.get('/pedidos/dashboard/contagem', verificarToken, async (req, res) => {
     try {
@@ -6327,7 +6326,6 @@ router.post('/entrada', async (req, res) => {
 router.post('/estoque/entrada-lote', async (req, res) => {
     const { itens, usuario_id, observacoes } = req.body;
     
-    // IMPORTANTE: Verifique se no seu arquivo é db.pool.connect() ou db.connect()
     const client = await db.pool.connect(); 
 
     try {
@@ -6345,37 +6343,41 @@ router.post('/estoque/entrada-lote', async (req, res) => {
 
         for (const item of itens) {
             if (item.tipo === 'MATERIAL') {
-                // CORREÇÃO CRÍTICA: ON CONFLICT deve bater com o índice do banco
+                // AJUSTE: Forçando 'N/A' para materiais sem grade
+                const tamanhoPadrao = 'N/A';
+
                 await client.query(
                     `INSERT INTO estoque_por_local (local_id, produto_id, tamanho, quantidade)
-                     VALUES (37, $1, NULL, $2)
+                     VALUES (37, $1, $2, $3)
                      ON CONFLICT (local_id, produto_id, (COALESCE(tamanho, ''::character varying))) 
                      DO UPDATE SET quantidade = estoque_por_local.quantidade + EXCLUDED.quantidade;`,
-                    [item.produto_id, item.qtd_total]
+                    [item.produto_id, tamanhoPadrao, item.qtd_total]
                 );
                 
                 await client.query(
-                    `INSERT INTO historico_detalhes (historico_id, produto_id, quantidade, tipo_produto) 
-                     VALUES ($1, $2, $3, 'MATERIAL')`,
-                    [historicoId, item.produto_id, item.qtd_total]
+                    `INSERT INTO historico_detalhes (historico_id, produto_id, quantidade, tamanho, tipo_produto) 
+                     VALUES ($1, $2, $3, $4, 'MATERIAL')`,
+                    [historicoId, item.produto_id, item.qtd_total, tamanhoPadrao]
                 );
 
             } else if (item.tipo === 'UNIFORMES') {
-                // Aqui o item.grade é o objeto { "P": 10, "M": 5 } que seu front envia
                 for (const [tamanho, qtd] of Object.entries(item.grade)) {
                     if (qtd > 0) {
+                        // Para uniformes, usamos o tamanho da grade, mas se por acaso vier vazio, usamos 'N/A'
+                        const tamanhoUniforme = tamanho || 'N/A';
+
                         await client.query(
                             `INSERT INTO estoque_por_local (local_id, produto_id, tamanho, quantidade)
                              VALUES (37, $1, $2, $3)
                              ON CONFLICT (local_id, produto_id, (COALESCE(tamanho, ''::character varying))) 
                              DO UPDATE SET quantidade = estoque_por_local.quantidade + EXCLUDED.quantidade;`,
-                            [item.produto_id, tamanho, qtd]
+                            [item.produto_id, tamanhoUniforme, qtd]
                         );
 
                         await client.query(
                             `INSERT INTO historico_detalhes (historico_id, produto_id, quantidade, tamanho, tipo_produto) 
                              VALUES ($1, $2, $3, $4, 'UNIFORMES')`,
-                            [historicoId, item.produto_id, qtd, tamanho]
+                            [historicoId, item.produto_id, qtd, tamanhoUniforme]
                         );
                     }
                 }
@@ -6383,12 +6385,11 @@ router.post('/estoque/entrada-lote', async (req, res) => {
         }
 
         await client.query('COMMIT');
-        res.status(200).json({ success: true, message: "Estoque atualizado com sucesso." });
+        res.status(200).json({ success: true, message: "Estoque atualizado com sucesso (Padronizado N/A)." });
 
     } catch (err) {
         await client.query('ROLLBACK');
-        console.error("ERRO NO BANCO:", err.message);
-        // Retornamos JSON para evitar o erro de Unexpected Token <
+        console.error("ERRO NO BANCO (ENTRADA):", err.message);
         res.status(500).json({ success: false, error: err.message });
     } finally {
         client.release();
@@ -6494,6 +6495,7 @@ router.get('/estoque/historico-completo', async (req, res) => {
 });
 
 // backend/routes/api.routes.js
+// backend/routes/api.routes.js
 router.post('/estoque/saida-pedido', async (req, res) => {
     const { itens, local_destino_id, usuario_id } = req.body;
     const client = await db.pool.connect();
@@ -6502,7 +6504,6 @@ router.post('/estoque/saida-pedido', async (req, res) => {
         await client.query('BEGIN');
 
         // 1. Criar o Pedido com status APROVADO
-        // O status permanece APROVADO conforme seu código, para que o outro usuário o processe.
         const resPedido = await client.query(
             `INSERT INTO pedidos (usuario_origem_id, local_destino_id, status, data_criacao, data_autorizacao, autorizado_por, tipo_pedido) 
              VALUES ($1, $2, 'APROVADO', NOW(), NOW(), $1, 'SAIDA_DIRETA') 
@@ -6522,31 +6523,36 @@ router.post('/estoque/saida-pedido', async (req, res) => {
 
         for (const item of itens) {
             if (item.tipo === 'MATERIAL') {
-                // APENAS INSERE O ITEM NO PEDIDO E NO HISTÓRICO
-                // A atualização de saldo (UPDATE estoque_por_local) foi removida daqui.
+                // ✅ CORREÇÃO: Inserindo explicitamente 'N/A' no tamanho
                 await client.query(
-                    `INSERT INTO itens_pedido (pedido_id, produto_id, quantidade) VALUES ($1, $2, $3)`,
+                    `INSERT INTO itens_pedido (pedido_id, produto_id, quantidade, tamanho) 
+                     VALUES ($1, $2, $3, 'N/A')`,
                     [pedidoId, item.produto_id, item.qtd_total]
                 );
 
+                // ✅ CORREÇÃO: Mantendo o histórico também com 'N/A'
                 await client.query(
-                    `INSERT INTO historico_detalhes (historico_id, produto_id, quantidade, tipo_produto) VALUES ($1, $2, $3, 'MATERIAL')`,
+                    `INSERT INTO historico_detalhes (historico_id, produto_id, quantidade, tamanho, tipo_produto) 
+                     VALUES ($1, $2, $3, 'N/A', 'MATERIAL')`,
                     [historicoId, item.produto_id, item.qtd_total]
                 );
 
             } else if (item.tipo === 'UNIFORMES') {
                 for (const [tamanho, qtd] of Object.entries(item.grade)) {
                     if (qtd > 0) {
-                        // APENAS INSERE O ITEM NO PEDIDO E NO HISTÓRICO
-                        // A atualização de saldo (UPDATE estoque_por_local) foi removida daqui.
+                        // Se o tamanho vier vazio por algum erro do front, usamos 'N/A' como fallback
+                        const tamUniforme = tamanho || 'N/A';
+
                         await client.query(
-                            `INSERT INTO itens_pedido (pedido_id, produto_id, quantidade, tamanho) VALUES ($1, $2, $3, $4)`,
-                            [pedidoId, item.produto_id, qtd, tamanho]
+                            `INSERT INTO itens_pedido (pedido_id, produto_id, quantidade, tamanho) 
+                             VALUES ($1, $2, $3, $4)`,
+                            [pedidoId, item.produto_id, qtd, tamUniforme]
                         );
 
                         await client.query(
-                            `INSERT INTO historico_detalhes (historico_id, produto_id, quantidade, tamanho, tipo_produto) VALUES ($1, $2, $3, $4, 'UNIFORMES')`,
-                            [historicoId, item.produto_id, qtd, tamanho]
+                            `INSERT INTO historico_detalhes (historico_id, produto_id, quantidade, tamanho, tipo_produto) 
+                             VALUES ($1, $2, $3, $4, 'UNIFORMES')`,
+                            [historicoId, item.produto_id, qtd, tamUniforme]
                         );
                     }
                 }

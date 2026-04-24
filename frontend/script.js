@@ -1103,8 +1103,7 @@ async function salvarEdicaoPedido(pedidoId) {
 }
 
 async function finalizarPedido(pedidoId) {
-    if (!confirm("Confirmar autorização e saída de estoque deste pedido?")) return;
-
+ 
     try {
         const res = await fetch(`${API_URL}/pedidos/finalizar-autorizacao`, {
             method: 'POST',
@@ -1116,7 +1115,7 @@ async function finalizarPedido(pedidoId) {
         });
 
         if (res.ok) {
-            notificar("✅ Autorizado! O pedido seguiu para SEPARAÇÃO.");
+            notificar("✅ Autorizado!");
             document.getElementById('modal-analise').style.display = 'none';
             telaAdminGerenciarSolicitacoes(); // Recarrega a lista
         } else {
@@ -1155,8 +1154,6 @@ async function finalizarAutorizacao(pedidoId) {
         }
     });
 
-    if (!confirm(`Deseja confirmar a saída definitiva de ${itensParaAutorizar.length} itens do estoque?`)) return;
-
     try {
         const res = await fetch(`${API_URL}/estoque/confirmar-autorizacao`, {
             method: 'POST',
@@ -1177,7 +1174,7 @@ async function finalizarAutorizacao(pedidoId) {
             notificar("✅ Pedido Autorizado!");
             document.getElementById('modal-analise').style.display = 'none';
             // Recarrega a fila de pedidos ou dashboard
-            if (typeof carregarFilaPedidos === 'function') telaAdminGerenciarSolicitacoes();
+            if (typeof carregarFilaPedidos === 'function') carregarDashboard();
         } else {
             throw new Error(resultado.error);
         }
@@ -1276,7 +1273,7 @@ async function finalizarAprovacao(pedidoId) {
         });
 
         if (res.ok) {
-            notificar("🚀 Pedido APROVADO e enviado para o estoque!");
+            notificar("🚀 Pedido APROVADO");
             telaAdminGerenciarSolicitacoes(); // Recarrega a lista
         }
     } catch (err) { notificar("Erro ao aprovar pedido."); }

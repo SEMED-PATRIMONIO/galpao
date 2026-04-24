@@ -611,7 +611,7 @@ function getBotoesSubmenu(perfil, titulo, contagem = 0, contagemProntos = 0) {
         if (titulo === 'RELATÓRIOS') return `
             <button class="btn-grande btn-vidro" onclick="telaRelatorioLogStatus()"><i>🕵️</i><span>AUDITORIA</span></button>
             <button class="btn-grande btn-vidro" onclick="telaProgressoGeralEscolas()"><i>🌐</i><span>ENTREGA DE UNIFORMES E KITS</span></button>
-            <button class="btn-grande btn-vidro" onclick="abrirHistoricoRemessas()"><i>🔍</i><span>HISTÓRICO DE ROMANEIOS</span></button>
+            <button class="btn-grande btn-vidro" onclick="executarAberturaHistorico()"><i>🔍</i><span>ROMANEIOS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()"><i>📈</i><span>PAINEL GERAL</span></button>
             <button class="btn-grande btn-vidro" onclick="telaAuditoriaPedidos()"><i>🔍</i><span>FLUXO DO PEDIDO</span></button>
             <button class="btn-grande btn-vidro" onclick="telaRelatorioLogStatus()"><i>🕵️</i><span>HISTÓRICO</span></button>
@@ -632,7 +632,7 @@ function getBotoesSubmenu(perfil, titulo, contagem = 0, contagemProntos = 0) {
         `;
         if (titulo === 'RELATÓRIOS') return `
             <button class="btn-grande btn-vidro" onclick="telaAuditoriaPedidos()"><i>🔍</i><span>FLUXO DO PEDIDO</span></button>
-            <button class="btn-grande btn-vidro" onclick="abrirHistoricoRemessas()"><i>🔍</i><span>HISTÓRICO DE ROMANEIOS</span></button>
+            <button class="btn-grande btn-vidro" onclick="executarAberturaHistorico()"><i>🔍</i><span>ROMANEIOS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaRelatorioLogStatus()"><i>🕵️</i><span>HISTÓRICO</span></button>    
             <button class="btn-grande btn-vidro" onclick="telaProgressoGeralEscolas()"><i>🌐</i><span>ENTREGA DE UNIFORMES E KITS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaRelatorioConsolidado()"><i>🏢</i><span>LISTAGEM RECEBIDO/FALTA RECEBER</span></button>
@@ -22020,81 +22020,84 @@ async function gerarRelatorioStatusTurmasEmTelaCheia() {
     await gerarRelatorioStatusTurmas();
 }
 
-// Forçamos a função a ser global para o botão do modal encontrá-la
-// 1. Função principal de abertura
-window.abrirHistoricoRemessas = async function() {
-    // Definimos o HTML sem o 'onclick' problemático no botão
-    const htmlHistorico = `
-        <div style="padding: 20px; font-family: sans-serif;">
+// 1. ESCUTADOR DE EVENTOS GLOBAL (Ouvindo o documento inteiro)
+// Isso evita qualquer erro de "function not defined"
+document.addEventListener('click', function (e) {
+    // Se clicou no botão de abrir o histórico
+    if (e.target && e.target.id === 'btn-abrir-historico-geral') {
+        executarAberturaHistorico();
+    }
+    
+    // Se clicou no botão de FILTRAR dentro do modal
+    if (e.target && e.target.id === 'btn-executar-filtro-remessas') {
+        buscarDadosRemessas();
+    }
+});
+
+// 2. FUNÇÃO QUE MONTA O MODAL
+async function executarAberturaHistorico() {
+    const htmlPortal = `
+        <div style="padding: 20px; font-family: sans-serif; min-width: 350px;">
             <h2 style="color: #333; margin-bottom: 20px; border-bottom: 2px solid #0ea5e9; padding-bottom: 10px;">
                 🔍 Histórico de Remessas
             </h2>
             
             <div style="display: flex; gap: 10px; align-items: flex-end; margin-bottom: 20px; background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0;">
-                <div>
-                    <label style="display:block; font-size:11px; font-weight:bold; color:#64748b; margin-bottom:4px;">DATA INICIAL</label>
-                    <input type="date" id="filtro-inicio" style="padding:8px; border:1px solid #cbd5e1; border-radius:4px;">
+                <div style="flex: 1;">
+                    <label style="display:block; font-size:11px; font-weight:bold; color:#64748b; margin-bottom:4px;">INÍCIO</label>
+                    <input type="date" id="input-data-inicio" style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:4px;">
                 </div>
-                <div>
-                    <label style="display:block; font-size:11px; font-weight:bold; color:#64748b; margin-bottom:4px;">DATA FINAL</label>
-                    <input type="date" id="filtro-fim" style="padding:8px; border:1px solid #cbd5e1; border-radius:4px;">
+                <div style="flex: 1;">
+                    <label style="display:block; font-size:11px; font-weight:bold; color:#64748b; margin-bottom:4px;">FIM</label>
+                    <input type="date" id="input-data-fim" style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:4px;">
                 </div>
-                <button type="button" id="btn-executar-filtro" style="background:#0ea5e9; color:white; border:none; padding:10px 20px; border-radius:4px; cursor:pointer; font-weight:bold;">
+                <button type="button" id="btn-executar-filtro-remessas" style="background:#0ea5e9; color:white; border:none; padding:10px 20px; border-radius:4px; cursor:pointer; font-weight:bold;">
                     FILTRAR
                 </button>
             </div>
 
-            <div id="lista-resultado-remessas" style="max-height: 400px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; background: white;">
-                <p style="padding: 20px; color: #64748b; text-align: center;">Clique em FILTRAR para carregar as remessas.</p>
+            <div id="area-lista-remessas" style="max-height: 400px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; background: white;">
+                <p style="padding: 20px; color: #64748b; text-align: center;">Clique em FILTRAR para carregar.</p>
             </div>
         </div>
     `;
 
     if (typeof abrirModalComprovante === 'function') {
-        abrirModalComprovante(htmlHistorico, 'HistoricoRemessas');
-        
-        // --- O SEGREDO ESTÁ AQUI ---
-        // Aguardamos o modal ser inserido no DOM e anexamos o evento via código, não via string
-        setTimeout(() => {
-            const btnFiltro = document.getElementById('btn-executar-filtro');
-            if (btnFiltro) {
-                btnFiltro.addEventListener('click', window.buscarRemessasParaLista);
-                // Já dispara a primeira busca automaticamente ao abrir
-                window.buscarRemessasParaLista();
-            }
-        }, 400); 
-
+        abrirModalComprovante(htmlPortal, 'PortalHistorico');
+        // Já busca tudo automaticamente ao abrir
+        setTimeout(() => buscarDadosRemessas(), 500);
     } else {
-        alert("Erro: Função abrirModalComprovante não encontrada no sistema.");
+        alert("Erro: A função 'abrirModalComprovante' não foi encontrada.");
     }
-};
+}
 
-// 2. Função de busca (Global)
-window.buscarRemessasParaLista = async function() {
-    const container = document.getElementById('lista-resultado-remessas');
-    const inputInicio = document.getElementById('filtro-inicio');
-    const inputFim = document.getElementById('filtro-fim');
+// 3. FUNÇÃO QUE BUSCA NA API E DESENHA A LISTA
+async function buscarDadosRemessas() {
+    const container = document.getElementById('area-lista-remessas');
+    const dInicio = document.getElementById('input-data-inicio')?.value || '';
+    const dFim = document.getElementById('input-data-fim')?.value || '';
 
     if (!container) return;
 
-    container.innerHTML = '<div style="padding:20px; text-align:center;">⏳ Buscando dados...</div>';
+    container.innerHTML = '<div style="padding:20px; text-align:center; color:#0ea5e9; font-weight:bold;">⏳ Buscando no servidor...</div>';
 
     try {
-        const queryParams = new URLSearchParams({
-            inicio: inputInicio ? inputInicio.value : '',
-            fim: inputFim ? inputFim.value : ''
-        });
+        // Verifica se as variáveis globais existem
+        const urlBase = typeof API_URL !== 'undefined' ? API_URL : '';
+        const tokenAtivo = typeof TOKEN !== 'undefined' ? TOKEN : '';
 
-        const res = await fetch(`${API_URL}/remessas/listagem?${queryParams.toString()}`, {
-            headers: { 'Authorization': `Bearer ${TOKEN}` }
-        });
-
-        if (!res.ok) throw new Error('Falha na resposta do servidor');
+        const url = `${urlBase}/remessas/listagem?inicio=${dInicio}&fim=${dFim}`;
         
+        const res = await fetch(url, { 
+            headers: { 'Authorization': `Bearer ${tokenAtivo}` } 
+        });
+
+        if (!res.ok) throw new Error('Erro na comunicação com a API');
+
         const remessas = await res.json();
 
         if (!remessas || remessas.length === 0) {
-            container.innerHTML = '<div style="padding:20px; text-align:center; color:#64748b;">Nenhuma remessa encontrada.</div>';
+            container.innerHTML = '<div style="padding:20px; text-align:center; color:#ef4444;">Nenhuma remessa encontrada.</div>';
             return;
         }
 
@@ -22103,8 +22106,8 @@ window.buscarRemessasParaLista = async function() {
                 <div style="flex: 1;">
                     <div style="font-weight: bold; color: #1e293b; font-size: 13px;">#${r.remessa_id} - ${r.escola_nome}</div>
                     <div style="font-size: 11px; color: #64748b;">
-                        Data: ${new Date(r.data_criacao).toLocaleString('pt-BR')} | 
-                        <span style="color: #0284c7; font-weight:bold;">${r.status}</span>
+                        Criada em: ${new Date(r.data_criacao).toLocaleString('pt-BR')} | 
+                        <span style="color: #0284c7; font-weight:bold; text-transform: uppercase;">${r.status}</span>
                     </div>
                 </div>
                 <button onclick="gerarRomaneio(${r.remessa_id})" style="background:#0ea5e9; color:white; border:none; padding:7px 12px; border-radius:4px; cursor:pointer; font-size:11px; font-weight:bold;">
@@ -22114,43 +22117,8 @@ window.buscarRemessasParaLista = async function() {
         `).join('');
 
     } catch (err) {
-        console.error('Erro na listagem:', err);
-        container.innerHTML = `<div style="padding:20px; color:#ef4444; text-align:center;">Erro ao carregar: ${err.message}</div>`;
-    }
-};
-
-async function carregarListaRemessas() {
-    const inicio = document.getElementById('data-inicio').value;
-    const fim = document.getElementById('data-fim').value;
-    const container = document.getElementById('lista-remessas-container');
-
-    container.innerHTML = '<p>Buscando remessas...</p>';
-
-    try {
-        const url = `${API_URL}/remessas/listagem?inicio=${inicio}&fim=${fim}`;
-        const res = await fetch(url, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
-        const remessas = await res.json();
-
-        if (remessas.length === 0) {
-            container.innerHTML = '<p>Nenhuma remessa encontrada para este período.</p>';
-            return;
-        }
-
-        container.innerHTML = remessas.map(r => `
-            <div class="item-remessa">
-                <div>
-                    <strong>#${r.remessa_id}</strong> - ${r.escola_nome}<br>
-                    <small>${new Date(r.data_criacao).toLocaleString('pt-BR')}</small>
-                    <span class="badge-status">${r.status}</span>
-                </div>
-                <button class="btn-romaneio-pqs" onclick="gerarRomaneio(${r.remessa_id})">
-                    📄 ROMANEIO
-                </button>
-            </div>
-        `).join('');
-
-    } catch (err) {
-        container.innerHTML = '<p style="color:red">Erro ao carregar lista.</p>';
+        console.error('Erro crítico na listagem:', err);
+        container.innerHTML = `<div style="padding:20px; color:#ef4444; text-align:center;">Erro: ${err.message}</div>`;
     }
 }
 

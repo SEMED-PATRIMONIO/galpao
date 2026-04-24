@@ -9612,4 +9612,34 @@ router.get('/historico-geral', async (req, res) => {
     }
 });
 
+router.get('/admin/historico/geral', async (req, res) => {
+    try {
+        const { inicio, fim } = req.query;
+
+        // Query para buscar os dados vinculando os nomes de usuários e locais
+        const query = `
+            SELECT 
+                h.id,
+                h.data,
+                h.acao,
+                h.tipo,
+                h.quantidade_total,
+                h.observacoes,
+                u.nome as usuario_nome,
+                l.nome as local_nome
+            FROM historico h
+            LEFT JOIN usuarios u ON h.usuario_id = u.id
+            LEFT JOIN locais l ON h.local_id = l.id
+            WHERE h.data::date BETWEEN $1 AND $2
+            ORDER BY h.data DESC;
+        `;
+
+        const { rows } = await db.query(query, [inicio, fim]);
+        res.json(rows);
+    } catch (error) {
+        console.error('Erro na rota de histórico:', error);
+        res.status(500).json({ error: 'Erro ao buscar dados' });
+    }
+});
+
 module.exports = router;

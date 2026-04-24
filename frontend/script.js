@@ -609,13 +609,11 @@ function getBotoesSubmenu(perfil, titulo, contagem = 0, contagemProntos = 0) {
         `;
 
         if (titulo === 'RELATÓRIOS') return `
-            <button class="btn-grande btn-vidro" onclick="telaRelatorioLogStatus()"><i>🕵️</i><span>AUDITORIA</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaProgressoGeralEscolas()"><i>🌐</i><span>ENTREGA DE UNIFORMES E KITS</span></button>
-            <button class="btn-grande btn-vidro" onclick="executarAberturaHistorico()"><i>🔍</i><span>ROMANEIOS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaHistoricoRemessas()"><i>🔍</i><span>ROMANEIOS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()"><i>📈</i><span>PAINEL GERAL</span></button>
             <button class="btn-grande btn-vidro" onclick="telaAuditoriaPedidos()"><i>🔍</i><span>FLUXO DO PEDIDO</span></button>
             <button class="btn-grande btn-vidro" onclick="telaRelatorioLogStatus()"><i>🕵️</i><span>HISTÓRICO</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaRelatorioTransferenciasExternas()"><i>✈️</i><span>TRANSFERÊNCIAS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaProgressoGeralEscolas()"><i>🌐</i><span>ENTREGA DE UNIFORMES E KITS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaRelatorioConsolidado()"><i>🏢</i><span>LISTAGEM RECEBIDO/FALTA RECEBER</span></button>
         `;
     }
@@ -632,7 +630,7 @@ function getBotoesSubmenu(perfil, titulo, contagem = 0, contagemProntos = 0) {
         `;
         if (titulo === 'RELATÓRIOS') return `
             <button class="btn-grande btn-vidro" onclick="telaAuditoriaPedidos()"><i>🔍</i><span>FLUXO DO PEDIDO</span></button>
-            <button class="btn-grande btn-vidro" onclick="executarAberturaHistorico()"><i>🔍</i><span>ROMANEIOS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaHistoricoRemessas()"><i>🔍</i><span>ROMANEIOS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaRelatorioLogStatus()"><i>🕵️</i><span>HISTÓRICO</span></button>    
             <button class="btn-grande btn-vidro" onclick="telaProgressoGeralEscolas()"><i>🌐</i><span>ENTREGA DE UNIFORMES E KITS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaRelatorioConsolidado()"><i>🏢</i><span>LISTAGEM RECEBIDO/FALTA RECEBER</span></button>
@@ -22020,105 +22018,99 @@ async function gerarRelatorioStatusTurmasEmTelaCheia() {
     await gerarRelatorioStatusTurmas();
 }
 
-// 1. ESCUTADOR DE EVENTOS GLOBAL (Ouvindo o documento inteiro)
-// Isso evita qualquer erro de "function not defined"
-document.addEventListener('click', function (e) {
-    // Se clicou no botão de abrir o histórico
-    if (e.target && e.target.id === 'btn-abrir-historico-geral') {
-        executarAberturaHistorico();
-    }
-    
-    // Se clicou no botão de FILTRAR dentro do modal
-    if (e.target && e.target.id === 'btn-executar-filtro-remessas') {
-        buscarDadosRemessas();
-    }
-});
+async function telaHistoricoRemessas() {
+    const area = document.getElementById('app-content');
+    const hoje = new Date().toISOString().split('T')[0];
+    // Define o início do mês como padrão
+    const inicioMes = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
 
-// 2. FUNÇÃO QUE MONTA O MODAL
-async function executarAberturaHistorico() {
-    const htmlPortal = `
-        <div style="padding: 20px; font-family: sans-serif; min-width: 350px;">
-            <h2 style="color: #333; margin-bottom: 20px; border-bottom: 2px solid #0ea5e9; padding-bottom: 10px;">
-                🔍 Histórico de Remessas
-            </h2>
+    area.innerHTML = `
+        <div class="painel-vidro" style="max-width: 1300px; margin: auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                <h2 style="color:white; margin:0;">📋 HISTÓRICO DE REMESSAS / ROMANEIOS</h2>
+                <div></div> </div>
             
-            <div style="display: flex; gap: 10px; align-items: flex-end; margin-bottom: 20px; background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0;">
-                <div style="flex: 1;">
-                    <label style="display:block; font-size:11px; font-weight:bold; color:#64748b; margin-bottom:4px;">INÍCIO</label>
-                    <input type="date" id="input-data-inicio" style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:4px;">
+            <div style="display:flex; gap:15px; justify-content:center; background:rgba(255,255,255,0.05); padding:15px; border-radius:12px; margin-bottom:20px;">
+                <div style="display:flex; flex-direction:column;">
+                    <small style="color:white; margin-bottom:4px;">Início:</small>
+                    <input type="date" id="remessa_inicio" value="${inicioMes}" class="input-vidro" style="width:160px;">
                 </div>
-                <div style="flex: 1;">
-                    <label style="display:block; font-size:11px; font-weight:bold; color:#64748b; margin-bottom:4px;">FIM</label>
-                    <input type="date" id="input-data-fim" style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:4px;">
+                <div style="display:flex; flex-direction:column;">
+                    <small style="color:white; margin-bottom:4px;">Fim:</small>
+                    <input type="date" id="remessa_fim" value="${hoje}" class="input-vidro" style="width:160px;">
                 </div>
-                <button type="button" id="btn-executar-filtro-remessas" style="background:#0ea5e9; color:white; border:none; padding:10px 20px; border-radius:4px; cursor:pointer; font-weight:bold;">
-                    FILTRAR
+                <button onclick="carregarDadosHistoricoRemessas()" class="btn-vidro" style="background:#3b82f6; margin-top:18px; font-weight:bold;">
+                    🔍 FILTRAR REMESSAS
                 </button>
             </div>
 
-            <div id="area-lista-remessas" style="max-height: 400px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; background: white;">
-                <p style="padding: 20px; color: #64748b; text-align: center;">Clique em FILTRAR para carregar.</p>
+            <div class="painel-vidro" style="background:rgba(0,0,0,0.3); padding:0; overflow:hidden;">
+                <div style="max-height: 600px; overflow-y: auto;">
+                    <table style="width:100%; border-collapse:collapse; color:white; font-size:0.85rem;">
+                        <thead style="background:rgba(255,255,255,0.1); position: sticky; top:0; z-index:1;">
+                            <tr>
+                                <th style="padding:12px; text-align:left;">REMESSA</th>
+                                <th style="padding:12px; text-align:left;">DATA CRIAÇÃO</th>
+                                <th style="padding:12px; text-align:left;">UNIDADE / DESTINO</th>
+                                <th style="padding:12px; text-align:left;">STATUS</th>
+                                <th style="padding:12px; text-align:center;">AÇÃO</th>
+                            </tr>
+                        </thead>
+                        <tbody id="corpo-tabela-remessas">
+                            </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     `;
-
-    if (typeof abrirModalComprovante === 'function') {
-        abrirModalComprovante(htmlPortal, 'PortalHistorico');
-        // Já busca tudo automaticamente ao abrir
-        setTimeout(() => buscarDadosRemessas(), 500);
-    } else {
-        alert("Erro: A função 'abrirModalComprovante' não foi encontrada.");
-    }
+    
+    // Chama a carga inicial assim que monta a tela
+    carregarDadosHistoricoRemessas();
 }
+async function carregarDadosHistoricoRemessas() {
+    const corpoTabela = document.getElementById('corpo-tabela-remessas');
+    const dataInicio = document.getElementById('remessa_inicio').value;
+    const dataFim = document.getElementById('remessa_fim').value;
 
-// 3. FUNÇÃO QUE BUSCA NA API E DESENHA A LISTA
-async function buscarDadosRemessas() {
-    const container = document.getElementById('area-lista-remessas');
-    const dInicio = document.getElementById('input-data-inicio')?.value || '';
-    const dFim = document.getElementById('input-data-fim')?.value || '';
-
-    if (!container) return;
-
-    container.innerHTML = '<div style="padding:20px; text-align:center; color:#0ea5e9; font-weight:bold;">⏳ Buscando no servidor...</div>';
+    corpoTabela.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px;">⏳ Buscando remessas...</td></tr>';
 
     try {
-        // Verifica se as variáveis globais existem
-        const urlBase = typeof API_URL !== 'undefined' ? API_URL : '';
-        const tokenAtivo = typeof TOKEN !== 'undefined' ? TOKEN : '';
-
-        const url = `${urlBase}/remessas/listagem?inicio=${dInicio}&fim=${dFim}`;
-        
-        const res = await fetch(url, { 
-            headers: { 'Authorization': `Bearer ${tokenAtivo}` } 
+        const url = `${API_URL}/remessas/listagem?inicio=${dataInicio}&fim=${dataFim}`;
+        const res = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
 
-        if (!res.ok) throw new Error('Erro na comunicação com a API');
+        if (!res.ok) throw new Error('Erro ao buscar dados do servidor');
 
         const remessas = await res.json();
 
-        if (!remessas || remessas.length === 0) {
-            container.innerHTML = '<div style="padding:20px; text-align:center; color:#ef4444;">Nenhuma remessa encontrada.</div>';
+        if (remessas.length === 0) {
+            corpoTabela.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px;">Nenhuma remessa encontrada para este período.</td></tr>';
             return;
         }
 
-        container.innerHTML = remessas.map(r => `
-            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; border-bottom: 1px solid #f1f5f9;">
-                <div style="flex: 1;">
-                    <div style="font-weight: bold; color: #1e293b; font-size: 13px;">#${r.remessa_id} - ${r.escola_nome}</div>
-                    <div style="font-size: 11px; color: #64748b;">
-                        Criada em: ${new Date(r.data_criacao).toLocaleString('pt-BR')} | 
-                        <span style="color: #0284c7; font-weight:bold; text-transform: uppercase;">${r.status}</span>
-                    </div>
-                </div>
-                <button onclick="gerarRomaneio(${r.remessa_id})" style="background:#0ea5e9; color:white; border:none; padding:7px 12px; border-radius:4px; cursor:pointer; font-size:11px; font-weight:bold;">
-                    📄 ROMANEIO
-                </button>
-            </div>
+        corpoTabela.innerHTML = remessas.map(r => `
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                <td style="padding:12px; font-weight:bold;">#${r.remessa_id}</td>
+                <td style="padding:12px;">${new Date(r.data_criacao).toLocaleString('pt-BR')}</td>
+                <td style="padding:12px;">${r.escola_nome}</td>
+                <td style="padding:12px;">
+                    <span style="background:${r.status === 'RECEBIDO' ? '#16a34a' : '#2563eb'}; padding:2px 8px; border-radius:4px; font-size:0.7rem;">
+                        ${r.status}
+                    </span>
+                </td>
+                <td style="padding:12px; text-align:center;">
+                    <button onclick="gerarRomaneio(${r.remessa_id})" class="btn-vidro" style="background:#0ea5e9; font-size:0.7rem; margin:0;">
+                        📄 GERAR ROMANEIO
+                    </button>
+                </td>
+            </tr>
         `).join('');
 
     } catch (err) {
-        console.error('Erro crítico na listagem:', err);
-        container.innerHTML = `<div style="padding:20px; color:#ef4444; text-align:center;">Erro: ${err.message}</div>`;
+        console.error(err);
+        corpoTabela.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:20px; color:#f87171;">Erro: ${err.message}</td></tr>`;
     }
 }
 

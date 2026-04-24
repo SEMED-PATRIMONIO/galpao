@@ -612,7 +612,8 @@ function getBotoesSubmenu(perfil, titulo, contagem = 0, contagemProntos = 0) {
             <button class="btn-grande btn-vidro" onclick="telaHistoricoRemessas()"><i>🔍</i><span>ROMANEIOS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()"><i>📈</i><span>PAINEL GERAL</span></button>
             <button class="btn-grande btn-vidro" onclick="telaAuditoriaPedidos()"><i>🔍</i><span>FLUXO DO PEDIDO</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaRelatorioLogStatus()"><i>🕵️</i><span>HISTÓRICO</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioMovimentacao()"><i>🕵️</i><span>HISTÓRICO MOVIMENTAÇÃO</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioLogStatus()"><i>🕵️</i><span>HISTÓRICO PEDIDOS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaProgressoGeralEscolas()"><i>🌐</i><span>ENTREGA DE UNIFORMES E KITS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaRelatorioConsolidado()"><i>🏢</i><span>LISTAGEM RECEBIDO/FALTA RECEBER</span></button>
         `;
@@ -631,7 +632,8 @@ function getBotoesSubmenu(perfil, titulo, contagem = 0, contagemProntos = 0) {
         if (titulo === 'RELATÓRIOS') return `
             <button class="btn-grande btn-vidro" onclick="telaAuditoriaPedidos()"><i>🔍</i><span>FLUXO DO PEDIDO</span></button>
             <button class="btn-grande btn-vidro" onclick="telaHistoricoRemessas()"><i>🔍</i><span>ROMANEIOS</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaRelatorioLogStatus()"><i>🕵️</i><span>HISTÓRICO</span></button>    
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioMovimentacao()"><i>🕵️</i><span>HISTÓRICO MOVIMENTAÇÃO</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioLogStatus()"><i>🕵️</i><span>HISTÓRICO PEDIDOS</span></button>    
             <button class="btn-grande btn-vidro" onclick="telaProgressoGeralEscolas()"><i>🌐</i><span>ENTREGA DE UNIFORMES E KITS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaRelatorioConsolidado()"><i>🏢</i><span>LISTAGEM RECEBIDO/FALTA RECEBER</span></button>
         `;
@@ -19381,7 +19383,7 @@ async function telaRelatorioLogStatus() {
         <div class="painel-vidro" style="max-width: 1300px; margin: auto;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
                 <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
-                <h2 style="color:white; margin:0;">🕵️ AUDITORIA DE STATUS</h2>
+                <h2 style="color:white; margin:0;">🕵️ LOG DE PEDIDOS</h2>
                 <div style="display:flex; gap:10px;">
                     <button onclick="imprimirLogStatusPDF()" class="btn-vidro" style="background:#2563eb; font-size:0.7rem;">🖨️ IMPRIMIR PDF</button>
                     <button onclick="compartilharLogWhatsApp()" class="btn-vidro" style="background:#16a34a; font-size:0.7rem;">📱 WHATSAPP</button>
@@ -22092,6 +22094,96 @@ async function carregarDadosHistoricoRemessas() {
     } catch (err) {
         console.error(err);
         corpoTabela.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:20px; color:#f87171;">Erro: ${err.message}</td></tr>`;
+    }
+}
+
+async function telaRelatorioMovimentacao() {
+    const area = document.getElementById('app-content');
+    const hoje = new Date().toISOString().split('T')[0];
+    const inicioMes = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
+
+    area.innerHTML = `
+        <div class="painel-vidro animate__animated animate__fadeIn" style="max-width: 1300px; margin: auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                <h2 style="color:white; margin:0;">📦 HISTÓRICO GERAL DE ESTOQUE</h2>
+                <div style="visibility: hidden;"> <button class="btn-vidro">🖨️</button>
+                </div>
+            </div>
+            
+            <div style="display:flex; gap:15px; justify-content:center; background:rgba(255,255,255,0.05); padding:15px; border-radius:12px; margin-bottom:20px;">
+                <div style="display:flex; flex-direction:column;">
+                    <label style="color:white; font-size:0.7rem; margin-bottom:5px;">DATA INICIAL</label>
+                    <input type="date" id="hist_inicio" value="${inicioMes}" class="input-vidro" style="width:160px;">
+                </div>
+                <div style="display:flex; flex-direction:column;">
+                    <label style="color:white; font-size:0.7rem; margin-bottom:5px;">DATA FINAL</label>
+                    <input type="date" id="hist_fim" value="${hoje}" class="input-vidro" style="width:160px;">
+                </div>
+                <button onclick="carregarDadosHistorico()" class="btn-vidro" style="background:#3b82f6; align-self: flex-end; font-weight:bold; height: 40px;">
+                    🔍 FILTRAR HISTÓRICO
+                </button>
+            </div>
+
+            <div class="painel-vidro" style="background:rgba(0,0,0,0.3); padding:0; overflow:hidden; border: 1px solid rgba(255,255,255,0.1);">
+                <div style="max-height: 600px; overflow-y: auto;">
+                    <table style="width:100%; border-collapse:collapse; color:white; font-size:0.85rem;">
+                        <thead style="background:rgba(255,255,255,0.1); position: sticky; top:0; z-index:10;">
+                            <tr>
+                                <th style="padding:15px; text-align:left;">DATA / HORA</th>
+                                <th style="padding:15px; text-align:left;">AÇÃO</th>
+                                <th style="padding:15px; text-align:center;">TIPO</th>
+                                <th style="padding:15px; text-align:center;">QTD TOTAL</th>
+                                <th style="padding:15px; text-align:left;">USUÁRIO</th>
+                                <th style="padding:15px; text-align:left;">OBSERVAÇÕES</th>
+                            </tr>
+                        </thead>
+                        <tbody id="corpo-tabela-historico">
+                            <tr><td colspan="6" style="padding:20px; text-align:center;">Clique em filtrar para carregar...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    `;
+    carregarDadosHistorico();
+}
+
+async function carregarDadosHistorico() {
+    const inicio = document.getElementById('hist_inicio').value;
+    const fim = document.getElementById('hist_fim').value;
+    const corpo = document.getElementById('corpo-tabela-historico');
+
+    corpo.innerHTML = `<tr><td colspan="6" style="padding:20px; text-align:center;"><i class="fas fa-spinner fa-spin"></i> Buscando registros...</td></tr>`;
+
+    try {
+        const res = await fetch(`${API_URL}/estoque/historico-geral?inicio=${inicio}&fim=${fim}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const dados = await res.json();
+
+        if (dados.length === 0) {
+            corpo.innerHTML = `<tr><td colspan="6" style="padding:20px; text-align:center;">Nenhum registro encontrado no período.</td></tr>`;
+            return;
+        }
+
+        corpo.innerHTML = dados.map(h => `
+            <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); hover: background: rgba(255,255,255,0.02);">
+                <td style="padding:12px;">${new Date(h.data).toLocaleString('pt-BR')}</td>
+                <td style="padding:12px;"><span style="font-weight:bold; color: #60a5fa;">${h.acao}</span></td>
+                <td style="padding:12px; text-align:center;">
+                    <span style="padding:3px 8px; border-radius:4px; background:${h.tipo === 'ENTRADA' ? '#065f46' : '#991b1b'}; font-size:0.7rem;">
+                        ${h.tipo}
+                    </span>
+                </td>
+                <td style="padding:12px; text-align:center; font-weight:bold;">${h.quantidade_total}</td>
+                <td style="padding:12px;">${h.nome_usuario || 'Sistema'}</td>
+                <td style="padding:12px; font-size:0.75rem; opacity:0.8;">${h.observacoes || '-'}</td>
+            </tr>
+        `).join('');
+
+    } catch (err) {
+        corpo.innerHTML = `<tr><td colspan="6" style="padding:20px; text-align:center; color: #f87171;">Erro ao carregar histórico.</td></tr>`;
     }
 }
 

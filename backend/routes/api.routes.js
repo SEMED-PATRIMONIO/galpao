@@ -9475,9 +9475,10 @@ router.get('/remessas/:id/romaneio-detalhado', async (req, res) => {
                 p.data_autorizacao,
                 p.data_separacao,
                 p.data_saida,
+                p.data_recebimento, -- NOVO CAMPO
+                p.status,           -- NOVO CAMPO
                 p.tipo_pedido,
                 p.volumes,
-                -- COALESCE garante que se nome_oficial for nulo, use o nome. Se ambos forem nulos, usa 'Local não identificado'
                 COALESCE(l.nome_oficial, l.nome, 'Local não identificado') AS destino_final,
                 u_origem.nome AS solicitante,
                 u_autoriza.nome AS quem_autorizou,
@@ -9493,7 +9494,6 @@ router.get('/remessas/:id/romaneio-detalhado', async (req, res) => {
                 ) AS itens
             FROM pedido_remessas r
             JOIN pedidos p ON r.pedido_id = p.id
-            -- LEFT JOIN aqui é mais seguro: se o destino sumir por erro humano, a rota não quebra (retorna nulo mas não dá erro 500)
             LEFT JOIN locais l ON p.local_destino_id = l.id
             LEFT JOIN usuarios u_origem ON p.usuario_origem_id = u_origem.id
             LEFT JOIN usuarios u_autoriza ON p.autorizado_por = u_autoriza.id
@@ -9508,15 +9508,16 @@ router.get('/remessas/:id/romaneio-detalhado', async (req, res) => {
 
         const dados = result.rows[0];
 
-        // Mantemos a estrutura do objeto idêntica para não quebrar o seu Front-end
         res.json({
             pedido: {
                 id: dados.pedido_id,
-                escola_nome: dados.destino_final, // Agora com a garantia do COALESCE
+                escola_nome: dados.destino_final,
                 tipo_pedido: dados.tipo_pedido || 'SAÍDA',
                 data_criacao: dados.data_criacao,
                 data_autorizacao: dados.data_autorizacao,
                 data_separacao: dados.data_separacao,
+                data_recebimento: dados.data_recebimento, // ENVIANDO PARA O FRONT
+                status: dados.status,                     // ENVIANDO PARA O FRONT
                 solicitante: dados.solicitante || 'Não informado',
                 quem_autorizou: dados.quem_autorizou,
                 volumes: dados.volumes || 0
@@ -9527,6 +9528,37 @@ router.get('/remessas/:id/romaneio-detalhado', async (req, res) => {
     } catch (err) {
         console.error('Erro ao buscar romaneio:', err);
         res.status(500).json({ error: "Erro interno ao processar o romaneio." });
+    }
+});
+
+router.get('/remessas/listagem', async (req, res) => {
+    const { inicio, fim } = req.query;
+
+    try {
+        let query = `
+            SELECT 
+                r.id AS remessa_id,
+                p.data_criacao,
+                p.status,
+                COALESCE(l.nome_oficial, l.nome) AS escola_nome
+            FROM pedido_remessas r
+            JOIN pedidos p ON r.pedido_id = p.id
+            LEFT JOIN locais l ON p.local_destino_id = l.id
+        `;
+
+        const params = [];
+        if (inicio && fim) {
+            query += ` WHERE p.data_criacao::date BETWEEN $1 AND $2 `;
+            params.push(inicio, fim);
+        }
+
+        query += ` ORDER BY p.data_criacao DESC `;
+
+        const result = await db.query(query, params);
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Erro ao listar remessas." });
     }
 });
 

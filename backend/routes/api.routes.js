@@ -6326,63 +6326,51 @@ router.post('/entrada', async (req, res) => {
 // Sugestão de implementação (Node.js/Express)
 router.post('/entrada-lote', async (req, res) => {
     const { itens, observacao, usuario_id } = req.body;
-
-    if (!itens || itens.length === 0) {
-        return res.status(400).json({ error: "Nenhum item enviado." });
-    }
-
     const client = await db.connect();
 
     try {
         await client.query('BEGIN');
 
-        // 1. Calcula a soma total para o cabeçalho do histórico
-        const quantidadeTotalTotal = itens.reduce((acc, item) => acc + parseInt(item.quantidade, 10), 0);
-
-        // 2. Insere o registro MESTRE na tabela 'historico'
-        // local_id 37 fixo conforme seu Almoxarifado Central
+        // 1. Cabeçalho do Histórico
+        const qtdTotalGeral = itens.reduce((acc, i) => acc + parseInt(i.quantidade), 0);
         const resHist = await client.query(`
             INSERT INTO historico (usuario_id, acao, tipo_historico, quantidade_total, observacoes, local_id, tipo)
             VALUES ($1, 'ENTRADA DE ESTOQUE', 'PRINCIPAL', $2, $3, 37, 'ENTRADA')
             RETURNING id;
-        `, [usuario_id, quantidadeTotalTotal, observacao || 'Entrada via painel operacional']);
-        
+        `, [usuario_id, qtdTotalGeral, observacao]);
+
         const historico_id = resHist.rows[0].id;
 
-        // 3. Itera sobre os itens para atualizar saldo e gravar detalhes
+        // 2. Loop dos Itens
         for (const item of itens) {
-            const tamanhoStr = item.tamanho || null;
-
-            // --- ATUALIZAÇÃO DO SALDO (estoque_por_local) ---
-            // Usando ON CONFLICT para aproveitar seu índice único e evitar erros
+            // AQUI ESTÁ O SEGREDO: O ON CONFLICT tem que ser igual ao seu INDEX
             const sqlEstoque = `
                 INSERT INTO estoque_por_local (local_id, produto_id, tamanho, quantidade)
                 VALUES (37, $1, $2, $3)
-                ON CONFLICT (local_id, produto_id, COALESCE(tamanho, '')) 
+                ON CONFLICT (local_id, produto_id, (COALESCE(tamanho, ''::character varying))) 
                 DO UPDATE SET quantidade = estoque_por_local.quantidade + EXCLUDED.quantidade;
             `;
-            await client.query(sqlEstoque, [item.produto_id, tamanhoStr, item.quantidade]);
+            
+            await client.query(sqlEstoque, [
+                item.produto_id, 
+                item.tamanho || null, 
+                item.quantidade
+            ]);
 
-            // --- GRAVAÇÃO DO DETALHE (historico_detalhes) ---
+            // 3. Detalhes do Histórico
             await client.query(`
                 INSERT INTO historico_detalhes (historico_id, produto_id, tamanho, quantidade, tipo_produto) 
                 VALUES ($1, $2, $3, $4, $5)
-            `, [
-                historico_id, 
-                item.produto_id, 
-                tamanhoStr, 
-                item.quantidade, 
-                item.tipo_produto // 'UNIFORMES' ou 'MATERIAL' vindo do front
-            ]);
+            `, [historico_id, item.produto_id, item.tamanho || null, item.quantidade, item.tipo_produto]);
         }
 
         await client.query('COMMIT');
-        res.json({ message: "Sucesso" });
+        res.json({ success: true }); // Mandei success: true para bater com seu front
 
     } catch (err) {
         await client.query('ROLLBACK');
-        console.error('ERRO NA OPERAÇÃO DE ENTRADA:', err.message);
-        res.status(500).json({ error: "Erro interno ao processar entrada no banco." });
+        console.error('ERRO NO BANCO:', err.message);
+        res.status(500).json({ success: false, error: err.message });
     } finally {
         client.release();
     }

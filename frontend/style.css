@@ -2719,3 +2719,18 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .tabela-entrega-container::-webkit-scrollbar-thumb:hover {
     background: rgba(0, 212, 255, 0.55);
 }
+
+.container-historico { padding: 20px; background: white; border-radius: 8px; }
+.filtro-datas { display: flex; gap: 10px; align-items: flex-end; margin-bottom: 20px; flex-wrap: wrap; }
+.filtro-datas input { padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+.item-remessa { 
+    display: flex; justify-content: space-between; align-items: center; 
+    padding: 12px; border-bottom: 1px solid #eee; transition: 0.2s;
+}
+.item-remessa:hover { background: #f9f9f9; }
+.btn-romaneio-pqs { 
+    background: #0ea5e9; color: white; border: none; padding: 6px 12px; 
+    border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 12px;
+}
+.btn-romaneio-pqs:hover { background: #0284c7; }
+.badge-status { font-size: 10px; padding: 2px 6px; border-radius: 10px; background: #e2e8f0; }

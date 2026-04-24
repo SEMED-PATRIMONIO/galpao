@@ -611,6 +611,7 @@ function getBotoesSubmenu(perfil, titulo, contagem = 0, contagemProntos = 0) {
         if (titulo === 'RELATÓRIOS') return `
             <button class="btn-grande btn-vidro" onclick="telaRelatorioLogStatus()"><i>🕵️</i><span>AUDITORIA</span></button>
             <button class="btn-grande btn-vidro" onclick="telaProgressoGeralEscolas()"><i>🌐</i><span>ENTREGA DE UNIFORMES E KITS</span></button>
+            <button class="btn-grande btn-vidro" onclick="abrirHistoricoRemessas()"><i>🔍</i><span>HISTÓRICO DE ROMANEIOS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()"><i>📈</i><span>PAINEL GERAL</span></button>
             <button class="btn-grande btn-vidro" onclick="telaAuditoriaPedidos()"><i>🔍</i><span>FLUXO DO PEDIDO</span></button>
             <button class="btn-grande btn-vidro" onclick="telaRelatorioLogStatus()"><i>🕵️</i><span>HISTÓRICO</span></button>
@@ -631,6 +632,7 @@ function getBotoesSubmenu(perfil, titulo, contagem = 0, contagemProntos = 0) {
         `;
         if (titulo === 'RELATÓRIOS') return `
             <button class="btn-grande btn-vidro" onclick="telaAuditoriaPedidos()"><i>🔍</i><span>FLUXO DO PEDIDO</span></button>
+            <button class="btn-grande btn-vidro" onclick="abrirHistoricoRemessas()"><i>🔍</i><span>HISTÓRICO DE ROMANEIOS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaRelatorioLogStatus()"><i>🕵️</i><span>HISTÓRICO</span></button>    
             <button class="btn-grande btn-vidro" onclick="telaProgressoGeralEscolas()"><i>🌐</i><span>ENTREGA DE UNIFORMES E KITS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaRelatorioConsolidado()"><i>🏢</i><span>LISTAGEM RECEBIDO/FALTA RECEBER</span></button>
@@ -22016,6 +22018,70 @@ async function gerarRelatorioStatusTurmasEmTelaCheia() {
     `;
 
     await gerarRelatorioStatusTurmas();
+}
+
+async function abrirHistoricoRemessas() {
+    const mainContainer = document.getElementById('conteudo-principal'); // Ajuste para o ID da sua div principal
+    
+    // 1. Renderiza a estrutura da tela
+    mainContainer.innerHTML = `
+        <div class="container-historico">
+            <h2>Histórico de Remessas</h2>
+            <div class="filtro-datas">
+                <div>
+                    <label style="display:block; font-size:12px">Data Inicial:</label>
+                    <input type="date" id="data-inicio">
+                </div>
+                <div>
+                    <label style="display:block; font-size:12px">Data Final:</label>
+                    <input type="date" id="data-fim">
+                </div>
+                <button onclick="carregarListaRemessas()" class="btn-filtrar">LISTAR</button>
+                <button onclick="window.location.reload()" class="btn-voltar" style="background:#666; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer;">VOLTAR</button>
+            </div>
+            <div id="lista-remessas-container">
+                <p style="color:#666">Selecione um período ou clique em listar para ver tudo.</p>
+            </div>
+        </div>
+    `;
+
+    // Carrega tudo por padrão ao abrir
+    await carregarListaRemessas();
+}
+
+async function carregarListaRemessas() {
+    const inicio = document.getElementById('data-inicio').value;
+    const fim = document.getElementById('data-fim').value;
+    const container = document.getElementById('lista-remessas-container');
+
+    container.innerHTML = '<p>Buscando remessas...</p>';
+
+    try {
+        const url = `${API_URL}/remessas/listagem?inicio=${inicio}&fim=${fim}`;
+        const res = await fetch(url, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+        const remessas = await res.json();
+
+        if (remessas.length === 0) {
+            container.innerHTML = '<p>Nenhuma remessa encontrada para este período.</p>';
+            return;
+        }
+
+        container.innerHTML = remessas.map(r => `
+            <div class="item-remessa">
+                <div>
+                    <strong>#${r.remessa_id}</strong> - ${r.escola_nome}<br>
+                    <small>${new Date(r.data_criacao).toLocaleString('pt-BR')}</small>
+                    <span class="badge-status">${r.status}</span>
+                </div>
+                <button class="btn-romaneio-pqs" onclick="gerarRomaneio(${r.remessa_id})">
+                    📄 ROMANEIO
+                </button>
+            </div>
+        `).join('');
+
+    } catch (err) {
+        container.innerHTML = '<p style="color:red">Erro ao carregar lista.</p>';
+    }
 }
 
 window.telaVisualizarEstoque = telaVisualizarEstoque;

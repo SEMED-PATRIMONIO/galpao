@@ -3077,39 +3077,38 @@ function adicionarLinhaEntrada() {
 
 async function processarEntradaEstoque() {
     const usuarioId = localStorage.getItem('usuario_id'); 
-
-    if (!usuarioId) {
-        notificar("⚠️ Erro: Sessão de usuário não encontrada.");
-        return;
-    }
-
     const inputs = document.querySelectorAll('.input-entrada-qtd');
-    const itensParaEnviar = [];
+    const mapaItens = {};
 
-    // Transformamos os inputs diretamente no formato que o banco espera
     inputs.forEach(input => {
         const qtd = parseInt(input.value) || 0;
         if (qtd <= 0) return;
 
-        // O backend precisa de uma linha para cada combinação de Produto + Tamanho
-        itensParaEnviar.push({
-            produto_id: parseInt(input.dataset.id),
-            quantidade: qtd,
-            tamanho: input.dataset.tamanho || null,
-            tipo_produto: input.dataset.tipo // 'UNIFORMES' ou 'MATERIAL'
-        });
+        const id = input.dataset.id;
+        const tipo = input.dataset.tipo;
+        const tamanho = input.dataset.tamanho;
+
+        if (!mapaItens[id]) {
+            mapaItens[id] = {
+                produto_id: id,
+                tipo: tipo,
+                qtd_total: 0,
+                grade: {} 
+            };
+        }
+
+        mapaItens[id].qtd_total += qtd;
+        if (tipo === 'UNIFORMES' && tamanho) {
+            mapaItens[id].grade[tamanho] = (mapaItens[id].grade[tamanho] || 0) + qtd;
+        }
     });
 
+    const itensParaEnviar = Object.values(mapaItens);
+
     if (itensParaEnviar.length === 0) {
-        notificar("⚠️ Informe ao menos uma quantidade válida.");
+        notificar("⚠️ Informe uma quantidade.");
         return;
     }
-
-    // Feedback visual
-    const btn = document.querySelector('.btn-confirmar-entrada');
-    const originalText = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> PROCESSANDO...';
 
     try {
         const res = await fetch(`${API_URL}/estoque/entrada-lote`, {
@@ -3121,25 +3120,19 @@ async function processarEntradaEstoque() {
             body: JSON.stringify({ 
                 itens: itensParaEnviar,
                 usuario_id: usuarioId,
-                observacao: "Entrada via painel operacional" 
+                observacoes: "Entrada via painel operacional" 
             })
         });
 
         const resultado = await res.json();
-        
-        // Ajuste: Verificamos res.ok ou resultado.success dependendo de como seu back responde
-        if (res.ok) {
-            notificar("✅ Estoque atualizado com sucesso!");
-            setTimeout(() => carregarDashboard(), 1500); 
+        if (resultado.success) {
+            notificar("✅ Estoque atualizado!");
+            carregarDashboard();
         } else {
-            throw new Error(resultado.error || "Erro no servidor");
+            throw new Error(resultado.error);
         }
     } catch (err) {
-        console.error(err);
-        notificar("❌ Erro na operação: " + err.message);
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = originalText;
+        notificar("❌ Erro: " + err.message);
     }
 }
 

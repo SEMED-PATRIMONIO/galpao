@@ -22149,59 +22149,90 @@ async function telaRelatorioMovimentacao() {
     carregarDadosHistorico();
 }
 
+async function telaRelatorioLogStatus() {
+    const area = document.getElementById('app-content');
+    const hoje = new Date().toISOString().split('T')[0];
+    const inicioMes = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
+
+    area.innerHTML = `
+        <div class="painel-vidro" style="max-width: 1300px; margin: auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                <h2 style="color:white; margin:0;">🕵️ LOG DE MOVIMENTAÇÃO</h2>
+            </div>
+            
+            <div style="display:flex; gap:15px; justify-content:center; background:rgba(255,255,255,0.05); padding:15px; border-radius:12px; margin-bottom:20px;">
+                <input type="date" id="log_inicio" value="${inicioMes}" class="input-vidro" style="width:160px;">
+                <input type="date" id="log_fim" value="${hoje}" class="input-vidro" style="width:160px;">
+                <button onclick="carregarDadosHistorico()" class="btn-vidro" style="background:#3b82f6; font-weight:bold;">
+                    🔍 FILTRAR
+                </button>
+            </div>
+
+            <div class="painel-vidro" style="background:rgba(0,0,0,0.3); padding:0; overflow:hidden;">
+                <div style="max-height: 500px; overflow-y: auto;">
+                    <table style="width:100%; border-collapse:collapse; color:white; font-size:0.85rem;">
+                        <thead style="background:rgba(255,255,255,0.1); position: sticky; top:0;">
+                            <tr>
+                                <th style="padding:12px; text-align:left;">DATA/HORA</th>
+                                <th style="padding:12px; text-align:left;">AÇÃO</th>
+                                <th style="padding:12px; text-align:left;">USUÁRIO</th>
+                                <th style="padding:12px; text-align:center;">QTD</th>
+                                <th style="padding:12px; text-align:left;">OBSERVAÇÃO</th>
+                            </tr>
+                        </thead>
+                        <tbody id="corpo-tabela-log"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Pequeno delay para garantir que o DOM renderizou o innerHTML antes de buscar os valores
+    setTimeout(() => carregarDadosHistorico(), 100);
+}
+
 async function carregarDadosHistorico() {
-    const inicio = document.getElementById('log_inicio').value;
-    const fim = document.getElementById('log_fim').value;
+    // 1. Pegamos os elementos
+    const elInicio = document.getElementById('log_inicio');
+    const elFim = document.getElementById('log_fim');
     const corpo = document.getElementById('corpo-tabela-log');
 
-    // Feedback visual
-    corpo.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:20px;">🔍 Buscando registros...</td></tr>`;
+    // 2. Verificação de segurança para evitar o erro de 'null'
+    if (!elInicio || !elFim || !corpo) {
+        console.error("Erro: Elementos do relatório não encontrados no DOM.");
+        return;
+    }
+
+    const inicio = elInicio.value;
+    const fim = elFim.value;
+
+    corpo.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:20px;">🔍 Carregando...</td></tr>`;
 
     try {
         const res = await fetch(`${API_URL}/estoque/historico-geral?inicio=${inicio}&fim=${fim}`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
-
-        // Se a resposta for HTML (erro de rota), isso vai disparar o erro para o catch
-        if (!res.ok) {
-            const erroTxt = await res.text();
-            throw new Error("Erro no servidor: Verifique se a rota existe.");
-        }
-
+        
         const dados = await res.json();
 
-        if (dados.length === 0) {
-            corpo.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:20px;">Nenhum registro encontrado.</td></tr>`;
+        if (!dados || dados.length === 0) {
+            corpo.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:20px;">Nenhum registro no período.</td></tr>`;
             return;
         }
 
-        // Atualiza os cards de resumo (opcional, baseado no seu modelo)
-        document.getElementById('total-logs').innerText = dados.length;
-
-        corpo.innerHTML = dados.map(h => {
-            // Formata a data ISO/Postgres para PT-BR
-            const dataFormatada = new Date(h.data).toLocaleString('pt-BR');
-            const corTipo = h.tipo === 'ENTRADA' ? '#10b981' : '#f87171';
-
-            return `
-                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                    <td style="padding:12px; white-space:nowrap;">${dataFormatada}</td>
-                    <td style="padding:12px; font-weight:bold; color:${corTipo};">${h.acao}</td>
-                    <td style="padding:12px;">${h.nome_local || 'Almoxarifado'}</td>
-                    <td style="padding:12px;">${h.nome_usuario || 'SISTEMA'}</td>
-                    <td style="padding:12px; text-align:center;">
-                        <span style="background:rgba(255,255,255,0.1); padding:2px 8px; border-radius:4px;">
-                            ${h.quantidade_total}
-                        </span>
-                    </td>
-                    <td style="padding:12px; font-size:0.8rem; opacity:0.7;">${h.observacoes || ''}</td>
-                </tr>
-            `;
-        }).join('');
+        corpo.innerHTML = dados.map(h => `
+            <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                <td style="padding:12px;">${new Date(h.data).toLocaleString('pt-BR')}</td>
+                <td style="padding:12px; font-weight:bold;">${h.acao}</td>
+                <td style="padding:12px;">${h.nome_usuario || 'SISTEMA'}</td>
+                <td style="padding:12px; text-align:center;">${h.quantidade_total}</td>
+                <td style="padding:12px; font-size:0.75rem;">${h.observacoes || ''}</td>
+            </tr>
+        `).join('');
 
     } catch (err) {
-        console.error(err);
-        corpo.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:20px; color:#f87171;">❌ Erro: ${err.message}</td></tr>`;
+        corpo.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:20px; color:red;">Erro ao carregar dados.</td></tr>`;
     }
 }
 

@@ -612,7 +612,7 @@ function getBotoesSubmenu(perfil, titulo, contagem = 0, contagemProntos = 0) {
             <button class="btn-grande btn-vidro" onclick="telaHistoricoRemessas()"><i>🔍</i><span>ROMANEIOS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()"><i>📈</i><span>PAINEL GERAL</span></button>
             <button class="btn-grande btn-vidro" onclick="telaAuditoriaPedidos()"><i>🔍</i><span>FLUXO DO PEDIDO</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaRelatorioMovimentacao()"><i>🕵️</i><span>HISTÓRICO MOVIMENTAÇÃO</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaHistoricoGeral()"><i>🕵️</i><span>HISTÓRICO MOVIMENTAÇÃO</span></button>
             <button class="btn-grande btn-vidro" onclick="telaRelatorioLogStatus()"><i>🕵️</i><span>HISTÓRICO PEDIDOS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaProgressoGeralEscolas()"><i>🌐</i><span>ENTREGA DE UNIFORMES E KITS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaRelatorioConsolidado()"><i>🏢</i><span>LISTAGEM RECEBIDO/FALTA RECEBER</span></button>
@@ -632,7 +632,7 @@ function getBotoesSubmenu(perfil, titulo, contagem = 0, contagemProntos = 0) {
         if (titulo === 'RELATÓRIOS') return `
             <button class="btn-grande btn-vidro" onclick="telaAuditoriaPedidos()"><i>🔍</i><span>FLUXO DO PEDIDO</span></button>
             <button class="btn-grande btn-vidro" onclick="telaHistoricoRemessas()"><i>🔍</i><span>ROMANEIOS</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaRelatorioMovimentacao()"><i>🕵️</i><span>HISTÓRICO MOVIMENTAÇÃO</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaHistoricoGeral()"><i>🕵️</i><span>HISTÓRICO MOVIMENTAÇÃO</span></button>
             <button class="btn-grande btn-vidro" onclick="telaRelatorioLogStatus()"><i>🕵️</i><span>HISTÓRICO PEDIDOS</span></button>    
             <button class="btn-grande btn-vidro" onclick="telaProgressoGeralEscolas()"><i>🌐</i><span>ENTREGA DE UNIFORMES E KITS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaRelatorioConsolidado()"><i>🏢</i><span>LISTAGEM RECEBIDO/FALTA RECEBER</span></button>
@@ -22099,49 +22099,51 @@ async function carregarDadosHistoricoRemessas() {
     }
 }
 
-async function telaRelatorioMovimentacao() {
+async function telaHistoricoGeral() {
     const area = document.getElementById('app-content');
     const hoje = new Date().toISOString().split('T')[0];
     const inicioMes = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
 
     area.innerHTML = `
-        <div class="painel-vidro animate__animated animate__fadeIn" style="max-width: 1300px; margin: auto;">
+        <div class="painel-vidro" style="max-width: 1300px; margin: auto;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
                 <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
-                <h2 style="color:white; margin:0;">📦 HISTÓRICO GERAL DE ESTOQUE</h2>
-                <div style="visibility: hidden;"> <button class="btn-vidro">🖨️</button>
+                <h2 style="color:white; margin:0;">📜 HISTÓRICO GERAL DE MOVIMENTAÇÕES</h2>
+                <div style="display:flex; gap:10px;">
+                    <button onclick="imprimirHistoricoPDF()" class="btn-vidro" style="background:#2563eb; font-size:0.7rem;">🖨️ PDF</button>
                 </div>
             </div>
             
             <div style="display:flex; gap:15px; justify-content:center; background:rgba(255,255,255,0.05); padding:15px; border-radius:12px; margin-bottom:20px;">
-                <div style="display:flex; flex-direction:column;">
-                    <label style="color:white; font-size:0.7rem; margin-bottom:5px;">DATA INICIAL</label>
+                <div style="display:flex; flex-direction:column; gap:5px;">
+                    <small style="color:rgba(255,255,255,0.6); margin-left:5px;">Data Inicial</small>
                     <input type="date" id="hist_inicio" value="${inicioMes}" class="input-vidro" style="width:160px;">
                 </div>
-                <div style="display:flex; flex-direction:column;">
-                    <label style="color:white; font-size:0.7rem; margin-bottom:5px;">DATA FINAL</label>
+                <div style="display:flex; flex-direction:column; gap:5px;">
+                    <small style="color:rgba(255,255,255,0.6); margin-left:5px;">Data Final</small>
                     <input type="date" id="hist_fim" value="${hoje}" class="input-vidro" style="width:160px;">
                 </div>
-                <button onclick="carregarDadosHistorico()" class="btn-vidro" style="background:#3b82f6; align-self: flex-end; font-weight:bold; height: 40px;">
-                    🔍 FILTRAR HISTÓRICO
+                <button onclick="carregarDadosHistorico()" class="btn-vidro" style="background:#3b82f6; align-self: flex-end; margin:0; font-weight:bold; height:42px;">
+                    🔍 FILTRAR
                 </button>
             </div>
 
-            <div class="painel-vidro" style="background:rgba(0,0,0,0.3); padding:0; overflow:hidden; border: 1px solid rgba(255,255,255,0.1);">
+            <div class="painel-vidro" style="background:rgba(0,0,0,0.3); padding:0; overflow:hidden;">
                 <div style="max-height: 600px; overflow-y: auto;">
                     <table style="width:100%; border-collapse:collapse; color:white; font-size:0.85rem;">
                         <thead style="background:rgba(255,255,255,0.1); position: sticky; top:0; z-index:10;">
                             <tr>
-                                <th style="padding:15px; text-align:left;">DATA / HORA</th>
-                                <th style="padding:15px; text-align:left;">AÇÃO</th>
-                                <th style="padding:15px; text-align:center;">TIPO</th>
-                                <th style="padding:15px; text-align:center;">QTD TOTAL</th>
-                                <th style="padding:15px; text-align:left;">USUÁRIO</th>
-                                <th style="padding:15px; text-align:left;">OBSERVAÇÕES</th>
+                                <th style="padding:12px; text-align:left;">DATA/HORA</th>
+                                <th style="padding:12px; text-align:left;">AÇÃO</th>
+                                <th style="padding:12px; text-align:left;">TIPO</th>
+                                <th style="padding:12px; text-align:center;">QTD</th>
+                                <th style="padding:12px; text-align:left;">LOCAL</th>
+                                <th style="padding:12px; text-align:left;">USUÁRIO</th>
+                                <th style="padding:12px; text-align:left;">OBSERVAÇÕES</th>
                             </tr>
                         </thead>
                         <tbody id="corpo-tabela-historico">
-                            <tr><td colspan="6" style="padding:20px; text-align:center;">Clique em filtrar para carregar...</td></tr>
+                            <tr><td colspan="7" style="padding:20px; text-align:center; opacity:0.5;">Carregando dados...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -22152,46 +22154,51 @@ async function telaRelatorioMovimentacao() {
 }
 
 async function carregarDadosHistorico() {
-    // 1. Pegamos os elementos
-    const elInicio = document.getElementById('log_inicio');
-    const elFim = document.getElementById('log_fim');
-    const corpo = document.getElementById('corpo-tabela-log');
-
-    // 2. Verificação de segurança para evitar o erro de 'null'
-    if (!elInicio || !elFim || !corpo) {
-        console.error("Erro: Elementos do relatório não encontrados no DOM.");
-        return;
-    }
-
-    const inicio = elInicio.value;
-    const fim = elFim.value;
-
-    corpo.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:20px;">🔍 Carregando...</td></tr>`;
-
+    const inicio = document.getElementById('hist_inicio').value;
+    const fim = document.getElementById('hist_fim').value;
+    
     try {
-        const res = await fetch(`${API_URL}/estoque/historico-geral?inicio=${inicio}&fim=${fim}`, {
+        // Rota alterada conforme solicitado
+        const res = await fetch(`${API_URL}/admin/historico/geral?inicio=${inicio}&fim=${fim}`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
         
-        const dados = await res.json();
+        const registros = await res.json();
+        const tbody = document.getElementById('corpo-tabela-historico');
 
-        if (!dados || dados.length === 0) {
-            corpo.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:20px;">Nenhum registro no período.</td></tr>`;
+        if (!registros || registros.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="7" style="padding:20px; text-align:center; opacity:0.5;">Nenhum registro encontrado no período.</td></tr>`;
             return;
         }
 
-        corpo.innerHTML = dados.map(h => `
-            <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                <td style="padding:12px;">${new Date(h.data).toLocaleString('pt-BR')}</td>
-                <td style="padding:12px; font-weight:bold;">${h.acao}</td>
-                <td style="padding:12px;">${h.nome_usuario || 'SISTEMA'}</td>
-                <td style="padding:12px; text-align:center;">${h.quantidade_total}</td>
-                <td style="padding:12px; font-size:0.75rem;">${h.observacoes || ''}</td>
-            </tr>
-        `).join('');
+        tbody.innerHTML = registros.map(r => {
+            // Lógica simples para cor do tipo
+            const corTipo = r.tipo === 'ENTRADA' ? '#4ade80' : (r.tipo === 'SAIDA' ? '#f87171' : '#fbbf24');
+            
+            return `
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.05); transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
+                    <td style="padding:12px; white-space:nowrap; opacity:0.8;">
+                        ${new Date(r.data).toLocaleString('pt-BR')}
+                    </td>
+                    <td style="padding:12px; font-weight:500;">${r.acao}</td>
+                    <td style="padding:12px;">
+                        <span style="background:${corTipo}22; color:${corTipo}; padding:2px 8px; border-radius:4px; font-size:0.7rem; font-weight:bold; border:1px solid ${corTipo}44;">
+                            ${r.tipo}
+                        </span>
+                    </td>
+                    <td style="padding:12px; text-align:center; font-weight:bold;">${r.quantidade_total}</td>
+                    <td style="padding:12px; font-size:0.8rem; opacity:0.9;">${r.local_nome || r.local_id || '-'}</td>
+                    <td style="padding:12px; font-size:0.8rem;">${r.usuario_nome || 'ID: ' + r.usuario_id}</td>
+                    <td style="padding:12px; font-size:0.75rem; opacity:0.7; max-width:250px; overflow:hidden; text-overflow:ellipsis;">
+                        ${r.observacoes || '-'}
+                    </td>
+                </tr>
+            `;
+        }).join('');
 
-    } catch (err) {
-        corpo.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:20px; color:red;">Erro ao carregar dados.</td></tr>`;
+    } catch (erro) {
+        console.error("Erro ao carregar histórico:", erro);
+        document.getElementById('corpo-tabela-historico').innerHTML = `<tr><td colspan="7" style="padding:20px; text-align:center; color:#f87171;">Erro ao carregar dados.</td></tr>`;
     }
 }
 

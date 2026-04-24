@@ -9575,17 +9575,27 @@ router.get('/historico-geral', async (req, res) => {
     const client = await db.pool.connect();
 
     try {
-        // Query com JOIN para pegar o nome do usuário e ordenação decrescente
+        // Query com JOIN para trazer o nome do usuário e o nome do local
         let sql = `
-            SELECT h.*, u.nome as nome_usuario 
+            SELECT 
+                h.id,
+                h.data,
+                h.acao,
+                h.quantidade_total,
+                h.observacoes,
+                h.tipo,
+                u.nome as nome_usuario,
+                l.nome as nome_local
             FROM historico h
             LEFT JOIN usuarios u ON h.usuario_id = u.id
+            LEFT JOIN locais l ON h.local_id = l.id
             WHERE 1=1
         `;
         const params = [];
 
         if (inicio && fim) {
-            sql += ` AND h.data::date BETWEEN $1 AND $2`;
+            // Filtra pegando do início do dia inicial até o último segundo do dia final
+            sql += ` AND h.data::date >= $1 AND h.data::date <= $2`;
             params.push(inicio, fim);
         }
 
@@ -9596,7 +9606,7 @@ router.get('/historico-geral', async (req, res) => {
 
     } catch (err) {
         console.error("Erro ao buscar histórico:", err.message);
-        res.status(500).json({ error: "Erro interno no servidor" });
+        res.status(500).json({ success: false, error: err.message });
     } finally {
         client.release();
     }

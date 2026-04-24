@@ -3076,50 +3076,36 @@ function adicionarLinhaEntrada() {
 }
 
 async function processarEntradaEstoque() {
-    // Captura o ID do usuário salvo no login
     const usuarioId = localStorage.getItem('usuario_id'); 
 
     if (!usuarioId) {
-        notificar("⚠️ Erro: Sessão de usuário não encontrada. Por favor, faça login novamente.");
+        notificar("⚠️ Erro: Sessão de usuário não encontrada.");
         return;
     }
 
     const inputs = document.querySelectorAll('.input-entrada-qtd');
-    const mapaItens = {};
+    const itensParaEnviar = [];
 
+    // Transformamos os inputs diretamente no formato que o banco espera
     inputs.forEach(input => {
         const qtd = parseInt(input.value) || 0;
         if (qtd <= 0) return;
 
-        const id = input.dataset.id;
-        const tipo = input.dataset.tipo;
-        const tamanho = input.dataset.tamanho;
-
-        if (!mapaItens[id]) {
-            mapaItens[id] = {
-                produto_id: id,
-                tipo: tipo,
-                qtd_total: 0,
-                grade: {} 
-            };
-        }
-
-        mapaItens[id].qtd_total += qtd;
-        
-        // Só adiciona na grade se for Uniforme e tiver tamanho definido
-        if (tipo === 'UNIFORMES' && tamanho) {
-            mapaItens[id].grade[tamanho] = (mapaItens[id].grade[tamanho] || 0) + qtd;
-        }
+        // O backend precisa de uma linha para cada combinação de Produto + Tamanho
+        itensParaEnviar.push({
+            produto_id: parseInt(input.dataset.id),
+            quantidade: qtd,
+            tamanho: input.dataset.tamanho || null,
+            tipo_produto: input.dataset.tipo // 'UNIFORMES' ou 'MATERIAL'
+        });
     });
 
-    const itensParaEnviar = Object.values(mapaItens);
-
     if (itensParaEnviar.length === 0) {
-        notificar("⚠️ Informe ao menos uma quantidade válida para realizar a entrada.");
+        notificar("⚠️ Informe ao menos uma quantidade válida.");
         return;
     }
 
-    // Feedback visual de carregamento
+    // Feedback visual
     const btn = document.querySelector('.btn-confirmar-entrada');
     const originalText = btn.innerHTML;
     btn.disabled = true;
@@ -3135,19 +3121,21 @@ async function processarEntradaEstoque() {
             body: JSON.stringify({ 
                 itens: itensParaEnviar,
                 usuario_id: usuarioId,
-                observacoes: "Entrada via painel operacional" 
+                observacao: "Entrada via painel operacional" 
             })
         });
 
         const resultado = await res.json();
         
-        if (resultado.success) {
+        // Ajuste: Verificamos res.ok ou resultado.success dependendo de como seu back responde
+        if (res.ok) {
             notificar("✅ Estoque atualizado com sucesso!");
-            carregarDashboard(); // Ou carregarConsultaEstoque() se preferir voltar para a lista
+            setTimeout(() => carregarDashboard(), 1500); 
         } else {
-            throw new Error(resultado.error || "Erro desconhecido no servidor");
+            throw new Error(resultado.error || "Erro no servidor");
         }
     } catch (err) {
+        console.error(err);
         notificar("❌ Erro na operação: " + err.message);
     } finally {
         btn.disabled = false;

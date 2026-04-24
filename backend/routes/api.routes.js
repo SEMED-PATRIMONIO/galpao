@@ -9570,4 +9570,36 @@ router.get('/remessas/listagem', async (req, res) => {
     }
 });
 
+router.get('/historico-geral', async (req, res) => {
+    const { inicio, fim } = req.query;
+    const client = await db.pool.connect();
+
+    try {
+        // Query com JOIN para pegar o nome do usuário e ordenação decrescente
+        let sql = `
+            SELECT h.*, u.nome as nome_usuario 
+            FROM historico h
+            LEFT JOIN usuarios u ON h.usuario_id = u.id
+            WHERE 1=1
+        `;
+        const params = [];
+
+        if (inicio && fim) {
+            sql += ` AND h.data::date BETWEEN $1 AND $2`;
+            params.push(inicio, fim);
+        }
+
+        sql += ` ORDER BY h.data DESC`;
+
+        const resultado = await client.query(sql, params);
+        res.json(resultado.rows);
+
+    } catch (err) {
+        console.error("Erro ao buscar histórico:", err.message);
+        res.status(500).json({ error: "Erro interno no servidor" });
+    } finally {
+        client.release();
+    }
+});
+
 module.exports = router;

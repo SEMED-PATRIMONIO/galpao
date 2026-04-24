@@ -22150,40 +22150,58 @@ async function telaRelatorioMovimentacao() {
 }
 
 async function carregarDadosHistorico() {
-    const inicio = document.getElementById('hist_inicio').value;
-    const fim = document.getElementById('hist_fim').value;
-    const corpo = document.getElementById('corpo-tabela-historico');
+    const inicio = document.getElementById('log_inicio').value;
+    const fim = document.getElementById('log_fim').value;
+    const corpo = document.getElementById('corpo-tabela-log');
 
-    corpo.innerHTML = `<tr><td colspan="6" style="padding:20px; text-align:center;"><i class="fas fa-spinner fa-spin"></i> Buscando registros...</td></tr>`;
+    // Feedback visual
+    corpo.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:20px;">🔍 Buscando registros...</td></tr>`;
 
     try {
         const res = await fetch(`${API_URL}/estoque/historico-geral?inicio=${inicio}&fim=${fim}`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
+
+        // Se a resposta for HTML (erro de rota), isso vai disparar o erro para o catch
+        if (!res.ok) {
+            const erroTxt = await res.text();
+            throw new Error("Erro no servidor: Verifique se a rota existe.");
+        }
+
         const dados = await res.json();
 
         if (dados.length === 0) {
-            corpo.innerHTML = `<tr><td colspan="6" style="padding:20px; text-align:center;">Nenhum registro encontrado no período.</td></tr>`;
+            corpo.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:20px;">Nenhum registro encontrado.</td></tr>`;
             return;
         }
 
-        corpo.innerHTML = dados.map(h => `
-            <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); hover: background: rgba(255,255,255,0.02);">
-                <td style="padding:12px;">${new Date(h.data).toLocaleString('pt-BR')}</td>
-                <td style="padding:12px;"><span style="font-weight:bold; color: #60a5fa;">${h.acao}</span></td>
-                <td style="padding:12px; text-align:center;">
-                    <span style="padding:3px 8px; border-radius:4px; background:${h.tipo === 'ENTRADA' ? '#065f46' : '#991b1b'}; font-size:0.7rem;">
-                        ${h.tipo}
-                    </span>
-                </td>
-                <td style="padding:12px; text-align:center; font-weight:bold;">${h.quantidade_total}</td>
-                <td style="padding:12px;">${h.nome_usuario || 'Sistema'}</td>
-                <td style="padding:12px; font-size:0.75rem; opacity:0.8;">${h.observacoes || '-'}</td>
-            </tr>
-        `).join('');
+        // Atualiza os cards de resumo (opcional, baseado no seu modelo)
+        document.getElementById('total-logs').innerText = dados.length;
+
+        corpo.innerHTML = dados.map(h => {
+            // Formata a data ISO/Postgres para PT-BR
+            const dataFormatada = new Date(h.data).toLocaleString('pt-BR');
+            const corTipo = h.tipo === 'ENTRADA' ? '#10b981' : '#f87171';
+
+            return `
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                    <td style="padding:12px; white-space:nowrap;">${dataFormatada}</td>
+                    <td style="padding:12px; font-weight:bold; color:${corTipo};">${h.acao}</td>
+                    <td style="padding:12px;">${h.nome_local || 'Almoxarifado'}</td>
+                    <td style="padding:12px;">${h.nome_usuario || 'SISTEMA'}</td>
+                    <td style="padding:12px; text-align:center;">
+                        <span style="background:rgba(255,255,255,0.1); padding:2px 8px; border-radius:4px;">
+                            ${h.quantidade_total}
+                        </span>
+                    </td>
+                    <td style="padding:12px; font-size:0.8rem; opacity:0.7;">${h.observacoes || ''}</td>
+                </tr>
+            `;
+        }).join('');
 
     } catch (err) {
-        corpo.innerHTML = `<tr><td colspan="6" style="padding:20px; text-align:center; color: #f87171;">Erro ao carregar histórico.</td></tr>`;
+        console.error(err);
+        corpo.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:20px; color:#f87171;">❌ Erro: ${err.message}</td></tr>`;
     }
 }
 

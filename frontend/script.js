@@ -19430,8 +19430,6 @@ async function telaRelatorioLogStatus() {
     carregarDadosLogStatus();
 }
 
-let dadosCacheLog = [];
-
 async function carregarDadosLogStatus() {
     const inicio = document.getElementById('log_inicio').value;
     const fim = document.getElementById('log_fim').value;

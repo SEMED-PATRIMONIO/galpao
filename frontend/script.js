@@ -1172,9 +1172,15 @@ async function finalizarAutorizacao(pedidoId) {
 
         if (resultado.success) {
             notificar("✅ Pedido Autorizado!");
-            document.getElementById('modal-analise').style.display = 'none';
-            // Recarrega a fila de pedidos ou dashboard
-            if (typeof carregarFilaPedidos === 'function') carregarDashboard();
+            
+            // 1. Fecha o modal primeiro
+            const modal = document.getElementById('modal-analise');
+            if (modal) modal.style.display = 'none';
+
+            // 2. REFRESH REAL: Chama a função da tela novamente.
+            // Isso força um novo fetch no banco e reconstrói o HTML sem o pedido aprovado.
+            telaAdminGerenciarSolicitacoes(); 
+
         } else {
             throw new Error(resultado.error);
         }

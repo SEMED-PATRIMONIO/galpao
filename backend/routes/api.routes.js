@@ -6324,64 +6324,65 @@ router.post('/entrada', async (req, res) => {
 });
 
 // Sugestão de implementação (Node.js/Express)
-router.post('/estoque/entrada-lote', async (req, res) => {
-    const { itens, usuario_id, observacoes } = req.body;
-    const client = await db.pool.connect(); 
+router.post('/entrada-lote', async (req, res) => {
+    const { itens, observacao, usuario_id } = req.body;
+
+    if (!itens || itens.length === 0) {
+        return res.status(400).json({ error: "Nenhum item enviado." });
+    }
+
+    const client = await db.connect();
 
     try {
         await client.query('BEGIN');
 
-        const totalGeral = itens.reduce((acc, item) => acc + (parseInt(item.qtd_total) || 0), 0);
+        // 1. Calcula a soma total para o cabeçalho do histórico
+        const quantidadeTotalTotal = itens.reduce((acc, item) => acc + parseInt(item.quantidade, 10), 0);
 
-        const resMaster = await client.query(
-            `INSERT INTO historico (usuario_id, acao, quantidade_total, observacoes, local_id, tipo) 
-             VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-            [usuario_id, 'ENTRADA DE ESTOQUE', totalGeral, observacoes || '', 37, 'ENTRADA']
-        );
-        const historicoId = resMaster.rows[0].id;
+        // 2. Insere o registro MESTRE na tabela 'historico'
+        // local_id 37 fixo conforme seu Almoxarifado Central
+        const resHist = await client.query(`
+            INSERT INTO historico (usuario_id, acao, tipo_historico, quantidade_total, observacoes, local_id, tipo)
+            VALUES ($1, 'ENTRADA DE ESTOQUE', 'PRINCIPAL', $2, $3, 37, 'ENTRADA')
+            RETURNING id;
+        `, [usuario_id, quantidadeTotalTotal, observacao || 'Entrada via painel operacional']);
+        
+        const historico_id = resHist.rows[0].id;
 
+        // 3. Itera sobre os itens para atualizar saldo e gravar detalhes
         for (const item of itens) {
-            if (item.tipo === 'MATERIAL') {
-                await client.query(
-                    `INSERT INTO estoque_por_local (local_id, produto_id, tamanho, quantidade)
-                     VALUES (37, $1, NULL, $2)
-                     ON CONFLICT (local_id, produto_id, tamanho) 
-                     DO UPDATE SET quantidade = estoque_por_local.quantidade + EXCLUDED.quantidade;`,
-                    [item.produto_id, item.qtd_total]
-                );
-                
-                await client.query(
-                    `INSERT INTO historico_detalhes (historico_id, produto_id, quantidade, tipo_produto) VALUES ($1, $2, $3, 'MATERIAL')`,
-                    [historicoId, item.produto_id, item.qtd_total]
-                );
+            const tamanhoStr = item.tamanho || null;
 
-            } else if (item.tipo === 'UNIFORMES') {
-                for (const [tamanho, qtd] of Object.entries(item.grade)) {
-                    if (qtd > 0) {
-                        await client.query(
-                            `INSERT INTO estoque_por_local (local_id, produto_id, tamanho, quantidade)
-                             VALUES (37, $1, $2, $3)
-                             ON CONFLICT (local_id, produto_id, tamanho) 
-                             DO UPDATE SET quantidade = estoque_por_local.quantidade + EXCLUDED.quantidade;`,
-                            [item.produto_id, tamanho, qtd]
-                        );
+            // --- ATUALIZAÇÃO DO SALDO (estoque_por_local) ---
+            // Usando ON CONFLICT para aproveitar seu índice único e evitar erros
+            const sqlEstoque = `
+                INSERT INTO estoque_por_local (local_id, produto_id, tamanho, quantidade)
+                VALUES (37, $1, $2, $3)
+                ON CONFLICT (local_id, produto_id, COALESCE(tamanho, '')) 
+                DO UPDATE SET quantidade = estoque_por_local.quantidade + EXCLUDED.quantidade;
+            `;
+            await client.query(sqlEstoque, [item.produto_id, tamanhoStr, item.quantidade]);
 
-                        await client.query(
-                            `INSERT INTO historico_detalhes (historico_id, produto_id, quantidade, tamanho, tipo_produto) VALUES ($1, $2, $3, $4, 'UNIFORMES')`,
-                            [historicoId, item.produto_id, qtd, tamanho]
-                        );
-                    }
-                }
-            }
+            // --- GRAVAÇÃO DO DETALHE (historico_detalhes) ---
+            await client.query(`
+                INSERT INTO historico_detalhes (historico_id, produto_id, tamanho, quantidade, tipo_produto) 
+                VALUES ($1, $2, $3, $4, $5)
+            `, [
+                historico_id, 
+                item.produto_id, 
+                tamanhoStr, 
+                item.quantidade, 
+                item.tipo_produto // 'UNIFORMES' ou 'MATERIAL' vindo do front
+            ]);
         }
 
         await client.query('COMMIT');
-        res.status(200).json({ success: true, message: "Estoque de consumo atualizado com sucesso." });
+        res.json({ message: "Sucesso" });
 
     } catch (err) {
         await client.query('ROLLBACK');
-        console.error("ERRO CRÍTICO NA ENTRADA EM LOTE (v2):", err.message);
-        res.status(500).json({ success: false, error: "Erro ao processar entrada no banco de dados." });
+        console.error('ERRO NA OPERAÇÃO DE ENTRADA:', err.message);
+        res.status(500).json({ error: "Erro interno ao processar entrada no banco." });
     } finally {
         client.release();
     }

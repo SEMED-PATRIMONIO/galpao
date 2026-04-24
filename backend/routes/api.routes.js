@@ -1861,14 +1861,14 @@ router.post('/escola/confirmar-recebimento', verificarToken, async (req, res) =>
 
             // 2.2. Iterar sobre cada item e dar ENTRADA no estoque do local de destino
             for (const item of itensRes.rows) {
-                // Usamos INSERT ON CONFLICT para criar ou somar ao estoque existente.
-                // Isso é atômico e seguro.
+                const tamanhoTratado = item.tamanho || 'N/A';
+
                 await client.query(
                     `INSERT INTO estoque_por_local (local_id, produto_id, tamanho, quantidade)
                      VALUES ($1, $2, $3, $4)
                      ON CONFLICT (local_id, produto_id, tamanho)
                      DO UPDATE SET quantidade = estoque_por_local.quantidade + EXCLUDED.quantidade`,
-                    [local_destino_id, item.produto_id, item.tamanho, item.quantidade_enviada]
+                    [local_destino_id, item.produto_id, tamanhoTratado, item.quantidade_enviada]
                 );
             }
             // --- FIM DA NOVA LÓGICA ---

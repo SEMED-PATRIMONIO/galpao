@@ -22123,8 +22123,18 @@ async function telaHistoricoGeral() {
                     <small style="color:rgba(255,255,255,0.6); margin-left:5px;">Data Final</small>
                     <input type="date" id="hist_fim" value="${hoje}" class="input-vidro" style="width:160px;">
                 </div>
-                <button onclick="carregarDadosHistorico()" class="btn-vidro" style="background:#3b82f6; align-self: flex-end; margin:0; font-weight:bold; height:42px;">
-                    🔍 FILTRAR
+                <button onclick="carregarDadosHistorico()" class="btn-vidro" 
+                    style="background:#3b82f6; 
+                        margin:0; 
+                        font-weight:bold; 
+                        height:45px; 
+                        display:flex; 
+                        align-items:center; 
+                        justify-content:center; 
+                        gap:10px; 
+                        padding: 0 20px;">
+                    <span>🔍</span> 
+                    <span>FILTRAR HISTÓRICO</span>
                 </button>
             </div>
 
@@ -22156,18 +22166,20 @@ async function telaHistoricoGeral() {
 async function carregarDadosHistorico() {
     const inicio = document.getElementById('hist_inicio').value;
     const fim = document.getElementById('hist_fim').value;
+    const tbody = document.getElementById('corpo-tabela-historico');
+
+    // Feedback visual enquanto carrega
+    tbody.innerHTML = `<tr><td colspan="7" style="padding:20px; text-align:center;">⌛ Buscando registros...</td></tr>`;
     
     try {
-        // Rota alterada conforme solicitado
         const res = await fetch(`${API_URL}/admin/historico/geral?inicio=${inicio}&fim=${fim}`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
         
         const registros = await res.json();
-        const tbody = document.getElementById('corpo-tabela-historico');
-
-        if (!registros || registros.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="7" style="padding:20px; text-align:center; opacity:0.5;">Nenhum registro encontrado no período.</td></tr>`;
+        
+        if (registros.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="7" style="padding:20px; text-align:center; opacity:0.5;">Nenhuma movimentação neste período.</td></tr>`;
             return;
         }
 
@@ -22196,9 +22208,8 @@ async function carregarDadosHistorico() {
             `;
         }).join('');
 
-    } catch (erro) {
-        console.error("Erro ao carregar histórico:", erro);
-        document.getElementById('corpo-tabela-historico').innerHTML = `<tr><td colspan="7" style="padding:20px; text-align:center; color:#f87171;">Erro ao carregar dados.</td></tr>`;
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="7" style="padding:20px; text-align:center; color:#ff4d4d;">❌ Erro de conexão com o servidor.</td></tr>`;
     }
 }
 

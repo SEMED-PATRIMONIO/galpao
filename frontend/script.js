@@ -19374,6 +19374,10 @@ function formataPDFAlunosPendentes(alunos) {
     doc.save(`Relatorio_Pendencias_${localStorage.getItem('nome')}.pdf`);
 }
 
+
+
+let dadosCacheLog = [];
+
 async function telaRelatorioLogStatus() {
     const area = document.getElementById('app-content');
     const hoje = new Date().toISOString().split('T')[0];
@@ -19383,7 +19387,7 @@ async function telaRelatorioLogStatus() {
         <div class="painel-vidro" style="max-width: 1300px; margin: auto;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
                 <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
-                <h2 style="color:white; margin:0;">🕵️ LOG DE PEDIDOS</h2>
+                <h2 style="color:white; margin:0;">🕵️ AUDITORIA DE STATUS</h2>
                 <div style="display:flex; gap:10px;">
                     <button onclick="imprimirLogStatusPDF()" class="btn-vidro" style="background:#2563eb; font-size:0.7rem;">🖨️ IMPRIMIR PDF</button>
                     <button onclick="compartilharLogWhatsApp()" class="btn-vidro" style="background:#16a34a; font-size:0.7rem;">📱 WHATSAPP</button>
@@ -22147,49 +22151,6 @@ async function telaRelatorioMovimentacao() {
         </div>
     `;
     carregarDadosHistorico();
-}
-
-async function telaRelatorioLogStatus() {
-    const area = document.getElementById('app-content');
-    const hoje = new Date().toISOString().split('T')[0];
-    const inicioMes = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
-
-    area.innerHTML = `
-        <div class="painel-vidro" style="max-width: 1300px; margin: auto;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
-                <h2 style="color:white; margin:0;">🕵️ LOG DE MOVIMENTAÇÃO</h2>
-            </div>
-            
-            <div style="display:flex; gap:15px; justify-content:center; background:rgba(255,255,255,0.05); padding:15px; border-radius:12px; margin-bottom:20px;">
-                <input type="date" id="log_inicio" value="${inicioMes}" class="input-vidro" style="width:160px;">
-                <input type="date" id="log_fim" value="${hoje}" class="input-vidro" style="width:160px;">
-                <button onclick="carregarDadosHistorico()" class="btn-vidro" style="background:#3b82f6; font-weight:bold;">
-                    🔍 FILTRAR
-                </button>
-            </div>
-
-            <div class="painel-vidro" style="background:rgba(0,0,0,0.3); padding:0; overflow:hidden;">
-                <div style="max-height: 500px; overflow-y: auto;">
-                    <table style="width:100%; border-collapse:collapse; color:white; font-size:0.85rem;">
-                        <thead style="background:rgba(255,255,255,0.1); position: sticky; top:0;">
-                            <tr>
-                                <th style="padding:12px; text-align:left;">DATA/HORA</th>
-                                <th style="padding:12px; text-align:left;">AÇÃO</th>
-                                <th style="padding:12px; text-align:left;">USUÁRIO</th>
-                                <th style="padding:12px; text-align:center;">QTD</th>
-                                <th style="padding:12px; text-align:left;">OBSERVAÇÃO</th>
-                            </tr>
-                        </thead>
-                        <tbody id="corpo-tabela-log"></tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    `;
-
-    // Pequeno delay para garantir que o DOM renderizou o innerHTML antes de buscar os valores
-    setTimeout(() => carregarDadosHistorico(), 100);
 }
 
 async function carregarDadosHistorico() {

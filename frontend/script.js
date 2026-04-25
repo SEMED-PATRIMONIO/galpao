@@ -20489,7 +20489,6 @@ async function renderizarMatrizEntrega(turmaId, turmaNome) {
             return;
         }
 
-        // ✅ Pré-monta as options de cada produto (evita repetição no template)
         const opcoesPorProduto = {};
         data.produtos.forEach(produto => {
             const estoque = data.estoqueEscola[produto.id] || [];
@@ -20499,46 +20498,97 @@ async function renderizarMatrizEntrega(turmaId, turmaNome) {
         });
 
         app.innerHTML = `
+            <style>
+                .tabela-entrega-wrapper {
+                    max-height: 60vh;
+                    overflow-y: auto;
+                    overflow-x: hidden;
+                    border-radius: 8px;
+                    background: rgba(0, 26, 44, 0.5);
+                    margin-bottom: 20px;
+                }
+                .tabela-entrega {
+                    width: 100%;
+                    border-collapse: collapse;
+                    table-layout: fixed; /* Força larguras fixas */
+                }
+                .tabela-entrega thead th {
+                    position: sticky;
+                    top: 0;
+                    z-index: 10;
+                    background: #001a2c;
+                    font-size: 0.65rem; /* Fonte pequena nos títulos */
+                    padding: 8px 4px;
+                    word-wrap: break-word;
+                    border: 1px solid rgba(255,255,255,0.1);
+                }
+                .tabela-entrega .linha-todos th, 
+                .tabela-entrega .linha-todos td {
+                    position: sticky;
+                    top: 45px; /* Abaixo do título fixo */
+                    z-index: 9;
+                    background: #002a44;
+                }
+                .tabela-entrega td, .tabela-entrega th {
+                    text-align: center;
+                    border: 1px solid rgba(255,255,255,0.05);
+                }
+                .col-aluno {
+                    width: 150px; /* Largura menor para o nome */
+                    text-align: left !important;
+                    padding-left: 10px !important;
+                    font-size: 0.8rem; /* Fonte menor para o nome do aluno */
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+                .select-tamanho-entrega, .select-todos {
+                    width: 95%;
+                    font-size: 0.75rem;
+                    padding: 4px;
+                    background: rgba(0,0,0,0.3);
+                    color: white;
+                    border: 1px solid rgba(0,212,255,0.3);
+                    border-radius: 4px;
+                }
+                .celula-entregue { font-size: 0.7rem; color: #00ff88; }
+                .celula-nao-aplica { color: rgba(255,255,255,0.2); }
+                #footer-acoes-entrega {
+                    display: flex;
+                    gap: 15px;
+                    justify-content: center;
+                    padding: 20px;
+                    background: rgba(0,0,0,0.2);
+                    border-radius: 10px;
+                }
+            </style>
+
             <div class="header-animado animate__animated animate__fadeIn">
                 <button class="btn-voltar-vidro" onclick="telaEntregaUniformes()">
                     <i class="fas fa-arrow-left"></i> TROCAR TURMA
                 </button>
-                <h2 class="titulo-sessao" style="color: white;">Entregas para: ${turmaNome}</h2>
-                <p style="color: rgba(255,255,255,0.7);">
-                    Use a linha <strong>"TODOS"</strong> para aplicar um tamanho à coluna inteira.<br>
-                    Selecione <strong>--</strong> no "TODOS" para desfazer apenas o que foi aplicado em massa.
-                </p>
+                <h2 class="titulo-sessao" style="color: white; font-size: 1.4rem;">Entregas: ${turmaNome}</h2>
             </div>
 
-            <!-- ✅ Container com scroll vertical - fora fica o footer -->
-            <div class="tabela-entrega-container animate__animated animate__fadeInUp">
+            <div class="tabela-entrega-wrapper animate__animated animate__fadeInUp">
                 <table class="tabela-entrega">
                     <thead>
-                        <!-- Linha de títulos das colunas -->
                         <tr>
-                            <th class="sticky-col">ALUNO</th>
+                            <th class="col-aluno">ALUNO</th>
                             ${data.produtos.map(p => {
                                 const totalEstoque = (data.estoqueEscola[p.id] || [])
                                     .reduce((soma, e) => soma + e.qtd, 0);
                                 return `
                                     <th>
-                                        ${p.nome.toUpperCase()}
-                                        <br>
-                                        <small style="font-weight:normal; opacity:0.7;">
-                                            ${totalEstoque} em estoque
-                                        </small>
+                                        ${p.nome.toUpperCase()}<br>
+                                        <span style="font-weight:normal; opacity:0.6;">${totalEstoque} un.</span>
                                     </th>`;
                             }).join('')}
                         </tr>
 
-                        <!-- ✅ Linha TODOS com célula identificada para feedback visual -->
                         <tr class="linha-todos">
-                            <th class="sticky-col">
-                                TODOS
-                                <br>
-                                <small style="font-weight:normal; opacity:0.7; font-size:0.75em;">
-                                    aplica / desfaz
-                                </small>
+                            <th class="col-aluno">
+                                <span style="color:#00d4ff">TODOS</span>
                             </th>
                             ${data.produtos.map(produto => `
                                 <td class="celula-todos" data-produto-id="${produto.id}">
@@ -20554,32 +20604,18 @@ async function renderizarMatrizEntrega(turmaId, turmaNome) {
                     <tbody>
                         ${data.alunos.map(aluno => `
                             <tr id="aluno-row-${aluno.id}">
-                                <td class="sticky-col">${aluno.nome}</td>
+                                <td class="col-aluno" title="${aluno.nome}">${aluno.nome}</td>
                                 ${data.produtos.map(produto => {
                                     const status = aluno.statusItens?.[produto.id];
+                                    if (!status) return `<td class="celula-nao-aplica">—</td>`;
 
-                                    // ✅ Produto não se aplica a este aluno (ex: calça fem para menino)
-                                    if (!status) {
-                                        return `<td class="celula-nao-aplica" title="Não se aplica a este aluno">—</td>`;
-                                    }
-
-                                    // ✅ Já recebeu este item
                                     if (status.status === 'entregue') {
-                                        const dataFormatada = status.data
-                                            ? new Date(status.data).toLocaleDateString('pt-BR')
-                                            : '';
                                         return `
                                             <td class="celula-entregue">
-                                                <i class="fas fa-check-circle"></i>
-                                                <br>
-                                                <small>${status.tamanho}</small>
-                                                <br>
-                                                <small style="opacity:0.6;">${dataFormatada}</small>
+                                                <i class="fas fa-check"></i> ${status.tamanho}
                                             </td>`;
                                     }
 
-                                    // ✅ Pendente - pode selecionar tamanho
-                                    // data-origem controla se foi o "Todos" ou o usuário que preencheu
                                     return `
                                         <td>
                                             <select class="select-tamanho-entrega"
@@ -20597,13 +20633,12 @@ async function renderizarMatrizEntrega(turmaId, turmaNome) {
                 </table>
             </div>
 
-            <!-- ✅ Footer FORA do scroll - sempre visível na tela -->
             <div id="footer-acoes-entrega">
-                <button class="btn-imprimir-comprovante" onclick="gerarComprovanteTurma(${turmaId})">
+                <button class="btn-imprimir-comprovante" onclick="gerarComprovanteTurma(${turmaId})" style="flex:1; max-width:250px;">
                     <i class="fas fa-print"></i> GERAR COMPROVANTE
                 </button>
-                <button class="btn-confirmar-entrega" onclick="confirmarEntregasTurma(${turmaId})">
-                    <i class="fas fa-check"></i> CONFIRMAR ENTREGAS SELECIONADAS
+                <button class="btn-confirmar-entrega" onclick="confirmarEntregasTurma(${turmaId})" style="flex:1; max-width:350px; background:#00ff88; color:#001a2c;">
+                    <i class="fas fa-check"></i> CONFIRMAR ENTREGAS
                 </button>
             </div>
         `;

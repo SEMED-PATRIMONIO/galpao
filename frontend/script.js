@@ -21366,8 +21366,11 @@ function telaEntregaMaterial() {
     telaEntregaUniformes();
     
     setTimeout(() => {
-        document.querySelector('.titulo-sessao').innerText = 'ENTREGA DE MATERIAL ESCOLAR';
-        document.querySelector('p[style*="color: rgba(255,255,255,0.7)"]').innerText = 'Selecione uma turma para registrar a entrega dos kits de material.';
+        const titulo = document.querySelector('.titulo-sessao');
+        const desc = document.querySelector('p[style*="color: rgba(255,255,255,0.7)"]');
+        if(titulo) titulo.innerText = 'ENTREGA DE MATERIAL ESCOLAR';
+        if(desc) desc.innerText = 'Selecione uma turma para registrar a entrega dos kits de material.';
+        
         const btn = document.getElementById('btn-iniciar-entrega');
         if(btn) btn.setAttribute('onclick', 'carregarGradeDeEntregaMaterial()');
     }, 100);
@@ -21392,9 +21395,7 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
         });
         const data = await res.json();
         
-        if (!res.ok) {
-            throw new Error(data.error || 'Falha ao carregar dados da turma.');
-        }
+        if (!res.ok) throw new Error(data.error || 'Falha ao carregar dados da turma.');
 
         const turmaNome = data.turmaInfo.nome;
 
@@ -21402,128 +21403,162 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
             app.innerHTML = `
                 <div class="glass-panel" style="text-align:center; padding: 40px; margin: 20px;">
                     <h2>Nenhum Kit de Material Escolar Encontrado</h2>
-                    <p style="color: rgba(255,255,255,0.7); margin-bottom: 20px;">Não há produtos do tipo 'MATERIAL' cadastrados no sistema.</p>
                     <button class="btn-voltar-vidro" onclick="telaEntregaMaterial()">Voltar</button>
                 </div>`;
             return;
         }
 
-        if (!data.alunos || data.alunos.length === 0) {
-            app.innerHTML = `
-                <div class="glass-panel" style="text-align:center; padding: 40px; margin: 20px;">
-                    <h2>A turma "${turmaNome}" não possui alunos cadastrados.</h2>
-                    <button class="btn-voltar-vidro" onclick="telaEntregaMaterial()">Voltar</button>
-                </div>`;
-            return;
-        }
-
-        // ====================================================
-        // HTML CORRIGIDO - "Todos" agora usa CHECKBOX
-        // e a tabela fica dentro de um container com rolagem
-        // ====================================================
         app.innerHTML = `
+            <style>
+                .tabela-material-wrapper {
+                    max-height: 65vh;
+                    overflow-y: auto;
+                    overflow-x: hidden;
+                    border-radius: 8px;
+                    background: rgba(0, 26, 44, 0.6);
+                    margin-bottom: 15px;
+                    border: 1px solid rgba(255,255,255,0.1);
+                }
+
+                .tabela-entrega {
+                    width: 100%;
+                    border-collapse: collapse;
+                    table-layout: fixed; /* Trava as colunas */
+                }
+
+                .col-aluno {
+                    width: 25%; /* Material costuma ter menos colunas, aumentamos um pouco o nome */
+                    min-width: 25%;
+                    max-width: 25%;
+                    text-align: left !important;
+                    padding-left: 10px !important;
+                    font-size: 0.75rem;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    background: #001a2c;
+                }
+
+                .col-prod-mat {
+                    width: calc(75% / ${data.produtos.length});
+                    min-width: calc(75% / ${data.produtos.length});
+                    max-width: calc(75% / ${data.produtos.length});
+                }
+
+                .tabela-entrega thead th {
+                    position: sticky;
+                    top: 0;
+                    z-index: 10;
+                    background: #001a2c;
+                    font-size: 0.6rem;
+                    color: #00d4ff;
+                    height: 45px;
+                    border-bottom: 2px solid #00d4ff;
+                    word-wrap: break-word;
+                }
+
+                .tabela-entrega .linha-todos th, 
+                .tabela-entrega .linha-todos td {
+                    position: sticky;
+                    top: 45px;
+                    z-index: 9;
+                    background: #002a44;
+                    border-bottom: 1px solid rgba(255,255,255,0.2);
+                }
+
+                .tabela-entrega td {
+                    text-align: center;
+                    border: 1px solid rgba(255,255,255,0.05);
+                    height: 40px;
+                }
+
+                /* Ajuste dos Radio Buttons e Checkboxes */
+                .celula-radio input {
+                    transform: scale(1.2);
+                    cursor: pointer;
+                }
+
+                .celula-entregue { font-size: 0.65rem; color: #00ff88; }
+                .celula-bloqueada { background: rgba(0,0,0,0.2); opacity: 0.3; }
+                
+                #footer-material {
+                    display: flex;
+                    gap: 15px;
+                    justify-content: center;
+                    padding: 15px;
+                }
+            </style>
+
             <div class="header-animado animate__animated animate__fadeIn">
-                <button class="btn-voltar-vidro" onclick="telaEntregaMaterial()">
+                <button class="btn-voltar-vidro" onclick="telaEntregaMaterial()" style="padding: 5px 15px;">
                     <i class="fas fa-arrow-left"></i> TROCAR TURMA
                 </button>
-                <h2 class="titulo-sessao" style="color: white;">Entregas de Material para: ${turmaNome}</h2>
-                <p style="color: rgba(255,255,255,0.7);">Marque o kit entregue para cada aluno.</p>
+                <h2 class="titulo-sessao" style="color: white; font-size: 1.2rem; margin: 10px 0;">Material: ${turmaNome}</h2>
             </div>
 
-            <div class="tabela-entrega-container animate__animated animate__fadeInUp"
-                 style="max-height: 60vh; overflow-y: auto; margin: 10px auto; width: 95%;">
+            <div class="tabela-material-wrapper animate__animated animate__fadeInUp">
                 <table class="tabela-entrega">
-                    <thead style="position: sticky; top: 0; z-index: 10;">
+                    <thead>
                         <tr>
-                            <th class="sticky-col">ALUNO</th>
+                            <th class="col-aluno">ALUNO</th>
                             ${data.produtos.map(p => `
-                                <th>${p.nome.toUpperCase()}<br>
-                                    <small>(${data.estoqueEscola[p.id] || 0} em estoque)</small>
-                                </th>
-                            `).join('')}
+                                <th class="col-prod-mat">
+                                    ${p.nome.toUpperCase()}<br>
+                                    <small style="opacity:0.6">(${data.estoqueEscola[p.id] || 0} un)</small>
+                                </th>`).join('')}
                         </tr>
                         <tr class="linha-todos">
-                            <th class="sticky-col">TODOS</th>
+                            <th class="col-aluno" style="color: #00d4ff;">TODOS</th>
                             ${data.produtos.map(produto => `
-                                <td class="celula-radio">
-                                    <input type="checkbox" 
-                                           class="checkbox-todos" 
-                                           data-produto-id="${produto.id}" 
-                                           id="todos-${produto.id}">
-                                    <label for="todos-${produto.id}"></label>
+                                <td class="col-prod-mat celula-radio">
+                                    <input type="checkbox" class="checkbox-todos" data-produto-id="${produto.id}" id="todos-${produto.id}">
                                 </td>
                             `).join('')}
                         </tr>
                     </thead>
                     <tbody>
                         ${data.alunos.map(aluno => {
-                            if (aluno.status === 'entregue') {
-                                // Aluno já recebeu - linha bloqueada com data
-                                const dataFormatada = aluno.entregaInfo.data_entrega 
-                                    ? new Date(aluno.entregaInfo.data_entrega).toLocaleDateString('pt-BR')
-                                    : '';
-                                return `
-                                    <tr id="aluno-row-${aluno.id}" class="linha-entregue">
-                                        <td class="sticky-col">${aluno.nome}</td>
-                                        ${data.produtos.map(produto => {
-                                            if (aluno.entregaInfo.produto_id === produto.id) {
-                                                return `<td class="celula-entregue">
-                                                    <i class="fas fa-check-circle"></i>
-                                                    <small>${dataFormatada}</small>
-                                                </td>`;
-                                            } else {
-                                                return `<td class="celula-bloqueada"></td>`;
-                                            }
-                                        }).join('')}
-                                    </tr>
-                                `;
-                            } else {
-                                // Aluno pendente - pode selecionar
-                                return `
-                                    <tr id="aluno-row-${aluno.id}">
-                                        <td class="sticky-col">${aluno.nome}</td>
-                                        ${data.produtos.map(produto => `
-                                            <td class="celula-radio">
-                                                <input type="radio" 
-                                                       name="radio_aluno_${aluno.id}" 
-                                                       class="radio-aluno" 
-                                                       data-aluno-id="${aluno.id}" 
-                                                       data-produto-id="${produto.id}" 
-                                                       id="aluno${aluno.id}-prod${produto.id}">
-                                                <label for="aluno${aluno.id}-prod${produto.id}"></label>
-                                            </td>
-                                        `).join('')}
-                                    </tr>
-                                `;
-                            }
+                            const jaEntregue = aluno.status === 'entregue';
+                            const dataFormatada = jaEntregue && aluno.entregaInfo.data_entrega 
+                                ? new Date(aluno.entregaInfo.data_entrega).toLocaleDateString('pt-BR') : '';
+
+                            return `
+                                <tr id="aluno-row-${aluno.id}">
+                                    <td class="col-aluno" title="${aluno.nome}">${aluno.nome}</td>
+                                    ${data.produtos.map(produto => {
+                                        if (jaEntregue) {
+                                            return aluno.entregaInfo.produto_id === produto.id ? 
+                                                `<td class="col-prod-mat celula-entregue"><i class="fas fa-check"></i><br>${dataFormatada}</td>` : 
+                                                `<td class="col-prod-mat celula-bloqueada"></td>`;
+                                        }
+                                        return `
+                                            <td class="col-prod-mat celula-radio">
+                                                <input type="radio" name="radio_aluno_${aluno.id}" class="radio-aluno" 
+                                                       data-aluno-id="${aluno.id}" data-produto-id="${produto.id}" 
+                                                       id="al${aluno.id}-pr${produto.id}">
+                                            </td>`;
+                                    }).join('')}
+                                </tr>`;
                         }).join('')}
                     </tbody>
                 </table>
             </div>
 
-            <div id="footer-acoes-entrega" class="animate__animated animate__fadeIn"
-                 style="text-align: center; padding: 20px 10px; margin-top: 10px;">
-                <button class="btn-imprimir-comprovante" onclick="gerarComprovanteTurmaMaterial(${turmaId})">
-                    <i class="fas fa-print"></i> GERAR COMPROVANTE
+            <div id="footer-material">
+                <button class="btn-imprimir-comprovante" onclick="gerarComprovanteTurmaMaterial(${turmaId})" style="flex:1; max-width:200px;">
+                    <i class="fas fa-print"></i> COMPROVANTE
                 </button>
-                <button class="btn-confirmar-entrega" onclick="confirmarEntregasMaterial(${turmaId})">
-                    <i class="fas fa-check"></i> CONFIRMAR ENTREGAS MARCADAS
+                <button class="btn-confirmar-entrega" onclick="confirmarEntregasMaterial(${turmaId})" style="flex:1; max-width:300px; background:#00ff88; color:#001a2c;">
+                    <i class="fas fa-check"></i> CONFIRMAR ENTREGAS
                 </button>
             </div>
         `;
         
-        // Configura toda a lógica de interação
         configurarAcoesEmMassaMaterial(data.produtos, data.estoqueEscola);
 
     } catch (err) {
         console.error("Erro ao renderizar matriz de material:", err.message);
         notificar(`Erro: ${err.message}`, 'erro');
-        app.innerHTML = `
-            <div class="painel-vidro" style="margin:20px; padding:20px; color: #ff4d4d; text-align:center;">
-                <h2>Ocorreu um erro</h2>
-                <p>${err.message}</p>
-                <button class="btn-voltar-vidro" onclick="telaEntregaMaterial()">Tentar Novamente</button>
-            </div>`;
     }
 }
 

@@ -20964,7 +20964,7 @@ async function gerarComprovanteTurma(turmaId) {
 
                     <!-- CABEÇALHO -->
                     <div class="cabecalho">
-                        <img src="assets/braque.jpg" alt="Brasão"> 
+                        <img src="assets/braque.png" alt="Brasão"> 
                         
                         <div class="cabecalho-textos">
                             <p>PREFEITURA MUNICIPAL DE QUEIMADOS</p>

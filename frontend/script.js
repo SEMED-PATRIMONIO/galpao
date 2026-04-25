@@ -3155,7 +3155,7 @@ async function renderizarGradeUniformes() {
 
     // Separar Tênis para ser a última coluna
     const listaProdutos = [...produtos.filter(p => !p.nome.includes('TENIS')), ...produtos.filter(p => p.nome.includes('TENIS'))];
-    const tamanhos = ["02", "04", "06", "08", "10", "12", "14", "P", "M", "G", "GG", "28", "30", "32", "34", "36", "38", "40", "42"];
+    const tamanhos = ["02", "04", "06", "08", "10", "12", "14", "16", "PP", "P", "M", "G", "GG", "EGG", "28", "30", "32", "34", "36", "38", "40", "42"];
 
     let html = `
         <div class="card-entrada">

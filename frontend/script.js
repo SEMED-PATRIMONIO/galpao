@@ -1,7 +1,7 @@
 const API_URL = 'https://patrimoniosemed.paiva.api.br';
 let TOKEN = localStorage.getItem('token');
 const tokenParaUso = localStorage.getItem('token');
-const GRADE_VESTUARIO = ['2', '4', '6', '8', '10', '12', '14', '16', 'PP', 'P', 'M', 'G', 'GG', 'EGG'];
+const GRADE_VESTUARIO = ['02', '04', '06', '08', '10', '12', '14', '16', 'PP', 'P', 'M', 'G', 'GG', 'EGG'];
 const GRADE_TENIS = Array.from({length: 22}, (_, i) => (i + 22).toString()); // 22 a 43
 // Mapeamento extraído do PDF de Nomenclatura 
 const PREFIXOS_LOCAIS = {
@@ -2402,7 +2402,7 @@ function ajustarGradeUniforme() {
         if (nome.includes('TENIS')) {
             textoGrade.innerText = "22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43";
         } else {
-            textoGrade.innerText = "2, 4, 6, 8, 10, 12, 14, 16, PP, P, M, G, GG, EGG";
+            textoGrade.innerText = "02, 04, 06, 08, 10, 12, 14, 16, PP, P, M, G, GG, EGG";
         }
     } else {
         divnotificara.style.display = 'block';

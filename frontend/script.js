@@ -20504,31 +20504,36 @@ async function renderizarMatrizEntrega(turmaId, turmaNome) {
                     overflow-y: auto;
                     overflow-x: hidden;
                     border-radius: 8px;
-                    background: rgba(0, 26, 44, 0.5);
-                    margin-bottom: 20px;
+                    background: rgba(0, 26, 44, 0.6);
+                    margin-bottom: 15px;
                     border: 1px solid rgba(255,255,255,0.1);
                 }
+
                 .tabela-entrega {
                     width: 100%;
                     border-collapse: collapse;
-                    table-layout: fixed; /* ESSENCIAL: Força o respeito às larguras definidas */
+                    table-layout: fixed; /* Trava o layout */
                 }
-                
-                /* Definição de Larguras: 15% para Aluno, restante dividido pelas colunas de uniformes */
+
+                /* Coluna do Aluno: 20% do total */
                 .col-aluno {
-                    width: 20%; 
+                    width: 20%;
+                    min-width: 20%;
+                    max-width: 20%;
                     text-align: left !important;
                     padding-left: 10px !important;
-                    font-size: 0.75rem;
+                    font-size: 0.7rem;
                     white-space: nowrap;
                     overflow: hidden;
                     text-overflow: ellipsis;
                 }
-                
-                /* As colunas de uniformes dividem o espaço restante igualmente */
-                .tabela-entrega th:not(.col-aluno), 
-                .tabela-entrega td:not(.col-aluno) {
+
+                /* Colunas de Uniformes (9 colunas): Cada uma recebe exatamente 1/9 dos 80% restantes */
+                .col-uniforme {
                     width: calc(80% / ${data.produtos.length});
+                    min-width: calc(80% / ${data.produtos.length});
+                    max-width: calc(80% / ${data.produtos.length});
+                    padding: 5px 2px !important;
                 }
 
                 .tabela-entrega thead th {
@@ -20536,55 +20541,54 @@ async function renderizarMatrizEntrega(turmaId, turmaNome) {
                     top: 0;
                     z-index: 10;
                     background: #001a2c;
-                    font-size: 0.6rem;
-                    padding: 8px 2px;
+                    font-size: 0.55rem; /* Fonte levemente menor para garantir que caiba */
                     color: #00d4ff;
+                    height: 45px;
                     border-bottom: 2px solid #00d4ff;
+                    word-wrap: break-word; /* Força quebra de linha em nomes longos como CALCA MAS */
                 }
 
                 .tabela-entrega .linha-todos th, 
                 .tabela-entrega .linha-todos td {
                     position: sticky;
-                    top: 42px; /* Ajustado para colar logo abaixo do header */
+                    top: 45px;
                     z-index: 9;
                     background: #002a44;
-                    padding: 5px 0;
+                    border-bottom: 1px solid rgba(255,255,255,0.2);
                 }
 
                 .tabela-entrega td {
                     text-align: center;
-                    padding: 4px 0;
                     border: 1px solid rgba(255,255,255,0.05);
-                    height: 40px;
+                    height: 38px;
                 }
 
                 .select-tamanho-entrega, .select-todos {
-                    width: 90%;
-                    font-size: 0.7rem;
-                    padding: 3px;
-                    background: rgba(0,0,0,0.4);
+                    width: 98%; /* Ocupa quase toda a célula para ganhar espaço */
+                    font-size: 0.65rem;
+                    padding: 2px;
+                    background: rgba(0,0,0,0.5);
                     color: white;
-                    border: 1px solid rgba(0,212,255,0.2);
+                    border: 1px solid rgba(0,212,255,0.3);
                     border-radius: 3px;
-                    cursor: pointer;
                 }
 
-                .celula-entregue { font-size: 0.65rem; color: #00ff88; line-height: 1.1; }
-                .celula-nao-aplica { color: rgba(255,255,255,0.15); font-size: 0.8rem; }
+                .celula-entregue { font-size: 0.6rem; color: #00ff88; line-height: 1; }
+                .celula-nao-aplica { color: rgba(255,255,255,0.1); font-size: 0.7rem; }
                 
                 #footer-acoes-entrega {
                     display: flex;
-                    gap: 15px;
+                    gap: 10px;
                     justify-content: center;
-                    padding: 15px;
+                    padding: 10px;
                 }
             </style>
 
-            <div class="header-animado animate__animated animate__fadeIn" style="margin-bottom: 10px;">
-                <button class="btn-voltar-vidro" onclick="telaEntregaUniformes()" style="padding: 5px 15px;">
+            <div class="header-animado animate__animated animate__fadeIn">
+                <button class="btn-voltar-vidro" onclick="telaEntregaUniformes()" style="padding: 4px 12px; font-size: 0.8rem;">
                     <i class="fas fa-arrow-left"></i> TROCAR TURMA
                 </button>
-                <h2 class="titulo-sessao" style="color: white; font-size: 1.2rem; margin: 10px 0;">Entregas: ${turmaNome}</h2>
+                <h2 class="titulo-sessao" style="color: white; font-size: 1.1rem; margin: 8px 0;">Entregas: ${turmaNome}</h2>
             </div>
 
             <div class="tabela-entrega-wrapper animate__animated animate__fadeInUp">
@@ -20593,7 +20597,7 @@ async function renderizarMatrizEntrega(turmaId, turmaNome) {
                         <tr>
                             <th class="col-aluno">ALUNO</th>
                             ${data.produtos.map(p => `
-                                <th>
+                                <th class="col-uniforme">
                                     ${p.nome.toUpperCase()}
                                 </th>`).join('')}
                         </tr>
@@ -20601,7 +20605,7 @@ async function renderizarMatrizEntrega(turmaId, turmaNome) {
                         <tr class="linha-todos">
                             <th class="col-aluno" style="color: #00d4ff;">TODOS</th>
                             ${data.produtos.map(produto => `
-                                <td class="celula-todos" data-produto-id="${produto.id}">
+                                <td class="col-uniforme" data-produto-id="${produto.id}">
                                     <select class="select-todos" data-produto-id="${produto.id}">
                                         <option value="">--</option>
                                         ${opcoesPorProduto[produto.id]}
@@ -20617,17 +20621,17 @@ async function renderizarMatrizEntrega(turmaId, turmaNome) {
                                 <td class="col-aluno" title="${aluno.nome}">${aluno.nome}</td>
                                 ${data.produtos.map(produto => {
                                     const status = aluno.statusItens?.[produto.id];
-                                    if (!status) return `<td class="celula-nao-aplica">—</td>`;
+                                    if (!status) return `<td class="col-uniforme celula-nao-aplica">—</td>`;
 
                                     if (status.status === 'entregue') {
                                         return `
-                                            <td class="celula-entregue">
-                                                <i class="fas fa-check"></i><br>${status.tamanho}
+                                            <td class="col-uniforme celula-entregue">
+                                                <i class="fas fa-check"></i> ${status.tamanho}
                                             </td>`;
                                     }
 
                                     return `
-                                        <td>
+                                        <td class="col-uniforme">
                                             <select class="select-tamanho-entrega"
                                                     data-aluno-id="${aluno.id}"
                                                     data-produto-id="${produto.id}"
@@ -20644,11 +20648,13 @@ async function renderizarMatrizEntrega(turmaId, turmaNome) {
             </div>
 
             <div id="footer-acoes-entrega">
-                <button class="btn-imprimir-comprovante" onclick="gerarComprovanteTurma(${turmaId})" style="flex:1; max-width:200px;">
-                    <i class="fas fa-print"></i> COMPROVANTE
+                <button class="btn-imprimir-comprovante" onclick="gerarComprovanteTurma(${turmaId})" 
+                        style="background: #3b82f6; color: white; padding: 12px 20px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer;">
+                    COMPROVANTE
                 </button>
-                <button class="btn-confirmar-entrega" onclick="confirmarEntregasTurma(${turmaId})" style="flex:1; max-width:300px; background:#00ff88; color:#001a2c; font-weight:bold;">
-                    <i class="fas fa-check"></i> CONFIRMAR SELECIONADAS
+                <button class="btn-confirmar-entrega" onclick="confirmarEntregasTurma(${turmaId})" 
+                        style="background: #00ff88; color: #001a2c; padding: 12px 30px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer;">
+                    CONFIRMAR SELECIONADAS
                 </button>
             </div>
         `;
@@ -20658,7 +20664,6 @@ async function renderizarMatrizEntrega(turmaId, turmaNome) {
     } catch (err) {
         console.error("Erro ao renderizar matriz de entrega:", err);
         notificar(`Erro: ${err.message}`, 'erro');
-        app.innerHTML = `<div class="glass-panel"><h2>Erro ao carregar dados.</h2><button onclick="telaEntregaUniformes()">Voltar</button></div>`;
     }
 }
 

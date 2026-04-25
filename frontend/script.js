@@ -20500,74 +20500,91 @@ async function renderizarMatrizEntrega(turmaId, turmaNome) {
         app.innerHTML = `
             <style>
                 .tabela-entrega-wrapper {
-                    max-height: 60vh;
+                    max-height: 65vh;
                     overflow-y: auto;
                     overflow-x: hidden;
                     border-radius: 8px;
                     background: rgba(0, 26, 44, 0.5);
                     margin-bottom: 20px;
+                    border: 1px solid rgba(255,255,255,0.1);
                 }
                 .tabela-entrega {
                     width: 100%;
                     border-collapse: collapse;
-                    table-layout: fixed; /* Força larguras fixas */
+                    table-layout: fixed; /* ESSENCIAL: Força o respeito às larguras definidas */
                 }
+                
+                /* Definição de Larguras: 15% para Aluno, restante dividido pelas colunas de uniformes */
+                .col-aluno {
+                    width: 20%; 
+                    text-align: left !important;
+                    padding-left: 10px !important;
+                    font-size: 0.75rem;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+                
+                /* As colunas de uniformes dividem o espaço restante igualmente */
+                .tabela-entrega th:not(.col-aluno), 
+                .tabela-entrega td:not(.col-aluno) {
+                    width: calc(80% / ${data.produtos.length});
+                }
+
                 .tabela-entrega thead th {
                     position: sticky;
                     top: 0;
                     z-index: 10;
                     background: #001a2c;
-                    font-size: 0.65rem; /* Fonte pequena nos títulos */
-                    padding: 8px 4px;
-                    word-wrap: break-word;
-                    border: 1px solid rgba(255,255,255,0.1);
+                    font-size: 0.6rem;
+                    padding: 8px 2px;
+                    color: #00d4ff;
+                    border-bottom: 2px solid #00d4ff;
                 }
+
                 .tabela-entrega .linha-todos th, 
                 .tabela-entrega .linha-todos td {
                     position: sticky;
-                    top: 45px; /* Abaixo do título fixo */
+                    top: 42px; /* Ajustado para colar logo abaixo do header */
                     z-index: 9;
                     background: #002a44;
+                    padding: 5px 0;
                 }
-                .tabela-entrega td, .tabela-entrega th {
+
+                .tabela-entrega td {
                     text-align: center;
+                    padding: 4px 0;
                     border: 1px solid rgba(255,255,255,0.05);
+                    height: 40px;
                 }
-                .col-aluno {
-                    width: 150px; /* Largura menor para o nome */
-                    text-align: left !important;
-                    padding-left: 10px !important;
-                    font-size: 0.8rem; /* Fonte menor para o nome do aluno */
-                    white-space: nowrap;
-                    overflow: hidden;
-                    text-overflow: ellipsis;
-                }
+
                 .select-tamanho-entrega, .select-todos {
-                    width: 95%;
-                    font-size: 0.75rem;
-                    padding: 4px;
-                    background: rgba(0,0,0,0.3);
+                    width: 90%;
+                    font-size: 0.7rem;
+                    padding: 3px;
+                    background: rgba(0,0,0,0.4);
                     color: white;
-                    border: 1px solid rgba(0,212,255,0.3);
-                    border-radius: 4px;
+                    border: 1px solid rgba(0,212,255,0.2);
+                    border-radius: 3px;
+                    cursor: pointer;
                 }
-                .celula-entregue { font-size: 0.7rem; color: #00ff88; }
-                .celula-nao-aplica { color: rgba(255,255,255,0.2); }
+
+                .celula-entregue { font-size: 0.65rem; color: #00ff88; line-height: 1.1; }
+                .celula-nao-aplica { color: rgba(255,255,255,0.15); font-size: 0.8rem; }
+                
                 #footer-acoes-entrega {
                     display: flex;
                     gap: 15px;
                     justify-content: center;
-                    padding: 20px;
-                    background: rgba(0,0,0,0.2);
-                    border-radius: 10px;
+                    padding: 15px;
                 }
             </style>
 
-            <div class="header-animado animate__animated animate__fadeIn">
-                <button class="btn-voltar-vidro" onclick="telaEntregaUniformes()">
+            <div class="header-animado animate__animated animate__fadeIn" style="margin-bottom: 10px;">
+                <button class="btn-voltar-vidro" onclick="telaEntregaUniformes()" style="padding: 5px 15px;">
                     <i class="fas fa-arrow-left"></i> TROCAR TURMA
                 </button>
-                <h2 class="titulo-sessao" style="color: white; font-size: 1.4rem;">Entregas: ${turmaNome}</h2>
+                <h2 class="titulo-sessao" style="color: white; font-size: 1.2rem; margin: 10px 0;">Entregas: ${turmaNome}</h2>
             </div>
 
             <div class="tabela-entrega-wrapper animate__animated animate__fadeInUp">
@@ -20575,21 +20592,14 @@ async function renderizarMatrizEntrega(turmaId, turmaNome) {
                     <thead>
                         <tr>
                             <th class="col-aluno">ALUNO</th>
-                            ${data.produtos.map(p => {
-                                const totalEstoque = (data.estoqueEscola[p.id] || [])
-                                    .reduce((soma, e) => soma + e.qtd, 0);
-                                return `
-                                    <th>
-                                        ${p.nome.toUpperCase()}<br>
-                                        <span style="font-weight:normal; opacity:0.6;">${totalEstoque} un.</span>
-                                    </th>`;
-                            }).join('')}
+                            ${data.produtos.map(p => `
+                                <th>
+                                    ${p.nome.toUpperCase()}
+                                </th>`).join('')}
                         </tr>
 
                         <tr class="linha-todos">
-                            <th class="col-aluno">
-                                <span style="color:#00d4ff">TODOS</span>
-                            </th>
+                            <th class="col-aluno" style="color: #00d4ff;">TODOS</th>
                             ${data.produtos.map(produto => `
                                 <td class="celula-todos" data-produto-id="${produto.id}">
                                     <select class="select-todos" data-produto-id="${produto.id}">
@@ -20612,7 +20622,7 @@ async function renderizarMatrizEntrega(turmaId, turmaNome) {
                                     if (status.status === 'entregue') {
                                         return `
                                             <td class="celula-entregue">
-                                                <i class="fas fa-check"></i> ${status.tamanho}
+                                                <i class="fas fa-check"></i><br>${status.tamanho}
                                             </td>`;
                                     }
 
@@ -20634,11 +20644,11 @@ async function renderizarMatrizEntrega(turmaId, turmaNome) {
             </div>
 
             <div id="footer-acoes-entrega">
-                <button class="btn-imprimir-comprovante" onclick="gerarComprovanteTurma(${turmaId})" style="flex:1; max-width:250px;">
-                    <i class="fas fa-print"></i> GERAR COMPROVANTE
+                <button class="btn-imprimir-comprovante" onclick="gerarComprovanteTurma(${turmaId})" style="flex:1; max-width:200px;">
+                    <i class="fas fa-print"></i> COMPROVANTE
                 </button>
-                <button class="btn-confirmar-entrega" onclick="confirmarEntregasTurma(${turmaId})" style="flex:1; max-width:350px; background:#00ff88; color:#001a2c;">
-                    <i class="fas fa-check"></i> CONFIRMAR ENTREGAS
+                <button class="btn-confirmar-entrega" onclick="confirmarEntregasTurma(${turmaId})" style="flex:1; max-width:300px; background:#00ff88; color:#001a2c; font-weight:bold;">
+                    <i class="fas fa-check"></i> CONFIRMAR SELECIONADAS
                 </button>
             </div>
         `;
@@ -20648,12 +20658,7 @@ async function renderizarMatrizEntrega(turmaId, turmaNome) {
     } catch (err) {
         console.error("Erro ao renderizar matriz de entrega:", err);
         notificar(`Erro: ${err.message}`, 'erro');
-        app.innerHTML = `
-            <div class="glass-panel" style="text-align:center; padding: 40px; margin: 20px;">
-                <h2>Ocorreu um erro ao carregar os dados.</h2>
-                <p>${err.message}</p>
-                <button class="btn-voltar-vidro" onclick="telaEntregaUniformes()">Voltar</button>
-            </div>`;
+        app.innerHTML = `<div class="glass-panel"><h2>Erro ao carregar dados.</h2><button onclick="telaEntregaUniformes()">Voltar</button></div>`;
     }
 }
 

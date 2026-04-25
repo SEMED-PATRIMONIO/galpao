@@ -6351,7 +6351,7 @@ router.post('/estoque/entrada-lote', async (req, res) => {
                     VALUES (37, $1, $2, $3)
                     ON CONFLICT (local_id, produto_id, tamanho) 
                     DO UPDATE SET quantidade = estoque_por_local.quantidade + EXCLUDED.quantidade;`,
-                    [item.produto_id, tamanhoUniforme, qtd] // ou tamanhoPadrao para Material
+                    [item.produto_id, tamanhoPadrao, item.qtd_total]
                 );
                 
                 await client.query(
@@ -6371,7 +6371,7 @@ router.post('/estoque/entrada-lote', async (req, res) => {
                             VALUES (37, $1, $2, $3)
                             ON CONFLICT (local_id, produto_id, tamanho) 
                             DO UPDATE SET quantidade = estoque_por_local.quantidade + EXCLUDED.quantidade;`,
-                            [item.produto_id, tamanhoUniforme, qtd] // ou tamanhoPadrao para Material
+                            [item.produto_id, tamanhoUniforme, qtd]
                         );
 
                         await client.query(

@@ -21423,26 +21423,25 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
                 .tabela-entrega {
                     width: 100%;
                     border-collapse: collapse;
-                    table-layout: fixed; /* Trava as colunas */
+                    table-layout: fixed;
                 }
 
                 .col-aluno {
-                    width: 25%; /* Material costuma ter menos colunas, aumentamos um pouco o nome */
-                    min-width: 25%;
-                    max-width: 25%;
+                    width: 20%;
+                    min-width: 20%;
+                    max-width: 20%;
                     text-align: left !important;
                     padding-left: 10px !important;
                     font-size: 0.75rem;
                     white-space: nowrap;
                     overflow: hidden;
                     text-overflow: ellipsis;
-                    background: #001a2c;
                 }
 
                 .col-prod-mat {
-                    width: calc(75% / ${data.produtos.length});
-                    min-width: calc(75% / ${data.produtos.length});
-                    max-width: calc(75% / ${data.produtos.length});
+                    width: calc(80% / ${data.produtos.length});
+                    min-width: calc(80% / ${data.produtos.length});
+                    max-width: calc(80% / ${data.produtos.length});
                 }
 
                 .tabela-entrega thead th {
@@ -21450,7 +21449,7 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
                     top: 0;
                     z-index: 10;
                     background: #001a2c;
-                    font-size: 0.6rem;
+                    font-size: 0.55rem;
                     color: #00d4ff;
                     height: 45px;
                     border-bottom: 2px solid #00d4ff;
@@ -21472,28 +21471,28 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
                     height: 40px;
                 }
 
-                /* Ajuste dos Radio Buttons e Checkboxes */
-                .celula-radio input {
-                    transform: scale(1.2);
+                /* Inputs e Labels restaurados para funcionalidade original */
+                .celula-radio input[type="radio"], .celula-radio input[type="checkbox"] {
                     cursor: pointer;
+                    margin: 0;
                 }
 
-                .celula-entregue { font-size: 0.65rem; color: #00ff88; }
-                .celula-bloqueada { background: rgba(0,0,0,0.2); opacity: 0.3; }
+                .celula-entregue { font-size: 0.6rem; color: #00ff88; line-height: 1; }
+                .celula-bloqueada { background: rgba(0,0,0,0.1); opacity: 0.2; }
                 
                 #footer-material {
                     display: flex;
-                    gap: 15px;
+                    gap: 10px;
                     justify-content: center;
-                    padding: 15px;
+                    padding: 10px;
                 }
             </style>
 
             <div class="header-animado animate__animated animate__fadeIn">
-                <button class="btn-voltar-vidro" onclick="telaEntregaMaterial()" style="padding: 5px 15px;">
+                <button class="btn-voltar-vidro" onclick="telaEntregaMaterial()" style="padding: 4px 12px; font-size: 0.8rem;">
                     <i class="fas fa-arrow-left"></i> TROCAR TURMA
                 </button>
-                <h2 class="titulo-sessao" style="color: white; font-size: 1.2rem; margin: 10px 0;">Material: ${turmaNome}</h2>
+                <h2 class="titulo-sessao" style="color: white; font-size: 1.1rem; margin: 8px 0;">Material: ${turmaNome}</h2>
             </div>
 
             <div class="tabela-material-wrapper animate__animated animate__fadeInUp">
@@ -21510,8 +21509,10 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
                         <tr class="linha-todos">
                             <th class="col-aluno" style="color: #00d4ff;">TODOS</th>
                             ${data.produtos.map(produto => `
-                                <td class="col-prod-mat celula-radio">
-                                    <input type="checkbox" class="checkbox-todos" data-produto-id="${produto.id}" id="todos-${produto.id}">
+                                <td class="col-prod-mat">
+                                    <input type="checkbox" class="checkbox-todos" 
+                                           data-produto-id="${produto.id}" 
+                                           id="todos-${produto.id}">
                                 </td>
                             `).join('')}
                         </tr>
@@ -21527,15 +21528,22 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
                                     <td class="col-aluno" title="${aluno.nome}">${aluno.nome}</td>
                                     ${data.produtos.map(produto => {
                                         if (jaEntregue) {
-                                            return aluno.entregaInfo.produto_id === produto.id ? 
-                                                `<td class="col-prod-mat celula-entregue"><i class="fas fa-check"></i><br>${dataFormatada}</td>` : 
-                                                `<td class="col-prod-mat celula-bloqueada"></td>`;
+                                            if (aluno.entregaInfo.produto_id === produto.id) {
+                                                return `<td class="col-prod-mat celula-entregue"><i class="fas fa-check"></i><br>${dataFormatada}</td>`;
+                                            } else {
+                                                return `<td class="col-prod-mat celula-bloqueada"></td>`;
+                                            }
                                         }
+                                        // RESTAURADO: Input de seleção para o aluno
                                         return `
                                             <td class="col-prod-mat celula-radio">
-                                                <input type="radio" name="radio_aluno_${aluno.id}" class="radio-aluno" 
-                                                       data-aluno-id="${aluno.id}" data-produto-id="${produto.id}" 
+                                                <input type="radio" 
+                                                       name="radio_aluno_${aluno.id}" 
+                                                       class="radio-aluno" 
+                                                       data-aluno-id="${aluno.id}" 
+                                                       data-produto-id="${produto.id}" 
                                                        id="al${aluno.id}-pr${produto.id}">
+                                                <label for="al${aluno.id}-pr${produto.id}"></label>
                                             </td>`;
                                     }).join('')}
                                 </tr>`;
@@ -21545,11 +21553,13 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
             </div>
 
             <div id="footer-material">
-                <button class="btn-imprimir-comprovante" onclick="gerarComprovanteTurmaMaterial(${turmaId})" style="flex:1; max-width:200px;">
-                    <i class="fas fa-print"></i> COMPROVANTE
+                <button class="btn-imprimir-comprovante" onclick="gerarComprovanteTurmaMaterial(${turmaId})" 
+                        style="background: #3b82f6; color: white; padding: 12px 20px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer;">
+                    COMPROVANTE
                 </button>
-                <button class="btn-confirmar-entrega" onclick="confirmarEntregasMaterial(${turmaId})" style="flex:1; max-width:300px; background:#00ff88; color:#001a2c;">
-                    <i class="fas fa-check"></i> CONFIRMAR ENTREGAS
+                <button class="btn-confirmar-entrega" onclick="confirmarEntregasMaterial(${turmaId})" 
+                        style="background: #00ff88; color: #001a2c; padding: 12px 30px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer;">
+                    CONFIRMAR ENTREGAS
                 </button>
             </div>
         `;

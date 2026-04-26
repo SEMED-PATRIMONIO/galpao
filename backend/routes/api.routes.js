@@ -9642,17 +9642,18 @@ router.get('/admin/historico/geral', async (req, res) => {
 });
 
 // ROTA EXCLUSIVA PARA O RELATÓRIO DE FALTANTES DE UNIFORME
+// ROTA CORRIGIDA DE UNIFORMES (Sintaxe idêntica à de Material)
 router.get('/relatorios/escola/:localId/faltantes-uniforme', verificarToken, async (req, res) => {
     const { localId } = req.params;
-    const client = await db.pool.connect();
     
     try {
-        // 1. Busca o nome da Escola para o cabeçalho
-        const escolaRes = await client.query('SELECT nome FROM locais WHERE id = $1', [localId]);
+        // 1. Busca o nome da Escola
+        const escolaRes = await db.query('SELECT nome FROM locais WHERE id = $1', [localId]);
         const nomeEscola = escolaRes.rows[0]?.nome || 'Escola Selecionada';
 
-        // 2. Busca os alunos que não receberam NENHUM produto do tipo UNIFORME
-        const result = await client.query(`
+        // 2. Busca os alunos que não receberam nada do tipo 'UNIFORME'
+        // IMPORTANTE: Verifique se no seu banco está 'UNIFORME' ou 'UNIFORMES'
+        const result = await db.query(`
             SELECT t.nome AS turma_nome, a.nome AS aluno_nome
             FROM turmas t
             JOIN alunos a ON a.turma_id = t.id
@@ -9666,7 +9667,7 @@ router.get('/relatorios/escola/:localId/faltantes-uniforme', verificarToken, asy
             ORDER BY t.nome, a.nome;
         `, [localId]);
 
-        // 3. Agrupa os dados separados por turma
+        // 3. Agrupa os dados por turma
         const relatorio = {};
         result.rows.forEach(row => {
             if (!relatorio[row.turma_nome]) relatorio[row.turma_nome] = [];
@@ -9675,10 +9676,8 @@ router.get('/relatorios/escola/:localId/faltantes-uniforme', verificarToken, asy
 
         res.json({ escola: nomeEscola, turmas: relatorio });
     } catch (err) {
-        console.error("Erro no relatório de faltantes:", err);
-        res.status(500).json({ error: "Erro ao gerar os dados do relatório." });
-    } finally {
-        client.release();
+        console.error("Erro no relatório de uniformes:", err);
+        res.status(500).json({ error: err.message });
     }
 });
 

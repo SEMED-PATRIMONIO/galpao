@@ -250,6 +250,7 @@ async function carregarDashboard() {
     let carrinhoEntrada = [];
     let chartTecnicos = null; 
     let cacheColeta = [];
+    let listaLocaisRelatorio = [];
     await inicializarSessaoUsuario();
 
     // 1. Recuperação de dados da sessão (inalterado)
@@ -381,6 +382,7 @@ async function carregarDashboard() {
         html += `
             <button class="btn-grande btn-vidro" onclick="telaGerenciarUsuarios()"><i>👥</i><span>GERENCIAR USUÁRIOS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaProgressoGeralEscolas()"><i>🌐</i><span>ENTREGA DE UNIFORMES E KITS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatoriosFaltantes()"><i>👕</i><span>ALUNOS QUE FALTAM RECEBER UNIFORME/KIT</span></button>
             <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()"><i>📈</i><span>FLUXO DE PEDIDOS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()"><i>🔑</i><span>ALTERAR SENHA</span></button>
         `; 
@@ -614,6 +616,7 @@ function getBotoesSubmenu(perfil, titulo, contagem = 0, contagemProntos = 0) {
             <button class="btn-grande btn-vidro" onclick="telaAuditoriaPedidos()"><i>🔍</i><span>FLUXO DO PEDIDO</span></button>
             <button class="btn-grande btn-vidro" onclick="telaHistoricoGeral()"><i>🕵️</i><span>HISTÓRICO MOVIMENTAÇÃO</span></button>
             <button class="btn-grande btn-vidro" onclick="telaRelatorioLogStatus()"><i>🕵️</i><span>HISTÓRICO PEDIDOS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatoriosFaltantes()"><i>👕</i><span>ALUNOS QUE FALTAM RECEBER UNIFORME/KIT</span></button>            
             <button class="btn-grande btn-vidro" onclick="telaProgressoGeralEscolas()"><i>🌐</i><span>ENTREGA DE UNIFORMES E KITS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaRelatorioConsolidado()"><i>🏢</i><span>LISTAGEM RECEBIDO/FALTA RECEBER</span></button>
         `;
@@ -633,7 +636,8 @@ function getBotoesSubmenu(perfil, titulo, contagem = 0, contagemProntos = 0) {
             <button class="btn-grande btn-vidro" onclick="telaAuditoriaPedidos()"><i>🔍</i><span>FLUXO DO PEDIDO</span></button>
             <button class="btn-grande btn-vidro" onclick="telaHistoricoRemessas()"><i>🔍</i><span>ROMANEIOS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaHistoricoGeral()"><i>🕵️</i><span>HISTÓRICO MOVIMENTAÇÃO</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaRelatorioLogStatus()"><i>🕵️</i><span>HISTÓRICO PEDIDOS</span></button>    
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioLogStatus()"><i>🕵️</i><span>HISTÓRICO PEDIDOS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatoriosFaltantes()"><i>👕</i><span>ALUNOS QUE FALTAM RECEBER UNIFORME/KIT</span></button>        
             <button class="btn-grande btn-vidro" onclick="telaProgressoGeralEscolas()"><i>🌐</i><span>ENTREGA DE UNIFORMES E KITS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaRelatorioConsolidado()"><i>🏢</i><span>LISTAGEM RECEBIDO/FALTA RECEBER</span></button>
         `;
@@ -20575,6 +20579,11 @@ async function renderizarMatrizEntrega(turmaId, turmaNome) {
                     border-radius: 3px;
                 }
 
+                .tabela-entrega th:last-child, 
+                .tabela-entrega td:last-child {
+                    padding-right: 15px !important;
+                }
+
                 .titulo-turma-central {
                     width: 100%;
                     text-align: center;
@@ -22471,6 +22480,191 @@ async function carregarDadosHistorico() {
 
     } catch (err) {
         tbody.innerHTML = `<tr><td colspan="7" style="padding:20px; text-align:center; color:#ff4d4d;">❌ Erro de conexão com o servidor.</td></tr>`;
+    }
+}
+
+async function telaRelatoriosFaltantes() {
+    const app = document.getElementById('app-content');
+    app.innerHTML = `<div class="loading-spinner"></div>`;
+
+    try {
+        // Se já tiver uma rota que lista locais, adapte a URL se necessário. 
+        // Supondo que seja /locais
+        if (listaLocaisRelatorio.length === 0) {
+            const res = await fetch(`${API_URL}/locais`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+            listaLocaisRelatorio = await res.json();
+        }
+
+        let options = '<option value="">-- Selecione uma Escola --</option>';
+        listaLocaisRelatorio.forEach(l => {
+            options += `<option value="${l.id}">${l.nome}</option>`;
+        });
+
+        app.innerHTML = `
+            <div class="header-acoes" style="padding: 20px;">
+                <button class="btn-voltar-vidro" onclick="carregarDashboard()">
+                    <i class="fas fa-arrow-left"></i> VOLTAR
+                </button>
+            </div>
+            
+            <div style="text-align: center; padding: 40px;">
+                <h2 style="color: #00d4ff; margin-bottom: 20px;">RELATÓRIO DE FALTANTES</h2>
+                <select id="select-escola-rel" onchange="telaBotaoRelatorioSelecionado()"
+                        style="padding: 12px; font-size: 1rem; width: 60%; max-width: 400px; border-radius: 5px;">
+                    ${options}
+                </select>
+            </div>
+        `;
+    } catch (err) {
+        notificar("Erro ao carregar locais.", "erro");
+        carregarDashboard();
+    }
+}
+
+// 2. TELA APÓS SELECIONAR O LOCAL (Mostra o botão do PDF)
+function telaBotaoRelatorioSelecionado() {
+    const select = document.getElementById('select-escola-rel');
+    const localId = select.value;
+    const localNome = select.options[select.selectedIndex].text;
+
+    if (!localId) return;
+
+    const app = document.getElementById('app-content');
+    app.innerHTML = `
+        <div class="header-acoes" style="padding: 20px;">
+            <button class="btn-voltar-vidro" onclick="telaRelatoriosFaltantes()">
+                <i class="fas fa-arrow-left"></i> VOLTAR
+            </button>
+        </div>
+        
+        <div style="text-align: center; padding: 20px; animation: fadeIn 0.3s;">
+            <h3 style="color: white; margin-bottom: 5px;">ESCOLA SELECIONADA:</h3>
+            <h2 style="color: #00d4ff; margin-bottom: 40px; text-transform: uppercase;">${localNome}</h2>
+            
+            <div style="display: flex; flex-direction: column; gap: 20px; align-items: center;">
+                
+                <button onclick="gerarPdfFaltantes(${localId}, 'UNIFORME')" 
+                        style="background: #3b82f6; color: white; padding: 20px; width: 350px; border: none; border-radius: 8px; font-weight: 800; cursor: pointer; font-size: 1rem; box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);">
+                    <i class="fas fa-tshirt"></i> ALUNOS FALTANDO UNIFORME
+                </button>
+
+                <button onclick="gerarPdfFaltantes(${localId}, 'MATERIAL')" 
+                        style="background: #10b981; color: white; padding: 20px; width: 350px; border: none; border-radius: 8px; font-weight: 800; cursor: pointer; font-size: 1rem; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);">
+                    <i class="fas fa-book"></i> ALUNOS FALTANDO MATERIAL
+                </button>
+
+            </div>
+        </div>
+    `;
+}
+
+async function gerarPdfFaltantes(localId, tipo) {
+    // Define dinamicamente o endpoint e os títulos com base no tipo (UNIFORME ou MATERIAL)
+    const endpoint = tipo === 'MATERIAL' ? 'faltantes-material' : 'faltantes-uniforme';
+    const tituloRelatorio = tipo === 'MATERIAL' ? 'ALUNOS QUE FALTAM RECEBER MATERIAL' : 'ALUNOS QUE FALTAM RECEBER UNIFORMES';
+    
+    notificar(`Processando relatório de ${tipo.toLowerCase()}, aguarde...`, "info");
+
+    try {
+        const res = await fetch(`${API_URL}/relatorios/escola/${localId}/${endpoint}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        if (!res.ok) throw new Error("Erro ao buscar dados no servidor.");
+        const data = await res.json();
+
+        // INÍCIO DO CÓDIGO HTML DO PDF (Estrutura Completa e Corrigida)
+        let htmlPdf = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Relatório de Faltantes - ${data.escola}</title>
+                <style>
+                    /* Configuração estrita para a folha A4 e Margens de 1cm */
+                    @page { size: A4 portrait; margin: 1cm; }
+                    body { font-family: Arial, sans-serif; background: #525659; margin: 0; padding: 0; }
+                    
+                    /* Barra superior de controle (some na hora de imprimir) */
+                    .barra-controle { position: fixed; top: 0; left: 0; width: 100%; background: #2c3e50; padding: 15px; text-align: center; z-index: 9999; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+                    .btn-controle { padding: 10px 20px; font-weight: bold; font-size: 14px; border: none; border-radius: 5px; cursor: pointer; margin: 0 10px; transition: 0.2s; }
+                    .btn-imprimir { background: #3498db; color: white; }
+                    .btn-imprimir:hover { background: #2980b9; }
+                    .btn-fechar { background: #e74c3c; color: white; }
+                    .btn-fechar:hover { background: #c0392b; }
+                    
+                    /* Design da Folha na tela */
+                    .folha { background: white; width: 21cm; min-height: 29.7cm; margin: 80px auto 20px auto; padding: 1cm; box-sizing: border-box; box-shadow: 0 0 10px rgba(0,0,0,0.5); }
+                    
+                    /* O Segredo: Uma folha por turma */
+                    .quebra-pagina { page-break-after: always; }
+                    .folha:last-child { page-break-after: auto; }
+
+                    /* Textos e Layout exigidos */
+                    .cabecalho { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000; padding-bottom: 5px; margin-bottom: 20px; font-size: 14px; }
+                    .nome-local { text-transform: uppercase; max-width: 70%; }
+                    .nome-turma { font-weight: bold; text-transform: uppercase; }
+                    .titulo-central { text-align: center; font-weight: bold; font-size: 16px; margin-bottom: 25px; text-transform: uppercase; }
+                    
+                    /* Lista de Alunos - Letra Pequena conforme solicitado */
+                    .lista-alunos { font-size: 11px; line-height: 1.8; margin: 0; padding-left: 25px; }
+                    .lista-alunos li { border-bottom: 1px dashed #ccc; padding: 2px 0; text-transform: uppercase; }
+
+                    /* Ajustes para Impressão Real */
+                    @media print {
+                        body { background: white; }
+                        .barra-controle { display: none !important; }
+                        .folha { margin: 0; box-shadow: none; width: auto; min-height: auto; }
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="barra-controle">
+                    <button class="btn-controle btn-imprimir" onclick="window.print()">IMPRIMIR / SALVAR COMO PDF</button>
+                    <button class="btn-controle btn-fechar" onclick="window.close()">FECHAR JANELA</button>
+                </div>
+        `;
+
+        const turmas = Object.keys(data.turmas).sort();
+
+        if (turmas.length === 0) {
+            htmlPdf += `
+                <div class="folha">
+                    <div class="titulo-central">NÃO HÁ ALUNOS PENDENTES DE ${tipo} NESTA UNIDADE.</div>
+                </div>`;
+        } else {
+            // Gera uma folha completa para cada turma do local
+            turmas.forEach(turmaNome => {
+                const alunos = data.turmas[turmaNome];
+                
+                htmlPdf += `
+                    <div class="folha quebra-pagina">
+                        <div class="cabecalho">
+                            <div class="nome-local">${data.escola}</div>
+                            <div class="nome-turma">TURMA: ${turmaNome}</div>
+                        </div>
+                        <div class="titulo-central">${tituloRelatorio}</div>
+                        
+                        <ol class="lista-alunos">
+                            ${alunos.map(aluno => `<li>${aluno}</li>`).join('')}
+                        </ol>
+                    </div>
+                `;
+            });
+        }
+
+        htmlPdf += `</body></html>`;
+
+        // Execução: Abre a nova aba e renderiza o conteúdo
+        const novaAba = window.open('', '_blank');
+        if (novaAba) {
+            novaAba.document.write(htmlPdf);
+            novaAba.document.close();
+        } else {
+            notificar("O navegador bloqueou a abertura do PDF. Verifique o bloqueador de pop-ups.", "erro");
+        }
+
+    } catch (err) {
+        console.error("Erro ao gerar PDF:", err);
+        notificar(`Erro: ${err.message}`, "erro");
     }
 }
 

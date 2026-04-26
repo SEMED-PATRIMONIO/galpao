@@ -22557,12 +22557,20 @@ function telaBotaoRelatorioSelecionado() {
                 
                 <button onclick="gerarPdfFaltantes(${localId}, 'UNIFORME')" 
                         style="background: #3b82f6; color: white; padding: 20px; width: 350px; border: none; border-radius: 8px; font-weight: 800; cursor: pointer; font-size: 1rem; box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);">
-                    <i class="fas fa-tshirt"></i> ALUNOS FALTANDO UNIFORME
+                    <svg viewBox="0 0 512 512" fill="currentColor" style="width: 22px; height: 22px; vertical-align: middle; margin-right: 10px; filter: drop-shadow(0 2px 3px rgba(0,0,0,0.5));" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M493.3,101L394.7,2.4c-3.1-3.1-8.1-3.1-11.2,0L314,71.7l-47.3-47.3c-3.1-3.1-8.1-3.1-11.2,0L208,71.7l-69.7-69.7
+                        c-3.1-3.1-8.1-3.1-11.2,0L27.3,101c-3.1,3.1-3.1,8.1,0,11.2L126,210.9v241.1c0,4.4,3.6,8,8,8h243.3c4.4,0,8-3.6,8-8V210.9
+                        l98.7-98.7C496.4,109.1,496.4,104.1,493.3,101zM140.7,196.2L68.8,124.3l37.3-37.3l71.9,71.9L140.7,196.2z M176,312.7L241.7,247H270
+                        l-65.7,65.7H176z M176,368.7L297.7,247H326l-121.7,121.7H176z M176,424.7L333.7,267H362L204.3,424.7H176z M272.7,424.7
+                        L368,329.4v31.3l-64,64H272.7z M368,260.6l-20.6,20.6l-65.7-65.7l20.6-20.6L368,260.6z M336,424.7l32-32v32H336z M371.3,196.2
+                        l-37.3,37.3l-71.9-71.9l37.3-37.3L371.3,196.2z" fill="white"/>
+                        <path d="M176,191.3h160c4.4,0,8-3.6,8-8V79.3c0-4.4-3.6-8-8-8h-160c-4.4,0-8,3.6-8,8v104C168,187.7,171.6,191.3,176,191.3z" fill="black" opacity="0" />
+                        </svg> ALUNOS FALTANDO UNIFORME
                 </button>
 
                 <button onclick="gerarPdfFaltantes(${localId}, 'MATERIAL')" 
                         style="background: #10b981; color: white; padding: 20px; width: 350px; border: none; border-radius: 8px; font-weight: 800; cursor: pointer; font-size: 1rem; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);">
-                    <i class="fas fa-book"></i> ALUNOS FALTANDO MATERIAL
+                    <i class="fas fa-box-open" style="margin-right: 10px;"></i> ALUNOS FALTANDO MATERIAL
                 </button>
 
             </div>

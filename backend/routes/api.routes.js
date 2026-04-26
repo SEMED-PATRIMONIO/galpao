@@ -9641,4 +9641,84 @@ router.get('/admin/historico/geral', async (req, res) => {
     }
 });
 
+// ROTA EXCLUSIVA PARA O RELATÓRIO DE FALTANTES DE UNIFORME
+router.get('/relatorios/escola/:localId/faltantes-uniforme', verificarToken, async (req, res) => {
+    const { localId } = req.params;
+    const client = await db.pool.connect();
+    
+    try {
+        // 1. Busca o nome da Escola para o cabeçalho
+        const escolaRes = await client.query('SELECT nome FROM locais WHERE id = $1', [localId]);
+        const nomeEscola = escolaRes.rows[0]?.nome || 'Escola Selecionada';
+
+        // 2. Busca os alunos que não receberam NENHUM produto do tipo UNIFORME
+        const result = await client.query(`
+            SELECT t.nome AS turma_nome, a.nome AS aluno_nome
+            FROM turmas t
+            JOIN alunos a ON a.turma_id = t.id
+            WHERE t.local_id = $1 
+              AND a.id NOT IN (
+                  SELECT ea.aluno_id
+                  FROM entregas_alunos ea
+                  JOIN produtos p ON ea.produto_id = p.id
+                  WHERE p.tipo = 'UNIFORME'
+              )
+            ORDER BY t.nome, a.nome;
+        `, [localId]);
+
+        // 3. Agrupa os dados separados por turma
+        const relatorio = {};
+        result.rows.forEach(row => {
+            if (!relatorio[row.turma_nome]) relatorio[row.turma_nome] = [];
+            relatorio[row.turma_nome].push(row.aluno_nome);
+        });
+
+        res.json({ escola: nomeEscola, turmas: relatorio });
+    } catch (err) {
+        console.error("Erro no relatório de faltantes:", err);
+        res.status(500).json({ error: "Erro ao gerar os dados do relatório." });
+    } finally {
+        client.release();
+    }
+});
+
+// ROTA EXCLUSIVA PARA O RELATÓRIO DE FALTANTES DE MATERIAL
+router.get('/relatorios/escola/:localId/faltantes-material', verificarToken, async (req, res) => {
+    const { localId } = req.params;
+    const client = await db.pool.connect();
+    
+    try {
+        const escolaRes = await client.query('SELECT nome FROM locais WHERE id = $1', [localId]);
+        const nomeEscola = escolaRes.rows[0]?.nome || 'Escola Selecionada';
+
+        // Busca alunos que não receberam nenhum item do tipo MATERIAL
+        const result = await client.query(`
+            SELECT t.nome AS turma_nome, a.nome AS aluno_nome
+            FROM turmas t
+            JOIN alunos a ON a.turma_id = t.id
+            WHERE t.local_id = $1 
+              AND a.id NOT IN (
+                  SELECT ea.aluno_id
+                  FROM entregas_alunos ea
+                  JOIN produtos p ON ea.produto_id = p.id
+                  WHERE p.tipo = 'MATERIAL'
+              )
+            ORDER BY t.nome, a.nome;
+        `, [localId]);
+
+        const relatorio = {};
+        result.rows.forEach(row => {
+            if (!relatorio[row.turma_nome]) relatorio[row.turma_nome] = [];
+            relatorio[row.turma_nome].push(row.aluno_nome);
+        });
+
+        res.json({ escola: nomeEscola, turmas: relatorio });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Erro ao gerar os dados do relatório de material." });
+    } finally {
+        client.release();
+    }
+});
+
 module.exports = router;

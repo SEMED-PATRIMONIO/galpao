@@ -20601,7 +20601,7 @@ async function renderizarMatrizEntrega(turmaId, turmaNome) {
                     <i class="fas fa-arrow-left"></i> TROCAR TURMA
                 </button>
                 <h1 class="titulo-turma-central">
-                    <i class="fas fa-users"></i> TURMA: ${nomeDaTurma}
+                    <i class="fas fa-users"></i> TURMA: ${turmaNome}
                 </h1>
             </div>
 
@@ -21519,7 +21519,7 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
                     <i class="fas fa-arrow-left"></i> TROCAR TURMA
                 </button>
                 <h1 class="titulo-turma-central">
-                    <i class="fas fa-users"></i> TURMA: ${nomeDaTurma}
+                    <i class="fas fa-users"></i> TURMA: ${turmaNome}
                 </h1>
             </div>
 

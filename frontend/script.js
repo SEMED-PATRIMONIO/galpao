@@ -21677,17 +21677,19 @@ async function gerarComprovanteTurmaMaterial(turmaId) {
 // ============================================================
 async function confirmarEntregasMaterial(turmaId) {
     const radiosMarcados = document.querySelectorAll('.radio-aluno:checked');
+    
+    // Agora enviamos 'N/A' explicitamente para materiais
     const entregasParaEnviar = Array.from(radiosMarcados).map(radio => ({
         alunoId: radio.dataset.alunoId,
         produtoId: radio.dataset.produtoId,
-        tamanho: null
+        tamanho: 'N/A' 
     }));
 
     if (entregasParaEnviar.length === 0) {
         return notificar('Nenhum kit de material foi marcado para entrega.', 'aviso');
     }
     
-    if (!confirm(`Confirmar a entrega de ${entregasParaEnviar.length} kit(s) de material?`)) return;
+    // REMOVIDO: confirm() desnecessário a pedido do usuário
 
     const btn = document.querySelector('.btn-confirmar-entrega');
     btn.disabled = true;
@@ -21699,6 +21701,7 @@ async function confirmarEntregasMaterial(turmaId) {
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
             body: JSON.stringify({ entregas: entregasParaEnviar })
         });
+        
         const resultado = await res.json();
         if (!res.ok) throw new Error(resultado.error || 'Falha no servidor.');
 
@@ -21706,7 +21709,8 @@ async function confirmarEntregasMaterial(turmaId) {
         renderizarMatrizEntregaMaterial(turmaId);
 
     } catch (err) {
-        notificar(`Erro: ${err.message}`, 'erro');
+        // Se o erro for de estoque, a mensagem virá limpa do backend
+        notificar(`${err.message}`, 'erro');
     } finally {
         btn.disabled = false;
         btn.innerHTML = '<i class="fas fa-check"></i> CONFIRMAR ENTREGAS MARCADAS';
@@ -21878,7 +21882,7 @@ async function telaRelatorioConsolidado() {
         const dados = await res.json();
         if (!res.ok) throw new Error(dados.error);
 
-        // Totalizadores
+        // Totalizadores (Lógica original preservada)
         const totais = dados.reduce((acc, d) => {
             acc.turmas     += Number(d.total_turmas);
             acc.alunos     += Number(d.total_alunos);
@@ -21895,70 +21899,122 @@ async function telaRelatorioConsolidado() {
         });
 
         app.innerHTML = `
+            <style>
+                .wrapper-relatorio {
+                    max-height: 70vh;
+                    overflow-y: auto;
+                    border-radius: 8px;
+                    background: rgba(0, 26, 44, 0.6);
+                    margin: 20px;
+                    border: 1px solid rgba(255,255,255,0.1);
+                }
+
+                .tabela-entrega {
+                    width: 100%;
+                    border-collapse: collapse;
+                    table-layout: fixed; /* Trava o redimensionamento automático */
+                }
+
+                /* ESCOLA: 30% da largura */
+                .col-escola {
+                    width: 30%;
+                    min-width: 30%;
+                    max-width: 30%;
+                    text-align: left !important;
+                    padding-left: 15px !important;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+
+                /* DEMAIS 7 COLUNAS: 70% / 7 = 10% cada uma */
+                .col-dado {
+                    width: 10%;
+                    min-width: 10%;
+                    max-width: 10%;
+                    text-align: center;
+                }
+
+                .tabela-entrega thead th {
+                    position: sticky;
+                    top: 0;
+                    z-index: 10;
+                    background: #001a2c;
+                    font-size: 0.65rem;
+                    color: #00d4ff;
+                    height: 50px;
+                    border-bottom: 2px solid #00d4ff;
+                    word-wrap: break-word;
+                }
+
+                .tabela-entrega tbody td {
+                    padding: 10px 5px;
+                    border-bottom: 1px solid rgba(255,255,255,0.05);
+                    font-size: 0.85rem;
+                    color: white;
+                }
+
+                .tabela-entrega tfoot {
+                    position: sticky;
+                    bottom: 0;
+                    z-index: 10;
+                    background: #001a2c;
+                }
+
+                .tabela-entrega tfoot td {
+                    border-top: 2px solid rgba(0, 212, 255, 0.5);
+                    padding: 12px 5px;
+                    font-weight: bold;
+                    font-size: 0.9rem;
+                    color: white;
+                }
+            </style>
+
             <div class="header-animado animate__animated animate__fadeIn">
                 <button class="btn-voltar-vidro" onclick="carregarDashboard()">
                     <i class="fas fa-arrow-left"></i> VOLTAR
                 </button>
-                <h2 class="titulo-sessao" style="color: white;">
-                    Relatório Consolidado por Escola
-                </h2>
+                <h2 class="titulo-sessao" style="color: white;">Relatório Consolidado por Escola</h2>
             </div>
 
-            <div class="tabela-entrega-container animate__animated animate__fadeInUp"
-                 style="margin: 20px;">
+            <div class="wrapper-relatorio animate__animated animate__fadeInUp">
                 <table class="tabela-entrega">
                     <thead>
                         <tr>
-                            <th style="text-align: left;">ESCOLA</th>
-                            <th>TURMAS</th>
-                            <th>ALUNOS</th>
-                            <th style="color: #10b981;">UNIF. COMPLETOS</th>
-                            <th style="color: #3b82f6;">UNIF. PARCIAIS</th>
-                            <th style="color: #f59e0b;">UNIF. PENDENTES</th>
-                            <th style="color: #10b981;">MAT. RECEBIDOS</th>
-                            <th style="color: #f59e0b;">MAT. PENDENTES</th>
+                            <th class="col-escola">ESCOLA</th>
+                            <th class="col-dado">TURMAS</th>
+                            <th class="col-dado">ALUNOS</th>
+                            <th class="col-dado" style="color: #10b981;">UNIF. COMPLETOS</th>
+                            <th class="col-dado" style="color: #3b82f6;">UNIF. PARCIAIS</th>
+                            <th class="col-dado" style="color: #f59e0b;">UNIF. PENDENTES</th>
+                            <th class="col-dado" style="color: #10b981;">MAT. RECEBIDOS</th>
+                            <th class="col-dado" style="color: #f59e0b;">MAT. PENDENTES</th>
                         </tr>
                     </thead>
                     <tbody>
                         ${dados.map(d => `
                             <tr>
-                                <td style="text-align: left;">${d.local_nome}</td>
-                                <td>${d.total_turmas}</td>
-                                <td>${d.total_alunos}</td>
-                                <td style="color: #10b981; font-weight: bold;">
-                                    ${d.uniformes_recebidos}
-                                </td>
-                                <td style="color: #3b82f6; font-weight: bold;">
-                                    ${d.uniformes_parciais}
-                                </td>
-                                <td style="color: #f59e0b; font-weight: bold;">
-                                    ${d.uniformes_pendentes}
-                                </td>
-                                <td style="color: #10b981; font-weight: bold;">
-                                    ${d.material_recebido}
-                                </td>
-                                <td style="color: #f59e0b; font-weight: bold;">
-                                    ${d.material_pendentes}
-                                </td>
+                                <td class="col-escola" title="${d.local_nome}">${d.local_nome}</td>
+                                <td class="col-dado">${d.total_turmas}</td>
+                                <td class="col-dado">${d.total_alunos}</td>
+                                <td class="col-dado" style="color: #10b981; font-weight: bold;">${d.uniformes_recebidos}</td>
+                                <td class="col-dado" style="color: #3b82f6; font-weight: bold;">${d.uniformes_parciais}</td>
+                                <td class="col-dado" style="color: #f59e0b; font-weight: bold;">${d.uniformes_pendentes}</td>
+                                <td class="col-dado" style="color: #10b981; font-weight: bold;">${d.material_recebido}</td>
+                                <td class="col-dado" style="color: #f59e0b; font-weight: bold;">${d.material_pendentes}</td>
                             </tr>
                         `).join('')}
                     </tbody>
-
-                    <!-- Linha de totais -->
                     <tfoot>
-                        <tr style="
-                            border-top: 2px solid rgba(255,255,255,0.3);
-                            font-weight: bold;
-                            font-size: 1rem;
-                        ">
-                            <td style="text-align: left;">TOTAL GERAL</td>
-                            <td>${totais.turmas}</td>
-                            <td>${totais.alunos}</td>
-                            <td style="color: #10b981;">${totais.unifRec}</td>
-                            <td style="color: #3b82f6;">${totais.unifParc}</td>
-                            <td style="color: #f59e0b;">${totais.unifPend}</td>
-                            <td style="color: #10b981;">${totais.matRec}</td>
-                            <td style="color: #f59e0b;">${totais.matPend}</td>
+                        <tr>
+                            <td class="col-escola">TOTAL GERAL</td>
+                            <td class="col-dado">${totais.turmas}</td>
+                            <td class="col-dado">${totais.alunos}</td>
+                            <td class="col-dado" style="color: #10b981;">${totais.unifRec}</td>
+                            <td class="col-dado" style="color: #3b82f6;">${totais.unifParc}</td>
+                            <td class="col-dado" style="color: #f59e0b;">${totais.unifPend}</td>
+                            <td class="col-dado" style="color: #10b981;">${totais.matRec}</td>
+                            <td class="col-dado" style="color: #f59e0b;">${totais.matPend}</td>
                         </tr>
                     </tfoot>
                 </table>
@@ -21982,75 +22038,164 @@ async function telaProgressoGeralEscolas() {
         if (!res.ok) throw new Error(escolas.error || 'Falha ao carregar relatório.');
 
         app.innerHTML = `
+            <style>
+                .wrapper-progresso {
+                    max-height: 70vh;
+                    overflow-y: auto;
+                    overflow-x: hidden;
+                    border-radius: 8px;
+                    background: rgba(0, 26, 44, 0.6);
+                    margin: 20px;
+                    border: 1px solid rgba(255,255,255,0.1);
+                }
+
+                .tabela-entrega {
+                    width: 100%;
+                    border-collapse: collapse;
+                    table-layout: fixed; /* Trava o layout */
+                }
+
+                /* Coluna Escola: 30% */
+                .col-escola-prog {
+                    width: 30%;
+                    min-width: 30%;
+                    max-width: 30%;
+                    text-align: left !important;
+                    padding-left: 15px !important;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+
+                /* Colunas Turmas e Alunos: 7% cada */
+                .col-info-prog {
+                    width: 7%;
+                    min-width: 7%;
+                    max-width: 7%;
+                    text-align: center;
+                }
+
+                /* Colunas de Progresso: 28% cada */
+                .col-barra-prog {
+                    width: 28%;
+                    min-width: 28%;
+                    max-width: 28%;
+                    text-align: center;
+                    padding: 10px 8px !important;
+                }
+
+                .tabela-entrega thead th {
+                    position: sticky;
+                    top: 0;
+                    z-index: 10;
+                    background: #001a2c;
+                    font-size: 0.65rem;
+                    color: #00d4ff;
+                    height: 55px;
+                    border-bottom: 2px solid #00d4ff;
+                    word-wrap: break-word;
+                }
+
+                .tabela-entrega tbody td {
+                    border-bottom: 1px solid rgba(255,255,255,0.05);
+                    height: 60px; /* Um pouco mais alto para as barras */
+                }
+
+                /* Estilização das Barras de Progresso */
+                .barra-progresso-container {
+                    position: relative;
+                    height: 35px;
+                    background: rgba(255,255,255,0.05);
+                    border-radius: 6px;
+                    overflow: hidden;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+
+                .barra-progresso {
+                    position: absolute;
+                    left: 0;
+                    top: 0;
+                    height: 100%;
+                    transition: width 0.5s ease;
+                    opacity: 0.3;
+                }
+
+                .barra-progresso-container span {
+                    position: relative;
+                    z-index: 2;
+                    font-size: 0.65rem;
+                    line-height: 1.1;
+                    color: white;
+                    font-weight: 500;
+                }
+
+                .verde { background-color: #10b981; }
+                .amarelo { background-color: #f59e0b; }
+                .vermelho { background-color: #ef4444; }
+
+                .verde .barra-progresso { background-color: #10b981; }
+                .amarelo .barra-progresso { background-color: #f59e0b; }
+                .vermelho .barra-progresso { background-color: #ef4444; }
+            </style>
+
             <div class="header-animado animate__animated animate__fadeIn">
                 <button class="btn-voltar-vidro" onclick="carregarDashboard()">
                     <i class="fas fa-arrow-left"></i> VOLTAR
                 </button>
-                <h2 class="titulo-sessao" style="color: white;">Progresso Geral de Entregas por Escola</h2>
-                <p style="color: rgba(255,255,255,0.7); margin-bottom: 20px;">
-                    🟢 &ge;90% | 🟡 60-89% | 🔴 &lt;60% | <strong>Só alunos ATIVOS</strong> • Uniforme = 7 peças distintas
+                <h2 class="titulo-sessao" style="color: white; font-size: 1.2rem; margin: 10px 0;">Progresso Geral de Entregas</h2>
+                <p style="color: rgba(255,255,255,0.7); font-size: 0.8rem; margin-bottom: 10px;">
+                    🟢 &ge;90% | 🟡 60-89% | 🔴 &lt;60%
                 </p>
             </div>
 
-            <div class="tabela-entrega-container animate__animated animate__fadeInUp" style="margin: 20px;">
+            <div class="wrapper-progresso animate__animated animate__fadeInUp">
                 <table class="tabela-entrega">
                     <thead>
                         <tr>
-                            <th style="text-align:left;">ESCOLA</th>
-                            <th>TURMAS</th>
-                            <th>ALUNOS<br><small>(ATIVOS)</small></th>
-                            <th style="width: 28%;">PROGRESSO UNIFORMES</th>
-                            <th style="width: 28%;">PROGRESSO KITS</th>
+                            <th class="col-escola-prog">ESCOLA</th>
+                            <th class="col-info-prog">TURMAS</th>
+                            <th class="col-info-prog">ALUNOS</th>
+                            <th class="col-barra-prog">PROGRESSO UNIFORMES</th>
+                            <th class="col-barra-prog">PROGRESSO KITS</th>
                         </tr>
                     </thead>
                     <tbody>
                         ${escolas.length === 0 
-                            ? `<tr><td colspan="5" style="padding:40px; text-align:center; color:#ffcccb;">Nenhum dado de escola encontrado.</td></tr>`
+                            ? `<tr><td colspan="5" style="padding:40px; text-align:center; color:#ffcccb;">Nenhum dado encontrado.</td></tr>`
                             : escolas.map(e => {
-                                const totalAlunos = Number(e.total_alunos) || 0;
-                                const totalTurmas = Number(e.total_turmas) || 0;
-
-                                // Dados uniformes
-                                const uniformesCompletos = Number(e.uniformes_completos) || 0;
-                                const uniformesFaltantes = Number(e.uniformes_faltantes) || 0;
                                 const percUniformes = Number(e.perc_uniformes) || 0;
                                 const corUniformes = getCorProgresso(percUniformes);
-
-                                // Dados material
-                                const materialRecebido = Number(e.material_recebido) || 0;
-                                const materialFaltante = Number(e.material_faltante) || 0;
                                 const percMaterial = Number(e.perc_material) || 0;
                                 const corMaterial = getCorProgresso(percMaterial);
 
                                 return `
                                     <tr>
-                                        <td style="text-align:left; font-weight:bold; font-size: 1.1em;">${e.local_nome}</td>
-                                        <td>${totalTurmas}</td>
-                                        <td style="font-size: 1.2rem; font-weight: bold;">${totalAlunos.toLocaleString()}</td>
-                                        <td>
+                                        <td class="col-escola-prog" title="${e.local_nome}"><strong>${e.local_nome}</strong></td>
+                                        <td class="col-info-prog">${e.total_turmas}</td>
+                                        <td class="col-info-prog">${Number(e.total_alunos).toLocaleString()}</td>
+                                        
+                                        <td class="col-barra-prog">
                                             <div class="barra-progresso-container ${corUniformes}">
-                                                <div class="barra-progresso" style="width: ${Math.min(percUniformes, 100)}%;">
-                                                    <i class="fas ${corUniformes === 'verde' ? 'fa-check-circle' : corUniformes === 'amarelo' ? 'fa-exclamation-triangle' : 'fa-times-circle'}"></i>
-                                                </div>
+                                                <div class="barra-progresso" style="width: ${Math.min(percUniformes, 100)}%;"></div>
                                                 <span>
-                                                    ${uniformesCompletos} completos • ${uniformesFaltantes} faltam<br>
-                                                    <small style="font-weight: bold;">${percUniformes}%</small>
+                                                    ${e.uniformes_completos} entregues • ${e.uniformes_faltantes} faltam<br>
+                                                    <strong>${percUniformes}%</strong>
                                                 </span>
                                             </div>
                                         </td>
-                                        <td>
+
+                                        <td class="col-barra-prog">
                                             <div class="barra-progresso-container ${corMaterial}">
-                                                <div class="barra-progresso" style="width: ${Math.min(percMaterial, 100)}%;">
-                                                    <i class="fas ${corMaterial === 'verde' ? 'fa-check-circle' : corMaterial === 'amarelo' ? 'fa-exclamation-triangle' : 'fa-times-circle'}"></i>
-                                                </div>
+                                                <div class="barra-progresso" style="width: ${Math.min(percMaterial, 100)}%;"></div>
                                                 <span>
-                                                    ${materialRecebido} receberam • ${materialFaltante} faltam<br>
-                                                    <small style="font-weight: bold;">${percMaterial}%</small>
+                                                    ${e.material_recebido} entregues • ${e.material_faltante} faltam<br>
+                                                    <strong>${percMaterial}%</strong>
                                                 </span>
                                             </div>
                                         </td>
-                                    </tr>
-                                `;
+                                    </tr>`;
                             }).join('')
                         }
                     </tbody>
@@ -22058,7 +22203,6 @@ async function telaProgressoGeralEscolas() {
             </div>
         `;
 
-        // Função auxiliar para cor do progresso
         function getCorProgresso(perc) {
             if (perc >= 90) return 'verde';
             if (perc >= 60) return 'amarelo';
@@ -22067,12 +22211,6 @@ async function telaProgressoGeralEscolas() {
 
     } catch (err) {
         notificar("Erro ao carregar relatório: " + err.message, "erro");
-        app.innerHTML = `
-            <div class="painel-vidro" style="margin:20px; padding:20px; color: #ff4d4d; text-align:center;">
-                <h2>Ocorreu um erro</h2><p>${err.message}</p>
-                <button class="btn-voltar-vidro" onclick="carregarDashboard()">Voltar</button>
-            </div>
-        `;
     }
 }
 

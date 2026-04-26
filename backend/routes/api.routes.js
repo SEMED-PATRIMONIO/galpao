@@ -9645,14 +9645,13 @@ router.get('/admin/historico/geral', async (req, res) => {
 // ROTA CORRIGIDA DE UNIFORMES (Sintaxe idêntica à de Material)
 router.get('/relatorios/escola/:localId/faltantes-uniforme', verificarToken, async (req, res) => {
     const { localId } = req.params;
-    
+
     try {
-        // 1. Busca o nome da Escola
         const escolaRes = await db.query('SELECT nome FROM locais WHERE id = $1', [localId]);
         const nomeEscola = escolaRes.rows[0]?.nome || 'Escola Selecionada';
 
-        // 2. Busca os alunos que não receberam nada do tipo 'UNIFORME'
-        // IMPORTANTE: Verifique se no seu banco está 'UNIFORME' ou 'UNIFORMES'
+        // O segredo está no p.tipo::text
+        // Isso converte o ENUM para texto e permite a comparação sem erro 500
         const result = await db.query(`
             SELECT t.nome AS turma_nome, a.nome AS aluno_nome
             FROM turmas t
@@ -9662,12 +9661,11 @@ router.get('/relatorios/escola/:localId/faltantes-uniforme', verificarToken, asy
                   SELECT ea.aluno_id
                   FROM entregas_alunos ea
                   JOIN produtos p ON ea.produto_id = p.id
-                  WHERE p.tipo = 'UNIFORME'
+                  WHERE p.tipo::text ILIKE 'UNIFORME%' 
               )
             ORDER BY t.nome, a.nome;
         `, [localId]);
 
-        // 3. Agrupa os dados por turma
         const relatorio = {};
         result.rows.forEach(row => {
             if (!relatorio[row.turma_nome]) relatorio[row.turma_nome] = [];
@@ -9675,9 +9673,10 @@ router.get('/relatorios/escola/:localId/faltantes-uniforme', verificarToken, asy
         });
 
         res.json({ escola: nomeEscola, turmas: relatorio });
+
     } catch (err) {
-        console.error("Erro no relatório de uniformes:", err);
-        res.status(500).json({ error: err.message });
+        console.error("ERRO NO BACKEND:", err.message);
+        res.status(500).json({ error: "Erro ao processar consulta de uniformes." });
     }
 });
 

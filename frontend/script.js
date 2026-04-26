@@ -22489,17 +22489,26 @@ async function telaRelatoriosFaltantes() {
     app.innerHTML = `<div class="loading-spinner"></div>`;
 
     try {
-        // Se já tiver uma rota que lista locais, adapte a URL se necessário. 
-        // Supondo que seja /locais
-        if (listaLocaisRelatorio.length === 0) {
-            const res = await fetch(`${API_URL}locais/lista-simples`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+        // 1. Corrigido para a nova rota que você criou
+        // 2. Verificamos se a lista está vazia antes de buscar
+        if (!listaLocaisRelatorio || listaLocaisRelatorio.length === 0) {
+            const res = await fetch(`${API_URL}/locais/lista-simples`, { 
+                headers: { 'Authorization': `Bearer ${TOKEN}` } 
+            });
+
+            if (!res.ok) throw new Error(`Erro na requisição: ${res.status}`);
+            
             listaLocaisRelatorio = await res.json();
         }
 
         let options = '<option value="">-- Selecione uma Escola --</option>';
-        listaLocaisRelatorio.forEach(l => {
-            options += `<option value="${l.id}">${l.nome}</option>`;
-        });
+        
+        // Verificação de segurança caso o banco retorne vazio
+        if (Array.isArray(listaLocaisRelatorio)) {
+            listaLocaisRelatorio.forEach(l => {
+                options += `<option value="${l.id}">${l.nome}</option>`;
+            });
+        }
 
         app.innerHTML = `
             <div class="header-acoes" style="padding: 20px;">
@@ -22511,14 +22520,16 @@ async function telaRelatoriosFaltantes() {
             <div style="text-align: center; padding: 40px;">
                 <h2 style="color: #00d4ff; margin-bottom: 20px;">RELATÓRIO DE FALTANTES</h2>
                 <select id="select-escola-rel" onchange="telaBotaoRelatorioSelecionado()"
-                        style="padding: 12px; font-size: 1rem; width: 60%; max-width: 400px; border-radius: 5px;">
+                        style="padding: 12px; font-size: 1rem; width: 60%; max-width: 400px; border-radius: 5px; background: white; color: #333;">
                     ${options}
                 </select>
             </div>
         `;
     } catch (err) {
-        notificar("Erro ao carregar locais.", "erro");
-        carregarDashboard();
+        // Agora você verá o erro real no console se falhar de novo
+        console.error("Erro detalhado ao carregar locais:", err);
+        notificar("Erro ao carregar locais. Verifique o console.", "erro");
+        // Removi o carregarDashboard() momentaneamente para você conseguir ler o erro na tela se houver
     }
 }
 

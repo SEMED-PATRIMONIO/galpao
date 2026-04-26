@@ -364,28 +364,32 @@ async function carregarDashboard() {
         }
 
         html += `
-            <button class="btn-grande btn-vidro" onclick="telaSolicitarServicoImpressora('recarga')"><i class="fas fa-fill-drip" style="margin-right: 8px; color: #00ffff;"></i><span>SOLICITAR RECARGA</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaSolicitarServicoImpressora('recarga')"><i>🧪</i><span>SOLICITAR RECARGA</span></button>
             <button class="btn-grande btn-vidro" onclick="telaSolicitarServicoImpressora('manutencao')"><i>🛠️</i><span>SOLICITAR MANUTENÇÃO IMPRESSORA</span></button>
             <button class="btn-grande btn-vidro" onclick="telaSolicitarManutencaoPC('')"><i>💻</i><span>SOLICITAR MANUTENÇÃO INFORMÁTICA</span></button>
-            <button class="btn-grande btn-vidro" onclick="renderSubmenuCadastrosEscola()"><i class="fas fa-user-graduate" style="margin-right: 8px;"></i><span>TURMAS E ALUNOS</span></button>
+            <button class="btn-grande btn-vidro" onclick="renderSubmenuCadastrosEscola()"><i>👩‍🎓</i><span>TURMAS E ALUNOS</span></button>
             <button class="btn-grande btn-vidro" onclick="abrirMenuPatrimonioEscola()"><i>🏛️</i><span>PATRIMÔNIO</span></button>
             <button class="btn-grande btn-vidro" onclick="renderSubmenuUniformesKits()"><i>👕</i><span>UNIFORMES & KITS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaEscolaConfirmarRecebimento()">
                 ${contagemEntregas > 0 ? `<div class="badge-alerta-entrega">${contagemEntregas}</div>` : ''}
                 <i>🚚</i><span>ENTREGAS A CAMINHO</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="renderSubmenuRelatoriosEscola()"><i>📊</i><span>RELATÓRIOS</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()"><i>🔑</i><span>ALTERAR SENHA</span></button>
+            <button class="btn-grande btn-vidro" onclick="renderSubmenuRelatoriosEscola()"><i>📈</i><span>RELATÓRIOS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()"><i>🗝️</i><span>ALTERAR SENHA</span></button>
         `;
     }
     // --- PERFIL: SUPER ---
     else if (perfil === 'super') {
         html += `
-            <button class="btn-grande btn-vidro" onclick="telaGerenciarUsuarios()"><i>👥</i><span>GERENCIAR USUÁRIOS</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaProgressoGeralEscolas()"><i class="fas fa-pencil-ruler"></i><span>ENTREGA DE UNIFORMES E KITS</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaRelatoriosFaltantes()"><i>👕</i><span>ALUNOS QUE FALTAM RECEBER UNIFORME/KIT</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()"><i>📈</i><span>FLUXO DE PEDIDOS</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()"><i>🔑</i><span>ALTERAR SENHA</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaGerenciarUsuarios()"><i>🪪</i><span>GERENCIAR USUÁRIOS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaHistoricoRemessas()"><i>🏷️</i><span>ROMANEIOS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()"><i>🌎</i><span>PAINEL GERAL DE PEDIDOS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaHistoricoGeral()"><i>🔍</i><span>HISTÓRICO MOVIMENTAÇÃO</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioLogStatus()"><i>🕵️</i><span>HISTÓRICO PEDIDOS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatoriosFaltantes()"><i>👕</i><span>ALUNOS QUE FALTAM RECEBER UNIFORME/KIT</span></button>            
+            <button class="btn-grande btn-vidro" onclick="telaProgressoGeralEscolas()"><i>📐</i><span>ENTREGA DE UNIFORMES E KITS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioConsolidado()"><i>🚨</i><span>LISTAGEM RECEBIDO/FALTA RECEBER</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()"><i>🗝️</i><span>ALTERAR SENHA</span></button>
         `; 
     }
     // --- PERFIL: LOGISTICA ---
@@ -410,16 +414,16 @@ async function carregarDashboard() {
                 <i>🚚</i><span>LIBERADO PARA ENTREGA</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()">
-                <i>🔑</i><span>ALTERAR MINHA SENHA</span>
+                <i>🗝️</i><span>ALTERAR MINHA SENHA</span>
             </button>
         `;
     }
     // --- PERFIL: HUMANOS ---
     else if (perfil === 'humanos') {
         html += `
-            <button class="btn-grande btn-vidro" onclick="telaSolicitarServicoImpressora('recarga')"><i>💧</i><span>SOLICITAR RECARGA</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaSolicitarServicoImpressora('recarga')"><i>🧪</i><span>SOLICITAR RECARGA</span></button>
             <button class="btn-grande btn-vidro" onclick="telaSolicitarManutencaoPC('')"><i>💻</i><span>MANUTENÇÃO INFORMÁTICA</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()"><i>🔑</i><span>ALTERAR SENHA</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()"><i>🗝️</i><span>ALTERAR SENHA</span></button>
         `;
     }
     // --- PERFIL: DTI ---
@@ -428,11 +432,11 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="telaListarChamadosPC_DTI()"><i>💻</i><span>FILA DE CHAMADOS INFORMÁTICA</span></button>
             <button class="btn-grande btn-vidro" onclick="telaDashboardComputadores()"><i>📈</i><span>ATENDIMENTOS REALIZADOS INFORMÁTICA</span></button>
             <button class="btn-grande btn-vidro" onclick="telaFilaAtendimentoImpressoras()"><i>🖨️</i><span>FILA DE CHAMADOS IMPRESSORA</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaDashboardImpressoras()"><i>📈</i><span>ATENDIMENTOS REALIZADOS IMPRESSORA</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaDashboardImpressoras()"><i>📆</i><span>ATENDIMENTOS REALIZADOS IMPRESSORA</span></button>
             <button class="btn-grande btn-vidro" onclick="telaConsumoImpressoras()"><i>📊</i><span>CONSUMO DAS IMPRESSORAS</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaCadastroImpressoras()"><i>📋</i><span>CADASTRAR NOVA IMPRESSORA</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaRelatorioGeralAtivos()"><i>📋</i><span>STATUS ATUAL DAS IMPRESSORAS</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()"><i>🔑</i><span>ALTERAR SENHA</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaCadastroImpressoras()"><i>➕</i><span>CADASTRAR NOVA IMPRESSORA</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioGeralAtivos()"><i>☢️</i><span>STATUS ATUAL DAS IMPRESSORAS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()"><i>🗝️</i><span>ALTERAR SENHA</span></button>
         `;
     }
     // --- PERFIL: IMPRES ---
@@ -441,7 +445,7 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="telaListarChamadosAbertos()"><i>🖨️</i><span>FILA DE CHAMADOS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaDashboardImpressoras()"><i>📈</i><span>ATENDIMENTOS REALIZADOS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaRelatorioGeralAtivos()"><i>📋</i><span>STATUS ATUAL DAS IMPRESSORAS</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()"><i>🔑</i><span>ALTERAR SENHA</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()"><i>🗝️</i><span>ALTERAR SENHA</span></button>
         `; 
     }
     // --- PERFIL: ADMIN ---
@@ -471,7 +475,7 @@ async function carregarDashboard() {
 
             <button class="btn-grande btn-vidro" onclick="carregarConsultaEstoque()"><i>🔎</i><span>CONSULTA ESTOQUE</span></button>
             <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('RELATÓRIOS', getBotoesSubmenu('admin', 'RELATÓRIOS'))"><i>📊</i><span>RELATÓRIOS</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()"><i>🔑</i><span>ALTERAR SENHA</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()"><i>🗝️</i><span>ALTERAR SENHA</span></button>
         `;
     }
     // --- PERFIL: ESTOQUE ---
@@ -522,7 +526,7 @@ async function carregarDashboard() {
         html += `
             <button class="btn-grande btn-vidro" onclick="infra_telaPendentes()">
                 <div id="badge-infra-count" class="badge-alerta-entrega" style="display:${contagemInfra > 0 ? 'flex' : 'none'};">${contagemInfra}</div>
-                <i>🏗️</i><span>SOLIC. INFRA</span>
+                <i>🏃‍♂️‍➡️</i><span>SOLIC. INFRA</span>
             </button>
 
             <button class="btn-grande btn-vidro" onclick="abrirMenuPatrimonioAlmoxarifado()">
@@ -552,7 +556,7 @@ async function carregarDashboard() {
             </button>
 
             <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()">
-                <i>🔑</i><span>ALTERAR SENHA</span>
+                <i>🗝️</i><span>ALTERAR SENHA</span>
             </button>
         `;
     }
@@ -607,19 +611,19 @@ function getBotoesSubmenu(perfil, titulo, contagem = 0, contagemProntos = 0) {
             </button>
 
             <button class="btn-grande btn-vidro" onclick="listarDevolucoesLogistica()"><i>↩️</i><span>RECEBER DEVOLUÇÃO</span></button>
-            <button class="btn-grande btn-vidro" onclick="listarDevolucoesEstoque()"><i>🔄</i><span>CONCLUIR DEVOLUÇÃO</span></button>
-            <button class="btn-grande btn-vidro" onclick="abrirCalculadoraConversao()"><i>🧮</i><span>CALCULADORA</span></button>
+            <button class="btn-grande btn-vidro" onclick="listarDevolucoesEstoque()"><i>✅</i><span>CONCLUIR DEVOLUÇÃO</span></button>
+            <button class="btn-grande btn-vidro" onclick="abrirCalculadoraConversao()"><i>📱</i><span>CALCULADORA</span></button>
         `;
 
         if (titulo === 'RELATÓRIOS') return `
-            <button class="btn-grande btn-vidro" onclick="telaHistoricoRemessas()"><i>🔍</i><span>ROMANEIOS</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()"><i>📈</i><span>PAINEL GERAL</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaAuditoriaPedidos()"><i>🔍</i><span>FLUXO DO PEDIDO</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaHistoricoGeral()"><i>🕵️</i><span>HISTÓRICO MOVIMENTAÇÃO</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaHistoricoRemessas()"><i>🏷️</i><span>ROMANEIOS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()"><i>🌎</i><span>PAINEL GERAL DE PEDIDOS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaAuditoriaPedidos()"><i>♻️</i><span>FLUXO DO PEDIDO</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaHistoricoGeral()"><i>🔍</i><span>HISTÓRICO MOVIMENTAÇÃO</span></button>
             <button class="btn-grande btn-vidro" onclick="telaRelatorioLogStatus()"><i>🕵️</i><span>HISTÓRICO PEDIDOS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaRelatoriosFaltantes()"><i>👕</i><span>ALUNOS QUE FALTAM RECEBER UNIFORME/KIT</span></button>            
-            <button class="btn-grande btn-vidro" onclick="telaProgressoGeralEscolas()"><i>🌐</i><span>ENTREGA DE UNIFORMES E KITS</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaRelatorioConsolidado()"><i>🏢</i><span>LISTAGEM RECEBIDO/FALTA RECEBER</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaProgressoGeralEscolas()"><i>📐</i><span>ENTREGA DE UNIFORMES E KITS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioConsolidado()"><i>🚨</i><span>LISTAGEM RECEBIDO/FALTA RECEBER</span></button>
         `;
     }
 
@@ -634,13 +638,14 @@ function getBotoesSubmenu(perfil, titulo, contagem = 0, contagemProntos = 0) {
             <button class="btn-grande btn-vidro" onclick="listarDevolucoesAdmin()"><i>🔄</i><span>DEVOLUÇÕES</span></button>
         `;
         if (titulo === 'RELATÓRIOS') return `
-            <button class="btn-grande btn-vidro" onclick="telaAuditoriaPedidos()"><i>🔍</i><span>FLUXO DO PEDIDO</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaHistoricoRemessas()"><i>🔍</i><span>ROMANEIOS</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaHistoricoGeral()"><i>🕵️</i><span>HISTÓRICO MOVIMENTAÇÃO</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaHistoricoRemessas()"><i>🏷️</i><span>ROMANEIOS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()"><i>🌎</i><span>PAINEL GERAL DE PEDIDOS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaAuditoriaPedidos()"><i>♻️</i><span>FLUXO DO PEDIDO</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaHistoricoGeral()"><i>🔍</i><span>HISTÓRICO MOVIMENTAÇÃO</span></button>
             <button class="btn-grande btn-vidro" onclick="telaRelatorioLogStatus()"><i>🕵️</i><span>HISTÓRICO PEDIDOS</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaRelatoriosFaltantes()"><i>👕</i><span>ALUNOS QUE FALTAM RECEBER UNIFORME/KIT</span></button>        
-            <button class="btn-grande btn-vidro" onclick="telaProgressoGeralEscolas()"><i>🌐</i><span>ENTREGA DE UNIFORMES E KITS</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaRelatorioConsolidado()"><i>🏢</i><span>LISTAGEM RECEBIDO/FALTA RECEBER</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatoriosFaltantes()"><i>👕</i><span>ALUNOS QUE FALTAM RECEBER UNIFORME/KIT</span></button>            
+            <button class="btn-grande btn-vidro" onclick="telaProgressoGeralEscolas()"><i>📐</i><span>ENTREGA DE UNIFORMES E KITS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioConsolidado()"><i>🚨</i><span>LISTAGEM RECEBIDO/FALTA RECEBER</span></button>
         `;
     }
     return '';

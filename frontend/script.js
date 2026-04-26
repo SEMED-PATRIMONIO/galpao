@@ -12,6 +12,7 @@ const PREFIXOS_LOCAIS = {
     41:"DE", 42:"MA", 43:"CO", 44:"RH", 45:"FI", 46:"TR", 47:"IT", 48:"PR"
 };
 const styleAlerta = document.createElement('style');
+let listaLocaisRelatorio = [];
 (function() {
     const estiloBtnBranco = document.createElement('style');
     estiloBtnBranco.innerHTML = `
@@ -22491,7 +22492,7 @@ async function telaRelatoriosFaltantes() {
         // Se já tiver uma rota que lista locais, adapte a URL se necessário. 
         // Supondo que seja /locais
         if (listaLocaisRelatorio.length === 0) {
-            const res = await fetch(`${API_URL}/locais`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+            const res = await fetch(`${API_URL}locais/lista-simples`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
             listaLocaisRelatorio = await res.json();
         }
 

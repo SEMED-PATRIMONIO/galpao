@@ -20564,7 +20564,9 @@ async function renderizarMatrizEntrega(turmaId, turmaNome) {
                 }
 
                 .select-tamanho-entrega, .select-todos {
-                    width: 98%; /* Ocupa quase toda a célula para ganhar espaço */
+                    width: 90%; /* Reduzido de 98% para 90% para dar respiro */
+                    margin: 0 auto; /* Centraliza perfeitamente na célula */
+                    display: block; /* Garante que o alinhamento funcione */
                     font-size: 0.65rem;
                     padding: 2px;
                     background: rgba(0,0,0,0.5);

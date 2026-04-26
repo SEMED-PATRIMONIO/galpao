@@ -8507,8 +8507,7 @@ router.post('/entregas/lote', verificarToken, async (req, res) => {
     try {
         await client.query('BEGIN');
 
-        // ✅ NOVA VALIDAÇÃO: impedir 2º kit de MATERIAL para o mesmo aluno
-        // Pegamos os IDs dos produtos do lote para descobrir quais são MATERIAL
+        // 1. Pegar informações dos produtos para saber quem é MATERIAL e quem é UNIFORME
         const produtoIds = [...new Set(entregas.map(e => parseInt(e.produtoId)))];
         const tiposRes = await client.query(
             `SELECT id, tipo, nome FROM produtos WHERE id = ANY($1::int[])`,
@@ -8516,7 +8515,7 @@ router.post('/entregas/lote', verificarToken, async (req, res) => {
         );
         const tipoPorProduto = new Map(tiposRes.rows.map(p => [p.id, p]));
 
-        // Verifica se algum aluno do lote (com produto MATERIAL) já recebeu MATERIAL
+        // 2. VALIDAÇÃO: impedir 2º kit de MATERIAL para o mesmo aluno
         const alunosMaterialNoLote = entregas
             .filter(e => tipoPorProduto.get(parseInt(e.produtoId))?.tipo === 'MATERIAL')
             .map(e => parseInt(e.alunoId));
@@ -8537,7 +8536,7 @@ router.post('/entregas/lote', verificarToken, async (req, res) => {
             }
         }
 
-        // Processa cada entrega
+        // 3. Processar cada entrega
         for (const entrega of entregas) {
             const { alunoId, produtoId, tamanho } = entrega;
             const produtoInfo = tipoPorProduto.get(parseInt(produtoId));
@@ -8546,42 +8545,35 @@ router.post('/entregas/lote', verificarToken, async (req, res) => {
                 throw new Error(`Produto ID ${produtoId} não encontrado.`);
             }
 
-            // ✅ AJUSTE: tratar tamanho NULL corretamente no SQL
-            // Para material (sem tamanho) usamos IS NULL
-            // Para uniforme usamos = $3
-            let baixaEstoqueRes;
-            if (tamanho === null || tamanho === undefined || tamanho === '') {
-                baixaEstoqueRes = await client.query(
-                    `UPDATE estoque_por_local
-                     SET quantidade = quantidade - 1
-                     WHERE local_id = $1
-                       AND produto_id = $2
-                       AND (tamanho IS NULL OR tamanho = '')
-                       AND quantidade > 0`,
-                    [localId, produtoId]
-                );
+            // --- LÓGICA DE TAMANHO CORRIGIDA ---
+            // Se for MATERIAL, ignoramos o null/vazio e usamos 'N/A' (que é como está no seu estoque)
+            let tamanhoFinal;
+            if (produtoInfo.tipo === 'MATERIAL') {
+                tamanhoFinal = 'N/A';
             } else {
-                baixaEstoqueRes = await client.query(
-                    `UPDATE estoque_por_local
-                     SET quantidade = quantidade - 1
-                     WHERE local_id = $1
-                       AND produto_id = $2
-                       AND tamanho = $3
-                       AND quantidade > 0`,
-                    [localId, produtoId, tamanho]
-                );
+                // Se for Uniforme, mantém o tamanho ou vira string vazia para evitar erro de null
+                tamanhoFinal = (tamanho === null || tamanho === undefined) ? '' : tamanho;
             }
+
+            // 4. Baixa no estoque
+            // Usamos uma query única que busca pelo tamanho exato (seja 'P', 'M' ou 'N/A')
+            const baixaEstoqueRes = await client.query(
+                `UPDATE estoque_por_local
+                 SET quantidade = quantidade - 1
+                 WHERE local_id = $1
+                   AND produto_id = $2
+                   AND tamanho = $3
+                   AND quantidade > 0`,
+                [localId, produtoId, tamanhoFinal]
+            );
 
             if (baixaEstoqueRes.rowCount === 0) {
                 throw new Error(
-                    `Estoque insuficiente para "${produtoInfo.nome}"${tamanho ? ` tamanho ${tamanho}` : ''}. Operação cancelada.`
+                    `Estoque insuficiente para "${produtoInfo.nome}" (${tamanhoFinal}). Verifique o saldo no estoque da escola.`
                 );
             }
 
-            // ✅ AJUSTE: tamanho garantidamente string vazia ou valor (constraint UNIQUE não aceita NULL bem)
-            // Se preferir manter NULL, ajuste a constraint para incluir COALESCE
-            const tamanhoFinal = (tamanho === null || tamanho === undefined) ? '' : tamanho;
-
+            // 5. Inserir registro da entrega
             await client.query(
                 `INSERT INTO entregas_alunos
                     (aluno_id, produto_id, tamanho, usuario_id, local_id)
@@ -8599,10 +8591,11 @@ router.post('/entregas/lote', verificarToken, async (req, res) => {
     } catch (err) {
         await client.query('ROLLBACK');
 
+        // Tratamento para erro de duplicidade (Unique Constraint)
         if (err.code === '23505') {
-            console.error("Duplicidade:", err.message);
+            console.error("Duplicidade detectada:", err.message);
             return res.status(409).json({
-                error: "Um ou mais alunos já receberam este item anteriormente."
+                error: "Um ou mais alunos selecionados já receberam este item anteriormente."
             });
         }
 

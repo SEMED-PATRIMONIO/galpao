@@ -1,6 +1,8 @@
 const API_URL = 'https://patrimoniosemed.paiva.api.br';
 let TOKEN = localStorage.getItem('token');
 const tokenParaUso = localStorage.getItem('token');
+const GRADE_VESTUARIO = ['02', '04', '06', '08', '10', '12', '14', '16', 'PP', 'P', 'M', 'G', 'GG', 'EGG'];
+const GRADE_TENIS = Array.from({length: 22}, (_, i) => (i + 22).toString()); // 22 a 43
 // Mapeamento extraído do PDF de Nomenclatura 
 const PREFIXOS_LOCAIS = {
     1:"CL", 2:"IG", 3:"VF", 4:"GO", 5:"AK", 6:"CN", 7:"CC", 8:"FB", 9:"ET", 10:"JR",
@@ -10,6 +12,7 @@ const PREFIXOS_LOCAIS = {
     41:"DE", 42:"MA", 43:"CO", 44:"RH", 45:"FI", 46:"TR", 47:"IT", 48:"PR"
 };
 const styleAlerta = document.createElement('style');
+let listaLocaisRelatorio = [];
 (function() {
     const estiloBtnBranco = document.createElement('style');
     estiloBtnBranco.innerHTML = `
@@ -62,6 +65,7 @@ function inicializarFundo() {
     }
     bg.innerHTML = htmlContent;
 }
+
 // Forçar maiúsculas sem acentos APENAS em campos de texto
 document.addEventListener('input', (e) => {
     // A regra && e.target.id !== 'senha' é fundamental aqui
@@ -103,7 +107,7 @@ document.getElementById('form-login')?.addEventListener('submit', async (e) => {
             TOKEN = data.token;
             carregarDashboard();
         } else {
-            notificar('ERRO: ' + (data.message || 'Falha no login'));
+            notificar(data.message || 'Usuário e/ou senha inválidos', 'erro');
         }
     } catch (err) {
         console.error("Erro na conexão:", err);
@@ -236,360 +240,448 @@ async function carregarDashboard() {
     const app = document.getElementById('app-content');
     if (app) {
         app.style.background = "transparent";
-        app.innerHTML = ''; // Limpa o conteúdo antes de reconstruir os cards [cite: 2, 3]
+        app.innerHTML = '<div class="loading-spinner"></div>';
     }   
+    
+    // Suas variáveis de controle permanecem intocadas
     let chart1, chart2;
     let dadosEstoqueCache = [];
     let categoriaAtual = 'UNIFORMES';
     let carrinhoAdmin = [];
-    let chartTecnicos = null; // Variável global para controle do gráfico [cite: 4, 5]
-    
+    let carrinhoEntrada = [];
+    let chartTecnicos = null; 
+    let cacheColeta = [];
+    let listaLocaisRelatorio = [];
     await inicializarSessaoUsuario();
+
+    // 1. Recuperação de dados da sessão (inalterado)
     const perfil = localStorage.getItem('perfil') ? localStorage.getItem('perfil').toLowerCase() : null;
-    const nome = localStorage.getItem('nome');
+    const nome = localStorage.getItem('nome') || "Usuário";
     const localId = localStorage.getItem('local_id');
-    const container = document.getElementById('app-content');
-    const classeGrelha = 'grid-movel-celular';
-    let htmlBotoes = '';
     const loginContainer = document.getElementById('login-container');
-    let modoComparacao = false; // [cite: 6, 7]
+    const container = document.getElementById('app-content');
 
-    if (container) {
-        container.style.display = 'block';
-        container.style.position = 'relative'; // Reforço via JS [cite: 8]
-        container.style.zIndex = '20'; // Reforço via JS [cite: 9]
-    }
-
+    // 2. LÓGICA DA GRELHA (SIMPLIFICADA PARA 3 COLUNAS)
+    let classeGrelha = 'grid-tres-colunas';
+    
+    // 3. Verificação de autenticação (inalterado)
     if (!perfil) {
         if (loginContainer) loginContainer.style.display = 'block';
         if (container) container.style.display = 'none';
-        return; // [cite: 10]
+        return; 
     }
 
     if (loginContainer) loginContainer.style.display = 'none';
     if (container) container.style.display = 'block';
 
-    // Cabeçalho Padrão [cite: 11]
+    // 4. Início da construção do HTML
     let html = `
+    <style>
+        @keyframes pulse-vermelho {
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { transform: scale(1.15); box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+
+        .grid-tres-colunas {
+            display: grid !important;
+            grid-template-columns: repeat(3, 1fr) !important;
+            gap: 12px !important;
+            padding: 15px !important;
+        }
+
+        /* ---- INÍCIO DAS MUDANÇAS ---- */
+
+        .btn-grande {
+            position: relative;
+            height: 110px; /* Mantém a altura */
+            padding: 10px 5px; /* Ajusta o padding */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border-radius: 14px;
+            text-align: center; /* Garante que o texto quebre corretamente */
+        }
+
+        .btn-grande i {
+            font-size: 2.8rem; /* Ícones significativamente maiores */
+            margin-bottom: 8px; /* Mais espaço entre o ícone e o texto */
+            line-height: 1; /* Garante alinhamento vertical do ícone */
+        }
+        
+        .btn-grande span {
+            font-size: 0.65rem; /* Fonte do texto menor */
+            line-height: 1.2;    /* Melhora a legibilidade do texto se quebrar em duas linhas */
+            font-weight: 600;
+        }
+
+        /* O badge de alerta permanece o mesmo, já está bem posicionado */
+        .badge-alerta-entrega {
+            position: absolute;
+            top: 6px; right: 6px;
+            background: #ef4444; color: white;
+            width: 26px; height: 26px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 0.75rem; font-weight: 900;
+            border: 2px solid white;
+            box-shadow: 0 0 12px rgba(239, 68, 68, 0.8);
+            animation: pulse-vermelho 1.8s infinite;
+            z-index: 10;
+        }
+
+        /* ---- FIM DAS MUDANÇAS ---- */
+    </style>
+    `;
+
+    // Header do Painel
+    html += `
         <div class="painel-usuario-vidro">
             <span class="nome-usuario-painel">${nome.toUpperCase()}</span>
             <button onclick="logout()" class="btn-sair-vidro">SAIR</button>
         </div>
-
-        <div id="area-notificaras" style="margin-top: 80px; margin-bottom: 20px;"></div>
-        
+        <div style="margin-top: 80px;"></div>
         <div class="${classeGrelha}">
     `;
 
-    // --- 2. PERFIL: SUPER (Gestão de Usuários) --- [cite: 12]
-    if (perfil === 'super') {
-        html += `
-            <button class="btn-grande btn-vidro" onclick="telaGerenciarUsuarios()">
-                <i>👥</i><span>GERENCIAR USUÁRIOS</span>
-            </button>
-            <button class="btn-grande btn-vidro btn-breve" // --- onclick="telaAdminDashboard()">
-                <i>📈</i><span>PAINEL DE PEDIDOS</span>
-            </button>
-            <button class="btn-grande btn-vidro" onclick="telaVisualizarEstoque()">
-                <i>👕</i><span>ESTOQUE UNIFORMES</span>
-            </button>
-            <button class="btn-grande btn-vidro" style="background:rgba(16, 185, 129, 0.2);" onclick="telaEstoqueMateriaisEPatrimonios()">
-                <i>📦</i><span>ESTOQUE DEMAIS MATERIAIS</span>
-            </button>
-            <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
-                <i>🔑</i><span>ALTERAR MINHA SENHA</span>
-            </button>            
-        `; // [cite: 13, 14, 15]
-    }
+    // --- PERFIL: ESCOLA (REESTRUTURADO) ---
+    if (perfil === 'escola') {
+        let contagemEntregas = 0;
+        try {
+            const res = await fetch(`${API_URL}/escola/alertas/entregas?ts=${Date.now()}`, {
+            method: 'GET',
+            cache: 'no-store',
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                contagemEntregas = Number(data.count) || 0;
+            } else {
+                console.warn('Alerta entregas (escola) - HTTP:', res.status);
+            }
+        } catch (err) {
+            console.error("Falha ao buscar alerta de entregas:", err);
+        }
 
-    if (perfil === 'logistica') {
+        html += `
+            <button class="btn-grande btn-vidro" onclick="telaSolicitarServicoImpressora('recarga')"><i class="fas fa-fill-drip" style="margin-right: 8px; color: #00ffff;"></i><span>SOLICITAR RECARGA</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaSolicitarServicoImpressora('manutencao')"><i>🛠️</i><span>SOLICITAR MANUTENÇÃO IMPRESSORA</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaSolicitarManutencaoPC('')"><i>💻</i><span>SOLICITAR MANUTENÇÃO INFORMÁTICA</span></button>
+            <button class="btn-grande btn-vidro" onclick="renderSubmenuCadastrosEscola()"><i class="fas fa-user-graduate" style="margin-right: 8px;"></i><span>TURMAS E ALUNOS</span></button>
+            <button class="btn-grande btn-vidro" onclick="abrirMenuPatrimonioEscola()"><i>🏛️</i><span>PATRIMÔNIO</span></button>
+            <button class="btn-grande btn-vidro" onclick="renderSubmenuUniformesKits()"><i>👕</i><span>UNIFORMES & KITS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaEscolaConfirmarRecebimento()">
+                ${contagemEntregas > 0 ? `<div class="badge-alerta-entrega">${contagemEntregas}</div>` : ''}
+                <i>🚚</i><span>ENTREGAS A CAMINHO</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="renderSubmenuRelatoriosEscola()"><i>📊</i><span>RELATÓRIOS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()"><i>🔑</i><span>ALTERAR SENHA</span></button>
+        `;
+    }
+    // --- PERFIL: SUPER ---
+    else if (perfil === 'super') {
+        html += `
+            <button class="btn-grande btn-vidro" onclick="telaGerenciarUsuarios()"><i>👥</i><span>GERENCIAR USUÁRIOS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaProgressoGeralEscolas()"><i class="fas fa-pencil-ruler"></i><span>ENTREGA DE UNIFORMES E KITS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatoriosFaltantes()"><i>👕</i><span>ALUNOS QUE FALTAM RECEBER UNIFORME/KIT</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()"><i>📈</i><span>FLUXO DE PEDIDOS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()"><i>🔑</i><span>ALTERAR SENHA</span></button>
+        `; 
+    }
+    // --- PERFIL: LOGISTICA ---
+    else if (perfil === 'logistica') {
+        let contagemColetas = 0;
+        try {
+            // Busca a contagem de coletas liberadas ANTES de renderizar
+            const res = await fetch(`${API_URL}/logistica/alertas/coleta-liberada`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+            if (res.ok) {
+                contagemColetas = (await res.json()).count;
+            }
+        } catch (err) {
+            console.error("Falha ao buscar alerta de coletas:", err);
+        }
+
         html += `
             <button class="btn-grande btn-vidro" onclick="telaSaidaTransferencia37()">
                 <i>🏛️</i><span>SOLICITAR AO PATRIMÔNIO</span>
             </button>
-            <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioColetaLiberada()">
+                ${contagemColetas > 0 ? `<div class="badge-alerta-entrega">${contagemColetas}</div>` : ''}
+                <i>🚚</i><span>LIBERADO PARA ENTREGA</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()">
                 <i>🔑</i><span>ALTERAR MINHA SENHA</span>
             </button>
         `;
     }
-
-    if (perfil === 'humanos') {
+    // --- PERFIL: HUMANOS ---
+    else if (perfil === 'humanos') {
         html += `
-            <button class="btn-grande btn-vidro" onclick="telaAuditoriaAcessos()">
-                <i>🛡️</i><span>ACESSOS AO INFORME DE RENDIMENTOS</span>
-            </button>
-            <button class="btn-grande btn-vidro" onclick="telaSolicitarServicoImpressora('recarga')">
-                <i>💧</i><span>RECARGA DE TONER</span>
-            </button>
-            <button class="btn-grande btn-vidro" onclick="telaSolicitarManutencaoPC('')">
-                <i>💻</i><span>MANUTENÇÃO INFORMÁTICA</span>
-            </button>
-            <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
-                <i>🔑</i><span>ALTERAR MINHA SENHA</span>
-            </button>
+            <button class="btn-grande btn-vidro" onclick="telaSolicitarServicoImpressora('recarga')"><i>💧</i><span>SOLICITAR RECARGA</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaSolicitarManutencaoPC('')"><i>💻</i><span>MANUTENÇÃO INFORMÁTICA</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()"><i>🔑</i><span>ALTERAR SENHA</span></button>
         `;
     }
-
-    // --- PERFIL: DTI --- [cite: 16]
-    if (perfil === 'dti') {
+    // --- PERFIL: DTI ---
+    else if (perfil === 'dti') {
         html += `
-            <button class="btn-grande btn-vidro" onclick="telaListarChamadosPC_DTI()">
-                <i>💻</i><span>FILA ABERTA DE CHAMADOS COMPUTADOR</span>
-            </button>            
-            <button class="btn-grande btn-vidro" onclick="telaDashboardComputadores()">
-                <i>📈</i><span>ATENDIMENTOS REALIZADOS COMPUTADOR</span>
-            </button>
-            <button class="btn-grande btn-vidro" onclick="telaRelatorioGeralAtivos()">
-                <i>📋</i><span>STATUS ATUAL IMPRESSORAS</span>
-            </button>
-            <button class="btn-grande btn-vidro" onclick="telaFilaAtendimentoImpressoras()">
-                <i>🖨️</i><span>FILA ABERTA DE CHAMADOS IMPRESSORA</span>
-            </button>
-            <button class="btn-grande btn-vidro" onclick="telaDashboardImpressoras()">
-                <i>📈</i><span>ATENDIMENTOS REALIZADOS IMPRESSORA</span>
-            </button>
-            <button class="btn-grande btn-vidro" onclick="telaConsumoImpressoras()">
-                <i>📊</i><span>UTILIZAÇÃO E CONSUMO IMPRESSORA</span>
-            </button>
-            <button class="btn-grande btn-vidro" onclick="telaCadastroImpressoras()">
-                <i>📋</i><span>CADASTRAR NOVA IMPRESSORA</span>
-            </button>
-            <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
-                <i>🔑</i><span>ALTERAR MINHA SENHA</span>
-            </button>                        
-        `; // [cite: 17, 18, 19, 20]
+            <button class="btn-grande btn-vidro" onclick="telaListarChamadosPC_DTI()"><i>💻</i><span>FILA DE CHAMADOS INFORMÁTICA</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaDashboardComputadores()"><i>📈</i><span>ATENDIMENTOS REALIZADOS INFORMÁTICA</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaFilaAtendimentoImpressoras()"><i>🖨️</i><span>FILA DE CHAMADOS IMPRESSORA</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaDashboardImpressoras()"><i>📈</i><span>ATENDIMENTOS REALIZADOS IMPRESSORA</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaConsumoImpressoras()"><i>📊</i><span>CONSUMO DAS IMPRESSORAS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaCadastroImpressoras()"><i>📋</i><span>CADASTRAR NOVA IMPRESSORA</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioGeralAtivos()"><i>📋</i><span>STATUS ATUAL DAS IMPRESSORAS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()"><i>🔑</i><span>ALTERAR SENHA</span></button>
+        `;
     }
-
-    // --- PERFIL: IMPRES --- [cite: 21]
-    if (perfil === 'impres') {
+    // --- PERFIL: IMPRES ---
+    else if (perfil === 'impres') {
         html += `
-            <button class="btn-grande btn-vidro" onclick="telaListarChamadosAbertos()">
-                <i>🖨️</i><span>FILA DE CHAMADOS</span>
-            </button>
-            <button class="btn-grande btn-vidro" onclick="telaRelatorioGeralAtivos()">
-                <i>📋</i><span>STATUS ATUAL IMPRESSORAS</span>
-            </button>                                       
-            <button class="btn-grande btn-vidro" onclick="telaDashboardImpressoras()">
-                <i>📈</i><span>ATENDIMENTOS REALIZADOS (IMPRESSORAS)</span>
-            </button>
-            <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
-                <i>🔑</i><span>ALTERAR MINHA SENHA</span>
-            </button> 
-        `; // [cite: 22, 23, 24]
+            <button class="btn-grande btn-vidro" onclick="telaListarChamadosAbertos()"><i>🖨️</i><span>FILA DE CHAMADOS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaDashboardImpressoras()"><i>📈</i><span>ATENDIMENTOS REALIZADOS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioGeralAtivos()"><i>📋</i><span>STATUS ATUAL DAS IMPRESSORAS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()"><i>🔑</i><span>ALTERAR SENHA</span></button>
+        `; 
     }
+    // --- PERFIL: ADMIN ---
+    else if (perfil === 'admin') {
+        let contagemSolicitacoes = 0;
 
-    // --- 3. PERFIL: ESCOLA --- [cite: 25]
-    if (perfil === 'escola') {
-        html += `
-            <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaSolicitarServicoImpressora('recarga')">
-                <i>💧</i><span>SOLICITAR RECARGA DE TONER</span>
-            </button>
-            <button class="btn-grande btn-vidro" onclick="telaSolicitarServicoImpressora('manutencao')">
-                <i>🛠️</i><span>SOLICITAR MANUTENÇÃO IMPRESSORA</span>
-            </button>
-            <button class="btn-grande btn-vidro" onclick="telaSolicitarManutencaoPC('')">
-                <i>💻</i><span>SOLICITAR MANUTENÇÃO INFORMÁTICA</span>
-            </button>
-            <button class="btn-grande btn-vidro" onclick="abrirMenuPatrimonioEscola()">
-                <i>🏛️</i><span>PATRIMÔNIO</span>
-            </button>
-            <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
-                <i>🔑</i><span>ALTERAR MINHA SENHA</span>
-            </button>    
-            <button class="btn-grande btn-vidro" onclick="telaEscolaConfirmarRecebimento()">
-                <i>🚚</i><span>CONFIRMAR RECEBIMENTO</span>
-            </button>
-            <button class="btn-grande btn-vidro" onclick="telaSolicitarUniforme()">
-                <i>👕</i><span>SOLICITAR UNIFORMES</span>
-            </button>
-            <button class="btn-grande btn-vidro" onclick="telaDevolucaoUniforme()">
-                <i>🔄</i><span>DEVOLVER UNIFORMES</span>
-            </button>                
-        `; // [cite: 26, 27, 28, 29, 30, 31]
-    }
+        try {
+            const res = await fetch(`${API_URL}/admin/alertas/solicitacoes`, {
+                headers: { 'Authorization': `Bearer ${TOKEN}` }
+            });
 
-    // --- 4. PERFIL: ADMIN (NOVA INTERFACE) --- [cite: 32]
-    if (perfil === 'admin') {
+            if (res.ok) {
+                const data = await res.json();
+                contagemSolicitacoes = Number(data.count) || 0;
+            } else {
+                console.warn('Alerta solicitações (admin) - HTTP:', res.status);
+            }
+        } catch (err) {
+            console.error("Falha ao buscar alerta de solicitações (admin):", err);
+        }
+
         html += `
-            <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('DEMAIS ITENS')">
-                <i>📦</i><span>ESTOQUE</span>
-            </button>
-            <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('PEDIDOS')">
+            <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('PEDIDOS', getBotoesSubmenu('admin', 'PEDIDOS', ${contagemSolicitacoes}))">
+                ${contagemSolicitacoes > 0 ? `<div class="badge-alerta-entrega">${contagemSolicitacoes}</div>` : ''}
                 <i>📝</i><span>PEDIDOS</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('RELATÓRIOS')">
-                <i>📊</i><span>RELATÓRIOS</span>
-            </button>
-            <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
-                <i>🔑</i><span>ALTERAR MINHA SENHA</span>
-            </button>    
-        `; // Note: Você moverá os botões de [cite: 33, 34, 35, 36] para dentro da função abaixo.
-    }
 
-    // --- 5. PERFIL: ESTOQUE (NOVA INTERFACE) --- [cite: 37]
-    if (perfil === 'estoque') {
-        const containerBotoes = document.getElementById('grid-botoes-dashboard');
-        
-        // Usamos backticks (`) para envolver todo o bloco HTML
-        containerBotoes.innerHTML = `
-            <button class="btn-grande btn-vidro" style="position: relative;" onclick="telaPendentesInfra()">
-                <div id="badge-infra-count" style="display: none; position: absolute; top: -10px; right: -10px; 
-                    background: #ef4444; color: white; min-width: 26px; height: 26px; border-radius: 50%; 
-                    display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 900; 
-                    box-shadow: 0 0 15px rgba(239, 68, 68, 0.6); border: 2px solid rgba(255,255,255,0.2); 
-                    animation: pulse-vermelho 2s infinite; z-index: 10;">
-                    0
-                </div>
-                <i>🚚</i><span>SOLICITADO PELA INFRA</span>
+            <button class="btn-grande btn-vidro" onclick="carregarConsultaEstoque()"><i>🔎</i><span>CONSULTA ESTOQUE</span></button>
+            <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('RELATÓRIOS', getBotoesSubmenu('admin', 'RELATÓRIOS'))"><i>📊</i><span>RELATÓRIOS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()"><i>🔑</i><span>ALTERAR SENHA</span></button>
+        `;
+    }
+    // --- PERFIL: ESTOQUE ---
+    else if (perfil === 'estoque') {
+
+        // Alerta: PRONTOS para liberar transporte (pedido_remessas.status = 'PRONTO')
+        let contagemProntos = 0;
+        try {
+            const res = await fetch(`${API_URL}/estoque/alertas/prontos-transporte?ts=${Date.now()}`, {
+                method: 'GET',
+                cache: 'no-store',
+                headers: { 'Authorization': `Bearer ${TOKEN}` }
+            });
+            if (res.ok) contagemProntos = Number((await res.json()).count) || 0;
+            else console.warn('Alerta prontos-transporte (estoque) - HTTP:', res.status);
+        } catch (err) {
+            console.error("Falha ao buscar alerta de PRONTOS p/ transporte:", err);
+        }
+
+        // Alerta: APROVADOS (pedidos.status = 'APROVADO')
+        let contagemAprovados = 0;
+        try {
+            const res = await fetch(`${API_URL}/estoque/alertas/aprovados?ts=${Date.now()}`, {
+                method: 'GET',
+                cache: 'no-store',
+                headers: { 'Authorization': `Bearer ${TOKEN}` }
+            });
+            if (res.ok) contagemAprovados = Number((await res.json()).count) || 0;
+            else console.warn('Alerta aprovados (estoque) - HTTP:', res.status);
+        } catch (err) {
+            console.error("Falha ao buscar alerta de pedidos aprovados:", err);
+        }
+
+        // Alerta: INFRA pendente (se você já criou essa rota)
+        let contagemInfra = 0;
+        try {
+            const res = await fetch(`${API_URL}/estoque/alertas/infra-pendentes?ts=${Date.now()}`, {
+                method: 'GET',
+                cache: 'no-store',
+                headers: { 'Authorization': `Bearer ${TOKEN}` }
+            });
+            if (res.ok) contagemInfra = Number((await res.json()).count) || 0;
+            else console.warn('Alerta infra-pendentes (estoque) - HTTP:', res.status);
+        } catch (err) {
+            console.error("Falha ao buscar alerta de INFRA pendente:", err);
+        }
+
+        html += `
+            <button class="btn-grande btn-vidro" onclick="infra_telaPendentes()">
+                <div id="badge-infra-count" class="badge-alerta-entrega" style="display:${contagemInfra > 0 ? 'flex' : 'none'};">${contagemInfra}</div>
+                <i>🏗️</i><span>SOLIC. INFRA</span>
             </button>
 
             <button class="btn-grande btn-vidro" onclick="abrirMenuPatrimonioAlmoxarifado()">
                 <i>🏛️</i><span>PATRIMÔNIO</span>
             </button>
 
-            <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('DEMAIS ITENS')">
-                <i>📦</i><span>ESTOQUE</span>
-            </button>
-
-            <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('PEDIDOS')">
+            <button class="btn-grande btn-vidro"
+                    onclick="abrirSubmenuVitrificado('PEDIDOS', getBotoesSubmenu('estoque', 'PEDIDOS', ${contagemAprovados}, ${contagemProntos}))">
+                ${contagemAprovados > 0 ? `<div class="badge-alerta-entrega">${contagemAprovados}</div>` : ''}
                 <i>📝</i><span>PEDIDOS</span>
             </button>
 
-            <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('RELATÓRIOS')">
+            <button class="btn-grande btn-vidro" onclick="telaCadastrosBase()">
+                <i>💻</i><span>CADASTROS BÁSICOS</span>
+            </button>
+
+            <button class="btn-grande btn-vidro" onclick="abrirTelaEntrada()">
+                <i>📥</i><span>ENTRADA ESTOQUE</span>
+            </button>
+
+            <button class="btn-grande btn-vidro" onclick="carregarConsultaEstoque()">
+                <i>🔎</i><span>CONSULTA ESTOQUE</span>
+            </button>
+
+            <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('RELATÓRIOS', getBotoesSubmenu('estoque', 'RELATÓRIOS'))">
                 <i>📊</i><span>RELATÓRIOS</span>
             </button>
 
-            <button class="btn-grande btn-vidro" style="grid-column: 1;" onclick="telaAlterarSenha()">
-                <i>🔑</i><span>ALTERAR MINHA SENHA</span>
+            <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()">
+                <i>🔑</i><span>ALTERAR SENHA</span>
             </button>
         `;
-
-        // CRÍTICO: Chama a função para atualizar o número no badge assim que cria os botões
-        if (typeof atualizarBadgeInfra === 'function') {
-            atualizarBadgeInfra();
-        }
     }
-
-    html += `</div>`;
+    html += `</div>`; // Fecha a div da grelha
     container.innerHTML = html;
-    verificarAlertasPatrimonio();
+
 }
 
-// FUNÇÃO PARA A TELA SOBRE TELA (VITRIFICADA)
-function abrirSubmenuVitrificado(titulo) {
-    const perfil = localStorage.getItem('perfil').toLowerCase();
-    
-    // 1. Overlay puramente vitrificada (sem fundo sólido, apenas blur e leve tinta)
+
+// ====================================================================================
+// ================= FUNÇÕES DE SUPORTE E SUBMENUS (COLE ABAIXO DO DASHBOARD) ================
+// ====================================================================================
+
+function renderSubmenuCadastrosEscola() {
+    const botoes = `
+        <button class="btn-grande btn-vidro" onclick="telaEscolaGestaoTurmas()"><i>🏫</i><span>CADASTRO DE TURMAS</span></button>
+        <button class="btn-grande btn-vidro" onclick="telaEscolaGestaoAlunos()"><i>👥</i><span>CADASTRO DE ALUNOS</span></button>
+    `;
+    abrirSubmenuVitrificado('CADASTROS', botoes);
+}
+
+function renderSubmenuUniformesKits() {
+    const botoes = `
+        <button class="btn-grande btn-vidro" onclick="telaEscolaConsultaEstoque()"><i>📦</i><span>MEU ESTOQUE</span></button>
+        <button class="btn-grande btn-vidro" onclick="telaSolicitarUniforme()"><i>📝</i><span>SOLICITAR</span></button>
+        <button class="btn-grande btn-vidro" onclick="telaEntregaUniformes()"><i>👕</i><span>ENTREGA DE UNIFORMES</span></button>
+        <button class="btn-grande btn-vidro" onclick="telaEntregaMaterial()"><i>✏️</i><span>ENTREGA DE KITS</span></button>
+        <button class="btn-grande btn-vidro" onclick="telaDevolucaoUniforme()"><i>🔄</i><span>DEVOLVER</span></button>
+    `;
+    abrirSubmenuVitrificado('UNIFORMES & KITS', botoes);
+}
+
+function renderSubmenuRelatoriosEscola() {
+    const botoes = `
+        <button class="btn-grande btn-vidro" onclick="gerarRelatorioStatusTurmasEmTelaCheia()"><i>📊</i><span>ENTREGAS POR TURMA</span></button>
+        <button class="btn-grande btn-vidro" onclick="telaRelatoriosGeral()"><i>📈</i><span>ENTREGAS DETALHADAS</span></button>
+    `;
+    abrirSubmenuVitrificado('RELATÓRIOS', botoes);
+}
+
+function getBotoesSubmenu(perfil, titulo, contagem = 0, contagemProntos = 0) {
+    if (perfil === 'estoque') {
+        if (titulo === 'PEDIDOS') return `
+            <button class="btn-grande btn-vidro" onclick="telaEstoquePedidosPendentes()">
+                ${contagem > 0 ? `<div class="badge-alerta-entrega">${contagem}</div>` : ''}
+                <i>📦</i><span>SEPARAÇÃO</span>
+            </button>
+
+            <button class="btn-grande btn-vidro" onclick="telaLogisticaEntregas()">
+                ${contagemProntos > 0 ? `<div class="badge-alerta-entrega">${contagemProntos}</div>` : ''}
+                <i>🚚</i><span>LIBERAR TRANSPORTE</span>
+            </button>
+
+            <button class="btn-grande btn-vidro" onclick="listarDevolucoesLogistica()"><i>↩️</i><span>RECEBER DEVOLUÇÃO</span></button>
+            <button class="btn-grande btn-vidro" onclick="listarDevolucoesEstoque()"><i>🔄</i><span>CONCLUIR DEVOLUÇÃO</span></button>
+            <button class="btn-grande btn-vidro" onclick="abrirCalculadoraConversao()"><i>🧮</i><span>CALCULADORA</span></button>
+        `;
+
+        if (titulo === 'RELATÓRIOS') return `
+            <button class="btn-grande btn-vidro" onclick="telaHistoricoRemessas()"><i>🔍</i><span>ROMANEIOS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()"><i>📈</i><span>PAINEL GERAL</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaAuditoriaPedidos()"><i>🔍</i><span>FLUXO DO PEDIDO</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaHistoricoGeral()"><i>🕵️</i><span>HISTÓRICO MOVIMENTAÇÃO</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioLogStatus()"><i>🕵️</i><span>HISTÓRICO PEDIDOS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatoriosFaltantes()"><i>👕</i><span>ALUNOS QUE FALTAM RECEBER UNIFORME/KIT</span></button>            
+            <button class="btn-grande btn-vidro" onclick="telaProgressoGeralEscolas()"><i>🌐</i><span>ENTREGA DE UNIFORMES E KITS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioConsolidado()"><i>🏢</i><span>LISTAGEM RECEBIDO/FALTA RECEBER</span></button>
+        `;
+    }
+
+    if (perfil === 'admin') {
+        if (titulo === 'PEDIDOS') return `
+            <button class="btn-grande btn-vidro" onclick="telaAdminGerenciarSolicitacoes()">
+                ${contagem > 0 ? `<div class="badge-alerta-entrega">${contagem}</div>` : ''}
+                <i>⚖️</i><span>SOLICITAÇÕES DAS ESCOLAS</span>
+            </button>
+            <button class="btn-grande btn-vidro" onclick="abrirTelaSaidaPedido()"><i>➕</i><span>CRIAR PEDIDO</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()"><i>📈</i><span>PAINEL DE PEDIDOS</span></button>
+            <button class="btn-grande btn-vidro" onclick="listarDevolucoesAdmin()"><i>🔄</i><span>DEVOLUÇÕES</span></button>
+        `;
+        if (titulo === 'RELATÓRIOS') return `
+            <button class="btn-grande btn-vidro" onclick="telaAuditoriaPedidos()"><i>🔍</i><span>FLUXO DO PEDIDO</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaHistoricoRemessas()"><i>🔍</i><span>ROMANEIOS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaHistoricoGeral()"><i>🕵️</i><span>HISTÓRICO MOVIMENTAÇÃO</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioLogStatus()"><i>🕵️</i><span>HISTÓRICO PEDIDOS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatoriosFaltantes()"><i>👕</i><span>ALUNOS QUE FALTAM RECEBER UNIFORME/KIT</span></button>        
+            <button class="btn-grande btn-vidro" onclick="telaProgressoGeralEscolas()"><i>🌐</i><span>ENTREGA DE UNIFORMES E KITS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioConsolidado()"><i>🏢</i><span>LISTAGEM RECEBIDO/FALTA RECEBER</span></button>
+        `;
+    }
+    return '';
+}
+
+function abrirSubmenuVitrificado(titulo, botoesHTML) {
+    // Remove qualquer submenu que já possa estar aberto
+    const overlayExistente = document.getElementById('submenu-overlay');
+    if (overlayExistente) overlayExistente.remove();
+
     const overlay = document.createElement('div');
     overlay.id = 'submenu-overlay';
     overlay.style.cssText = `
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(15, 23, 42, 0.7); /* Reduzida a opacidade para não parecer sólido */
-        backdrop-filter: blur(20px); /* Aumento do blur para o efeito de vidro jateado */
-        -webkit-backdrop-filter: blur(20px); 
-        z-index: 9999;
-        display: flex; flex-direction: column;
-        overflow-y: auto;
-        animation: fadeIn 0.3s ease;
+        background: rgba(15, 23, 42, 0.8);
+        backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);
+        z-index: 10000; display: flex; flex-direction: column;
+        overflow-y: auto; animation: fadeIn 0.3s ease;
     `;
 
-    let botoesExtra = '';
-
-    // --- LÓGICA DE DISTRIBUIÇÃO (Botões Padronizados com Ícone + Span) ---
-    if (perfil === 'estoque') {
-        if (titulo === 'DEMAIS ITENS') {
-            botoesExtra = `
-            <button class="btn-grande btn-vidro" onclick="telaCadastrosBase()">
-                <i>⚙️</i><span>CADASTRAR NOVO</span>
-            </button>            
-            <button class="btn-grande btn-vidro" onclick="telaAbastecerEstoque()">
-                <i>📥</i><span>LANÇAR ENTRADA NO ESTOQUE</span>
-            </button>
-            <button class="btn-grande btn-vidro" onclick="telaVisualizarEstoque()">
-                <i>👕</i><span>ESTOQUE DE UNIFORMES</span>
-            </button>
-            <button class="btn-grande btn-vidro" style="background:rgba(16, 185, 129, 0.2);" onclick="telaEstoqueMateriaisEPatrimonios()">
-                <i>📦</i><span>ESTOQUE DOS DEMAIS ITENS</span>
-            </button>
-            `;
-        } else if (titulo === 'PEDIDOS') {
-            botoesExtra = `
-            <button class="btn-grande btn-vidro" onclick="telaEstoquePedidosPendentes()">
-                <i>📦</i><span>SEPARAÇÃO DE VOLUMES</span>
-            </button>
-            <button class="btn-grande btn-vidro" onclick="telaLogisticaEntregas()">
-                <i>🚚</i><span>LIBERAR TRANSPORTE DE PEDIDO</span>
-            </button>
-            <button class="btn-grande btn-vidro" onclick="listarDevolucoesLogistica()">
-                <i>🚚</i><span>INICIAR RECEBIMENTO DE DEVOLUÇÃO</span>
-            </button>                        
-            <button class="btn-grande btn-vidro" onclick="listarDevolucoesEstoque()">
-                <i>🔄</i><span>CONCLUIR DEVOLUÇÃO RECEBIDA</span>
-            </button>
-            <button class="btn-grande btn-vidro" onclick="abrirCalculadoraConversao()">
-                <i>🧮</i><span>CALCULADORA</span>
-            </button>            
-            `;
-        } else if (titulo === 'RELATÓRIOS') {
-            botoesExtra = `
-            <button class="btn-grande btn-vidro" onclick="renderizarTelaRelatorios()">
-                <i>🚚</i><span>SAÍDA DE PEDIDOS</span>
-            </button>
-            `;
-        }
-    }
-
-    if (perfil === 'admin') {
-        if (titulo === 'DEMAIS ITENS') {
-            botoesExtra = `
-            <button class="btn-grande btn-vidro" onclick="telaCadastrosBase()">
-                <i>⚙️</i><span>CADASTRAR NOVO</span>
-            </button>
-            <button class="btn-grande btn-vidro" onclick="telaVisualizarEstoque()">
-                <i>👕</i><span>ESTOQUE DE UNIFORMES</span>
-            </button>
-            <button class="btn-grande btn-vidro" style="background:rgba(16, 185, 129, 0.2);" onclick="telaEstoqueMateriaisEPatrimonios()">
-                <i>📦</i><span>ESTOQUE DOS DEMAIS ITENS</span>
-            </button>
-            `;
-        } else if (titulo === 'PEDIDOS') {
-            botoesExtra = `
-            <button class="btn-grande btn-vidro" onclick="telaAdminGerenciarSolicitacoes()">
-                <i>⚖️</i><span>AUTORIZAR SOLICITAÇÕES</span>
-            </button>
-            <button class="btn-grande btn-vidro" onclick="listarDevolucoesAdmin()">
-                <i>🔄</i><span>AUTORIZAR DEVOLUÇÕES</span>
-            </button>
-            <button class="btn-grande btn-vidro" onclick="modalEscolhaTipoPedido()">
-                <i>➕</i><span>CRIAR PEDIDO</span>
-            </button>
-            `;
-        } else if (titulo === 'RELATÓRIOS') {
-            botoesExtra = `
-            <button class="btn-grande btn-vidro" onclick="renderizarTelaRelatorios()">
-                <i>🚚</i><span>SAÍDA DE PEDIDOS</span>
-            </button>
-            `;
-        }
-    }
-
-    // 2. Injeção do HTML (Cabeçalho e Grid seguindo o padrão Dashboard)
     overlay.innerHTML = `
-        <div class="painel-usuario-vidro" style="position: sticky; top: 0; z-index: 10001; background: rgba(255,255,255,0.05);">
+        <div class="painel-usuario-vidro" style="position: sticky; top: 0; z-index: 1; display: flex; justify-content: space-between; align-items: center;">
+            <div style="font-weight:bold; color:white; font-size:1.2rem;">${titulo}</div>
             <button onclick="document.getElementById('submenu-overlay').remove()" class="btn-sair-vidro">VOLTAR</button>
         </div>
         <div style="margin-top: 40px;"></div>
-        <div class="grid-movel-celular" style="padding: 10px 20px 100px 20px;">
-            ${botoesExtra}
+        <div class="grid-tres-colunas" style="padding: 10px 20px 100px 20px;">
+            ${botoesHTML}
         </div>
     `;
 
     document.body.appendChild(overlay);
 
-    // 3. Fechamento automático ao selecionar opção
     overlay.addEventListener('click', (e) => {
-        if (e.target.closest('button') && !e.target.closest('.btn-sair-vidro')) {
-            overlay.remove();
+        const targetButton = e.target.closest('button');
+        // Fecha o submenu se um botão de ação (não o de voltar) for clicado
+        if (targetButton && !targetButton.classList.contains('btn-sair-vidro')) {
+            setTimeout(() => {
+                const overlayElement = document.getElementById('submenu-overlay');
+                if (overlayElement) overlayElement.remove();
+            }, 250);
         }
     });
 }
@@ -649,62 +741,6 @@ function mudarAba(novaCategoria) {
     if (busca) busca.value = '';
     
     filtrarEstoque();
-}
-
-function filtrarEstoque() {
-    const termoBusca = document.getElementById('busca-produto').value.toLowerCase();
-    
-    // Filtra por Categoria E por Texto (se houver)
-    const produtosExibidos = dadosEstoqueCache.filter(p => {
-        const matchCategoria = p.tipo === categoriaAtual;
-        const matchTexto = p.nome.toLowerCase().includes(termoBusca);
-        return matchCategoria && matchTexto;
-    });
-
-    const areaTabela = document.getElementById('conteudo-estoque');
-    
-    if (produtosExibidos.length === 0) {
-        areaTabela.innerHTML = `<div style="padding:40px; text-align:center; color:#cbd5e1;">Nenhum item encontrado.</div>`;
-        return;
-    }
-
-    areaTabela.innerHTML = `
-        <table style="width:100%; border-collapse:collapse; color:white;">
-            <thead>
-                <tr style="background:rgba(255,255,255,0.1);">
-                    <th style="padding:15px; text-align:left; font-size:0.8rem;">PRODUTO</th>
-                    <th style="padding:15px; text-align:center; font-size:0.8rem;">SALDO REAL</th>
-                    <th style="padding:15px; text-align:center; font-size:0.8rem;">STATUS</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${produtosExibidos.map(p => {
-                    // Garantimos que os valores sejam tratados como números para a comparação
-                    const saldo = Number(p.quantidade_estoque) || 0;
-                    const minimo = Number(p.notificara_minimo) || 0;
-
-                    const status = saldo <= minimo 
-                        ? '<span style="color:#f87171; font-weight:bold; font-size:0.75rem;">🔴 CRÍTICO</span>' 
-                        : '<span style="color:#4ade80; font-weight:bold; font-size:0.75rem;">🟢 OK</span>';
-                    
-                    return `
-                        <tr style="border-bottom:1px solid rgba(255,255,255,0.1); transition: 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
-                            <td style="padding:15px; font-weight:500; font-size:0.9rem;">${p.nome}</td>
-                            <td style="padding:15px; text-align:center;">
-                                ${p.tipo === 'UNIFORMES' ? 
-                                    `<button onclick="abrirModalGrade(${p.id}, '${p.nome}')" class="btn-sair-vidro" style="background:rgba(59,130,246,0.3); border:1px solid #3b82f6; font-size:0.75rem; padding: 5px 12px; cursor:pointer; width: auto; height: auto; margin: 0;">
-                                        🔍 ${saldo} (GRADE)
-                                    </button>` : 
-                                    `<strong style="font-size:1.1rem; color: #fbbf24;">${saldo}</strong> <small style="color:#94a3b8; font-size:0.7rem;">unid.</small>`
-                                }
-                            </td>
-                            <td style="padding:15px; text-align:center;">${status}</td>
-                        </tr>
-                    `;
-                }).join('')}
-            </tbody>
-        </table>
-    `;
 }
 
 async function enviarPedidoUniforme(operacao) {
@@ -822,34 +858,6 @@ async function finalizarPedidoUniforme(tipoMovimentacao) {
     }
 }
 
-async function abrirModalGrade(id, nome) {
-    const modal = document.getElementById('modalGrade');
-    const corpo = document.getElementById('modalCorpo');
-    document.getElementById('modalTitulo').innerText = nome;
-    corpo.innerHTML = "Carregando...";
-    modal.style.display = 'flex';
-
-    try {
-        const res = await fetch(`${API_URL}/estoque/grade/${id}`, {
-            headers: { 'Authorization': `Bearer ${TOKEN}` }
-        });
-        const grade = await res.json();
-
-        if (grade.length === 0) {
-            corpo.innerHTML = "<p style='grid-column: span 3; text-align:center;'>Nenhum saldo por tamanho registrado.</p>";
-        } else {
-            corpo.innerHTML = grade.map(g => `
-                <div style="background:#f8fafc; border:1px solid #e2e8f0; padding:10px; text-align:center; border-radius:6px;">
-                    <div style="font-size:0.75rem; color:#64748b; font-weight:bold;">TAM ${g.tamanho}</div>
-                    <div style="font-size:1.1rem; font-weight:bold; color:#1e293b;">${g.quantidade}</div>
-                </div>
-            `).join('');
-        }
-    } catch (err) {
-        corpo.innerHTML = "Erro ao carregar grade.";
-    }
-}
-
 function gerarCamposProduto() {
     return `
         <label>NOME DO PRODUTO:</label>
@@ -878,7 +886,8 @@ async function telaAdminGerenciarSolicitacoes() {
         const res = await fetch(`${API_URL}/pedidos/admin/pendentes`, { 
             headers: { 'Authorization': `Bearer ${TOKEN}` } 
         });
-        const pedidos = await res.json();
+        let pedidos = await res.json();
+        pedidos = pedidos.filter(p => p.tipo_pedido !== 'INFRA_PATRIMONIO');        
 
         app.innerHTML = `
             <div style="padding:20px; min-height:100vh;" class="animar-entrada">
@@ -926,7 +935,6 @@ async function telaAdminGerenciarSolicitacoes() {
 
 async function analisarPedidoEstoque(pedidoId) {
     const modal = document.getElementById('modal-analise');
-    // Busca os dados da rota que acabamos de corrigir
     const res = await fetch(`${API_URL}/pedidos/detalhes-estoque/${pedidoId}`, { 
         headers: { 'Authorization': `Bearer ${TOKEN}` } 
     });
@@ -934,17 +942,16 @@ async function analisarPedidoEstoque(pedidoId) {
 
     let saldoSuficiente = true;
     const linhas = itens.map(i => {
-        // Garantindo que a comparação seja numérica
-        const solicitado = Number(i.solicitado);
-        const emEstoque = Number(i.em_estoque);
+        const solicitado = parseInt(i.solicitado) || 0;
+        const emEstoque = parseInt(i.em_estoque) || 0;
         const falta = solicitado > emEstoque;
-        
         if (falta) saldoSuficiente = false;
 
         return `
-            <tr style="border-bottom: 1px solid #eee; background: ${falta ? '#fff1f2' : 'transparent'}">
+            <tr data-produto-id="${i.produto_id}" data-tamanho="${i.tamanho || ''}" data-tipo="${i.tipo}"
+                style="border-bottom: 1px solid #eee; background: ${falta ? '#fff1f2' : 'transparent'}">
                 <td style="padding:15px; color:#1e3a8a; font-weight:bold;">${i.produto} ${i.tamanho ? `(${i.tamanho})` : ''}</td>
-                <td style="padding:15px; text-align:center;">${solicitado}</td>
+                <td style="padding:15px; text-align:center;" contenteditable="true" class="edit-qtd">${solicitado}</td>
                 <td style="padding:15px; text-align:center; color:${falta ? '#e11d48' : '#16a34a'}; font-weight:bold;">${emEstoque}</td>
                 <td style="padding:15px; text-align:right;">${falta ? '❌ SEM SALDO' : '✅ OK'}</td>
             </tr>
@@ -952,16 +959,17 @@ async function analisarPedidoEstoque(pedidoId) {
     }).join('');
 
     modal.style.display = 'flex';
+    // Ajuste aqui: max-height e overflow para permitir rolagem
     modal.innerHTML = `
-        <div style="background:white; padding:30px; border-radius:15px; width:100%; max-width:800px; box-shadow: 0 20px 25px rgba(0,0,0,0.2);">
+        <div style="background:white; padding:30px; border-radius:15px; width:100%; max-width:800px; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 25px rgba(0,0,0,0.2);">
             <h3 style="color:#1e3a8a; margin-top:0;">📋 Comparação Pedido vs Estoque</h3>
             <table style="width:100%; border-collapse:collapse; margin:20px 0;">
-                <thead style="background:#f1f5f9; color:#1e3a8a;">
+                <thead style="background:#f1f5f9; color:#1e3a8a; position: sticky; top: 0;">
                     <tr><th style="text-align:left; padding:15px;">PRODUTO</th><th>PEDIDO</th><th>ESTOQUE</th><th>STATUS</th></tr>
                 </thead>
                 <tbody>${linhas}</tbody>
             </table>
-            <div style="display:flex; gap:15px;">
+            <div style="display:flex; gap:15px; position: sticky; bottom: 0; background: white; padding-top: 15px; border-top: 1px solid #eee;">
                 <button onclick="editarQuantidades(${pedidoId})" style="flex:1; background:#f59e0b; color:white; border:none; padding:15px; border-radius:8px; font-weight:bold; cursor:pointer;">✏️ EDITAR QUANTIDADES</button>
                 <button ${!saldoSuficiente ? 'disabled style="opacity:0.4; cursor:not-allowed;"' : ''} 
                         onclick="finalizarAutorizacao(${pedidoId})" 
@@ -1021,19 +1029,19 @@ async function analisarPedido(id) {
 
 async function editarQuantidades(pedidoId) {
     const modal = document.getElementById('modal-analise');
-    // Buscamos os dados novamente para garantir que estamos editando a versão mais recente
     const res = await fetch(`${API_URL}/pedidos/detalhes-estoque/${pedidoId}`, { 
         headers: { 'Authorization': `Bearer ${TOKEN}` } 
     });
     const itens = await res.json();
 
+    // Ajuste aqui: max-height: 90vh e overflow-y: auto
     modal.innerHTML = `
-        <div style="background:white; padding:30px; border-radius:15px; width:90%; max-width:750px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+        <div style="background:white; padding:30px; border-radius:15px; width:95%; max-width:750px; max-height: 90vh; overflow-y: auto; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
             <h3 style="color:#1e3a8a; margin-top:0; border-bottom: 2px solid #e2e8f0; padding-bottom:10px;">✏️ EDITAR QUANTIDADES - PEDIDO #${pedidoId}</h3>
             <p style="color:#64748b; margin-bottom:20px;">Ajuste as quantidades para que fiquem dentro do limite disponível em estoque.</p>
             
             <table style="width:100%; border-collapse:collapse; margin-bottom:25px;">
-                <thead style="background:#f1f5f9; color:#1e3a8a;">
+                <thead style="background:#f1f5f9; color:#1e3a8a; position: sticky; top: -30px; z-index: 1;">
                     <tr>
                         <th style="text-align:left; padding:12px;">PRODUTO / TAMANHO</th>
                         <th style="padding:12px;">ESTOQUE</th>
@@ -1054,7 +1062,7 @@ async function editarQuantidades(pedidoId) {
                 </tbody>
             </table>
             
-            <div style="display:flex; gap:15px;">
+            <div style="display:flex; gap:15px; position: sticky; bottom: -30px; background: white; padding: 15px 0;">
                 <button onclick="salvarEdicaoPedido(${pedidoId})" style="flex:2; background:#1e40af; color:white; border:none; padding:15px; border-radius:8px; font-weight:bold; cursor:pointer; font-size:1rem;">
                     💾 SALVAR ALTERAÇÕES
                 </button>
@@ -1100,8 +1108,7 @@ async function salvarEdicaoPedido(pedidoId) {
 }
 
 async function finalizarPedido(pedidoId) {
-    if (!confirm("Confirmar autorização e saída de estoque deste pedido?")) return;
-
+ 
     try {
         const res = await fetch(`${API_URL}/pedidos/finalizar-autorizacao`, {
             method: 'POST',
@@ -1113,7 +1120,7 @@ async function finalizarPedido(pedidoId) {
         });
 
         if (res.ok) {
-            notificar("✅ Autorizado! O estoque foi atualizado e o pedido seguiu para SEPARAÇÃO.");
+            notificar("✅ Autorizado!");
             document.getElementById('modal-analise').style.display = 'none';
             telaAdminGerenciarSolicitacoes(); // Recarrega a lista
         } else {
@@ -1126,28 +1133,64 @@ async function finalizarPedido(pedidoId) {
 }
 
 async function finalizarAutorizacao(pedidoId) {
-    if (!confirm("Deseja autorizar este pedido e dar baixa no estoque?")) return;
+    const usuarioId = localStorage.getItem('usuario_id');
+    const rows = document.querySelectorAll('#modal-analise tbody tr');
+    const itensParaAutorizar = [];
+
+    // Coleta os dados diretamente da tabela do modal (garante que pega as edições)
+    rows.forEach(row => {
+        const celulas = row.querySelectorAll('td');
+        const nomeCompleto = celulas[0].innerText;
+        
+        // Extrai ID do produto e tamanho se existir (armazenados no dataset ou processados por regex)
+        // Dica: na função analisarPedidoEstoque, adicione data-id e data-tamanho no <tr> para facilitar
+        const solicitado = Number(celulas[1].innerText);
+
+        // Aqui assumimos que você já tem os dados do produto mapeados
+        // Se a quantidade for 0, o loop pula (conforme sua regra)
+        if (solicitado > 0) {
+            // Busca os dados que foram injetados no dataset da linha
+            itensParaAutorizar.push({
+                produto_id: row.dataset.produtoId,
+                tamanho: row.dataset.tamanho || null,
+                quantidade: solicitado,
+                tipo: row.dataset.tipo // MATERIAL ou UNIFORMES
+            });
+        }
+    });
 
     try {
-        const res = await fetch(`${API_URL}/pedidos/autorizar-final`, {
+        const res = await fetch(`${API_URL}/estoque/confirmar-autorizacao`, {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${TOKEN}`
             },
-            body: JSON.stringify({ pedidoId: pedidoId })
+            body: JSON.stringify({
+                pedido_id: pedidoId,
+                itens: itensParaAutorizar,
+                usuario_id: usuarioId
+            })
         });
 
-        if (res.ok) {
-            notificar("✅ Pedido Autorizado! O status agora é 'AGUARDANDO SEPARAÇÃO'.");
-            document.getElementById('modal-analise').style.display = 'none';
-            telaAdminGerenciarSolicitacoes(); // Recarrega a lista de pendentes
+        const resultado = await res.json();
+
+        if (resultado.success) {
+            notificar("✅ Pedido Autorizado!");
+            
+            // 1. Fecha o modal primeiro
+            const modal = document.getElementById('modal-analise');
+            if (modal) modal.style.display = 'none';
+
+            // 2. REFRESH REAL: Chama a função da tela novamente.
+            // Isso força um novo fetch no banco e reconstrói o HTML sem o pedido aprovado.
+            telaAdminGerenciarSolicitacoes(); 
+
         } else {
-            const erro = await res.json();
-            notificar("❌ Erro ao autorizar: " + erro.error);
+            throw new Error(resultado.error);
         }
     } catch (err) {
-        notificar("🚨 Erro de conexão com o servidor.");
+        notificar("Erro ao finalizar: " + err.message);
     }
 }
 
@@ -1241,7 +1284,7 @@ async function finalizarAprovacao(pedidoId) {
         });
 
         if (res.ok) {
-            notificar("🚀 Pedido APROVADO e enviado para o estoque!");
+            notificar("🚀 Pedido APROVADO");
             telaAdminGerenciarSolicitacoes(); // Recarrega a lista
         }
     } catch (err) { notificar("Erro ao aprovar pedido."); }
@@ -1628,7 +1671,7 @@ function logout() {
     window.location.reload();
 }
 
-// Função para Admin autorizar pedido ou recusar com motivo [cite: 10, 24]
+// Função para Admin autorizar pedido ou recusar com motivo 
 async function processarSolicitacaoANTIGO(pedidoId, acao) {
     let motivo = '';
     let status = acao === 'AUTORIZA' ? 'PEDIDO AUTORIZADO' : 'RECUSADO';
@@ -1653,7 +1696,7 @@ async function processarSolicitacaoANTIGO(pedidoId, acao) {
     }
 }
 
-// Função para Escola confirmar recebimento [cite: 16, 51, 52]
+// Função para Escola confirmar recebimento 
 async function confirmarRecebimentoantigo(pedidoId) {
     if (!confirm("CONFIRMA O RECEBIMENTO DESTE PEDIDO?")) return;
 
@@ -1672,10 +1715,10 @@ async function confirmarRecebimentoantigo(pedidoId) {
     }
 }
 
-// Função para Estoque definir volumes e liberar [cite: 18, 20, 21]
+// Função para Estoque definir volumes e liberar 
 async function liberarParaLogistica(pedidoId) {
     const volumes = document.getElementById(`volumes_${pedidoId}`).value;
-    if (!volumes) return notificar("INFORME A QTD DE VOLUMES");
+    if (!volumes) return notificar("INFORME A QUANTIDADE DE VOLUMES");
 
     const res = await fetch(`${API_URL}/pedidos/${pedidoId}/status`, {
         method: 'PATCH',
@@ -1687,12 +1730,12 @@ async function liberarParaLogistica(pedidoId) {
     });
 
     if (res.ok) {
-        notificar("PEDIDO LIBERADO PARA LOGÍSTICA");
+        notificar("PEDIDO LIBERADO PARA ENTREGA");
         carregarDashboard();
     }
 }
 
-// Função para Gerar Relatório PDF (jsPDF) [cite: 6, 38, 39, 40]
+// Função para Gerar Relatório PDF (jsPDF) 
 function imprimirRelatorioEstoque(dados) {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
@@ -1941,12 +1984,12 @@ async function telaGerenciarUsuarios() {
         const nomesPerfis = {
             'escola': 'Escola',
             'admin': 'Administração',
-            'estoque': 'Estoque',
-            'logistica': 'Logística',
+            'estoque': 'Patrimônio',
+            'logistica': 'Infra',
             'super': 'Supervisão',
-            'dti': 'DTI - Admin',
+            'dti': 'Informática',
             'impres': 'Técnico Impressora',
-            'humanos': 'RH' // Mapeamento visual conforme solicitado
+            'humanos': 'RH'
         };
 
         container.innerHTML = `
@@ -1967,14 +2010,15 @@ async function telaGerenciarUsuarios() {
 
                         <label style="color:white; font-size:0.8rem;">PERFIL:</label>
                         <select id="novo_perfil" class="input-vidro" style="width:100%; margin-bottom:10px;">
+                            <option value="">-- SELECIONE O PERFIL --</option>
                             <option value="escola">ESCOLA</option>
-                            <option value="admin">ADMIN</option>
-                            <option value="estoque">ESTOQUE</option>
-                            <option value="logistica">INFRA</option>
-                            <option value="humanos">RH (Recursos Humanos)</option>
-                            <option value="dti">DTI - Admin</option>
-                            <option value="impres">Técnico Impressora</option>
-                            <option value="super">SUPER</option>
+                            <option value="admin">ADMINISTRAÇÃO</option>
+                            <option value="estoque">PATRIMÔNIO</option>
+                            <option value="logistica">INFRA</option> <option value="humanos">RH (Recursos Humanos)</option>
+                            <option value="dti">INFORMÁTICA</option>
+                            <option value="impres">TÉCNICO IMPRESSORA</option>
+                            <option value="super">SUPERVISÃO</option>
+                            <option value="humanos">RH</option>
                         </select>
 
                         <label style="color:white; font-size:0.8rem;">UNIDADE:</label>
@@ -2000,10 +2044,8 @@ async function telaGerenciarUsuarios() {
                             </thead>
                             <tbody>
                                 ${usuarios
-                                    .filter(u => u.status === 'ativo') // AJUSTE CIRÚRGICO: Filtra apenas ativos
-                                    .map(u => {
-                                        const ativo = u.status === 'ativo';
-                                        return `
+                                    .filter(u => u.status === 'ativo')
+                                    .map(u => `
                                         <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
                                             <td style="padding:12px;">${u.nome.toUpperCase()}</td>
                                             <td style="padding:12px;">
@@ -2020,7 +2062,7 @@ async function telaGerenciarUsuarios() {
                                                 </button>
                                             </td>
                                         </tr>
-                                    `}).join('')}
+                                    `).join('')}
                             </tbody>
                         </table>
                     </div>
@@ -2043,7 +2085,7 @@ async function salvarUsuario() {
     });
 
     if (res.ok) {
-        notificar("UTILIZADOR CRIADO!");
+        notificar("LOGIN CRIADO!");
         telaGerenciarUsuarios();
     }
 }
@@ -2067,7 +2109,7 @@ async function alternarStatusUsuario(id, statusAtual) {
         if (res.ok) {
             telaGerenciarUsuarios(); // Recarrega a listagem
         } else {
-            alert("Erro ao alterar status no servidor.");
+            notificar("Erro ao alterar status no servidor.");
         }
     } catch (err) {
         console.error("Erro status:", err);
@@ -2365,7 +2407,7 @@ function ajustarGradeUniforme() {
         if (nome.includes('TENIS')) {
             textoGrade.innerText = "22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43";
         } else {
-            textoGrade.innerText = "2, 4, 6, 8, 10, 12, 14, 16, PP, P, M, G, GG, EGG";
+            textoGrade.innerText = "02, 04, 06, 08, 10, 12, 14, 16, PP, P, M, G, GG, EGG";
         }
     } else {
         divnotificara.style.display = 'block';
@@ -2648,18 +2690,16 @@ async function formProduto() {
 async function salvarProdutoNovo() {
     const nome = document.getElementById('prod_nome').value.toUpperCase().trim();
     const tipo = document.getElementById('prod_tipo').value;
-    const categoriaSelect = document.getElementById('prod_categoria');
-    const categoria_id = categoriaSelect.value;
+    const categoria_id = document.getElementById('prod_categoria').value;
     const notificara_minimo = document.getElementById('prod_notificara').value;
 
-    if (!nome) return notificar("O nome do produto é obrigatório!");
+    if (!nome) return notificar("O nome do produto é obrigatório!", "alerta");
 
     const payload = {
         nome: nome,
         tipo: tipo,
-        // Envia null se não houver categoria selecionada
         categoria_id: categoria_id ? parseInt(categoria_id) : null,
-        notificara_minimo: parseInt(notificara_minimo) || 0
+        alerta_minimo: parseInt(notificara_minimo) || 0 // Nome exato esperado no backend
     };
 
     try {
@@ -2674,7 +2714,7 @@ async function salvarProdutoNovo() {
 
         if (res.ok) {
             notificar("✅ Cadastro realizado com sucesso!");
-            formProduto(); // Limpa a tela
+            formProduto(); 
         } else {
             const erro = await res.json();
             notificar("❌ Erro no Servidor: " + erro.error);
@@ -3046,42 +3086,63 @@ function adicionarLinhaEntrada() {
 }
 
 async function processarEntradaEstoque() {
-    const obs = document.getElementById('ent_obs').value;
-    const linhas = document.querySelectorAll('.item-linha');
-    const itens = [];
+    const usuarioId = localStorage.getItem('usuario_id'); 
+    const inputs = document.querySelectorAll('.input-entrada-qtd');
+    const mapaItens = {};
 
-    linhas.forEach(linha => {
-        const produto_id = linha.querySelector('.ent_produto').value;
-        const tamanho = linha.querySelector('.ent_tamanho').value;
-        const quantidade = linha.querySelector('.ent_qtd').value;
+    inputs.forEach(input => {
+        const qtd = parseInt(input.value) || 0;
+        if (qtd <= 0) return;
 
-        if (produto_id && quantidade) {
-            itens.push({ produto_id: parseInt(produto_id), tamanho, quantidade: parseInt(quantidade) });
+        const id = input.dataset.id;
+        const tipo = input.dataset.tipo;
+        const tamanho = input.dataset.tamanho;
+
+        if (!mapaItens[id]) {
+            mapaItens[id] = {
+                produto_id: id,
+                tipo: tipo,
+                qtd_total: 0,
+                grade: {} 
+            };
+        }
+
+        mapaItens[id].qtd_total += qtd;
+        if (tipo === 'UNIFORMES' && tamanho) {
+            mapaItens[id].grade[tamanho] = (mapaItens[id].grade[tamanho] || 0) + qtd;
         }
     });
 
-    if (itens.length === 0) return notificar("Adicione pelo menos um item!");
+    const itensParaEnviar = Object.values(mapaItens);
 
-    const payload = {
-        local_id: parseInt(localStorage.getItem('local_id')), // ID 36, 37 ou 38 automático do login
-        tipo_historico: 'ENTRADA',
-        observacoes: obs,
-        itens: itens
-    };
+    if (itensParaEnviar.length === 0) {
+        notificar("⚠️ Informe uma quantidade.");
+        return;
+    }
 
     try {
-        const res = await fetch(`${API_URL}/estoque/entrada`, {
+        const res = await fetch(`${API_URL}/estoque/entrada-lote`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
-            body: JSON.stringify(payload)
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${TOKEN}`
+            },
+            body: JSON.stringify({ 
+                itens: itensParaEnviar,
+                usuario_id: usuarioId,
+                observacoes: "Entrada via painel operacional" 
+            })
         });
 
-        if (!res.ok) throw new Error("Erro ao processar entrada");
-        
-        notificar("ESTOQUE ATUALIZADO COM SUCESSO!");
-        renderizarMenu();
+        const resultado = await res.json();
+        if (resultado.success) {
+            notificar("✅ Estoque atualizado!");
+            carregarDashboard();
+        } else {
+            throw new Error(resultado.error);
+        }
     } catch (err) {
-        notificar(err.message);
+        notificar("❌ Erro: " + err.message);
     }
 }
 
@@ -3099,7 +3160,7 @@ async function renderizarGradeUniformes() {
 
     // Separar Tênis para ser a última coluna
     const listaProdutos = [...produtos.filter(p => !p.nome.includes('TENIS')), ...produtos.filter(p => p.nome.includes('TENIS'))];
-    const tamanhos = ["02", "04", "06", "08", "10", "12", "14", "P", "M", "G", "GG", "28", "30", "32", "34", "36", "38", "40", "42"];
+    const tamanhos = ["02", "04", "06", "08", "10", "12", "14", "16", "PP", "P", "M", "G", "GG", "EGG", "28", "30", "32", "34", "36", "38", "40", "42"];
 
     let html = `
         <div class="card-entrada">
@@ -3217,42 +3278,33 @@ function toggleInputMaterial(cb) {
 }
 
 async function renderizarHistorico() {
-    const conteudo = document.getElementById('conteudo-dinamico');
-    const res = await fetch(`${API_URL}/api/cadastros/historico`, { 
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } 
-    });
-    const dados = await res.json();
+    const response = await fetch('/api/estoque/historico-recente');
+    const logs = await response.json();
+    const timeline = document.getElementById('timeline-historico');
+    timeline.innerHTML = '';
 
-    conteudo.innerHTML = `
-        <div class="card-historico">
-            <h2>AUDITORIA DE MOVIMENTAÇÕES (HISTÓRICO)</h2>
-            <p><small>* Duplo clique em um registro para ver o detalhamento dos itens.</small></p>
-            <table class="tabela-estilizada">
-                <thead>
-                    <tr>
-                        <th>DATA/HORA</th>
-                        <th>USUÁRIO</th>
-                        <th>TIPO</th>
-                        <th>QTD TOTAL</th>
-                        <th>OBSERVAÇÕES</th>
-                        <th>LOCAL</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${dados.map(h => `
-                        <tr ondblclick="verDetalhesHistorico(${h.id})" title="Duplo clique para detalhes">
-                            <td>${new Date(h.data).toLocaleString()}</td>
-                            <td>${h.usuario_nome}</td>
-                            <td><span class="badge-${h.acao.toLowerCase()}">${h.acao}</span></td>
-                            <td>${h.quantidade_total}</td>
-                            <td>${h.observacoes || '-'}</td>
-                            <td>${h.local_nome || '-'}</td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>
-        </div>
-    `;
+    logs.forEach(log => {
+        const dataFormatada = new Date(log.data).toLocaleString('pt-BR');
+        
+        timeline.innerHTML += `
+            <div class="card-historico glass-panel animate__animated animate__fadeInUp">
+                <div class="historico-header">
+                    <span class="log-data">${dataFormatada}</span>
+                    <span class="log-usuario"><i class="fas fa-user"></i> ${log.usuario}</span>
+                </div>
+                <div class="historico-body">
+                    <strong>${log.acao}</strong>
+                    <p class="log-obs">${log.observacoes || 'Sem observações'}</p>
+                    <div class="log-itens">
+                        ${log.itens.map(i => `<span>${i.produto} (<b>${i.qtd}</b>)</span>`).join('')}
+                    </div>
+                </div>
+                <div class="log-footer">
+                    <span>Total de itens: <b>${log.quantidade_total}</b></span>
+                </div>
+            </div>
+        `;
+    });
 }
 
 async function verDetalhesHistorico(id) {
@@ -3922,9 +3974,9 @@ async function renderizarFormSolicitacaoUniforme() {
                     <tbody></tbody>
                 </table>
             </div>
-
-            <button onclick="enviarPedidoEscolaFinal()" class="btn-success" style="width:100%; margin-top:20px; display:none;" id="btn-enviar-pedido">
-                ENVIAR SOLICITAÇÃO PARA ADMINISTRAÇÃO
+            <button id="btnEnviarSolicitacao" onclick="enviarPedidoEscola('SOLICITACAO')" disabled 
+                style="width:100%; padding:15px; background:#1e40af; color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer; opacity:0.5;">
+                🚀 ENVIAR SOLICITAÇÃO COMPLETA
             </button>
         </div>
     `;
@@ -3969,7 +4021,7 @@ async function enviarPedidoEscola(tipo) {
 }
 
 function ordenarTamanhos(lista) {
-    const ordemLetras = { 'PP': 1, 'P': 2, 'M': 3, 'G': 4, 'GG': 5, 'EXG': 6, 'UNICO': 7 };
+    const ordemLetras = { 'PP': 1, 'P': 2, 'M': 3, 'G': 4, 'GG': 5, 'EGG': 6, 'UNICO': 7 };
     return lista.sort((a, b) => {
         const tA = String(a.tamanho || a);
         const tB = String(b.tamanho || b);
@@ -4036,7 +4088,7 @@ async function abrirModalConferencia(pedidoId) {
 
     modal.style.display = 'flex';
     modal.innerHTML = `
-        <div style="background:white; padding:30px; border-radius:15px; width:90%; max-width:800px; max-height:90vh; overflow-y:auto;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
             <h2 style="color:#1e3a8a;">📦 CONFERÊNCIA DE SAÍDA</h2>
             <p style="color:#64748b;">Confirme as quantidades que estão saindo agora.</p>
             
@@ -5587,78 +5639,230 @@ let carrinhoSolicitacao = [];
 
 async function telaSolicitarUniforme() {
     const container = document.getElementById('app-content');
-    container.innerHTML = '<div style="padding:20px; color:white; text-align:center;">🔄 Carregando produtos...</div>';
+    container.innerHTML = '<div style="padding:20px; color:white; text-align:center;">🔄 Carregando uniformes...</div>';
     
-    carrinhoSolicitacao = [];
+    // Limpa o carrinho global ao abrir a tela
+    window.carrinhoSolicitacao = [];
 
     try {
         const res = await fetch(`${API_URL}/produtos/tipo/UNIFORMES`, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         });
         const produtos = await res.json();
-        const tituloTela = "👕 SOLICITAÇÃO DE UNIFORMES";
 
-        // Seguindo EXATAMENTE a estrutura da sua função de Materiais
         container.innerHTML = `
-            <div class="painel-vidro" style="max-width: 1000px; margin: auto;">
+            <style>
+                .grid-solicitacao { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 15px; padding: 10px; }
+                .card-uniforme { background: rgba(255, 255, 255, 0.05); border-radius: 10px; padding: 15px; border: 1px solid rgba(255,255,255,0.1); cursor: pointer; }
+                .titulo-prod { color: #00d4ff; font-weight: bold; text-transform: uppercase; font-size: 0.9rem; }
+                .grade-expansivel { display: none; margin-top: 15px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1); }
+                .grade-inputs { display: grid; grid-template-columns: repeat(auto-fill, minmax(65px, 1fr)); gap: 8px; }
+                .caixa-item { background: rgba(0,0,0,0.2); padding: 5px; border-radius: 6px; text-align: center; border: 1px solid rgba(255,255,255,0.05); }
+                .label-t { display: block; font-size: 0.6rem; color: #aaa; margin-bottom: 2px; }
                 
+                /* Ajuste de visibilidade: fundo cinza médio e fonte otimizada */
+                .input-qtd-uniforme { 
+                    width: 100%; 
+                    background: #666 !important; /* Cinza médio solicitado */
+                    border: none; 
+                    border-bottom: 2px solid #10b981; 
+                    color: white !important; 
+                    text-align: center; 
+                    outline: none; 
+                    font-size: 0.75rem; 
+                    padding: 4px 0;
+                    border-radius: 4px 4px 0 0;
+                    -moz-appearance: textfield; 
+                }
+
+                /* Garante que o fundo permaneça cinza ao clicar/digitar */
+                .input-qtd-uniforme:focus {
+                    background: #777 !important;
+                    box-shadow: 0 0 5px rgba(16,185,129,0.5);
+                }
+
+                .input-qtd-uniforme::-webkit-outer-spin-button,
+                .input-qtd-uniforme::-webkit-inner-spin-button {
+                    -webkit-appearance: none;
+                    margin: 0;
+                }
+            </style>
+
+            <div class="painel-vidro" style="max-width: 1100px; margin: auto;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
                     <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
-                    <h2 style="color:white; margin:0; font-size:1.3rem;">${tituloTela}</h2>
-                    <div style="width:100px;"></div>
+                    <h2 style="color:white; margin:0; font-size:1.2rem;">👕 SOLICITAÇÃO DE UNIFORMES</h2>
+                    <div style="width:80px;"></div>
                 </div>
 
-                <div style="background:rgba(0,0,0,0.2); border-radius:10px; padding: 30px; color: white;">
-                    
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 40px;">
-                        
-                        <div>
-                            <h3 style="margin-top:0; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom:10px; color: white;">Adicionar Item</h3>
-                            
-                            <label style="display:block; margin-top:15px; font-weight:bold; font-size:0.85rem;">PRODUTO:</label>
-                            <select id="solicitar_produto_id" onchange="configurarGradeTamanhosDinamicamente()" 
-                                    class="input-vidro" style="width:100%; margin-bottom:15px; background: rgba(255,255,255,0.1); color: white;">
-                                ${produtos.map(p => `<option value="${p.id}" style="background:#1e3a8a;">${p.nome}</option>`).join('')}
-                            </select>
+                <div class="grid-solicitacao">
+                    ${produtos.map(p => {
+                        const isTenis = p.nome.toUpperCase().includes('TENIS') || p.nome.toUpperCase().includes('TÊNIS');
+                        const grade = isTenis 
+                            ? ['22', '23', '24', '25', '26', '27', '28', '29', '30', '31', '32', '33', '34', '35', '36', '37', '38', '39', '40', '41', '42', '43']
+                            : ['2', '4', '6', '8', '10', '12', '14', '16', 'PP', 'P', 'M', 'G', 'GG', 'EGG'];
 
-                            <label style="display:block; font-weight:bold; font-size:0.85rem;">TAMANHO:</label>
-                            <select id="solicitar_tamanho" class="input-vidro" 
-                                    style="width:100%; margin-bottom:15px; background: rgba(255,255,255,0.1); color: white;">
-                                <option value="" style="background:#1e3a8a; color: white;">Aguardando produto...</option>
-                            </select>
-
-                            <label style="display:block; font-weight:bold; font-size:0.85rem;">QUANTIDADE:</label>
-                            <input type="number" id="solicitar_qtd" value="1" min="1" 
-                                   class="input-vidro" style="width:100%; margin-bottom:15px; background: rgba(255,255,255,0.1); color: white;">
-
-                            <button onclick="adicionarAoCarrinhoSolicitacao()" 
-                                    style="width:100%; padding:12px; background:#10b981; color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer;">
-                                ➕ ADICIONAR À LISTA
-                            </button>
-                        </div>
-
-                        <div style="border-left: 1px solid rgba(255,255,255,0.1); padding-left: 30px;">
-                            <h3 style="margin-top:0; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom:10px; color: white;">Itens na Solicitação</h3>
-                            <div id="lista_carrinho_solicitacao" style="margin-top:15px; min-height: 150px;">
-                                <p style="color:rgba(255,255,255,0.6);">Nenhum item adicionado ainda.</p>
+                        return `
+                            <div class="card-uniforme" onclick="document.getElementById('grade-${p.id}').style.display = document.getElementById('grade-${p.id}').style.display === 'block' ? 'none' : 'block'">
+                                <div style="display:flex; justify-content:space-between;">
+                                    <span class="titulo-prod">${p.nome}</span>
+                                    <span style="color:rgba(255,255,255,0.3);">▼</span>
+                                </div>
+                                <div id="grade-${p.id}" class="grade-expansivel" onclick="event.stopPropagation()">
+                                    <div class="grade-inputs">
+                                        ${grade.map(tam => `
+                                            <div class="caixa-item">
+                                                <span class="label-t">${tam}</span>
+                                                <input type="number" class="input-qtd-uniforme" 
+                                                       data-id="${p.id}" data-tamanho="${tam}" 
+                                                       min="0" placeholder="0">
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                </div>
                             </div>
-                            <hr style="border:0; border-top:1px solid rgba(255,255,255,0.1); margin:20px 0;">
-                            <button id="btnEnviarSolicitacao" onclick="enviarPedidoEscola('SOLICITACAO')" disabled 
-                                    style="width:100%; padding:15px; background:#1e40af; color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer; opacity:0.5;">
-                                🚀 ENVIAR SOLICITAÇÃO COMPLETA
-                            </button>
-                        </div>
-                    </div>
+                        `;
+                    }).join('')}
+                </div>
+
+                <div style="margin-top:25px; text-align:right; padding:10px;">
+                    <button onclick="dispararEnvioSolicitacao()" 
+                            style="padding:15px 40px; background:#10b981; color:white; border:none; border-radius:30px; font-weight:bold; cursor:pointer; box-shadow:0 4px 15px rgba(16,185,129,0.3);">
+                        🚀 ENVIAR SOLICITAÇÃO AGORA
+                    </button>
                 </div>
             </div>
         `;
-
-        configurarGradeTamanhosDinamicamente();
-
-    } catch (e) { 
+    } catch (e) {
         console.error(e);
         notificar("Erro ao carregar formulário.");
     }
+}
+
+async function dispararEnvioSolicitacao() {
+    const inputs = document.querySelectorAll('.input-qtd-uniforme');
+    const itens = [];
+
+    // Coleta as quantidades digitadas
+    inputs.forEach(input => {
+        const qtd = parseInt(input.value) || 0;
+        if (qtd > 0) {
+            itens.push({
+                produto_id: parseInt(input.dataset.id),
+                tamanho: input.dataset.tamanho,
+                quantidade: qtd
+            });
+        }
+    });
+
+    if (itens.length === 0) {
+        return notificar("⚠️ Por favor, preencha a quantidade de pelo menos um uniforme.");
+    }
+
+    // Alimenta a variável global do seu sistema sem perder a referência
+    carrinhoSolicitacao.length = 0; 
+    itens.forEach(item => carrinhoSolicitacao.push(item));
+
+    // Dispara a SUA função e aguarda ela terminar
+    await enviarPedidoEscola('SOLICITACAO');
+
+    // FORÇA O RETORNO PARA O DASHBOARD (encerra o loop)
+    carregarDashboard(); 
+    // OBS: Se preferir voltar para o submenu, troque a linha acima por: renderSubmenuUniformesKits();
+}
+
+// Alternar visualização da grade
+function toggleGradeSolicitacao(id) {
+    const grade = document.getElementById(`grade-sol-${id}`);
+    const estaVisivel = grade.style.display === 'block';
+    
+    // Opcional: Fecha todas as outras antes de abrir a atual (efeito sanfona)
+    document.querySelectorAll('.grade-expansivel').forEach(el => el.style.display = 'none');
+    
+    grade.style.display = estaVisivel ? 'none' : 'block';
+}
+
+// Filtro de busca
+function filtrarUniformes() {
+    const termo = document.getElementById('busca-uniforme').value.toUpperCase();
+    document.querySelectorAll('.item-busca').forEach(card => {
+        card.style.display = card.innerText.toUpperCase().includes(termo) ? 'block' : 'none';
+    });
+}
+
+// Coleta os dados e chama a sua função original de envio
+async function processarEnvioSolicitacao() {
+    const inputs = document.querySelectorAll('.input-qtd-sol');
+    const itensParaCarrinho = [];
+
+    inputs.forEach(input => {
+        const qtd = parseInt(input.value) || 0;
+        if (qtd > 0) {
+            itensParaCarrinho.push({
+                produto_id: parseInt(input.dataset.id),
+                tamanho: input.dataset.tamanho,
+                quantidade: qtd
+            });
+        }
+    });
+
+    if (itensParaCarrinho.length === 0) {
+        return notificar("⚠️ Informe ao menos uma quantidade!");
+    }
+
+    if (!confirm("Deseja enviar esta solicitação de uniformes?")) return;
+
+    // Alimenta a variável global que sua função enviarPedidoEscola utiliza
+    window.carrinhoSolicitacao = itensParaCarrinho;
+
+    // Chama a sua função original para garantir que o status AGUARDANDO_AUTORIZACAO seja gravado
+    await enviarPedidoEscola('SOLICITACAO');
+}
+
+// Funções de suporte (Lógica)
+function filtrarCardsUniforme() {
+    const busca = document.getElementById('busca-uniforme').value.toUpperCase();
+    const cards = document.querySelectorAll('.item-busca');
+    cards.forEach(card => {
+        const texto = card.innerText.toUpperCase();
+        card.style.display = texto.includes(busca) ? "block" : "none";
+    });
+}
+
+function validarPositivo(input) {
+    if (input.value < 0) input.value = 0;
+}
+
+async function coletarEEnviarSolicitacao() {
+    const inputs = document.querySelectorAll('.input-qtd-sol');
+    const itensSolicitados = [];
+
+    inputs.forEach(input => {
+        const qtd = parseInt(input.value) || 0;
+        if (qtd > 0) {
+            itensSolicitados.push({
+                produto_id: input.dataset.id,
+                tamanho: input.dataset.tamanho,
+                quantidade: qtd,
+                nome: input.dataset.nome
+            });
+        }
+    });
+
+    if (itensSolicitados.length === 0) {
+        return notificar("⚠️ Por favor, preencha a quantidade de pelo menos um item.", "aviso");
+    }
+
+    const resumo = itensSolicitados.map(i => `${i.nome} (${i.tamanho}): ${i.quantidade}`).join('\n');
+    
+    if (!confirm(`Confirmar solicitação dos itens abaixo?\n\n${resumo}`)) return;
+
+    // Aqui usamos a sua função original de envio, adaptando o carrinho
+    // Se a sua função 'enviarPedidoEscola' espera uma variável global 'carrinhoSolicitacao':
+    window.carrinhoSolicitacao = itensSolicitados;
+    
+    // Chama a sua função original (que você mencionou que já funciona)
+    enviarPedidoEscola('SOLICITACAO');
 }
 
 function configurarGradeTamanhosDinamicamente() {
@@ -5679,7 +5883,7 @@ function configurarGradeTamanhosDinamicamente() {
         htmlTamanhos = gradeCalcado.map(t => `<option>${t}</option>`).join('');
     } else {
         // Grade Padrão de Vestuário (Roupas)
-        const gradeVestuario = ['PP', 'P', 'M', 'G', 'GG', 'XGG', '2', '4', '6', '8', '10', '12', '14', '16'];
+        const gradeVestuario = ['2', '4', '6', '8', '10', '12', '14', '16', 'PP', 'P', 'M', 'G', 'GG', 'EGG'];
         htmlTamanhos = gradeVestuario.map(t => `<option>${t}</option>`).join('');
     }
 
@@ -6661,6 +6865,7 @@ async function abrirTelaConferenciaItens(pedidoId) {
         container.innerHTML = `
             <div style="padding:20px;">
                 <h2 style="color:#1e3a8a;">📝 CONFERÊNCIA DE SAÍDA - PEDIDO #${pedidoId}</h2>
+                <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
                 <table style="width:100%; border-collapse:collapse; background:white;">
                     <thead>
                         <tr style="background:#f8fafc; border-bottom:2px solid #eee;">
@@ -6702,59 +6907,82 @@ async function abrirTelaConferenciaItens(pedidoId) {
 
 async function salvarRemessa(pedidoId) {
     const inputs = document.querySelectorAll('.qtd-envio');
-    const itensRemessa = [];
-    let erroValidacao = false;
+
+    // ✅ Map para evitar duplicatas (mesmo produto/tamanho aparecendo 2x no DOM)
+    const itensMap = new Map();
 
     inputs.forEach(input => {
         const qtd = parseInt(input.value) || 0;
-        const maxPermitido = parseInt(input.dataset.max); // Pega o que ainda falta enviar
-
-        if (qtd > maxPermitido) {
-            notificar(`Erro: Você tentou enviar ${qtd} unidades, mas o saldo pendente é de apenas ${maxPermitido}.`);
-            erroValidacao = true;
-            return;
-        }
-
         if (qtd > 0) {
-            itensRemessa.push({
-                produto_id: input.dataset.prodId,
-                tamanho: input.dataset.tam,
-                quantidade_enviada: qtd
-            });
+            const tamanhoRaw = input.dataset.tam;
+            const tamanho = (tamanhoRaw === 'null' || tamanhoRaw === '') 
+                ? null 
+                : tamanhoRaw;
+
+            const chave = `${input.dataset.prodId}_${tamanho ?? 'NULL'}`;
+
+            if (itensMap.has(chave)) {
+                // Soma se vier duplicado no DOM
+                itensMap.get(chave).quantidade_enviada += qtd;
+            } else {
+                itensMap.set(chave, {
+                    produto_id: input.dataset.prodId,
+                    tamanho,
+                    quantidade_enviada: qtd
+                });
+            }
         }
     });
 
-    if (erroValidacao) return; // Interrompe se houver erro
-    if (itensRemessa.length === 0) return notificar("Informe a quantidade de pelo menos um item.");
+    if (itensMap.size === 0) {
+        return notificar(
+            "Informe a quantidade de pelo menos um item para a remessa.", 
+            "aviso"
+        );
+    }
 
     if (!confirm("Confirmar o registro desta remessa de saída?")) return;
+
+    // ✅ Desabilita botão imediatamente para evitar duplo clique
+    const btnSalvar = document.querySelector('[onclick*="salvarRemessa"]');
+    if (btnSalvar) {
+        btnSalvar.disabled = true;
+        btnSalvar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> PROCESSANDO...';
+    }
 
     try {
         const res = await fetch(`${API_URL}/pedidos/estoque/finalizar-remessa`, {
             method: 'POST',
             headers: { 
-                'Content-Type': 'application/json',
+                'Content-Type': 'application/json', 
                 'Authorization': `Bearer ${TOKEN}` 
             },
-            body: JSON.stringify({ pedidoId, itens: itensRemessa })
+            body: JSON.stringify({ 
+                pedidoId, 
+                itens: [...itensMap.values()]
+            })
         });
-        if (res.ok) {
-            const data = await res.json();
-            
-            // Pequeno delay para o usuário respirar após o clique
-            setTimeout(() => {
-                if (confirm(`✅ Remessa #${data.remessaId} Salva!\n\nDeseja compartilhar o Romaneio via WhatsApp agora?`)) {
-                    gerarECompartilharRomaneio(data.remessaId);
-                }
-                telaEstoquePedidosPendentes(); // Recarrega a fila
-            }, 300);
 
-        } else {
-            const data = await res.json();
-            notificar("Erro: " + data.error);
+        const data = await res.json();
+
+        if (!res.ok) {
+            throw new Error(data.error || "Erro desconhecido no servidor.");
         }
+
+        notificar(
+            `✅ Remessa #${data.remessaId} registrada com sucesso!`, 
+            "sucesso"
+        );
+        telaEstoquePedidosPendentes();
+
     } catch (err) {
-        notificar("Erro de conexão.");
+        notificar("Erro ao salvar remessa: " + err.message, "erro");
+
+        // ✅ Reabilita o botão apenas em caso de erro
+        if (btnSalvar) {
+            btnSalvar.disabled = false;
+            btnSalvar.innerHTML = '<i class="fas fa-check"></i> CONFIRMAR REMESSA';
+        }
     }
 }
 
@@ -6825,6 +7053,7 @@ async function telaAbastecerEstoque() {
     }
 }
 
+
 async function enviarEntradaEstoque() {
     const inputs = document.querySelectorAll('.input-entrada-estoque');
     const itens = [];
@@ -6889,8 +7118,6 @@ async function salvarAbastecimento(produtoId) {
         }
     } catch (err) { notificar("Erro ao salvar"); }
 }
-
-let carrinhoAdmin = [];
 
 async function telaAdminCriarPedido() {
     const container = document.getElementById('app-content');
@@ -8499,49 +8726,56 @@ async function telaAdminDashboard() {
         const res = await fetch(`${API_URL}/admin/dashboard/stats`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
-        
-        if (!res.ok) throw new Error("A rota não foi encontrada no servidor (Erro 404).");
-        
         const s = await res.json();
 
         container.innerHTML = `
-            <div class="painel-vidro" style="max-width: 1000px; margin: auto;">
-                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
+            <div class="painel-vidro" style="max-width: 1100px; margin: auto; padding: 25px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid rgba(255,255,255,0.1); padding-bottom:15px; margin-bottom:25px;">
                     <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                    <h2 style="color:white; margin:0; font-size:1.4rem;">📊 PAINEL DE PEDIDOS</h2>
                 </div>
-                <div style="background:rgba(0,0,0,0.2); border-radius:10px; padding: 25px;">
-                    <div class="fluxo-container" style="display: flex; justify-content: space-around; gap: 10px; flex-wrap: wrap;">
-                        ${renderCirculo('SOLICITADO', s.qtd_solicitado || 0, '📩', '#ef4444')}
-                        ${renderCirculo('AUTORIZADO', s.qtd_autorizado || 0, '⚖️', '#f59e0b')}
-                        ${renderCirculo('EM SEPARAÇÃO', s.qtd_separacao || 0, '📦', '#8b5cf6')}
-                        ${renderCirculo('PRONTO', s.qtd_pronto || 0, '✅', '#3b82f6')}
-                        ${renderCirculo('EM_TRANSPORTE', s.qtd_transporte || 0, '🚚', '#06b6d4')}
-                        ${renderCirculo('ENTREGUE', s.qtd_entregue || 0, '🏠', '#10b981')}
+
+                <div style="background:rgba(0,0,0,0.2); border-radius:15px; padding: 30px;">
+                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px;">
+                        
+                        ${renderCirculo('SOLICITADO', s.qtd_solicitado, '📩', '#ef4444')}
+                        ${renderCirculo('AUTORIZADO', s.qtd_autorizado, '⚖️', '#f59e0b')}
+                        ${renderCirculo('EM SEPARAÇÃO', s.qtd_separacao, '📦', '#8b5cf6')}
+                        ${renderCirculo('PRONTO PARA ENTREGA', s.qtd_pronto, '✅', '#3b82f6')}
+
+                        ${renderCirculo('A CAMINHO', s.qtd_transporte, '🚚', '#06b6d4')}
+                        ${renderCirculo('ENTREGUE', s.qtd_entregue, '🏠', '#10b981')}
+                        
+                        ${renderCirculo(' EM TRANSFERÊNCIA', s.qtd_transferencia, '🔄', '#ec4899')}
+                        ${renderCirculo('EM TRÂNSITO', s.qtd_limbo, '📍', '#94a3b8')}
+
                     </div>
 
-                    <div id="detalhes-dashboard" style="margin-top:40px; background:rgba(255,255,255,0.05); border-radius:12px; padding:25px; border: 1px solid rgba(255,255,255,0.1); min-height:200px; color: white;">
-                        <h3 id="titulo-fase" style="color:white; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:10px; font-size: 1.1rem;">📊 Detalhes da Operação</h3>
+                    <div id="detalhes-dashboard" style="margin-top:40px; background:rgba(255,255,255,0.05); border-radius:12px; padding:25px; border: 1px solid rgba(255,255,255,0.1); color: white;">
+                        <h3 id="titulo-fase" style="color:white; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:10px;">📊 Detalhes da Operação</h3>
                         <div id="lista-fase-conteudo" style="margin-top:15px; text-align:center; opacity:0.6;">
-                            Clique numa fase do círculo para investigar os pedidos.
+                            Clique em um dos cards acima para listar os registros.
                         </div>
                     </div>
                 </div>
             </div>
         `;
     } catch (err) { 
-        console.error(err);
-        if (typeof notificaraVidro === 'function') {
-            notificaraVidro("Erro ao carregar Dashboard. Verifique se o servidor foi reiniciado após adicionar a nova rota.", "erro");
-        }
+        notificar("Erro ao carregar dashboard.", "erro");
     }
 }
 
+// Função Auxiliar de Renderização (Estilo Círculo/Card)
 function renderCirculo(fase, qtd, icone, cor) {
     return `
-        <div class="fase-card" style="border-color: ${qtd > 0 ? cor : '#e2e8f0'}" onclick="verDetalhesFase('${fase}')">
-            <span class="icone">${icone}</span>
-            <span class="qtd" style="color:${cor}">${qtd}</span>
-            <span class="label">${fase}</span>
+        <div class="fase-card" 
+             style="display: flex; flex-direction: column; align-items: center; justify-content: center; 
+                    background: rgba(255,255,255,0.05); border: 2px solid ${qtd > 0 ? cor : 'rgba(255,255,255,0.1)'}; 
+                    border-radius: 20px; padding: 20px; cursor: pointer; transition: transform 0.2s;"
+             onclick="verDetalhesFase('${fase}')">
+            <span style="font-size: 1.8rem;">${icone}</span>
+            <span style="font-size: 2.5rem; font-weight: 900; color: ${cor}; line-height: 1; margin: 5px 0;">${qtd}</span>
+            <span style="font-size: 0.7rem; font-weight: bold; color: white; text-align: center; text-transform: uppercase;">${fase}</span>
         </div>
     `;
 }
@@ -8561,38 +8795,56 @@ function renderCard(fase, qtd, cor, icone) {
 window.verDetalhesFase = async function(fase) {
     const listaArea = document.getElementById('lista-fase-conteudo');
     const titulo = document.getElementById('titulo-fase');
-    titulo.innerText = `📋 LISTAGEM: ${fase}`;
-    listaArea.innerHTML = '🔍 Carregando dados...';
+    
+    titulo.innerHTML = `📋 LISTAGEM: <span style="color: #fbbf24;">${fase}</span>`;
+    listaArea.innerHTML = '<div class="spinner" style="margin: 20px auto;"></div>';
 
-    const res = await fetch(`${API_URL}/admin/dashboard/detalhes/${fase}`, {
-        headers: { 'Authorization': `Bearer ${TOKEN}` }
-    });
-    const dados = await res.json();
+    try {
+        const res = await fetch(`${API_URL}/admin/dashboard/detalhes/${encodeURIComponent(fase)}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        
+        if (!res.ok) throw new Error("Erro ao buscar detalhes da fase.");
+        const dados = await res.json();
 
-    if (dados.length === 0) {
-        listaArea.innerHTML = '<p style="text-align:center; padding:20px;">Nenhum registro nesta fase.</p>';
-        return;
+        if (dados.length === 0) {
+            listaArea.innerHTML = `
+                <div style="padding:30px; opacity:0.5;">
+                    <p>📭 Nenhum registro encontrado para esta fase.</p>
+                </div>`;
+            return;
+        }
+
+        listaArea.innerHTML = `
+            <div style="overflow-x:auto;">
+                <table style="width:100%; border-collapse:collapse; color:white; font-size:0.9rem;">
+                    <thead>
+                        <tr style="text-align:left; background:rgba(255,255,255,0.05); color:rgba(255,255,255,0.7);">
+                            <th style="padding:12px; border-bottom:1px solid rgba(255,255,255,0.1);">ID</th>
+                            <th style="padding:12px; border-bottom:1px solid rgba(255,255,255,0.1);">UNIDADE ESCOLAR</th>
+                            <th style="padding:12px; border-bottom:1px solid rgba(255,255,255,0.1); text-align:center;">AÇÃO</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${dados.map(d => `
+                            <tr style="border-bottom:1px solid rgba(255,255,255,0.03); transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.02)'" onmouseout="this.style.background='transparent'">
+                                <td style="padding:12px; font-weight:bold; color:#fbbf24;">#${d.id}</td>
+                                <td style="padding:12px;">${d.escola.toUpperCase()}</td>
+                                <td style="padding:12px; text-align:center;">
+                                    <button class="btn-vidro" onclick="abrirModalInvestigarItens(${d.id})" 
+                                            style="padding:6px 12px; font-size:0.75rem; background:rgba(59, 130, 246, 0.2); border-color:rgba(59, 130, 246, 0.4);">
+                                        🔎 INVESTIGAR
+                                    </button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    } catch (err) {
+        listaArea.innerHTML = `<p style="color:#ef4444; padding:20px;">⚠️ ${err.message}</p>`;
     }
-
-    listaArea.innerHTML = `
-        <table style="width:100%; border-collapse:collapse;">
-            <tr style="text-align:left; background:#f8fafc; color:#64748b; font-size:0.8rem;">
-                <th style="padding:12px;">ID</th>
-                <th style="padding:12px;">UNIDADE ESCOLAR</th>
-                <th style="padding:12px;">AÇÃO</th>
-            </tr>
-            ${dados.map(d => `
-                <tr style="border-bottom:1px solid #f1f5f9;">
-                    <td style="padding:12px; font-weight:bold;">#${d.id}</td>
-                    <td style="padding:12px;">${d.escola}</td>
-                    <td style="padding:12px;">
-                        <button class="btn-investigar" data-id="${d.id}" style="background:#3b82f6; color:white; border:none; padding:5px 12px; border-radius:4px; cursor:pointer;">🔍 Itens</button>
-                    </td>
-                </tr>
-            `).join('')}
-        </table>
-        <div id="box-produtos" style="margin-top:20px;"></div>
-    `;
 };
 
 async function telaLogisticaEntregas() {
@@ -8605,7 +8857,6 @@ async function telaLogisticaEntregas() {
         });
         
         if (!res.ok) throw new Error("Falha ao carregar remessas.");
-        
         const remessas = await res.json();
 
         container.innerHTML = `
@@ -8618,33 +8869,298 @@ async function telaLogisticaEntregas() {
                         <div style="background:#f1f5f9; padding:40px; text-align:center; border-radius:10px; color:#64748b;">
                             Nenhuma remessa aguardando coleta no momento.
                         </div>` : 
-                        remessas.map(r => `
-                        <div style="background:white; padding:20px; border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,0.1); border-left:8px solid #8b5cf6;">
-                            <div style="display:flex; justify-content:space-between; align-items:center;">
-                                <div>
-                                    <div style="font-weight:bold; font-size:1.1rem; color:#1e293b;">${r.escola_nome}</div>
-                                    <div style="color:#64748b; font-size:0.9rem;">
-                                        Remessa: <strong>#${r.remessa_id}</strong> (Pedido #${r.pedido_id})
-                                    </div>
-                                    <div style="margin-top:5px; font-size:0.8rem; color:#94a3b8;">
-                                        Pronta desde: ${new Date(r.data_remessa).toLocaleString('pt-BR')}
+                        remessas.map(r => {
+                            const idValido = r.remessa_id || r.id; 
+                            
+                            return `
+                                <div style="background:white; padding:20px; border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,0.1); border-left:8px solid #8b5cf6;">
+                                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                                        <div>
+                                            <div style="font-weight:bold; font-size:1.1rem; color:#1e293b;">${r.escola_nome}</div>
+                                            <div style="color:#64748b; font-size:0.9rem;">
+                                                Remessa: <strong>#${idValido}</strong> (Pedido #${r.pedido_id})
+                                            </div>
+                                            <div style="margin-top:5px; font-size:0.8rem; color:#94a3b8;">
+                                                Pronta desde: ${new Date(r.data_remessa).toLocaleString('pt-BR')}
+                                            </div>
+                                        </div>
+                                        
+                                        <div style="display:flex; flex-direction:column; gap:8px; min-width:200px;">
+                                            <button class="btn-coletar-remessa" 
+                                                    onclick="processarSaidaRemessa(${idValido}, '${r.tipo_pedido}', event)"
+                                                    style="padding:10px; background:#8b5cf6; color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer; width:100%;">
+                                                🚚 LIBERAR SAÍDA
+                                            </button>
+
+                                            <button onclick="gerarRomaneio(${idValido})"
+                                                    style="padding:10px; background:#0ea5e9; color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer; width:100%; display:flex; align-items:center; justify-content:center; gap:8px;">
+                                                <i class="fas fa-file-pdf"></i> ROMANEIO
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
-                                
-                                <button class="btn-coletar-remessa" 
-                                        data-remessa-id="${r.remessa_id}" 
-                                        style="background:#1e40af; color:white; border:none; padding:12px 25px; border-radius:6px; cursor:pointer; font-weight:bold; transition: background 0.3s;">
-                                    🚚 COLETAR REMESSA
-                                </button>
-                            </div>
-                        </div>
-                    `).join('')}
+                            `;
+                        }).join('')}
                 </div>
             </div>
         `;
     } catch (err) {
         console.error(err);
         container.innerHTML = `<div style="padding:20px; color:red;">Erro ao carregar logística: ${err.message}</div>`;
+    }
+}
+
+async function gerarRomaneio(remessaId) {
+    // Removida a notificação "Gerando romaneio..." para ir direto ao que interessa.
+
+    try {
+        const res = await fetch(`${API_URL}/remessas/${remessaId}/romaneio-detalhado`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+            throw new Error(data.error || 'Erro ao obter dados do servidor.');
+        }
+
+        const pedido = data.pedido;
+        const itens = data.itens || [];
+
+        const urlValidacao = `http://validador.paiva.api.br/?id=${remessaId}`;
+        const qrCodeUrl = `https://quickchart.io/qr?text=${encodeURIComponent(urlValidacao)}&size=100&margin=0`;
+
+        const formatarData = (d) => {
+            if (!d) return '---';
+            return new Date(d).toLocaleString('pt-BR');
+        };
+
+        // Lógica condicional para a linha de Recebimento
+        const linhaRecebimento = pedido.status === 'RECEBIDO' 
+            ? `<div class="info-item"><strong>Recebido em:</strong> ${formatarData(pedido.data_recebimento)}</div>` 
+            : '';
+
+        const linhasItens = itens.map(i => `
+            <tr>
+                <td style="border: 1px solid #999; padding: 6px; font-size: 9pt;">${i.produto_nome || 'Produto não identificado'}</td>
+                <td style="border: 1px solid #999; padding: 6px; font-size: 9pt; text-align: center;">${i.tamanho && i.tamanho !== 'null' ? i.tamanho : '---'}</td>
+                <td style="border: 1px solid #999; padding: 6px; font-size: 10pt; text-align: center; font-weight: bold;">${i.quantidade_enviada || 0}</td>
+            </tr>
+        `).join('');
+
+        const htmlDocumento = `
+            <!DOCTYPE html>
+            <html lang="pt-BR">
+            <head>
+                <meta charset="UTF-8">
+                <style>
+                    * { margin: 0; padding: 0; box-sizing: border-box; font-family: Arial, sans-serif; }
+                    body { background: #f5f5f5; }
+                    .pagina-a4 { width: 210mm; min-height: 297mm; padding: 1.5cm; margin: 0 auto; background: white; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+                    .cabecalho { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #333; padding-bottom: 8px; margin-bottom: 20px; }
+                    .logo-esquerda { height: 45px; width: auto; }
+                    .logo-direita { height: 40px; width: auto; }
+                    .cabecalho-textos { text-align: center; flex: 1; }
+                    .txt-prefeitura { font-size: 10pt; margin-bottom: 2px; }
+                    .txt-secretaria { font-size: 9pt; }
+                    .titulo-doc { text-align: center; font-size: 12pt; font-weight: bold; margin-bottom: 20px; background: #f2f2f2; padding: 8px; border: 1px solid #ccc; text-transform: uppercase; }
+                    .container-identificacao { display: flex; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 20px; overflow: hidden; }
+                    .grid-info { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 12px; flex: 1; }
+                    .info-item { font-size: 8.5pt; color: #333; line-height: 1.4; }
+                    .info-item strong { color: #000; }
+                    .qr-code-area { width: 120px; display: flex; flex-direction: column; align-items: center; justify-content: center; border-left: 1px dashed #ccc; background: #fafafa; padding: 10px; }
+                    .qr-code-area p { font-size: 6pt; color: #666; margin-top: 5px; font-weight: bold; text-align: center; }
+                    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+                    th { background: #444; color: white; padding: 8px; font-size: 8.5pt; text-align: center; }
+                    .rodape-assinaturas { margin-top: 80px; display: flex; justify-content: center; }
+                    .caixa-assinatura { width: 450px; border-top: 1px solid #000; text-align: center; padding-top: 8px; font-size: 8.5pt; }
+                    @media print { body { background: none; } .pagina-a4 { box-shadow: none; margin: 0; width: 100%; } }
+                </style>
+            </head>
+            <body>
+                <div class="pagina-a4">
+                    <div class="cabecalho">
+                        <img src="assets/braque.png" class="logo-esquerda">
+                        <div class="cabecalho-textos">
+                            <p class="txt-prefeitura">PREFEITURA MUNICIPAL DE QUEIMADOS</p>
+                            <p class="txt-secretaria">SECRETARIA MUNICIPAL DE EDUCAÇÃO</p>
+                        </div>
+                        <img src="assets/logap.png" class="logo-direita">
+                    </div>
+
+                    <div class="titulo-doc">ROMANEIO DE ENTREGA - REMESSA #${remessaId}</div>
+
+                    <div class="container-identificacao">
+                        <div class="grid-info">
+                            <div class="info-item"><strong>Pedido:</strong> #${pedido.id}</div>
+                            <div class="info-item"><strong>Tipo:</strong> ${pedido.tipo_pedido}</div>
+                            
+                            <div class="info-item"><strong>Criação:</strong> ${formatarData(pedido.data_criacao)}</div>
+                            <div class="info-item"><strong>Status:</strong> ${pedido.status || 'EM ANDAMENTO'}</div>
+                            
+                            <div class="info-item"><strong>Solicitante:</strong> ${pedido.solicitante}</div>
+                            <div class="info-item"><strong>Destino:</strong> ${pedido.escola_nome}</div>
+                            
+                            ${linhaRecebimento} </div>
+                        
+                        <div class="qr-code-area">
+                            <img src="${qrCodeUrl}" style="width: 85px; height: 85px;">
+                            <p>AUTENTICIDADE<br>DIGITAL</p>
+                        </div>
+                    </div>
+
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="text-align: left; padding-left: 10px;">DESCRIÇÃO DO ITEM</th>
+                                <th style="width: 100px;">TAMANHO</th>
+                                <th style="width: 110px;">QTD ENVIADA</th>
+                            </tr>
+                        </thead>
+                        <tbody>${linhasItens}</tbody>
+                    </table>
+
+                    <div style="margin-top: 30px; font-size: 7.5pt; color: #666; font-style: italic;">
+                        Documento emitido em: ${new Date().toLocaleString('pt-BR')} | ID Remessa: ${remessaId}
+                    </div>
+
+                    <div class="rodape-assinaturas">
+                        <div class="caixa-assinatura">
+                            <strong>ASSINATURA DO RECEBEDOR (UNIDADE ESCOLAR)</strong><br>
+                            <span style="color: #444;">NOME LEGÍVEL E MATRÍCULA OU RG</span>
+                        </div>
+                    </div>
+                </div>
+            </body>
+            </html>
+        `;
+
+        if (typeof abrirModalComprovante === 'function') {
+            abrirModalComprovante(htmlDocumento, `Romaneio_${remessaId}`);
+        } else {
+            const win = window.open('', '_blank');
+            win.document.write(htmlDocumento);
+            win.document.close();
+        }
+
+    } catch (err) {
+        console.error('Erro na geração do romaneio:', err);
+        if (typeof notificar === 'function') {
+            notificar(`Erro: ${err.message}`, 'erro');
+        }
+    }
+}
+
+function abrirModalComprovante(htmlContent, tituloArquivo) {
+    // 1. Cria o fundo escuro do modal
+    const modalOverlay = document.createElement('div');
+    modalOverlay.style = `
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.8); z-index: 10000;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+    `;
+
+    // 2. Cria o container do modal
+    const modalContainer = document.createElement('div');
+    modalContainer.style = `
+        width: 90%; max-width: 900px; height: 90%;
+        background: white; border-radius: 12px; overflow: hidden;
+        display: flex; flex-direction: column; position: relative;
+    `;
+
+    // 3. Barra de ferramentas (Fechar e Imprimir)
+    const toolbar = document.createElement('div');
+    toolbar.style = `
+        padding: 15px; background: #f8fafc; border-bottom: 1px solid #e2e8f0;
+        display: flex; justify-content: space-between; align-items: center;
+    `;
+    toolbar.innerHTML = `
+        <h3 style="margin:0; font-family:sans-serif; color:#1e293b;">Visualizar ${tituloArquivo}</h3>
+        <div>
+            <button id="btn-print-modal" style="padding:8px 16px; background:#0ea5e9; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:bold; margin-right:10px;">
+                🖨️ Imprimir
+            </button>
+            <button id="btn-close-modal" style="padding:8px 16px; background:#ef4444; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:bold;">
+                Fechar
+            </button>
+        </div>
+    `;
+
+    // 4. Iframe para renderizar o HTML do Romaneio
+    const iframe = document.createElement('iframe');
+    iframe.style = "flex-grow: 1; border: none; width: 100%; height: 100%;";
+    
+    modalContainer.appendChild(toolbar);
+    modalContainer.appendChild(iframe);
+    modalOverlay.appendChild(modalContainer);
+    document.body.appendChild(modalOverlay);
+
+    // Injeta o HTML no iframe
+    const doc = iframe.contentWindow.document;
+    doc.open();
+    doc.write(htmlContent);
+    doc.close();
+
+    // Eventos dos botões
+    document.getElementById('btn-close-modal').onclick = () => document.body.removeChild(modalOverlay);
+    
+    document.getElementById('btn-print-modal').onclick = () => {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+    };
+}
+
+window.processarSaidaRemessa = async function(remessaId, tipoPedido) {
+    // 1. Previne qualquer comportamento padrão do navegador (como abrir novas janelas)
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+
+    // 2. Garante que o TOKEN seja capturado do local correto
+    const tokenSeguro = TOKEN || localStorage.getItem('token');
+
+    if (!remessaId || remessaId === "null") return notificar("Erro: ID da remessa inválido.", "erro");
+
+    if (!confirm(`Confirmar o início do transporte para a Remessa #${remessaId}?`)) return;
+
+    try {
+        // 3. Chamada para atualizar o status no banco (EM_TRANSPORTE)
+        const res = await fetch(`${API_URL}/pedidos/logistica/confirmar-saida`, {
+            method: 'POST',
+            headers: { 
+                'Authorization': `Bearer ${tokenSeguro}`, 
+                'Content-Type': 'application/json' 
+            },
+            body: JSON.stringify({ remessaId, tipoPedido })
+        });
+
+        if (res.ok) {
+            notificar("Saída registrada com sucesso!", "sucesso");
+
+            // 4. Busca os detalhes da remessa para o Modal (Tudo na mesma janela)
+            const resDados = await fetch(`${API_URL}/pedidos/remessa/${remessaId}/detalhes`, {
+                headers: { 'Authorization': `Bearer ${tokenSeguro}` }
+            });
+            
+            const dadosRemessa = await resDados.json();
+
+            // 5. Gera o Romaneio Interno (MODAL) - SEM ABRIR NOVA JANELA
+            // if (typeof gerarModalRomaneioA4 === 'function') {
+            //     gerarModalRomaneioA4(dadosRemessa.pedido_id, remessaId, dadosRemessa);
+            // }
+
+            // 6. Atualiza a lista de logística que está por baixo
+            if (typeof telaLogisticaEntregas === 'function') {
+                telaLogisticaEntregas(); 
+            }
+        } else {
+            const erro = await res.json();
+            throw new Error(erro.error || "Erro ao confirmar saída no servidor.");
+        }
+    } catch (err) {
+        console.error("Erro na saída:", err);
+        notificar("Erro ao processar: " + err.message, "erro");
     }
 }
 
@@ -8747,120 +9263,233 @@ window.iniciarTransporteRemessa = async function(remessaId) {
     console.log("Iniciando processo de romaneio para remessa:", remessaId);
 
     try {
-        // Busca os dados consolidados para o documento
-        const res = await fetch(`${API_URL}/pedidos/remessa/${remessaId}/detalhes-romaneio`, {
+        // 1. Primeiro, avisa o banco para mudar o status e gerar o LOG
+        const resStatus = await fetch(`${API_URL}/estoque/confirmar-inicio-transporte`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${TOKEN}` 
+            },
+            body: JSON.stringify({ remessaId })
+        });
+
+        if (!resStatus.ok) throw new Error("Falha ao atualizar status de transporte no servidor.");
+
+        // 2. Se o status atualizou, busca os dados para o documento A4
+        const resDados = await fetch(`${API_URL}/pedidos/remessa/${remessaId}/detalhes-romaneio`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
-        if (!res.ok) throw new Error("Erro ao carregar dados do romaneio.");
-        const dados = await res.json();
+        
+        if (!resDados.ok) throw new Error("Erro ao carregar dados do romaneio.");
+        const dados = await resDados.json();
 
-        // Abre o Modal com o Documento A4 Paisagem
+        // 3. Abre o Modal com o Documento A4 Paisagem que configuramos
         gerarModalRomaneioA4(remessaId, dados);
+        
+        notificar(`🚚 Remessa #${remessaId} em transporte!`, "sucesso");
 
     } catch (err) {
         console.error(err);
-        notificar("Falha ao preparar documento.", "erro");
+        notificar("Falha ao iniciar transporte: " + err.message, "erro");
     }
 };
 
-function gerarModalRomaneioA4(remessaId, dados) {
-    const overlay = document.createElement('div');
-    overlay.id = 'modal-romaneio-logistica';
-    overlay.className = 'alerta-vidro-overlay';
-    
-    // Agrupamento de itens por Produto para criar a grade visual
-    const itensAgrupados = {};
-    dados.itens.forEach(item => {
-        if (!itensAgrupados[item.produto]) {
-            itensAgrupados[item.produto] = { categoria: item.categoria, tamanhos: {} };
-        }
-        itensAgrupados[item.produto].tamanhos[item.tamanho] = item.quantidade_enviada;
-    });
+async function processarSalvamentoRomaneio(pedidoId, remessaId, dados) {
+    // 1. Preparação dos dados e datas
+    const dataPedido = dados.data_pedido ? new Date(dados.data_pedido).toLocaleDateString('pt-BR') : '---';
+    const dataEnvio = dados.data_envio ? new Date(dados.data_envio).toLocaleDateString('pt-BR') : '---'; 
 
-    overlay.innerHTML = `
-        <div class="painel-vidro" style="width: 98vw; height: 98vh; display: flex; flex-direction: column; padding: 15px; overflow: hidden;">
+    // 2. Geramos o HTML de forma "silenciosa" (em uma variável, não na tela)
+    const htmlConteudo = `
+        <div style="font-family: Arial, sans-serif; padding: 40px; color: #333;">
+            <div style="text-align: center; border-bottom: 2px solid #000; padding-bottom: 20px; margin-bottom: 20px;">
+                <h2 style="margin:0;">ROMANEIO DE ENTREGA</h2>
+                <p>PREFEITURA DE QUEIMADOS - SME</p>
+            </div>
             
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 8px;">
-                <div style="color:white; font-weight:bold;">📄 PRÉ-VISUALIZAÇÃO DO ROMANEIO (A4 PAISAGEM)</div>
-                <div style="display: flex; gap: 8px;">
-                    <button onclick="exportarRomaneioPDF()" class="btn-sair-vidro" style="background:#ef4444; border:none;">PDF 📄</button>
-                    <button onclick="exportarRomaneioExcel()" class="btn-sair-vidro" style="background:#16a34a; border:none;">EXCEL 📊</button>
-                    <button onclick="compartilharRomaneio(${remessaId})" class="btn-sair-vidro" style="background:#3b82f6; border:none;">WHATSAPP 🟢</button>
-                    <button onclick="efetivarSaidaTransporte(${remessaId})" style="background:#10b981; color:white; border:none; padding:8px 20px; border-radius:8px; font-weight:bold; cursor:pointer;">CONFIRMAR CARREGAMENTO ✅</button>
-                    <button onclick="document.getElementById('modal-romaneio-logistica').remove()" class="btn-sair-vidro">FECHAR</button>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 30px;">
+                <div>
+                    <p><b>REMESSA:</b> #${dados.remessa_id || remessaId}</p>
+                    <p><b>PEDIDO:</b> #${dados.pedido_id || pedidoId}</p>
+                    <p><b>DESTINO:</b> ${dados.escola_nome}</p>
+                </div>
+                <div style="text-align: right;">
+                    <p><b>DATA PEDIDO:</b> ${dataPedido}</p>
+                    <p><b>DATA ENVIO:</b> ${dataEnvio}</p>
                 </div>
             </div>
 
-            <div id="scroll-documento" style="flex: 1; overflow: auto; background: #333; padding: 20px; display: flex; justify-content: center;">
-                
-                <div id="documento-a4-print" style="width: 297mm; min-height: 210mm; background: white; padding: 10mm; color: black; font-family: 'Segoe UI', Arial; box-shadow: 0 0 30px rgba(0,0,0,0.5); position: relative;">
-                    
-                    <div style="display: flex; justify-content: space-between; border-bottom: 2px solid black; padding-bottom: 10px;">
-                        <img src="braque.png" style="height: 50px;">
-                        <div style="text-align: right;">
-                            <h2 style="margin:0; font-size: 14pt;">ROMANEIO DE CARGA / GUIA DE REMESSA</h2>
-                            <p style="margin:0; font-size: 10pt;">Remessa: <strong>#${remessaId}</strong> | Pedido: #${dados.pedido_id}</p>
-                            <p style="margin:0; font-size: 9pt;">Emissão: ${new Date().toLocaleString()}</p>
-                        </div>
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="background: #f2f2f2;">
+                        <th style="border: 1px solid #ddd; padding: 10px; text-align: left;">PRODUTO</th>
+                        <th style="border: 1px solid #ddd; padding: 10px; text-align: center;">TAM/SÉRIE</th>
+                        <th style="border: 1px solid #ddd; padding: 10px; text-align: center;">QTD</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${dados.itens.map(i => `
+                        <tr>
+                            <td style="border: 1px solid #ddd; padding: 10px;">${i.produto_nome}</td>
+                            <td style="border: 1px solid #ddd; padding: 10px; text-align: center;">${i.detalhe}</td>
+                            <td style="border: 1px solid #ddd; padding: 10px; text-align: center;">${i.qtd}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+
+    // 3. Enviar para o servidor salvar no disco
+    try {
+        const res = await fetch(`${API_URL}/admin/salvar-romaneio-disco`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json', 
+                'Authorization': `Bearer ${TOKEN}` 
+            },
+            body: JSON.stringify({ 
+                html: htmlConteudo, 
+                nomeArquivo: `romaneio_${remessaId}.pdf` 
+            })
+        });
+
+        if (res.ok) {
+            console.log("✅ Romaneio salvo no servidor com sucesso.");
+        }
+    } catch (err) {
+        console.error("❌ Falha ao salvar romaneio no disco:", err);
+    }
+}
+
+function gerarModalRomaneioA4(pedidoId, remessaId, dados) {
+    const modal = document.createElement('div');
+    modal.id = 'modal-romaneio';
+    
+    // 1. Identificar todos os tamanhos únicos na remessa para criar as colunas
+    const dataPedido = dados.data_pedido ? new Date(dados.data_pedido).toLocaleDateString('pt-BR') : '---';
+    const dataEnvio = dados.data_envio ? new Date(dados.data_envio).toLocaleDateString('pt-BR') : '---';    
+    const tamanhosExistentes = [...new Set(dados.itens
+        .filter(i => i.tamanho)
+        .map(i => i.tamanho))].sort((a, b) => a.localeCompare(b, undefined, {numeric: true}));
+
+    // 2. Agrupar produtos por nome para consolidar a grade
+    const produtosAgrupados = {};
+    dados.itens.forEach(i => {
+        if (!produtosAgrupados[i.nome]) {
+            produtosAgrupados[i.nome] = { nome: i.nome, tipo: i.tipo, total: 0, tamanhos: {} };
+        }
+        produtosAgrupados[i.nome].total += Number(i.quantidade);
+        if (i.tamanho) {
+            produtosAgrupados[i.nome].tamanhos[i.tamanho] = i.quantidade;
+        }
+    });
+
+    modal.innerHTML = `
+        <div class="ferramentas-modal no-print" style="position:fixed; top:10px; right:10px; z-index:10000; display:flex; gap:10px;">
+            <button onclick="window.print()" class="btn-vidro" style="background:#16a34a; padding:12px 25px;">🖨️ IMPRIMIR / PDF</button>
+            <button onclick="this.closest('#modal-romaneio').remove()" class="btn-vidro" style="background:#ef4444;">❌ FECHAR</button>
+        </div>
+        
+        <div class="folha-a4">
+            <header class="cabecalho">
+                <div class="logo-txt">
+                    <img src="braque.png" alt="SME">
+                    <div>
+                        <p>PREFEITURA MUNICIPAL DE QUEIMADOS</p>
+                        <p>SECRETARIA MUNICIPAL DE EDUCAÇÃO</p>
                     </div>
-
-                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin: 15px 0; font-size: 9pt; background: #f0f0f0; padding: 10px; border: 1px solid #ccc;">
-                        <div><strong>DESTINO:</strong><br>${dados.destino}</div>
-                        <div><strong>MOTORISTA:</strong><br>${dados.motorista_nome || 'NÃO INFORMADO'}</div>
-                        <div><strong>PLACA / VEÍCULO:</strong><br>${dados.veiculo_placa || '---'}</div>
-                    </div>
-
-                    <table style="width: 100%; border-collapse: collapse; font-size: 8.5pt;">
-                        <thead>
-                            <tr style="background: #333; color: white;">
-                                <th style="border: 1px solid #000; padding: 6px; text-align: left;">PRODUTO / DESCRIÇÃO</th>
-                                <th style="border: 1px solid #000; padding: 6px; text-align: center;">CATEGORIA</th>
-                                <th style="border: 1px solid #000; padding: 6px; text-align: center;">GRADE DE TAMANHOS / QUANTIDADES</th>
-                                <th style="border: 1px solid #000; padding: 6px; text-align: center; width: 60px;">TOTAL</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${Object.keys(itensAgrupados).map(nome => {
-                                const item = itensAgrupados[nome];
-                                let totalLinha = 0;
-                                // Monta a string da grade (Ex: P:2, M:4)
-                                const gradeTexto = Object.entries(item.tamanhos).map(([tam, qtd]) => {
-                                    totalLinha += qtd;
-                                    return `<span style="border: 1px solid #ddd; padding: 2px 5px; margin: 0 2px;">${tam}: <strong>${qtd}</strong></span>`;
-                                }).join(' ');
-
-                                return `
-                                    <tr>
-                                        <td style="border: 1px solid #000; padding: 6px; font-weight:bold;">${nome}</td>
-                                        <td style="border: 1px solid #000; padding: 6px; text-align: center;">${item.categoria || '---'}</td>
-                                        <td style="border: 1px solid #000; padding: 6px; text-align: center;">${gradeTexto}</td>
-                                        <td style="border: 1px solid #000; padding: 6px; text-align: center; background: #f9f9f9;"><strong>${totalLinha}</strong></td>
-                                    </tr>
-                                `;
-                            }).join('')}
-                        </tbody>
-                    </table>
-
-                    <div style="margin-top: 15px; font-size: 9pt;">
-                        <strong>Total de Volumes:</strong> ${dados.volumes || '---'}
-                    </div>
-
-                    <div style="position: absolute; bottom: 10mm; left: 10mm; right: 10mm; display: flex; gap: 50px;">
-                        <div style="flex: 1; border-top: 1px solid black; text-align: center; padding-top: 5px;">
-                            <p style="font-size: 8pt; margin:0;">Data de Recebimento</p>
-                            <p style="font-size: 10pt; margin: 5px 0;">____/____/________</p>
-                        </div>
-                        <div style="flex: 2; border-top: 1px solid black; text-align: center; padding-top: 5px;">
-                            <p style="font-size: 8pt; margin:0;">Assinatura do Responsável pelo Recebimento (Nome Legível / Carimbo)</p>
-                            <div style="height: 30px;"></div>
-                        </div>
-                    </div>
-
                 </div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; font-size:0.9rem;">
+                    <p><b>REMESSA:</b> #${dados.remessa_id || remessaId}</p>
+                    <p><b>PEDIDO ORIGEM:</b> #${dados.pedido_id || pedidoId}</p>
+                    <p><b>SOLICITANTE:</b> ${dados.solicitante || 'Não informado'}</p>
+                    <p><b>DESTINO:</b> ${dados.escola_nome || '---'}</p>
+                    <p><b>DATA PEDIDO:</b> ${dataPedido}</p>
+                    <p><b>DATA ENVIO:</b> ${dataEnvio}</p>
+                </div>
+            </header>
+
+            <div class="titulo-doc">
+                <h2>ROMANEIO DE ENTREGA</h2>
+            </div>
+
+            <table class="tabela-itens-romaneio">
+                <thead>
+                    <tr>
+                        <th>PRODUTO</th>
+                        <th style="text-align:center;">TAM/SÉRIE</th>
+                        <th style="text-align:center;">QTD</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${dados.itens.map(i => `
+                        <tr>
+                            <td>${i.produto_nome}</td>
+                            <td style="text-align:center;">${i.detalhe}</td>
+                            <td style="text-align:center;"><b>${i.qtd}</b></td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+
+            <div class="footer-assinaturas">
+                <div class="campo-assinatura">
+                    <div class="linha-assinatura"></div>
+                    <p>Responsável pela Expedição</p>
+                </div>
+                <div class="campo-assinatura">
+                    <div class="linha-assinatura"></div>
+                    <p>Recebido em: ____/____/____<br>Assinatura e Carimbo</p>
+                </div>
+            </div>
+            
+            <div class="botoes-acao-modal">
+                <button onclick="window.print()" class="btn-imprimir">🖨️ IMPRIMIR</button>
+                <button onclick="this.closest('.modal-romaneio-overlay').remove()" class="btn-fechar">FECHAR</button>
             </div>
         </div>
     `;
-    document.body.appendChild(overlay);
+    document.body.appendChild(modal);
+}
+
+// Lógica de Exportação para Excel (CSV)
+// --- FUNÇÕES DE EXPORTAÇÃO ---
+
+// 1. Excel (Gera um CSV compatível que o Excel abre direto)
+function exportarExcelRomaneio(pedidoId) {
+    const tabela = document.querySelector('#modal-romaneio table');
+    let csv = [];
+    const rows = tabela.querySelectorAll("tr");
+    
+    for (let i = 0; i < rows.length; i++) {
+        const row = [], cols = rows[i].querySelectorAll("td, th");
+        for (let j = 0; j < cols.length; j++) {
+            // Limpa vírgulas e pontos para não quebrar o CSV
+            row.push(cols[j].innerText.replace(/[\n\r,]/g, ''));
+        }
+        csv.push(row.join(";")); // Usando ponto e vírgula para Excel PT-BR
+    }
+
+    const blob = new Blob(["\ufeff" + csv.join("\n")], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `Romaneio_Pedido_${pedidoId}.csv`;
+    link.click();
+}
+
+// 2. WhatsApp (Compartilha o resumo textual)
+function compartilharWhatsApp(pedidoId, destino, itens) {
+    let texto = `*📦 ROMANEIO DE SAÍDA - PEDIDO #${pedidoId}*%0A`;
+    texto += `*Destino:* ${destino}%0A`;
+    texto += `*Data:* ${new Date().toLocaleDateString()}%0A`;
+    texto += `-----------------------------------%0A`;
+    
+    itens.forEach(i => {
+        texto += `• ${i.nome} ${i.tamanho ? `(${i.tamanho})` : ''}: *${i.quantidade}*%0A`;
+    });
+
+    window.open(`https://wa.me/?text=${texto}`, '_blank');
 }
 
 async function efetivarSaidaTransporte(remessaId) {
@@ -9023,74 +9652,323 @@ async function efetivarInicioTransporte(remessaId) {
 
 async function telaEscolaConfirmarRecebimento() {
     const container = document.getElementById('app-content');
-    container.innerHTML = '<div style="padding:20px; text-align:center;">🔍 Localizando mercadorias em trânsito...</div>';
+    container.innerHTML = '<div class="loading">Buscando remessas...</div>';
 
     try {
-        const res = await fetch(`${API_URL}/escola/remessas-a-caminho`, {
-            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        const [resRemessas, resSetores] = await Promise.all([
+            fetch(`${API_URL}/escola/painel-v2`, { headers: { 'Authorization': `Bearer ${TOKEN}` } }),
+            fetch(`${API_URL}/escola/setores-unidade`, { headers: { 'Authorization': `Bearer ${TOKEN}` } })
+        ]);
+
+        const remessas = await resRemessas.json();
+        const setores = await resSetores.json();
+
+        container.innerHTML = `
+            <div style="padding:20px; max-width:900px; margin:0 auto;">
+                <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                <h2 style="color:white; margin:20px 0;">📦 RECEBIMENTO DE CARGAS</h2>
+                
+                ${remessas.map(r => {
+                    const isPatrimonio = (r.tipo_pedido === 'INFRA_PATRIMONIO');
+                    return `
+                    <div class="glass-panel" style="margin-bottom:20px; padding:20px; border-left: 6px solid ${isPatrimonio ? '#eab308' : '#00d4ff'};">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <h3 style="color:white; margin:0;">Remessa #${r.remessa_id}</h3>
+                            <button onclick="visualizarItensRemessa(${r.remessa_id}, '${r.tipo_pedido}')" class="btn-detalhes">👁️ VISUALIZAR ITENS</button>
+                        </div>
+                        
+                        <div id="lista-itens-${r.remessa_id}" style="display:none; margin-top:15px; padding:10px; background:rgba(0,0,0,0.3); border-radius:8px;"></div>
+
+                        <hr style="border:0; border-top:1px solid rgba(255,255,255,0.1); margin:15px 0;">
+
+                        ${isPatrimonio ? `
+                            <div class="setor-obrigatorio">
+                                <label style="color:#eab308; display:block; font-size:0.8rem; font-weight:bold; margin-bottom:8px;">📍 SETOR DE DESTINO (OBRIGATÓRIO):</label>
+                                <select id="setor-select-${r.remessa_id}" class="select-vidro" style="width:100%; border:1px solid #eab308;">
+                                    <option value="">-- SELECIONE O SETOR --</option>
+                                    ${setores.map(s => `<option value="${s.id}">${s.nome}</option>`).join('')}
+                                </select>
+                            </div>
+                        ` : ''}
+
+                        <button onclick="efetivarRecebimento(${r.remessa_id}, ${r.pedido_id}, '${r.tipo_pedido}')" 
+                                class="btn-confirmar-recebimento" style="margin-top:15px; width:100%;">
+                            ✅ CONFIRMAR RECEBIMENTO
+                        </button>
+                    </div>`;
+                }).join('')}
+            </div>`;
+    } catch (err) { container.innerHTML = "Erro ao carregar."; }
+}
+
+async function visualizarItensRemessa(remessaId, tipoPedido) {
+    const div = document.getElementById(`lista-itens-${remessaId}`);
+    const rota = (tipoPedido === 'INFRA_PATRIMONIO') ? 'detalhes-patrimonio' : 'detalhes-consumo';
+    
+    if (div.style.display === 'block') { div.style.display = 'none'; return; }
+    
+    div.innerHTML = "Carregando...";
+    div.style.display = 'block';
+
+    const res = await fetch(`${API_URL}/escola/remessa/${remessaId}/${rota}`, {
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+    const itens = await res.json();
+
+    div.innerHTML = `
+        <table style="width:100%; font-size:0.8rem; color:white; border-collapse:collapse;">
+            ${itens.map(i => `
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.1);">
+                    <td style="padding:5px;">${i.nome}</td>
+                    <td style="padding:5px; color:#00d4ff;">${i.numero_serie || i.detalhe || ''}</td>
+                    <td style="padding:5px; text-align:right;">${i.quantidade_enviada}</td>
+                </tr>
+            `).join('')}
+        </table>`;
+}
+
+async function efetivarRecebimento(remessaId, pedidoId, tipoPedido) {
+    let setorId = null;
+    if (tipoPedido === 'INFRA_PATRIMONIO') {
+        const selectSetor = document.getElementById(`setor-select-${remessaId}`);
+        setorId = selectSetor ? selectSetor.value : null;
+        if (!setorId) return notificar("⚠️ Selecione o SETOR antes de confirmar.");
+    }
+
+    if (!confirm("Confirmar o recebimento físico desta carga?")) return;
+
+    try {
+        // 1. Grava o recebimento no Banco de Dados
+        const res = await fetch(`${API_URL}/escola/confirmar-recebimento`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ remessaId, pedidoId, setorId })
         });
 
-        if (!res.ok) {
-            const erro = await res.json();
-            throw new Error(erro.error || "Erro ao buscar dados.");
+        if (!res.ok) throw new Error("Erro ao gravar recebimento no servidor.");
+
+        // 2. Busca os detalhes completos para compor o romaneio
+        const resDados = await fetch(`${API_URL}/pedidos/remessa/${remessaId}/detalhes`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const dadosRemessa = await resDados.json();
+
+        // --- O GATILHO ESTÁ AQUI ---
+        // Chamamos a função de salvamento silencioso em vez de abrir o modal
+        if (resDados.ok) {
+            await processarSalvamentoRomaneio(pedidoId, remessaId, dadosRemessa);
         }
+        // ---------------------------
 
-        const dados = await res.json();
+        // 3. Notifica o usuário e limpa a tela
+        notificar("✨ Recebimento confirmado!", "sucesso");
+        telaEscolaConfirmarRecebimento(); 
 
-        container.innerHTML = `
-            <div style="padding:20px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
-                    <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
-                </div>
-                    ${dados.length === 0 ? `
-                        <div style="background:#f8fafc; padding:40px; text-align:center; border-radius:10px; color:#64748b; border:1px dashed #cbd5e1;">
-                            Nenhuma remessa vindo para sua unidade no momento.
-                        </div>` : 
-                        dados.map(r => `
-                        <div style="background:#fffbeb; padding:20px; border-radius:10px; border-left:10px solid #f59e0b; box-shadow:0 4px 6px rgba(0,0,0,0.05);">
-                            <div style="display:flex; justify-content:space-between; align-items:center;">
-                                <div>
-                                    <div style="font-weight:bold; font-size:1.1rem; color:#92400e;">📦 CARGA A CAMINHO</div>
-                                    <div style="color:#b45309; margin-top:5px;">
-                                        Remessa: <strong>#${r.remessa_id}</strong> | Pedido: #${r.pedido_id}
-                                    </div>
-                                    <div style="font-size:0.8rem; color:#d97706; margin-top:5px;">
-                                        Escola: ${r.escola_nome}
-                                    </div>
-                                </div>
-                                <button class="btn-confirmar-entrega" data-remessa-id="${r.remessa_id}" 
-                                        style="background:#059669; color:white; border:none; padding:12px 25px; border-radius:6px; cursor:pointer; font-weight:bold;">
-                                    ✅ CONFIRMAR CHEGADA
-                                </button>
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>
-            </div>
-        `;
     } catch (err) {
-        container.innerHTML = `
-            <div style="padding:20px; color:#ef4444; background:#fef2f2; border:1px solid #fee2e2; border-radius:8px;">
-                <strong>⚠️ Falha:</strong> ${err.message}
-            </div>`;
+        console.error("Erro crítico no fluxo:", err);
+        notificar("❌ Falha no processo: " + err.message, "erro");
     }
 }
 
-async function confirmarRecebimentoRemessa(remessaId, pedidoId) {
-    if (!confirm("Você confirma que conferiu e recebeu todos os itens desta remessa?")) return;
+// 3. O MODAL DE SUCESSO COM SALVAMENTO OBRIGATÓRIO E IMPRESSÃO OPCIONAL
+async function exibirSucessoComRomaneio(remessaId) {
+    // 1. Gera o PDF automaticamente (Salvamento Obrigatório)
+    // Aqui você chama sua rota de relatório que gera o PDF
+    const urlPdf = `${API_URL}/relatorios/romaneio-padrao/${remessaId}?token=${TOKEN}`;
+    
+    // Simula o download obrigatório
+    const link = document.createElement('a');
+    link.href = urlPdf;
+    link.download = `Romaneio_Recebido_${remessaId}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    // 2. Mostra o Modal de Sucesso
+    const app = document.getElementById('app-content');
+    app.innerHTML = `
+        <div class="modal-vidro" style="display:flex; align-items:center; justify-content:center;">
+            <div class="glass-panel animate__animated animate__zoomIn" style="text-align:center; padding:40px; max-width:500px;">
+                <div style="font-size:4rem; color:#10b981; margin-bottom:20px;">✅</div>
+                <h2 style="color:white;">RECEBIMENTO CONCLUÍDO!</h2>
+                <p style="color:rgba(255,255,255,0.7); margin-bottom:30px;">O romaneio foi baixado automaticamente no seu dispositivo.</p>
+                
+                <div style="display:grid; gap:10px;">
+                    <button onclick="window.open('${urlPdf}', '_blank')" class="btn-confirmar" style="background:#00d4ff; color:#000;">
+                        🖨️ VISUALIZAR / IMPRIMIR (OPCIONAL)
+                    </button>
+                    <button onclick="telaEscolaConfirmarRecebimento()" class="btn-voltar-vidro" style="width:100%;">
+                        CONCLUIR E VOLTAR À LISTA
+                    </button>
+                </div>
+            </div>
+        </div>`;
+}
+
+async function abrirDetalhesRemessa(remessaId) {
+    const divDetalhes = document.getElementById(`detalhes-${remessaId}`);
+    if (!divDetalhes) return;
+
+    // Toggle simples (abre/fecha)
+    if (divDetalhes.style.display === 'block') {
+        divDetalhes.style.display = 'none';
+        return;
+    }
+
+    divDetalhes.style.display = 'block';
+    divDetalhes.innerHTML = '<div style="color:#00d4ff; padding:10px; font-size:0.8rem;">⏳ Carregando itens...</div>';
 
     try {
-        const res = await fetch(`${API_URL}/pedidos/escola/confirmar-recebimento`, {
+        const res = await fetch(`${API_URL}/escola/detalhes-remessa/${remessaId}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        
+        if (!res.ok) throw new Error("Falha ao buscar dados");
+        const itens = await res.json();
+
+        divDetalhes.innerHTML = `
+            <div style="background:rgba(255,255,255,0.05); border-radius:8px; overflow:hidden; border:1px solid rgba(255,255,255,0.1);">
+                <table style="width:100%; border-collapse:collapse; color:white; font-size:0.75rem;">
+                    <thead style="background:rgba(0,212,255,0.2);">
+                        <tr>
+                            <th style="padding:10px; text-align:left;">PRODUTO</th>
+                            <th style="padding:10px; text-align:center;">DETALHE / SÉRIE</th>
+                            <th style="padding:10px; text-align:center;">QTD</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${itens.map(i => `
+                            <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                                <td style="padding:10px;">${i.nome}</td>
+                                <td style="padding:10px; text-align:center; color:#00d4ff;">
+                                    ${i.numero_serie ? `SN: ${i.numero_serie}` : (i.detalhe || '---')}
+                                </td>
+                                <td style="padding:10px; text-align:center; font-weight:bold;">
+                                    ${i.quantidade_enviada}
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    } catch (err) {
+        console.error(err);
+        divDetalhes.innerHTML = '<div style="color:#ff4d4d; padding:10px;">❌ Erro ao listar itens.</div>';
+    }
+}
+
+async function confirmarRecebimentoRemessa(remessaId, pedidoId, tipoPedido) {
+    let setorId = null;
+
+    // Se for Patrimônio, valida se o setor foi escolhido
+    if (tipoPedido === 'INFRA_PATRIMONIO') {
+        setorId = document.getElementById(`setor-remessa-${remessaId}`).value;
+        if (!setorId) return notificar("⚠️ Por favor, selecione o setor que receberá o patrimônio.");
+    }
+
+    if (!confirm("Confirmar o recebimento físico desta carga?")) return;
+
+    try {
+        const res = await fetch(`${API_URL}/escola/confirmar-recebimento`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
-            body: JSON.stringify({ remessaId, pedidoId })
+            body: JSON.stringify({ remessaId, pedidoId, setorId })
         });
 
         if (res.ok) {
-            notificar("✨ Recebimento registrado! O estoque da escola foi atualizado.");
-            telaEscolaConfirmarRecebimento(); // Atualiza a lista
+            notificar("✨ Recebimento confirmado com sucesso!");
+            telaEscolaConfirmarRecebimento();
+        } else {
+            const erro = await res.json();
+            throw new Error(erro.error);
         }
-    } catch (err) { notificar("Erro ao processar recebimento."); }
+    } catch (err) { notificar("❌ ERRO: " + err.message); }
+}
+
+async function confirmarChegadaEscola(remessaId) {
+    const usuarioId = localStorage.getItem('usuario_id');
+    
+    // Alerta de segurança dinâmico
+    const confirmacao = confirm("⚠️ ATENÇÃO: Você confirma que todos os itens desta carga chegaram corretamente?\n\n- Bens de Património serão alocados à sua unidade.\n- Uniformes serão somados ao seu saldo de estoque.");
+    
+    if (!confirmacao) return;
+
+    try {
+        const res = await fetch(`${API_URL}/escola/confirmar-recebimento`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${TOKEN}` 
+            },
+            body: JSON.stringify({ remessaId, usuarioId })
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+            notificar("✅ SUCESSO: Recebimento confirmado! Os bens e produtos já constam na sua unidade.", "sucesso");
+            
+            // Pequeno delay para a notificação aparecer antes de atualizar a tela
+            setTimeout(() => {
+                telaEscolaConfirmarRecebimento(); // Recarrega a lista de pendentes
+                divDetalhes.innerHTML = ""; // Limpa a área de detalhes
+            }, 1500);
+        } else {
+            throw new Error(data.error || "Erro ao processar o recebimento.");
+        }
+    } catch (err) {
+        console.error("Erro no recebimento:", err);
+        notificar("❌ ERRO: " + err.message, "erro");
+    }
+}
+
+// Função para buscar e exibir os itens da remessa
+async function visualizarDetalhesRemessa(remessaId) {
+    // Busca a div específica desta remessa que você criou no map
+    const divDetalhes = document.getElementById(`detalhes-remessa-${remessaId}`);
+    
+    // Toggle (se já estiver aberto, fecha)
+    if (divDetalhes.style.display === 'block') {
+        divDetalhes.style.display = 'none';
+        return;
+    }
+
+    divDetalhes.innerHTML = '<div style="color:white; font-size:0.8rem;">⌛ Carregando itens...</div>';
+    divDetalhes.style.display = 'block';
+
+    try {
+        const res = await fetch(`${API_URL}/escola/detalhes-remessa/${remessaId}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const data = await res.json();
+        const ePatrimonio = data.tipo_pedido === 'INFRA_PATRIMONIO';
+
+        divDetalhes.innerHTML = `
+            <div style="padding:15px; background:rgba(255,255,255,0.05); border-radius:8px;">
+                <table style="width:100%; color:white; font-size:0.85rem; border-collapse:collapse;">
+                    <thead>
+                        <tr style="border-bottom:1px solid rgba(255,255,255,0.1); color:#fbbf24;">
+                            <th style="text-align:left; padding:8px;">PRODUTO</th>
+                            <th style="text-align:center; padding:8px;">${ePatrimonio ? 'ETIQUETA' : 'TAMANHO'}</th>
+                            <th style="text-align:center; padding:8px;">QTD</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${data.itens.map(i => `
+                            <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                                <td style="padding:8px;">${i.nome}</td>
+                                <td style="padding:8px; text-align:center; color:#60a5fa;">${ePatrimonio ? (i.numero_serie || '---') : (i.tamanho || 'Geral')}</td>
+                                <td style="padding:8px; text-align:center;">${i.quantidade_enviada}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    } catch (err) {
+        divDetalhes.innerHTML = '<p style="color:#ef4444;">Erro ao carregar detalhes.</p>';
+    }
 }
 
 async function confirmarEntregaFinal(pedidoId) {
@@ -9184,11 +10062,9 @@ async function gerarECompartilharRomaneio(remessaId) {
 
         const dados = await res.json();
         
-        if (!dados || dados.length === 0) {
+        if (!dados || !dados.itens || dados.itens.length === 0) {
             throw new Error("Nenhum item encontrado para esta remessa.");
         }
-
-        const info = dados[0];
 
         // 2. Cria a estrutura visual do romaneio (HTML)
         const elemento = document.createElement('div');
@@ -9200,8 +10076,8 @@ async function gerarECompartilharRomaneio(remessaId) {
                 </div>
 
                 <div style="background: #f8fafc; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
-                    <p style="margin: 5px 0;"><strong>Escola:</strong> ${info.escola_nome}</p>
-                    <p style="margin: 5px 0;"><strong>Pedido Origem:</strong> #${info.pedido_id}</p>
+                    <p style="margin: 5px 0;"><strong>Escola:</strong> ${dados.escola_nome}</p>
+                    <p style="margin: 5px 0;"><strong>Pedido Origem:</strong> #${dados.pedido_id}</p>
                     <p style="margin: 5px 0;"><strong>Data/Hora:</strong> ${new Date().toLocaleString('pt-BR')}</p>
                 </div>
 
@@ -9214,10 +10090,10 @@ async function gerarECompartilharRomaneio(remessaId) {
                         </tr>
                     </thead>
                     <tbody>
-                        ${dados.map(i => `
+                        ${dados.itens.map(i => `
                             <tr style="border-bottom: 1px solid #e2e8f0;">
                                 <td style="padding: 12px; font-weight: 500;">${i.produto_nome}</td>
-                                <td style="padding: 12px; text-align: center;">${i.tamanho}</td>
+                                <td style="padding: 12px; text-align: center;">${i.tamanho || '---'}</td>
                                 <td style="padding: 12px; text-align: center; font-weight: bold;">${i.quantidade_enviada}</td>
                             </tr>
                         `).join('')}
@@ -9243,30 +10119,23 @@ async function gerarECompartilharRomaneio(remessaId) {
         const pdfBlob = await html2pdf().set(opt).from(elemento).output('blob');
         const file = new File([pdfBlob], `Romaneio_${remessaId}.pdf`, { type: 'application/pdf' });
 
-        // 5. Lógica de Compartilhamento / Download (À prova de erros de gesto)
+        // 5. Lógica de Compartilhamento / Download
         try {
             if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
                 await navigator.share({
                     files: [file],
-                    title: `Romaneio #${remessaId} - ${info.escola_nome}`,
-                    text: `Segue romaneio digital da remessa #${remessaId} para a escola ${info.escola_nome}.`
+                    title: `Romaneio #${remessaId} - ${dados.escola_nome}`,
+                    text: `Segue romaneio digital da remessa #${remessaId} para a escola ${dados.escola_nome}.`
                 });
             } else {
-                throw new Error("API de compartilhamento não suportada neste navegador.");
+                throw new Error("Compartilhamento não suportado.");
             }
         } catch (shareErr) {
-            // Se o erro for de segurança (User Gesture) ou indisponibilidade, faz o download
-            console.warn("Redirecionando para download direto:", shareErr.message);
             const link = document.createElement('a');
             link.href = URL.createObjectURL(pdfBlob);
             link.download = `Romaneio_${remessaId}.pdf`;
             link.click();
-            
-            if (shareErr.name === 'NotAllowedError') {
-                notificar("O navegador bloqueou o compartilhamento direto. O romaneio foi baixado na sua pasta de Downloads.");
-            } else {
-                notificar("Compartilhamento indisponível. O PDF foi baixado automaticamente.");
-            }
+            notificar("O PDF foi baixado automaticamente.");
         }
 
     } catch (err) {
@@ -9298,7 +10167,7 @@ window.confirmarRecebimento = async function(remessaId) {
     if (!confirm(`Confirma que todos os itens da Remessa #${remessaId} foram entregues na unidade?`)) return;
 
     try {
-        const res = await fetch(`${API_URL}/pedidos/remessa/${remessaId}/confirmar-recebimento`, {
+        const res = await fetch(`${API_URL}/pedidos/remessa2/${remessaId}/confirmar-recebimento`, {
             method: 'PATCH',
             headers: { 
                 'Content-Type': 'application/json',
@@ -9351,7 +10220,7 @@ document.addEventListener('click', async (event) => {
         if (!confirm(`Confirma que a Remessa #${id} chegou na escola?`)) return;
 
         try {
-            const res = await fetch(`${API_URL}/escola/confirmar-recebimento/${id}`, {
+            const res = await fetch(`${API_URL}/escola/confirmar-recebimento2/${id}`, {
                 method: 'PATCH',
                 headers: { 'Authorization': `Bearer ${TOKEN}` }
             });
@@ -10647,7 +11516,7 @@ async function gerarRelatorioInventario() {
     area.innerHTML = `
         <div id="pdf-content" style="padding:30px;">
             <div style="text-align:center; border-bottom:2px solid #1e3a8a; padding-bottom:15px; margin-bottom:20px;">
-                <h3 style="margin:0; color:#1e3a8a;">PREFEITURA MUNICIPAL - SEMED</h3>
+                <h3 style="margin:0; color:#1e3a8a;">PREFEITURA MUNICIPAL DE QUEIMADOS - SEMED</h3>
                 <h4 style="margin:5px 0; color:#64748b;">Relatório de Inventário de Patrimônio</h4>
                 <p style="margin:0; font-weight:bold;">UNIDADE: ${data.unidade}</p>
                 <p style="font-size:0.8rem;">Total de Bens Localizados: ${data.total_itens}</p>
@@ -11299,11 +12168,11 @@ async function telaAdminPedidoPatrimonios() {
                         <option value="">-- SELECIONE O MODELO --</option>
                         ${produtos.map(p=>`<option value="${p.id}">${p.nome}</option>`).join('')}
                     </select>
-                    <label>PLAQUETA / TAG:</label>
+                    <label>Nº PATRIMÔNIO:</label>
                     <select id="pat_individual" class="input-vidro"></select>
                     <button onclick="addCarrinhoPatrimonio()" class="btn-vidro" style="background:#10b981; margin-top:15px; width:100%;">➕ ADICIONAR</button>
                 </div>
-                <div id="display-carrinho-admin" class="painel-interno-vidro">Aguardando...</div>
+                <div id="display-carrinho-admin" class="painel-interno-vidro"> </div>
             </div>
             <button id="btnFinalizar" onclick="finalizarPedidoPatrimonioDireto()" disabled class="btn-grande btn-vidro" style="margin-top:20px;">🚀 FINALIZAR PATRIMÔNIOS</button>
         </div>
@@ -11348,7 +12217,7 @@ async function telaAdminPedidoUniformes() {
                             <div>
                                 <label>TAMANHO:</label>
                                 <select id="uni_tamanho" class="input-vidro" style="width:100%;">
-                                    <option value="">Aguardando...</option>
+                                    <option value=""> </option>
                                 </select>
                             </div>
                             <div>
@@ -12285,8 +13154,11 @@ async function finalizarProcessoDevolucao(pedidoId) {
 }
 
 function notificar(mensagem, tipo = 'sucesso') {
-    // 1. Injeta o estilo de animação se ele ainda não existir
+    const overlayAntiga = document.getElementById('notificara-overlay');
+    if (overlayAntiga) overlayAntiga.remove();
+
     if (!document.getElementById('notificar-estilo')) {
+
         const estilo = document.createElement('style');
         estilo.id = 'notificar-estilo';
         estilo.innerHTML = `
@@ -12304,6 +13176,7 @@ function notificar(mensagem, tipo = 'sucesso') {
     // 2. Cria o elemento da overlay (Fundo escurecido com blur)
     const overlay = document.createElement('div');
     overlay.id = 'notificara-overlay';
+    const bgOverlay = tipo === 'erro' ? 'rgba(20, 10, 10, 0.85)' : 'rgba(7, 11, 22, 0.8)';
     overlay.style.cssText = `
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
         background: rgba(7, 11, 22, 0.8);
@@ -12314,7 +13187,7 @@ function notificar(mensagem, tipo = 'sucesso') {
 
     // 3. Configurações de Ícone e Cores (Gamificadas)
     // Amarelo vibrante para alertas/erros e Verde Neon para sucesso
-    const corNeon = tipo === 'erro' ? '#fbbf24' : '#4ade80';
+    const corNeon = tipo === 'erro' ? '#ff4d4d' : '#4ade80'; // Vermelho mais vivo para erro
     const icone = tipo === 'erro' ? '⚠️' : '✅';
     const titulo = tipo === 'erro' ? 'ATENÇÃO!' : 'SUCESSO!';
 
@@ -12513,7 +13386,7 @@ async function telaPatrimonioSolicitar() {
             const produtoNome = sel.options[sel.selectedIndex].dataset.nome;
             const produtoId = sel.value;
 
-            if (!produtoId) return alert("Selecione um produto.");
+            if (!produtoId) return notificar("Selecione um produto.");
 
             itensSolicitados.push({ produto_id: produtoId, nome: produtoNome, quantidade: qtd });
             renderizarListaPatrimonio();
@@ -12530,7 +13403,7 @@ async function telaPatrimonioSolicitar() {
         };
 
         window.enviarSolicitacaoPatrimonio = async () => {
-            if (itensSolicitados.length === 0) return alert("Adicione ao menos um item.");
+            if (itensSolicitados.length === 0) return notificar("Adicione ao menos um item.");
             
             const payload = {
                 local_destino_id: USUARIO.local_id, // Se for Escola, o destino é ela mesma
@@ -12545,7 +13418,7 @@ async function telaPatrimonioSolicitar() {
             });
 
             if (res.ok) {
-                alert("✅ Solicitação enviada com sucesso!");
+                notificar("✅ Solicitação enviada com sucesso!");
                 telaMenuPatrimonio();
             }
         };
@@ -12628,7 +13501,7 @@ async function telaPatrimonioEntrada() {
                 setor_id: null // Pode ser definido depois
             };
 
-            if (!data.produto_id || data.quantidade < 1) return alert("Preencha o produto e a quantidade.");
+            if (!data.produto_id || data.quantidade < 1) return notificar("Preencha o produto e a quantidade.");
 
             const res = await fetch(`${API_URL}/patrimonio/entrada`, {
                 method: 'POST',
@@ -12637,7 +13510,7 @@ async function telaPatrimonioEntrada() {
             });
 
             if (res.ok) {
-                alert("✅ Itens registrados individualmente no patrimônio!");
+                notificar("✅ Itens registrados individualmente no patrimônio!");
                 telaMenuPatrimonio();
             }
         };
@@ -13085,35 +13958,76 @@ async function telaPatrimonioEscolaCatalogo() {
     carregarBensRecentesModal();
 }
 
+// FUNÇÃO AUXILIAR: Gerencia a visibilidade do campo de texto
+window.verificarNovoProduto = function(valor) {
+    const inputNome = document.getElementById('cat-nome');
+    if (valor === 'NOVO') {
+        inputNome.value = "";
+        inputNome.style.display = "block";
+        inputNome.focus();
+    } else {
+        inputNome.value = valor; // O input oculto guarda o nome vindo do select
+        inputNome.style.display = "none";
+        gerarNumeroSerieAutomatico();
+    }
+};
+
 // Lógica de Autopreenchimento do Número de Série
 async function gerarNumeroSerieAutomatico() {
     const nomeInput = document.getElementById('cat-nome').value;
     const serieInput = document.getElementById('cat-serie');
+    const btnSalvar = document.getElementById('btn-salvar');
     const qtd = parseInt(document.getElementById('cat-qtd').value) || 1;
     
-    if (nomeInput.trim().length > 0) {
-        const localId = localStorage.getItem('local_id');
-        const prefixo = PREFIXOS_LOCAIS[localId] || "XX";
-        const anoAtual = new Date().getFullYear().toString().slice(-2);
+    // 1. Garantia do Local e do Ano (4 dígitos agora)
+    const localId = localStorage.getItem('local_id') || 26;
+    const anoAtual = new Date().getFullYear(); // Retorna 2026 completo
+    const prefixo = "MP"; // Prefixo padrão conforme sua tabela
 
+    if (nomeInput.trim().length > 0) {
         try {
+            // 2. Chama o backend enviando o ano de 4 dígitos
             const res = await fetch(`${API_URL}/patrimonio/proximo-numero/${prefixo}/${anoAtual}`, {
                 headers: { 'Authorization': `Bearer ${TOKEN}` }
             });
             const data = await res.json();
             const inicio = data.proximo;
 
+            // 3. Formatação da string para exibição no campo
+            let serieFinal = "";
             if (qtd <= 1) {
-                serieInput.value = `${prefixo}-${anoAtual}-${String(inicio).padStart(4, '0')}`;
+                // Formato: MP-2026-0001
+                serieFinal = `${prefixo}-${anoAtual}-${String(inicio).padStart(4, '0')}`;
             } else {
+                // Formato para lote: MP-2026-0001 a 0010
                 const fim = inicio + (qtd - 1);
-                serieInput.value = `${prefixo}-${anoAtual}-${String(inicio).padStart(4, '0')} a ${String(fim).padStart(4, '0')}`;
+                serieFinal = `${prefixo}-${anoAtual}-${String(inicio).padStart(4, '0')} a ${String(fim).padStart(4, '0')}`;
             }
+
+            serieInput.value = serieFinal;
+
+            // 4. Validação visual (Verde se livre, Vermelho se ocupado)
+            const checkRes = await fetch(`${API_URL}/patrimonio/checar-disponibilidade/${serieFinal.split(' ')[0]}`, {
+                headers: { 'Authorization': `Bearer ${TOKEN}` }
+            });
+            const checkData = await checkRes.json();
+
+            if (!checkData.disponivel) {
+                serieInput.style.borderColor = "#ef4444";
+                btnSalvar.disabled = true;
+                btnSalvar.innerText = "NÚMERO JÁ EXISTE ❌";
+            } else {
+                serieInput.style.borderColor = "#22c55e";
+                btnSalvar.disabled = false;
+                btnSalvar.innerText = "SALVAR REGISTRO ✅";
+            }
+
         } catch (err) {
-            console.error("Erro ao gerar série:", err);
+            console.error("Erro na geração da etiqueta:", err);
         }
     } else {
         serieInput.value = "";
+        serieInput.style.borderColor = "rgba(255,255,255,0.1)";
     }
 }
 
@@ -13205,40 +14119,133 @@ async function carregarBensRecentesModal() {
     const container = document.getElementById('lista-bens-recentes');
     if (!container) return;
 
-    // Mostra um mini-spinner ou texto de carregando
+    // Feedback visual enquanto carrega
     container.innerHTML = '<p style="color:gray; text-align:center; margin-top:20px; font-size:0.8rem;">Atualizando lista...</p>';
 
     try {
-        const localId = localStorage.getItem('local_id');
-        // Rota que busca os últimos itens do local logado
+        // Garantimos que o local_id existe. Se não existir no localStorage, tenta pegar do objeto TOKEN decodificado ou usa 26 como padrão
+        const localId = localStorage.getItem('local_id') || 26; 
+
         const res = await fetch(`${API_URL}/patrimonio/recentes/${localId}`, {
-            headers: { 'Authorization': `Bearer ${TOKEN}` }
+            headers: { 
+                'Authorization': `Bearer ${TOKEN}`,
+                'Content-Type': 'application/json'
+            }
         });
         
         const bens = await res.json();
 
-        if (bens.length === 0) {
-            container.innerHTML = '<p style="color:gray; text-align:center; margin-top:50px;">Nenhum bem cadastrado ainda.</p>';
+        // Se o backend retornar erro ou a lista vier vazia
+        if (!res.ok || !Array.isArray(bens) || bens.length === 0) {
+            container.innerHTML = '<p style="color:gray; text-align:center; margin-top:50px; font-size:0.85rem;">Nenhum bem cadastrado recentemente.</p>';
             return;
         }
 
+        // Montagem da lista usando a variável 'b' do map de forma consistente
         container.innerHTML = bens.map(b => `
-            <div style="background: rgba(255,255,255,0.03); padding: 10px; border-radius: 8px; margin-bottom: 8px; border: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; align-items: center;">
-                <div style="text-align: left;">
-                    <strong style="color: white; font-size: 0.85rem; display: block;">${b.nome_produto}</strong>
-                    <small style="color: #60a5fa; font-family: monospace;">${b.numero_serie}</small>
+            <div style="background: rgba(255,255,255,0.03); padding: 12px; border-radius: 10px; margin-bottom: 8px; border: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; align-items: center; transition: 0.3s;">
+                <div style="text-align: left; display: flex; align-items: center; gap: 12px;">
+                    <input type="checkbox" class="check-patrimonio" value="${b.id}" style="cursor:pointer; transform: scale(1.1);">
+                    <div>
+                        <strong style="color: white; font-size: 0.85rem; display: block; margin-bottom: 2px;">
+                            ${b.nome_produto || 'Produto sem nome'}
+                        </strong>
+                        <small style="color: #60a5fa; font-family: 'Courier New', monospace; font-weight: bold;">
+                            ${b.numero_serie}
+                        </small>
+                    </div>
                 </div>
-                <div style="text-align: right;">
-                    <span style="font-size: 0.7rem; color: #aaa;">${new Date(b.data_atualizacao).toLocaleDateString()}</span>
+                <div style="text-align: right; display: flex; flex-direction: column; gap: 4px;">
+                    <span style="font-size: 0.65rem; color: #888; font-weight: bold;">
+                        ${b.data_atualizacao ? new Date(b.data_atualizacao).toLocaleDateString('pt-BR') : '--/--/--'}
+                    </span>
+                    <span style="font-size: 0.6rem; color: #22c55e; background: rgba(34, 197, 94, 0.1); padding: 2px 6px; border-radius: 4px; text-align: center;">
+                        ${b.status || 'ESTOQUE'}
+                    </span>
                 </div>
             </div>
         `).join('');
 
     } catch (err) {
         console.error("Erro ao carregar recentes:", err);
-        container.innerHTML = '<p style="color:#ef4444; text-align:center;">Erro ao carregar lista.</p>';
+        container.innerHTML = '<p style="color:#ef4444; text-align:center; font-size:0.8rem; margin-top:20px;">⚠️ Erro ao atualizar lista lateral.</p>';
     }
 }
+
+window.abrirModalVincularNF = function() {
+    const selecionados = Array.from(document.querySelectorAll('.check-patrimonio:checked')).map(cb => cb.value);
+    
+    if (selecionados.length === 0) {
+        return notificar("Selecione ao menos um bem para vincular a nota!", "alerta");
+    }
+
+    const modal = document.createElement('div');
+    modal.id = 'modal-vincular-nf';
+    modal.className = 'alerta-vidro-overlay';
+    modal.innerHTML = `
+        <div class="painel-vidro" style="width: 400px; padding: 25px; text-align: center;">
+            <h3 style="color: white;">📄 VINCULAR NOTA FISCAL</h3>
+            <p style="color: #ccc; font-size: 0.8rem;">Você está vinculando a nota a <b>${selecionados.length}</b> itens selecionados.</p>
+            
+            <input type="text" id="vinc-numero-nf" class="input-vidro" placeholder="Número da NF ou CE" style="margin-bottom: 15px; width: 100%;">
+            <input type="file" id="vinc-arquivo-nf" accept="application/pdf" class="input-vidro" style="margin-bottom: 20px; width: 100%;">
+
+            <div style="display: flex; gap: 10px;">
+                <button onclick="document.getElementById('modal-vincular-nf').remove()" class="btn-sair-vidro" style="flex:1;">CANCELAR</button>
+                <button onclick="executarVinculoMassa([${selecionados}])" class="btn-vidro" style="flex:1; background: #22c55e;">VINCULAR ✅</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+};
+
+window.executarVinculoMassa = async function(idsArray) {
+    const numero = document.getElementById('vinc-numero-nf').value;
+    const arquivo = document.getElementById('vinc-arquivo-nf').files[0];
+
+    if (!numero || !arquivo) return notificar("Preencha o número e anexe o PDF!", "erro");
+
+    const formData = new FormData();
+    formData.append('patrimoniosIds', idsArray.join(','));
+    formData.append('numeroNF', numero);
+    formData.append('arquivo_nf', arquivo);
+
+    try {
+        const res = await fetch(`${API_URL}/patrimonio/vincular-nf-massa`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${TOKEN}` },
+            body: formData
+        });
+
+        if (res.ok) {
+            notificar("Bens atualizados com sucesso!", "sucesso");
+            document.getElementById('modal-vincular-nf').remove();
+            carregarBensRecentesModal(); // Atualiza a lista
+        }
+    } catch (err) {
+        notificar("Erro ao vincular arquivo.", "erro");
+    }
+};
+
+window.visualizarNF = async function(patrimonioId) {
+    try {
+        const res = await fetch(`${API_URL}/patrimonio/obter-nf/${patrimonioId}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+
+        const data = await res.json();
+
+        if (res.ok && data.url) {
+            // Abre o PDF numa nova aba
+            // Nota: Se usares caminhos relativos no servidor, pode ser necessário prefixar a URL
+            window.open(data.url, '_blank');
+        } else {
+            notificar(data.error || "Nota Fiscal não disponível.", "alerta");
+        }
+    } catch (err) {
+        notificar("Erro ao abrir o documento.", "erro");
+    }
+};
 
 // LÓGICA DE INTERFACE
 window.alternarLogica2025 = (marcado) => {
@@ -13271,57 +14278,77 @@ window.alternarLogica2025 = (marcado) => {
     }
 };
 
-async function enviarCadastroComAnexo() {
-    const btn = document.getElementById('btn-salvar');
-    const nome = document.getElementById('cat-nome').value.trim();
-    const qtd = document.getElementById('cat-qtd').value;
-    const serie = document.getElementById('cat-serie').value;
-    const setor = document.getElementById('cat-setor').value;
-    const nf = document.getElementById('cat-nf').value;
-    const check2025 = document.getElementById('check-2025').checked;
-    const arquivo = document.getElementById('cat-file').files[0];
+window.enviarCadastroComAnexo = async function() {
+    // 1. Captura dos elementos
+    const elNome = document.getElementById('cat-nome');
+    const elSetor = document.getElementById('cat-setor');
+    const elQtd = document.getElementById('cat-qtd');
+    const elNF = document.getElementById('cat-nf');
+    const elCheck = document.getElementById('check-2025');
+    const elFile = document.getElementById('cat-file');
+    
+    // 2. Local ID (Pegando do sistema para garantir que não vá nulo)
+    const localId = localStorage.getItem('local_id') || 26;
 
-    if (!nome || !serie) return notificar("Nome e Série são obrigatórios!", "erro");
+    if (!elNome || !elNome.value.trim()) {
+        return notificar("O nome do bem é obrigatório!", "alerta");
+    }
 
-    btn.disabled = true;
-    btn.innerHTML = "💾 SALVANDO...";
-
+    // 3. Preparação do envio
     const formData = new FormData();
-    formData.append('nome_produto', nome);
-    formData.append('quantidade', qtd);
-    formData.append('serie_base', serie);
-    formData.append('setor_id', setor);
-    formData.append('local_id', localStorage.getItem('local_id'));
-    formData.append('nota_fiscal', nf);
-    formData.append('adquirido_pos_2025', check2025);
-    if (arquivo) formData.append('arquivo', arquivo);
+    formData.append('nome', elNome.value.trim().toUpperCase());
+    formData.append('setor_id', elSetor.value);
+    formData.append('quantidade', elQtd.value);
+    formData.append('local_id_manual', localId); // Garantia para o backend
+    formData.append('numero_nf', elNF ? elNF.value : "");
+    formData.append('adquirido_2025', elCheck ? elCheck.checked : false);
+
+    if (elFile && elFile.files[0]) {
+        formData.append('arquivo_nf', elFile.files[0]);
+    }
+
+    // Desabilita o botão para evitar cliques duplos
+    const btnSalvar = document.getElementById('btn-salvar');
+    btnSalvar.disabled = true;
+    btnSalvar.innerText = "Processando...";
 
     try {
-        const res = await fetch(`${API_URL}/patrimonio/cadastrar`, {
+        const res = await fetch(`${API_URL}/patrimonio/cadastrar-completo`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${TOKEN}` },
             body: formData
         });
 
         if (res.ok) {
-            notificar("✅ Cadastro concluído!");
-            // Limpa para o próximo item
-            document.getElementById('cat-nome').value = '';
-            document.getElementById('cat-serie').value = '';
+            notificar("Patrimônio registrado com sucesso!", "sucesso");
+
+            // --- A MÁGICA DA ATUALIZAÇÃO ---
+            // 1. Limpa os campos para o próximo cadastro
+            elNome.value = "";
+            elQtd.value = "1";
+            if (elNF) elNF.value = "";
+            if (elFile) elFile.value = "";
             
-            // Atualiza a lista lateral no modal imediatamente
-            carregarBensRecentesModal();
+            // 2. ATUALIZA A LISTA LATERAL SEM FECHAR O MODAL
+            // Note o 'await' para garantir que ele busque os dados novos
+            await carregarBensRecentesModal();
+
+            // 3. Coloca o foco de volta no nome para o próximo item
+            elNome.focus();
+
         } else {
             const erro = await res.json();
-            notificar("Erro: " + erro.error, "erro");
+            notificar(erro.error || "Erro ao salvar.", "erro");
         }
     } catch (err) {
-        notificar("Erro de conexão", "erro");
+        console.error(err);
+        notificar("Erro de comunicação com o servidor.", "erro");
     } finally {
-        btn.disabled = false;
-        btn.innerHTML = "SALVAR REGISTRO";
+        // Reabilita o botão
+        btnSalvar.disabled = false;
+        btnSalvar.innerText = "SALVAR REGISTRO ✅";
     }
-}
+};
 
 async function carregarTabelaInventario() {
     const filtroSetor = document.getElementById('filtro-setor-patrimonio');
@@ -13592,6 +14619,9 @@ async function telaPatrimonioConsultaEscola() {
                 <button id="btn-transferir-externo" disabled class="btn-acao-topo" onclick="abrirModalTransferenciaExterna()">
                     🚚 TRANSFERIR P/ OUTRO LOCAL
                 </button>
+                <button id="btn-mudar-estado" enabled class="btn-acao-topo" onclick="telaEditarItemPatrimonio()">
+                    🚨 EDITAR ESTADO DE CONSERVAÇÃO
+                </button>                
                 <button class="btn-acao-topo" style="background:#8b5cf6; color:white; opacity:1; cursor:pointer;" onclick="abrirModalImportarExcel()">
                     📊 IMPORTAR DO EXCEL
                 </button>
@@ -13602,7 +14632,7 @@ async function telaPatrimonioConsultaEscola() {
                 <div class="painel-vidro" style="padding: 15px; display: flex; flex-direction: column; overflow: hidden;">
                     <h3 style="margin-top:0; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; font-size: 1rem;">📍 Setores</h3>
                     <div id="lista-setores-inventario" style="flex: 1; overflow-y: auto; margin-top: 10px;">
-                        <p style="color:gray; font-size: 0.8rem;">Carregando...</p>
+                        <p style="color:gray; font-size: 0.8rem;"> </p>
                     </div>
                 </div>
 
@@ -13693,6 +14723,9 @@ async function telaPatrimonioConsultaEscola2() {
                 <button id="btn-transferir-externo" disabled class="btn-acao-topo" onclick="abrirModalTransferenciaExterna()">
                     🚚 TRANSFERIR P/ OUTRO LOCAL
                 </button>
+                <button id="btn-mudar-estado" enabled class="btn-acao-topo" onclick="telaEditarItemPatrimonio()">
+                    🚨 EDITAR ESTADO CONSERVAÇÃO
+                </button>
                 <button class="btn-acao-topo" style="background:#8b5cf6; color:white; opacity:1; cursor:pointer;" onclick="abrirModalImportarExcel()">
                     📊 IMPORTAR DO EXCEL
                 </button>
@@ -13703,7 +14736,7 @@ async function telaPatrimonioConsultaEscola2() {
                 <div class="painel-vidro" style="padding: 15px; display: flex; flex-direction: column; overflow: hidden;">
                     <h3 style="margin-top:0; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; font-size: 1rem;">📍 Setores</h3>
                     <div id="lista-setores-inventario" style="flex: 1; overflow-y: auto; margin-top: 10px;">
-                        <p style="color:gray; font-size: 0.8rem;">Carregando...</p>
+                        <p style="color:gray; font-size: 0.8rem;"> </p>
                     </div>
                 </div>
 
@@ -13810,7 +14843,7 @@ async function carregarItensPorSetor(setor_id, nome_setor) {
     areaTabela.innerHTML = `
         <div style="display: flex; gap: 10px; margin-bottom: 20px; align-items: center;">
             <input type="text" id="filtro-inventario" onkeyup="filtrarTabelaInventario()" 
-                   placeholder="🔍 Pesquisar por nome ou série..." class="input-vidro" style="flex: 1;">
+                   placeholder="🔍 Pesquisar por nome ou Nº Patrimônio..." class="input-vidro" style="flex: 1;">
             
             <button onclick="gerarExcelInventario('${nome_setor}')" class="btn-sair-vidro" style="background: #16a34a; border:none; color:white;" title="Exportar para Excel">
                 Excel 📊
@@ -13869,10 +14902,10 @@ function renderizarTabela(dados) {
     const legendaHtml = `
         <div style="display: flex; gap: 20px; margin-bottom: 15px; padding: 10px; background: rgba(0, 0, 0, 0.2); border-radius: 8px; flex-wrap: wrap; border: 1px solid rgba(255,255,255,0.05);">
             <div style="display:flex; align-items:center; gap:8px; font-size:0.75rem; color:#4ade80; font-weight:bold;">
-                <span style="font-size: 1.2rem;">●</span> COM Nº PATRIMÔNIO (RGP)
+                <span style="font-size: 1.2rem;">●</span> COM Nº PATRIMÔNIO
             </div>
             <div style="display:flex; align-items:center; gap:8px; font-size:0.75rem; color:#fbbf24; font-weight:bold;">
-                <span style="font-size: 1.2rem;">●</span> PENDENTE DE ETIQUETA (RGP)
+                <span style="font-size: 1.2rem;">●</span> PENDENTE DE ETIQUETA
             </div>
         </div>
     `;
@@ -13927,7 +14960,7 @@ function renderizarTabela(dados) {
                                 </td>
 
                                 <td style="padding:6px 12px; font-weight: bold; color: ${corTexto};">
-                                    ${i.patrimonio || '<span style="opacity:0.3;">AGUARDANDO...</span>'}
+                                    ${i.patrimonio || '<span style="opacity:0.3;"> </span>'}
                                 </td>
                                 
                                 <td style="padding:6px 12px;">
@@ -13969,7 +15002,7 @@ window.detalharPatrimonio = async function(id) {
         const contentType = res.headers.get("content-type");
         if (!res.ok || !contentType || !contentType.includes("application/json")) {
             console.error("O servidor não retornou um JSON válido. Verifique a rota no backend.");
-            return alert("Erro ao carregar detalhes: Rota não encontrada ou erro no servidor.");
+            return notificar("Erro ao carregar detalhes: Rota não encontrada ou erro no servidor.");
         }
 
         const item = await res.json();
@@ -14052,7 +15085,7 @@ function gerarPDFInventario(nomeSetor) {
 
     // Título do Relatório
     doc.setFontSize(18);
-    doc.text("Relatório de Inventário de Património", 14, 20);
+    doc.text("Relatório de Inventário de Patrimônio", 14, 20);
     
     doc.setFontSize(11);
     doc.text(`Setor: ${nomeSetor}`, 14, 30);
@@ -14121,7 +15154,7 @@ async function telaPatrimonioRegistarItem() {
                     </div>
 
                     <div>
-                        <label style="color:white; font-size:0.8rem; opacity:0.7;">NÚMERO DE SÉRIE / PLAQUETA</label>
+                        <label style="color:white; font-size:0.8rem; opacity:0.7;">Nº PATRIMÔNIO</label>
                         <input type="text" id="reg-pat-serie" placeholder="Ex: ABC-12345" 
                             style="width:100%; padding:12px; border-radius:10px; background:rgba(255,255,255,0.1); color:white; border:1px solid rgba(255,255,255,0.2);">
                     </div>
@@ -14150,7 +15183,7 @@ async function telaPatrimonioRegistarItem() {
 
     } catch (err) {
         console.error(err);
-        alert("Erro ao carregar dados para registo.");
+        notificar("Erro ao carregar dados para registo.");
     }
 
     // Função interna para processar o envio
@@ -14163,7 +15196,7 @@ async function telaPatrimonioRegistarItem() {
         };
 
         if (!payload.produto_id || !payload.setor_id) {
-            return alert("Por favor, selecione o produto e o setor.");
+            return notificar("Por favor, selecione o produto e o setor.");
         }
 
         const res = await fetch(`${API_URL}/patrimonio/itens`, {
@@ -14177,7 +15210,7 @@ async function telaPatrimonioRegistarItem() {
             document.getElementById('modal-registo-item').remove();
         } else {
             const erro = await res.json();
-            alert("Erro: " + erro.error);
+            notificar("Erro: " + erro.error);
         }
     };
 }
@@ -14214,7 +15247,7 @@ async function telaGerenciarSetores() {
 
     window.salvarSetor = async () => {
         const nome = document.getElementById('nome-setor').value;
-        if (!nome) return alert("Digite o nome do setor.");
+        if (!nome) return notificar("Digite o nome do setor.");
 
         const res = await fetch(`${API_URL}/patrimonio/setores`, {
             method: 'POST',
@@ -14228,7 +15261,7 @@ async function telaGerenciarSetores() {
             await atualizarListaSetores(); 
         } else {
             const erro = await res.json();
-            alert(erro.error);
+            notificar(erro.error);
         }
     };
 }
@@ -14265,7 +15298,7 @@ async function telaGerenciarSetores2() {
 
     window.salvarSetor = async () => {
         const nome = document.getElementById('nome-setor').value;
-        if (!nome) return alert("Digite o nome do setor.");
+        if (!nome) return notificar("Digite o nome do setor.");
 
         const res = await fetch(`${API_URL}/patrimonio/setores`, {
             method: 'POST',
@@ -14279,7 +15312,7 @@ async function telaGerenciarSetores2() {
             await atualizarListaSetores(); 
         } else {
             const erro = await res.json();
-            alert(erro.error);
+            notificar(erro.error);
         }
     };
 }
@@ -14288,7 +15321,7 @@ async function telaGerenciarSetores2() {
 window.salvarSetor = async () => {
     const input = document.getElementById('nome-setor');
     const nome = input.value.trim();
-    if (!nome) return alert("Por favor, digite o nome do setor.");
+    if (!nome) return notificar("Por favor, digite o nome do setor.");
 
     try {
         const res = await fetch(`${API_URL}/patrimonio/setores`, {
@@ -14308,11 +15341,11 @@ window.salvarSetor = async () => {
             // Se você tiver a função notificar, use-a aqui
             if (typeof notificar === "function") notificar("Setor cadastrado!", "sucesso");
         } else {
-            alert(dados.error || "Erro ao salvar.");
+            notificar(dados.error || "Erro ao salvar.");
         }
     } catch (err) {
         console.error("Erro na requisição:", err);
-        alert("Erro de conexão com o servidor.");
+        notificar("Erro de conexão com o servidor.");
     }
 };
 
@@ -14419,7 +15452,7 @@ window.telaEditarItemPatrimonio = async function(id) {
         `;
         document.body.appendChild(modal);
     } catch (err) {
-        alert("Erro ao abrir edição: " + err.message);
+        notificar("Erro ao abrir edição: " + err.message);
     }
 };
 
@@ -14807,8 +15840,8 @@ async function salvarSetorPatrimonioIndependente() {
     const input = document.getElementById('nome-setor-patrimonio');
     const nome = input.value.trim();
 
-    if (!nome) return alert("Digite o nome do setor.");
-    if (!TOKEN) return alert("Sua sessão expirou. Faça login novamente.");
+    if (!nome) return notificar("Digite o nome do setor.");
+    if (!TOKEN) return notificar("Sua sessão expirou. Faça login novamente.");
 
     try {
         const res = await fetch(`${API_URL}/modulo-patrimonio/setores/novo`, {
@@ -14824,10 +15857,10 @@ async function salvarSetorPatrimonioIndependente() {
 
         if (res.ok) {
             input.value = '';
-            alert("Setor cadastrado com sucesso!");
+            notificar("Setor cadastrado com sucesso!");
             await atualizarListaSetoresPatrimonio(); // Chama a lista isolada
         } else {
-            alert(data.error || "Erro ao salvar.");
+            notificar(data.error || "Erro ao salvar.");
         }
     } catch (err) {
         console.error("Erro na requisição isolada:", err);
@@ -14895,7 +15928,7 @@ async function telaGerenciarSetoresPatrimonio() {
 
 async function executarSalvarSetor() {
     const nome = document.getElementById('novo-nome-setor').value;
-    if (!nome) return alert("Digite o nome.");
+    if (!nome) return notificar("Digite o nome.");
 
     const res = await fetch(`${API_URL}/patrimonio/setores/registrar`, {
         method: 'POST',
@@ -14911,7 +15944,7 @@ async function executarSalvarSetor() {
         await atualizarListaSetoresExclusiva();
     } else {
         const erro = await res.json();
-        alert(erro.error);
+        notificar(erro.error);
     }
 }
 
@@ -15217,10 +16250,10 @@ async function salvarAlteracaoEstado(id) {
                 const nomeSetor = document.getElementById('nome-setor-titulo').innerText.replace('ITENS EM: ', '');
                 await carregarItensPorSetor(setorId, nomeSetor);
             }
-            alert("Estado atualizado com sucesso!");
+            notificar("Estado atualizado com sucesso!");
         }
     } catch (err) {
-        alert("Erro ao salvar alteração.");
+        notificar("Erro ao salvar alteração.");
     }
 }
 
@@ -15228,7 +16261,7 @@ window.prepararEdicaoItem = () => {
     if (window.itemSelecionadoId) {
         telaEditarItemPatrimonio(window.itemSelecionadoId);
     } else {
-        alert("Por favor, selecione um item na lista primeiro clicando sobre ele.");
+        notificar("Por favor, selecione um item na lista primeiro clicando sobre ele.");
     }
 };
 
@@ -15434,34 +16467,33 @@ async function confirmarTransferenciaInterna() {
 }
 
 async function verificarAlertasPatrimonio() {
+    const badge = document.getElementById('badge-infra-count');
+    if (!badge) return;
+
     try {
-        const res = await fetch(`${API_URL}/patrimonio/verificar-pendencias`, {
+        // Buscamos os pedidos pendentes
+        const res = await fetch(`${API_URL}/infra/pendentes`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
-        const pendencias = await res.json();
+        const dados = await res.json();
 
-        const btnPatrimonio = document.getElementById('btn-menu-patrimonio');
-        if (!btnPatrimonio) return;
+        // Filtra conforme a sua regra de negócio
+        const pendentesInfra = dados.filter(p => 
+            p.tipo_pedido === 'INFRA_PATRIMONIO' && 
+            p.status === 'AGUARDANDO_AUTORIZACAO'
+        );
 
-        // Limpa alerta anterior se existir
-        const alertaExistente = document.getElementById('esfera-alerta-patrimonio');
-        if (alertaExistente) alertaExistente.remove();
+        const total = pendentesInfra.length;
 
-        if (pendencias.length > 0) {
-            const esfera = document.createElement('div');
-            esfera.id = 'esfera-alerta-patrimonio';
-            esfera.innerHTML = pendencias.length;
-            esfera.style.cssText = `
-                position: absolute; top: -10px; right: -10px; width: 24px; height: 24px;
-                background: #ef4444; color: white; border-radius: 50%; display: flex;
-                align-items: center; justify-content: center; font-size: 0.75rem;
-                font-weight: bold; box-shadow: 0 0 15px rgba(239, 68, 68, 0.7);
-                animation: pulsoEsfera 1.5s infinite; z-index: 100;
-            `;
-            btnPatrimonio.style.position = 'relative';
-            btnPatrimonio.appendChild(esfera);
+        if (total > 0) {
+            badge.innerText = total;
+            badge.style.display = 'flex'; // Exibe e começa a pulsar via CSS
+        } else {
+            badge.style.display = 'none'; // Esconde se for zero
         }
-    } catch (err) { console.error("Erro ao verificar alertas:", err); }
+    } catch (err) {
+        console.error("Erro ao verificar alertas de infra:", err);
+    }
 }
 
 async function abrirModalDecisaoTransferencia(pendencias) {
@@ -15554,11 +16586,11 @@ async function processarRespostaTransferencia(patrimonio_id, decisao) {
     const motivo_recusa = document.getElementById('motivo-recusa-transf')?.value;
 
     if (decisao === 'ACEITAR' && !setor_id) {
-        alert("Por favor, selecione o setor de destino.");
+        notificar("Por favor, selecione o setor de destino.");
         return;
     }
     if (decisao === 'RECUSAR' && !motivo_recusa.trim()) {
-        alert("Por favor, informe o motivo da recusa.");
+        notificar("Por favor, informe o motivo da recusa.");
         return;
     }
 
@@ -15629,13 +16661,13 @@ async function abrirModalTransferenciaExterna() {
         document.body.appendChild(modal);
     } catch (err) {
         console.error(err);
-        alert("Erro ao carregar locais. Verifique a conexão com o servidor.");
+        notificar("Erro ao carregar locais. Verifique a conexão com o servidor.");
     }
 }
 
 async function executarEnvioExterno() {
     const localDestinoId = document.getElementById('select-unidade-destino').value;
-    if (!localDestinoId) return alert("Selecione um destino!");
+    if (!localDestinoId) return notificar("Selecione um destino!");
 
     try {
         const res = await fetch(`${API_URL}/patrimonio/executar-transferencia-externa`, {
@@ -15651,7 +16683,7 @@ async function executarEnvioExterno() {
         });
 
         if (res.ok) {
-            alert("Bem enviado com sucesso! Aguardando aceite do destino.");
+            notificar("Item enviado com sucesso! Aguardando aceite do destino.");
             document.getElementById('modal-transferencia-externa').remove();
             
             // Recarrega a tabela para mostrar o item com opacidade e tag [EM TRÂNSITO]
@@ -15744,81 +16776,103 @@ function exibirResumoImportacao(res) {
 }
 
 async function abrirModalPendenciasTransferencia() {
-    const res = await fetch(`${API_URL}/patrimonio/verificar-pendencias`, {
-        headers: { 'Authorization': `Bearer ${TOKEN}` }
-    });
-    const pendencias = await res.json();
+    try {
+        const res = await fetch(`${API_URL}/patrimonio/verificar-pendencias`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        
+        if (!res.ok) throw new Error("Falha ao buscar pendências no servidor.");
+        const pendencias = await res.json();
 
-    const modal = document.createElement('div');
-    modal.className = 'alerta-vidro-overlay';
-    modal.id = 'modal-pendencias-geral';
-    modal.innerHTML = `
-        <div class="painel-vidro" style="width: 600px; padding: 25px; max-height: 80vh; overflow-y: auto;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                <h3 style="color:white; margin:0;">📦 TRANSFERÊNCIAS RECEBIDAS</h3>
-                <button onclick="document.getElementById('modal-pendencias-geral').remove()" class="btn-sair-vidro">VOLTAR</button>
-            </div>
-            
-            <div id="lista-itens-pendentes">
-                ${pendencias.length === 0 ? '<p style="color:gray; text-align:center;">Nenhuma pendência encontrada.</p>' : 
-                pendencias.map(p => `
-                    <div style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:15px; margin-bottom:15px;">
-                        <div style="display:flex; justify-content:space-between;">
-                            <div>
-                                <strong style="color:#60a5fa; font-size:1.1rem;">${p.produto_nome}</strong><br>
-                                <small style="color:gray;">Vindo de: ${p.local_origem}</small>
+        const modal = document.createElement('div');
+        modal.className = 'alerta-vidro-overlay';
+        modal.id = 'modal-pendencias-geral';
+        
+        modal.innerHTML = `
+            <div class="painel-vidro" style="width: 600px; padding: 25px; max-height: 80vh; overflow-y: auto;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                    <h3 style="color:white; margin:0;">📦 TRANSFERÊNCIAS RECEBIDAS</h3>
+                    <button onclick="document.getElementById('modal-pendencias-geral').remove()" class="btn-sair-vidro">VOLTAR</button>
+                </div>
+                
+                <div id="lista-itens-pendentes">
+                    ${pendencias.length === 0 ? 
+                        '<p style="color:gray; text-align:center; padding: 20px;">Nenhuma transferência direta pendente para sua unidade.</p>' : 
+                        pendencias.map(p => `
+                        <div style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:15px; margin-bottom:15px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <div>
+                                    <strong style="color:#60a5fa; font-size:1.1rem;">${p.produto_nome}</strong><br>
+                                    <small style="color:rgba(255,255,255,0.6);">Vindo de: ${p.local_origem}</small>
+                                </div>
+                                <div style="display:flex; gap:10px;">
+                                    <button onclick="prepararAceite(${p.id}, '${p.produto_nome}')" 
+                                            class="btn-confirmar-v2">ACEITAR</button>
+                                    <button onclick="prepararRecusa(${p.id}, '${p.produto_nome}')" 
+                                            class="btn-recusar-v2">RECUSAR</button>
+                                </div>
                             </div>
-                            <div style="display:flex; gap:10px;">
-                                <button onclick="prepararAceite(${p.id}, '${p.produto_nome}')" style="background:#10b981; color:white; border:none; padding:8px 15px; border-radius:8px; cursor:pointer; font-weight:bold;">ACEITAR</button>
-                                <button onclick="prepararRecusa(${p.id}, '${p.produto_nome}')" style="background:#ef4444; color:white; border:none; padding:8px 15px; border-radius:8px; cursor:pointer; font-weight:bold;">RECUSAR</button>
-                            </div>
+                            <div id="form-decisao-${p.id}" style="margin-top:15px; display:none;"></div>
                         </div>
-                        <div id="form-decisao-${p.id}" style="margin-top:15px; display:none; border-top:1px solid rgba(255,255,255,0.1); padding-top:15px;"></div>
-                    </div>
-                `).join('')}
+                    `).join('')}
+                </div>
             </div>
-        </div>
-    `;
-    document.body.appendChild(modal);
+        `;
+        document.body.appendChild(modal);
+    } catch (err) {
+        console.error(err);
+        notificar("Erro ao carregar modal de transferências.", "erro");
+    }
 }
 
 async function abrirModalPendenciasTransferencia2() {
-    const res = await fetch(`${API_URL}/patrimonio/verificar-pendencias`, {
-        headers: { 'Authorization': `Bearer ${TOKEN}` }
-    });
-    const pendencias = await res.json();
+    try {
+        const res = await fetch(`${API_URL}/patrimonio/verificar-pendencias`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        
+        if (!res.ok) throw new Error("Falha ao buscar pendências no servidor.");
+        const pendencias = await res.json();
 
-    const modal = document.createElement('div');
-    modal.className = 'alerta-vidro-overlay';
-    modal.id = 'modal-pendencias-geral';
-    modal.innerHTML = `
-        <div class="painel-vidro" style="width: 600px; padding: 25px; max-height: 80vh; overflow-y: auto;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                <h3 style="color:white; margin:0;">📦 TRANSFERÊNCIAS RECEBIDAS</h3>
-                <button onclick="document.getElementById('modal-pendencias-geral').remove()" class="btn-sair-vidro">VOLTAR</button>
-            </div>
-            
-            <div id="lista-itens-pendentes">
-                ${pendencias.length === 0 ? '<p style="color:gray; text-align:center;">Nenhuma pendência encontrada.</p>' : 
-                pendencias.map(p => `
-                    <div style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:15px; margin-bottom:15px;">
-                        <div style="display:flex; justify-content:space-between;">
-                            <div>
-                                <strong style="color:#60a5fa; font-size:1.1rem;">${p.produto_nome}</strong><br>
-                                <small style="color:gray;">Vindo de: ${p.local_origem}</small>
+        const modal = document.createElement('div');
+        modal.className = 'alerta-vidro-overlay';
+        modal.id = 'modal-pendencias-geral';
+        
+        modal.innerHTML = `
+            <div class="painel-vidro" style="width: 600px; padding: 25px; max-height: 80vh; overflow-y: auto;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                    <h3 style="color:white; margin:0;">📦 TRANSFERÊNCIAS RECEBIDAS</h3>
+                    <button onclick="document.getElementById('modal-pendencias-geral').remove()" class="btn-sair-vidro">VOLTAR</button>
+                </div>
+                
+                <div id="lista-itens-pendentes">
+                    ${pendencias.length === 0 ? 
+                        '<p style="color:gray; text-align:center; padding: 20px;">Nenhuma transferência direta pendente para sua unidade.</p>' : 
+                        pendencias.map(p => `
+                        <div style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:15px; margin-bottom:15px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <div>
+                                    <strong style="color:#60a5fa; font-size:1.1rem;">${p.produto_nome}</strong><br>
+                                    <small style="color:rgba(255,255,255,0.6);">Vindo de: ${p.local_origem}</small>
+                                </div>
+                                <div style="display:flex; gap:10px;">
+                                    <button onclick="prepararAceite(${p.id}, '${p.produto_nome}')" 
+                                            class="btn-confirmar-v2">ACEITAR</button>
+                                    <button onclick="prepararRecusa(${p.id}, '${p.produto_nome}')" 
+                                            class="btn-recusar-v2">RECUSAR</button>
+                                </div>
                             </div>
-                            <div style="display:flex; gap:10px;">
-                                <button onclick="prepararAceite(${p.id}, '${p.produto_nome}')" style="background:#10b981; color:white; border:none; padding:8px 15px; border-radius:8px; cursor:pointer; font-weight:bold;">ACEITAR</button>
-                                <button onclick="prepararRecusa(${p.id}, '${p.produto_nome}')" style="background:#ef4444; color:white; border:none; padding:8px 15px; border-radius:8px; cursor:pointer; font-weight:bold;">RECUSAR</button>
-                            </div>
+                            <div id="form-decisao-${p.id}" style="margin-top:15px; display:none;"></div>
                         </div>
-                        <div id="form-decisao-${p.id}" style="margin-top:15px; display:none; border-top:1px solid rgba(255,255,255,0.1); padding-top:15px;"></div>
-                    </div>
-                `).join('')}
+                    `).join('')}
+                </div>
             </div>
-        </div>
-    `;
-    document.body.appendChild(modal);
+        `;
+        document.body.appendChild(modal);
+    } catch (err) {
+        console.error(err);
+        notificar("Erro ao carregar modal de transferências.", "erro");
+    }
 }
 
 
@@ -15853,7 +16907,7 @@ async function enviarResposta(patrimonio_id, decisao) {
     const setor_id = document.getElementById(`sel-setor-${patrimonio_id}`)?.value;
     const motivo_recusa = document.getElementById(`motivo-${patrimonio_id}`)?.value;
 
-    if (decisao === 'RECUSAR' && !motivo_recusa) return alert("Motivo da recusa é obrigatório!");
+    if (decisao === 'RECUSAR' && !motivo_recusa) return notificar("Motivo da recusa é obrigatório!");
 
     const res = await fetch(`${API_URL}/patrimonio/responder-transferencia`, {
         method: 'POST',
@@ -15862,7 +16916,7 @@ async function enviarResposta(patrimonio_id, decisao) {
     });
 
     if (res.ok) {
-        alert("Processado com sucesso!");
+        notificar("Processado com sucesso!");
         abrirModalPendenciasTransferencia(); // Recarrega a lista
         verificarAlertasPatrimonio(); // Atualiza a esfera no dashboard
     }
@@ -15919,7 +16973,7 @@ async function telaAuditoriaAcessos() {
                                 ${(data.logs || []).map(log => {
                                     const corResultado = log.resultado === 'SUCESSO' ? '#4ade80' : (log.resultado === 'FALHA' ? '#ef4444' : '#60a5fa');
                                     
-                                    // AJUSTE: Anonimização do CPF (Apenas 6 primeiros dígitos) [cite: 10]
+                                    // AJUSTE: Anonimização do CPF (Apenas 6 primeiros dígitos)  10]
                                     const cpfOrigem = log.cpf_tentativa || '';
                                     const cpfMascarado = cpfOrigem.length >= 6 
                                         ? cpfOrigem.substring(0, 6) + '*****' 
@@ -16142,18 +17196,27 @@ window.confirmarEnvioTransferencia = async function(produtoId, qtdMax) {
 };
 
 window.telaSaidaTransferencia37 = async function() {
-    const app = document.getElementById('app');
+    // CORREÇÃO: Alterado de 'app' para 'app-content'
+    const container = document.getElementById('app-content');
     
-    app.innerHTML = `
-        <div class="painel-vidro animar-entrada" style="width: 100%; min-height: 100vh; padding: 30px; display: flex; flex-direction: column;">
+    // Trava de segurança: se não achar o container, tenta o 'app' ou avisa o erro
+    if (!container) {
+        console.error("Erro: Container de conteúdo não encontrado!");
+        return;
+    }
+
+    container.innerHTML = `
+        <div class="painel-vidro animar-entrada" style="width: 100%; min-height: 80vh; padding: 30px; display: flex; flex-direction: column;">
             
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
                 <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);">⬅ VOLTAR</button>
                 <h2 style="color: white; margin: 0; text-shadow: 0 0 10px rgba(0,0,0,0.5);">📦 ENVIO DE PATRIMÔNIO</h2>
-                <div style="width: 100px;"></div> </div>
+                <div style="width: 100px;"></div> 
+            </div>
 
             <div id="grid-produtos-transferencia" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; flex: 1; align-content: start;">
-                </div>
+                <p style="color: white; text-align: center; grid-column: 1/-1;">🔍 Buscando produtos no local 37...</p>
+            </div>
         </div>
     `;
 
@@ -16161,12 +17224,18 @@ window.telaSaidaTransferencia37 = async function() {
         const res = await fetch(`${API_URL}/transferencia/estoque-fonte`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
+        
         const produtos = await res.json();
         const grid = document.getElementById('grid-produtos-transferencia');
 
+        if (!produtos || produtos.length === 0) {
+            grid.innerHTML = '<p style="color: gray; text-align: center; grid-column: 1/-1;">Nenhum patrimônio disponível para transferência no Local 37.</p>';
+            return;
+        }
+
         grid.innerHTML = produtos.map(p => `
             <div class="item-setor-global" onclick="abrirModalDestinoTransferencia(${p.id}, '${p.nome}', ${p.quantidade_estoque})" 
-                 style="padding: 20px; cursor: pointer; border: 1px solid rgba(255,255,255,0.05); text-align: left; transition: 0.3s;">
+                 style="padding: 20px; cursor: pointer; border: 1px solid rgba(255,255,255,0.05); text-align: left; transition: 0.3s; background: rgba(255,255,255,0.02); border-radius: 15px;">
                 <span style="color: #aaa; font-size: 0.7rem; display: block; margin-bottom: 5px;">PRODUTO</span>
                 <strong style="color: white; font-size: 1rem; display: block; margin-bottom: 15px; text-transform: uppercase;">${p.nome}</strong>
                 
@@ -16178,7 +17247,9 @@ window.telaSaidaTransferencia37 = async function() {
         `).join('');
 
     } catch (err) {
-        console.error(err);
+        console.error("Erro ao carregar estoque para transferência:", err);
+        const grid = document.getElementById('grid-produtos-transferencia');
+        if(grid) grid.innerHTML = '<p style="color: #ef4444; text-align: center; grid-column: 1/-1;">Erro ao conectar com o servidor.</p>';
     }
 };
 
@@ -16221,76 +17292,96 @@ window.processarEnvioTransferencia = async function(produtoId, maxQtd) {
     const localDestino = document.getElementById('select-destino-local').value;
     const qtd = parseInt(document.getElementById('input-qtd-transferir').value);
 
-    if (qtd <= 0 || qtd > maxQtd) {
-        return notificar("Quantidade inválida ou superior ao estoque!", "erro");
-    }
+    if (qtd <= 0 || qtd > maxQtd) return notificar("Quantidade inválida!", "erro");
 
     try {
-        const res = await fetch(`${API_URL}/transferencia/enviar-itens`, {
+        // Chamada para a nova rota que cria o pedido pendente
+        const res = await fetch(`${API_URL}/infra/iniciar-solicitacao`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
             body: JSON.stringify({ produto_id: produtoId, quantidade: qtd, local_destino_id: localDestino })
         });
 
         if (res.ok) {
-            notificar("Itens enviados para o local de TRANSFERÊNCIA!");
+            notificar("Solicitação enviada para separação de tags!");
             document.getElementById('modal-destino-transferencia').remove();
-            telaSaidaTransferencia37(); // Recarrega a lista
-        } else {
-            const erro = await res.json();
-            notificar(erro.error, "erro");
+            telaSaidaTransferencia37(); 
         }
-    } catch (err) {
-        notificar("Erro ao processar envio.", "erro");
-    }
+    } catch (err) { notificar("Erro no envio.", "erro"); }
 };
 
 window.telaPendentesInfra = async function() {
-    const app = document.getElementById('app');
-    app.innerHTML = `
-        <div class="painel-vidro animar-entrada" style="width: 100%; min-height: 100vh; padding: 30px;">
+    // Tenta pegar o 'app-content', se não existir, tenta o 'app'
+    const container = document.getElementById('app-content') || document.getElementById('app');
+    
+    if (!container) {
+        console.error("ERRO CRÍTICO: Nenhum container (app-content ou app) foi encontrado no HTML!");
+        return notificar("Erro interno: Container de tela não encontrado.");
+    }
+
+    // Agora que garantimos que o container existe, limpamos e desenhamos a tela
+    container.innerHTML = `
+        <div class="painel-vidro animar-entrada" style="width: 100%; min-height: 80vh; padding: 30px; display: flex; flex-direction: column;">
             <div style="display: flex; align-items: center; margin-bottom: 30px;">
-                <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background: rgba(255,255,255,0.1);">⬅ VOLTAR</button>
-                <h2 style="color: white; margin-left: 20px;">🏗️ SOLICITADO PELA INFRA</h2>
+                <button onclick="carregarDashboard()" class="btn-sair-vidro" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);">⬅ VOLTAR</button>
+                <h2 style="color: white; margin-left: 20px; text-shadow: 0 0 10px rgba(0,0,0,0.5);">🏗️ SOLICITAÇÕES DA INFRAESTRUTURA</h2>
             </div>
             
-            <div id="lista-infra-pendente" style="display: grid; gap: 15px;">
-                </div>
+            <div id="lista-infra-pendente" style="display: grid; gap: 15px; flex: 1; align-content: start;">
+                <p style="color: white; text-align: center;">🔍 Buscando solicitações pendentes...</p>
+            </div>
         </div>
     `;
 
-    const res = await fetch(`${API_URL}/transferencia/pendentes-infra`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
-    const pendencias = await res.json();
-    const lista = document.getElementById('lista-infra-pendente');
+    try {
+        const res = await fetch(`${API_URL}/transferencia/pendentes-infra`, { 
+            headers: { 'Authorization': `Bearer ${TOKEN}` } 
+        });
+        const pendencias = await res.json();
+        const lista = document.getElementById('lista-infra-pendente');
 
-    lista.innerHTML = pendencias.map(p => `
-        <div class="item-setor-global" onclick="abrirAcaoInfra(${p.produto_id}, ${p.destino_id}, '${p.produto_nome}', '${p.destino_nome}', ${p.quantidade})" 
-             style="display: flex; justify-content: space-between; align-items: center; padding: 20px; border: 1px solid rgba(255,255,255,0.05);">
-            <div>
-                <strong style="color: white; font-size: 1.1rem;">${p.produto_nome}</strong>
-                <p style="color: #aaa; margin: 5px 0 0 0; font-size: 0.8rem;">DESTINO: ${p.destino_nome}</p>
+        if (!pendencias || pendencias.length === 0) {
+            lista.innerHTML = '<p style="color:gray; text-align:center; margin-top: 50px;">Nenhuma solicitação pendente no momento.</p>';
+            return;
+        }
+
+        lista.innerHTML = pendencias.map(p => `
+            <div class="item-setor-global" onclick="abrirAcaoInfra(${p.produto_id}, ${p.destino_id}, '${p.produto_nome}', '${p.destino_nome}', ${p.quantidade})" 
+                 style="display: flex; justify-content: space-between; align-items: center; padding: 20px; cursor: pointer; background: rgba(255,255,255,0.02); border-radius: 12px; border: 1px solid rgba(255,255,255,0.05);">
+                <div>
+                    <strong style="color: white; font-size: 1.1rem; text-transform: uppercase;">${p.produto_nome}</strong>
+                    <p style="color: #60a5fa; margin: 5px 0 0 0; font-size: 0.85rem; font-weight: bold;">📍 DESTINO: ${p.destino_nome}</p>
+                </div>
+                <div style="text-align: right;">
+                    <span style="background: #3b82f6; color: white; padding: 6px 15px; border-radius: 20px; font-weight: 900; font-size: 0.9rem;">${p.quantidade} UN</span>
+                </div>
             </div>
-            <div style="text-align: right;">
-                <span style="background: #3b82f6; color: white; padding: 5px 15px; border-radius: 20px; font-weight: bold;">${p.quantidade} UN</span>
-                <small style="display: block; color: #666; margin-top: 5px;">Solicitado em: ${new Date(p.data_solicitacao).toLocaleDateString()}</small>
-            </div>
-        </div>
-    `).join('') || '<p style="color:gray; text-align:center;">Nenhuma solicitação pendente.</p>';
+        `).join('');
+    } catch (err) {
+        console.error("Erro na rota pendentes-infra:", err);
+    }
 };
 
 window.abrirAcaoInfra = function(prodId, destId, nome, destino, qtd) {
+    // Remove modal anterior se existir para evitar duplicação
+    const modalAntigo = document.getElementById('modal-decisao-infra');
+    if(modalAntigo) modalAntigo.remove();
+
     const modal = document.createElement('div');
     modal.id = 'modal-decisao-infra';
-    modal.className = 'alerta-vidro-overlay';
+    // ESTILOS DE FOCO: Position fixed e z-index alto são obrigatórios aqui
+    modal.style = "position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); backdrop-filter:blur(8px); display:flex; align-items:center; justify-content:center; z-index:9999;";
+    
     modal.innerHTML = `
-        <div class="painel-vidro animar-entrada" style="width: 450px; padding: 30px; text-align: center;">
-            <button onclick="this.closest('.alerta-vidro-overlay').remove()" style="position: absolute; top: 15px; left: 15px;" class="btn-sair-vidro">⬅ VOLTAR</button>
-            <h3 style="color: white; margin-top: 40px;">GESTÃO DE REMESSA</h3>
-            <p style="color: #ccc;">Deseja processar o envio de <strong>${qtd} ${nome}</strong> para <strong>${destino}</strong>?</p>
+        <div class="painel-vidro animar-entrada" style="width: 450px; padding: 30px; text-align: center; position: relative; border: 1px solid rgba(255,255,255,0.1);">
+            <button onclick="this.closest('#modal-decisao-infra').remove()" style="position: absolute; top: 15px; left: 15px;" class="btn-sair-vidro">⬅ VOLTAR</button>
+            
+            <h3 style="color: white; margin-top: 40px; font-size: 1.4rem;">📦 GESTÃO DE REMESSA</h3>
+            <p style="color: #ccc; margin-top: 15px;">Deseja processar o envio de <br><strong style="color: #60a5fa; font-size: 1.2rem;">${qtd} ${nome}</strong><br> para <strong style="color: #fbbf24;">${destino}</strong>?</p>
             
             <div style="display: flex; gap: 15px; margin-top: 30px;">
-                <button onclick="rejeitarTransferencia(${prodId}, ${destId})" style="flex:1; background: #ef4444; color:white; border:none; padding:12px; border-radius:8px; font-weight:bold; cursor:pointer;">RECUSAR</button>
-                <button onclick="telaSelecaoPatrimonios(${prodId}, ${destId}, '${nome}', ${qtd})" style="flex:1; background: #22c55e; color:white; border:none; padding:12px; border-radius:8px; font-weight:bold; cursor:pointer;">ACEITAR</button>
+                <button onclick="rejeitarTransferencia(${prodId}, ${destId})" style="flex:1; background: #ef4444; color:white; border:none; padding:15px; border-radius:10px; font-weight:bold; cursor:pointer;">RECUSAR</button>
+                <button onclick="telaSelecaoPatrimonios(${prodId}, ${destId}, '${nome}', ${qtd})" style="flex:1; background: #22c55e; color:white; border:none; padding:15px; border-radius:10px; font-weight:bold; cursor:pointer;">ACEITAR ✅</button>
             </div>
         </div>
     `;
@@ -16298,43 +17389,57 @@ window.abrirAcaoInfra = function(prodId, destId, nome, destino, qtd) {
 };
 
 window.telaSelecaoPatrimonios = async function(prodId, destId, nome, qtdNecessaria) {
-    // Busca os itens individuais no local "TRANSFERÊNCIA"
-    const res = await fetch(`${API_URL}/patrimonio/global/bens/${prodId}`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
-    const todosBens = await res.json();
-    // Filtra apenas os que estão em trânsito para este destino específico
-    const bensDisponiveis = todosBens.filter(b => b.em_transito && b.local_destino_id == destId);
+    // Fecha o modal de decisão
+    const modalDecisao = document.getElementById('modal-decisao-infra');
+    if(modalDecisao) modalDecisao.remove();
 
-    const tela = document.createElement('div');
-    tela.className = 'alerta-vidro-overlay';
-    tela.style.zIndex = '11000';
-    tela.innerHTML = `
-        <div class="painel-vidro animar-entrada" style="width: 700px; height: 80vh; padding: 30px; display: flex; flex-direction: column;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <button onclick="this.closest('.alerta-vidro-overlay').remove()" class="btn-sair-vidro">⬅ VOLTAR</button>
-                <h3 style="color: white; margin: 0;">SELECIONE OS ITENS (${qtdNecessaria} un)</h3>
-            </div>
-            
-            <p style="color: #60a5fa; font-size: 0.9rem;">Produto: ${nome}</p>
-
-            <div id="lista-selecao-individual" style="flex: 1; overflow-y: auto; margin: 20px 0; background: rgba(0,0,0,0.2); border-radius: 10px; padding: 10px;">
-                ${bensDisponiveis.map(b => `
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.05);">
-                        <div>
-                            <span style="color: white; font-weight: bold;">SÉRIE: ${b.numero_serie}</span>
-                            <small style="display:block; color: #777;">RGP: ${b.patrimonio || 'S/N'}</small>
-                        </div>
-                        <input type="checkbox" class="check-patrimonio" value="${b.id}" onchange="validarQuantidadeSelecao(${qtdNecessaria})" style="width: 20px; height: 20px; cursor: pointer;">
-                    </div>
-                `).join('')}
-            </div>
-
-            <button id="btn-concluir-infra" disabled onclick="finalizarSelecaoInfra(${destId})" 
-                    style="width: 100%; padding: 15px; border: none; border-radius: 10px; font-weight: bold; background: #555; color: #888; cursor: not-allowed;">
-                CONCLUIR TRANSFERÊNCIA
-            </button>
+    const container = document.getElementById('app-content');
+    container.innerHTML = `
+        <div class="painel-vidro animar-entrada" style="padding: 30px;">
+            <h2 style="color: white;">🔍 SELECIONE OS ITENS (${nome})</h2>
+            <p style="color: #aaa;">Selecione exatamente <b>${qtdNecessaria}</b> itens para enviar ao destino.</p>
+            <div id="lista-selecao-itens" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin: 20px 0;">
+                </div>
+            <button id="btn-confirmar-envio" class="btn-vidro" style="background: #22c55e; width: 100%; display:none;" onclick="executarTransferenciaFinal(${destId}, ${qtdNecessaria})">CONFIRMAR ENVIO 📤</button>
         </div>
     `;
-    document.body.appendChild(tela);
+
+    // Busca os itens individuais (Patrimônios) disponíveis no Local 37 (Fonte)
+    const res = await fetch(`${API_URL}/transferencia/itens-disponiveis/${prodId}`, {
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+    const itens = await res.json();
+    const lista = document.getElementById('lista-selecao-itens');
+
+    lista.innerHTML = itens.map(item => `
+        <label class="item-checkbox-vidro">
+            <input type="checkbox" name="patrimonios_selecionados" value="${item.id}" onchange="validarQuantidadeSelecao(${qtdNecessaria})">
+            <span>${item.patrimonio}</span>
+        </label>
+    `).join('');
+};
+
+// FUNÇÃO QUE FAZ O UPDATE NO BANCO DE DADOS
+window.executarTransferenciaFinal = async function(destId, qtd) {
+    const selecionados = Array.from(document.querySelectorAll('input[name="patrimonios_selecionados"]:checked')).map(i => i.value);
+    
+    try {
+        const res = await fetch(`${API_URL}/transferencia/executar`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ 
+                patrimoniosIds: selecionados, 
+                localDestinoId: destId 
+            })
+        });
+
+        if(res.ok) {
+            notificar("Transferência realizada com sucesso!");
+            carregarDashboard();
+        }
+    } catch (err) {
+        notificar("Erro ao transferir: " + err.message);
+    }
 };
 
 window.validarQuantidadeSelecao = function(qtdNecessaria) {
@@ -16414,10 +17519,5167 @@ async function atualizarBadgeInfra() {
     }
 }
 
-// Chame isso logo após carregar o Dashboard
-// atualizarBadgeInfra();
+function abrirModalGrade(produto) {
+    const isTenis = produto.nome.toUpperCase().includes('TENIS');
+    const gradeTarget = isTenis ? GRADE_TENIS : GRADE_VESTUARIO;
+    
+    // Criar o HTML do modal dinamicamente
+    let modalHTML = `
+        <div id="modalGrade" class="modal-glass animate__animated animate__fadeIn">
+            <h3>Grade: ${produto.nome}</h3>
+            <p style="font-size: 0.8rem; opacity: 0.7;">Informe as quantidades por tamanho:</p>
+            
+            <div class="grid-tamanhos">
+                ${gradeTarget.map(tam => `
+                    <div class="item-grade">
+                        <label>${tam}</label>
+                        <input type="number" 
+                               class="input-grade" 
+                               data-tamanho="${tam}" 
+                               min="0" 
+                               placeholder="0"
+                               oninput="calcularTotalGrade()">
+                    </div>
+                `).join('')}
+            </div>
 
-// Isso garante que o onclick="funcao()" funcione sempre
+            <div class="modal-footer">
+                <div>Total: <span id="totalModal" class="total-badge">0</span></div>
+                <button class="btn-confirmar" onclick="confirmarGrade(${produto.id}, '${produto.nome}', '${produto.tipo}')">OK</button>
+            </div>
+        </div>
+        <div id="overlay" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:999;"></div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+}
+
+function calcularTotalGrade() {
+    const inputs = document.querySelectorAll('.input-grade');
+    let total = 0;
+    inputs.forEach(input => {
+        total += parseInt(input.value) || 0;
+    });
+    document.getElementById('totalModal').innerText = total;
+}
+
+function confirmarGrade(id, nome, tipo) {
+    const inputs = document.querySelectorAll('.input-grade');
+    const gradeFinal = {};
+    let totalGeral = 0;
+
+    inputs.forEach(input => {
+        const qtd = parseInt(input.value) || 0;
+        if (qtd > 0) {
+            gradeFinal[input.dataset.tamanho] = qtd;
+            totalGeral += qtd;
+        }
+    });
+
+    if (totalGeral === 0) {
+        notificar("Não é permitido quantidade zerada");
+        return;
+    }
+
+    // Aqui enviamos para a função que você já possui ou para o resumo lateral
+    adicionarAoResumoLateral({
+        produto_id: id,
+        nome: nome,
+        tipo: tipo,
+        qtd_total: totalGeral,
+        grade: gradeFinal
+    });
+
+    fecharModal();
+}
+
+function fecharModal() {
+    document.getElementById('modalGrade')?.remove();
+    document.getElementById('overlay')?.remove();
+}
+
+function adicionarAoResumoLateral(item) {
+    // Verifica se o item já está no resumo para evitar duplicidade (ou somar)
+    const index = carrinhoEntrada.findIndex(p => p.produto_id === item.produto_id);
+    
+    if (index > -1) {
+        carrinhoEntrada[index] = item; // Atualiza com os novos valores
+    } else {
+        carrinhoEntrada.push(item);
+    }
+    
+    renderizarResumoLateral();
+}
+
+function renderizarResumoLateral() {
+    const container = document.getElementById('lista-resumo');
+    container.innerHTML = '';
+
+    carrinhoEntrada.forEach((item, index) => {
+        let gradeHTML = '';
+        
+        // Se for uniforme, mostra os tamanhos detalhados
+        if (item.tipo === 'UNIFORMES' && item.grade) {
+            const detalhes = Object.entries(item.grade)
+                .map(([tam, qtd]) => `<b>${tam}</b>:${qtd}`)
+                .join(' | ');
+            gradeHTML = `<div class="detalhe-grade-resumo">${detalhes}</div>`;
+        }
+
+        container.innerHTML += `
+            <div class="card-item-resumo animate__animated animate__fadeInRight">
+                <div style="display:flex; justify-content:space-between;">
+                    <strong>${item.nome}</strong>
+                    <span style="color: #00d4ff;">+${item.qtd_total}</span>
+                </div>
+                ${gradeHTML}
+                <button onclick="removerItem(${index})" 
+                        style="background:none; border:none; color:#ff4d4d; cursor:pointer; font-size:0.7rem; padding:0; margin-top:5px;">
+                    [ remover ]
+                </button>
+            </div>
+        `;
+    });
+}
+
+function removerItem(index) {
+    carrinhoEntrada.splice(index, 1);
+    renderizarResumoLateral();
+}
+
+async function finalizarEntradaEstoque() {
+    if (carrinhoEntrada.length === 0) return notificar("O resumo está vazio!");
+
+    const payload = {
+        itens: carrinhoEntrada,
+        usuario_id: usuarioLogado.id // ID do usuário do seu sistema
+    };
+
+    try {
+        const response = await fetch('/estoque/entrada-lote', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            notificar("Estoque atualizado com sucesso.");
+            carrinhoEntrada = [];
+            renderizarResumoLateral();
+            // Opcional: recarregar listagem principal aqui
+        } else {
+            notificar("Erro: " + result.error);
+        }
+    } catch (err) {
+        console.error(err);
+        notificar("Falha na comunicação com o servidor.");
+    }
+}
+
+async function abrirTelaEntrada() {
+    const app = document.getElementById('app-content');
+    if (!app) return;
+
+    app.innerHTML = `
+        <div class="header-entrada animate__animated animate__fadeIn">
+            <button class="btn-voltar-vidro" onclick="carregarDashboard()" style="margin-bottom: 20px;">
+                <i class="fas fa-arrow-left"></i> VOLTAR
+            </button>
+            <h2 class="titulo-sessao" style="color: white; margin-bottom: 20px;">ENTRADA DE MERCADORIA</h2>
+            <p style="color: rgba(255,255,255,0.6); margin-bottom: 20px;">Selecione os itens e digite as quantidades para somar ao estoque.</p>
+        </div>
+        
+        <div id="lista-entrada-produtos">
+            <p style="color: white; padding: 20px;">Carregando produtos...</p>
+        </div>
+
+        <div id="footer-acoes" style="position: sticky; bottom: 20px; display: flex; justify-content: flex-end; margin-top: 30px;">
+            <button class="btn-confirmar-entrada" onclick="processarEntradaEstoque()" 
+                style="padding: 15px 40px; border-radius: 30px; border: none; background: #00d4ff; color: #001a2c; font-weight: bold; cursor: pointer; box-shadow: 0 10px 20px rgba(0,212,255,0.3);">
+                <i class="fas fa-check"></i> CONFIRMAR ENTRADA
+            </button>
+        </div>
+    `;
+
+    try {
+        const res = await fetch(`${API_URL}/estoque/consulta-exclusiva`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const dadosBrutos = await res.json();
+        const produtos = dadosBrutos.filter(p => p.tipo !== 'PATRIMONIO');
+        
+        const listaHtml = document.getElementById('lista-entrada-produtos');
+        listaHtml.innerHTML = '';
+
+        const listaOrdenada = produtos.sort((a, b) => {
+            if (a.tipo === 'MATERIAL' && b.tipo !== 'MATERIAL') return -1;
+            if (a.tipo !== 'MATERIAL' && b.tipo === 'MATERIAL') return 1;
+            return a.nome.localeCompare(b.nome);
+        });
+
+        listaOrdenada.forEach(p => {
+            const isUniforme = p.tipo === 'UNIFORMES';
+            const isTenis = p.nome.toUpperCase().includes('TENIS');
+            const corTag = p.tipo === 'MATERIAL' ? '#10b981' : '#00d4ff';
+            
+            // Lógica de ordenação da grade para Uniformes (exceto tênis)
+            let gradeOrdenada = p.grade || [];
+            if (isUniforme && !isTenis && gradeOrdenada.length > 0) {
+                const ordemDefinida = ['2', '4', '6', '8', '10', '12', '14', '16', 'PP', 'P', 'M', 'G', 'GG', 'EGG'];
+                gradeOrdenada = [...gradeOrdenada].sort((a, b) => {
+                    const idxA = ordemDefinida.indexOf(String(a.tamanho).toUpperCase());
+                    const idxB = ordemDefinida.indexOf(String(b.tamanho).toUpperCase());
+                    if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+                    if (idxA !== -1) return -1;
+                    if (idxB !== -1) return 1;
+                    return String(a.tamanho).localeCompare(String(b.tamanho));
+                });
+            }
+
+            listaHtml.innerHTML += `
+                <div class="card-entrada glass-panel animate__animated animate__fadeInUp" 
+                    style="background: rgba(255,255,255,0.05); margin-bottom: 12px; padding: 18px; border-radius: 15px; color: white; border: 1px solid rgba(255,255,255,0.1);">
+                    
+                    <div style="display: flex; justify-content: space-between; align-items: center;" 
+                         ${isUniforme ? `onclick="toggleGrade(${p.id})"` : ''}>
+                        <div style="cursor: ${isUniforme ? 'pointer' : 'default'}">
+                            <span style="font-size: 0.7rem; background: ${corTag}; padding: 3px 8px; border-radius: 5px; color: #001a2c; font-weight: bold;">
+                                ${p.tipo}
+                            </span>
+                            <p style="margin: 8px 0 0 0; font-weight: bold; font-size: 1.1rem;">${p.nome}</p>
+                            <small style="opacity: 0.5;">Estoque atual: ${p.quantidade_estoque}</small>
+                        </div>
+
+                        ${!isUniforme ? `
+                            <div style="text-align: right;">
+                                <small style="display: block; font-size: 0.65rem; opacity: 0.6; margin-bottom: 5px;">QTD ENTRADA</small>
+                                <input type="number" class="input-entrada-qtd" data-id="${p.id}" data-tipo="MATERIAL"
+                                       style="width: 100px; background: rgba(0,0,0,0.3); border: 1px solid #10b981; color: white; padding: 8px; border-radius: 8px; text-align: center;"
+                                       placeholder="0" min="0">
+                            </div>
+                        ` : `
+                            <div style="color: #00d4ff; font-size: 0.8rem; cursor: pointer; text-align: right;">
+                                Clique para abrir grade <i class="fas fa-chevron-down"></i>
+                                <br><small style="opacity:0.6">Total atual: ${p.quantidade_estoque}</small>
+                            </div>
+                        `}
+                    </div>
+
+                    ${isUniforme ? `
+                        <div id="grade-${p.id}" class="grade-expansivel" style="display:none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);">
+                            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px;">
+                                ${gradeOrdenada.map(g => `
+                                    <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; text-align: center; border: 1px solid rgba(255,255,255,0.05);">
+                                        <small style="display: block; font-size: 0.6rem; color: #00d4ff; margin-bottom: 5px;">${g.tamanho}</small>
+                                        <input type="number" class="input-entrada-qtd" 
+                                                data-id="${p.id}" data-tipo="UNIFORMES" data-tamanho="${g.tamanho}"
+                                                style="width: 100%; background: transparent; border: none; border-bottom: 1px solid #00d4ff; color: white; text-align: center;"
+                                                placeholder="0" min="0">
+                                        <small style="display: block; font-size: 0.55rem; opacity: 0.4; margin-top: 4px;">Atual: ${g.quantidade}</small>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        });
+    } catch (err) {
+        console.error("Erro ao carregar tela de entrada:", err);
+        document.getElementById('lista-entrada-produtos').innerHTML = `<p style="color: #ff4d4d; padding: 20px;">❌ Erro ao carregar dados.</p>`;
+    }
+}
+
+function renderizarListaProdutos(produtos) {
+    const listaHtml = document.getElementById('lista-produtos-entrada');
+    listaHtml.innerHTML = '';
+
+    produtos.forEach(p => {
+        const isUniforme = p.tipo === 'UNIFORMES';
+        
+        listaHtml.innerHTML += `
+            <div class="card-produto-entrada glass-panel">
+                <div class="info">
+                    <span class="badge-tipo ${p.tipo.toLowerCase()}">${p.tipo}</span>
+                    <p class="nome-prod">${p.nome}</p>
+                    <small>Atual: ${p.quantidade_estoque}</small>
+                </div>
+                
+                <div class="acoes">
+                    ${isUniforme 
+                        ? `<button class="btn-grade" onclick='abrirModalGrade(${JSON.stringify(p)})'>
+                             <i class="fas fa-layer-group"></i> Abrir Grade
+                           </button>`
+                        : `<input type="number" placeholder="Qtd" class="input-material" id="qtd_${p.id}">
+                           <button class="btn-add" onclick="adicionarMaterial(${p.id}, '${p.nome}')">
+                             <i class="fas fa-plus"></i>
+                           </button>`
+                    }
+                </div>
+            </div>
+        `;
+    });
+}
+
+function adicionarMaterial(id, nome) {
+    const input = document.getElementById(`qtd_${id}`);
+    const qtd = parseInt(input.value);
+
+    if (!qtd || qtd <= 0) {
+        notificar("Informe uma quantidade válida.");
+        return;
+    }
+
+    adicionarAoResumoLateral({
+        produto_id: id,
+        nome: nome,
+        tipo: 'MATERIAL',
+        qtd_total: qtd,
+        grade: null // Materiais não possuem grade
+    });
+
+    input.value = ''; // Limpa o campo após adicionar
+}
+
+// Função para renderizar os controles de filtro na tela
+function renderizarFiltroPeriodo() {
+    const containerFiltro = document.getElementById('secao-historico');
+    
+    // Inserindo o HTML dos inputs de data com estilo vitrificado
+    const htmlFiltro = `
+        <div class="toolbar-filtros glass-panel" style="margin-bottom: 20px; display: flex; gap: 15px; align-items: flex-end; padding: 15px;">
+            <div class="campo-data">
+                <label style="display:block; font-size: 0.7rem; color: #00d4ff; margin-bottom: 5px;">INÍCIO:</label>
+                <input type="date" id="data-inicio" class="input-grade" style="width: 150px;">
+            </div>
+            <div class="campo-data">
+                <label style="display:block; font-size: 0.7rem; color: #00d4ff; margin-bottom: 5px;">FIM:</label>
+                <input type="date" id="data-fim" class="input-grade" style="width: 150px;">
+            </div>
+            <button class="btn-confirmar" onclick="filtrarHistoricoPorPeriodo()" style="height: 38px; margin-bottom: 2px;">
+                <i class="fas fa-search"></i> FILTRAR
+            </button>
+        </div>
+        <div class="acoes-relatorio animate__animated animate__fadeIn">
+            <button class="btn-acao pdf" onclick="gerarPDFHistorico()">
+                <i class="fas fa-file-pdf"></i> PDF (A4 Paisagem)
+            </button>
+            <button class="btn-acao excel" onclick="exportarExcelHistorico()">
+                <i class="fas fa-file-excel"></i> Exportar Excel
+            </button>
+            <button class="btn-acao share" onclick="compartilharRelatorio()">
+                <i class="fas fa-share-alt"></i> Compartilhar
+            </button>
+        </div>            
+        <div id="timeline-historico"></div>
+    `;
+    
+    containerFiltro.innerHTML = htmlFiltro;
+    
+    // Sugestão: Preencher com a data de hoje por padrão
+    const hoje = new Date().toISOString().split('T')[0];
+    document.getElementById('data-inicio').value = hoje;
+    document.getElementById('data-fim').value = hoje;
+}
+
+async function filtrarHistoricoPorPeriodo() {
+    const inicio = document.getElementById('data-inicio').value;
+    const fim = document.getElementById('data-fim').value;
+    
+    if (!inicio || !fim) return notificar("Selecione o período completo.");
+
+    // Chamada para a API passando as datas como parâmetros
+    const response = await fetch(`/api/estoque/historico-periodo?inicio=${inicio}&fim=${fim}`);
+    const logs = await response.json();
+    
+    // Chama a função de renderização que criamos anteriormente
+    renderizarCardsHistorico(logs); 
+}
+
+function gerarPDFHistorico() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({
+        orientation: "landscape",
+        unit: "mm",
+        format: "a4"
+    });
+
+    // Título e Cabeçalho
+    doc.setFontSize(18);
+    doc.text("Relatório de Entradas - Almoxarifado Central (Local 37)", 14, 20);
+    doc.setFontSize(10);
+    doc.text(`Período: ${document.getElementById('data-inicio').value} até ${document.getElementById('data-fim').value}`, 14, 28);
+
+    // Preparar dados da tabela (usando o array que você já tem no front)
+    const colunas = ["Data", "Usuário", "Ação", "Qtd Total", "Itens Detalhados"];
+    const linhas = historicoFiltrado.map(h => [
+        new Date(h.data).toLocaleString(),
+        h.usuario,
+        h.acao,
+        h.quantidade_total,
+        h.itens.map(i => `${i.produto}(${i.qtd})`).join(', ')
+    ]);
+
+    doc.autoTable({
+        head: [colunas],
+        body: linhas,
+        startY: 35,
+        theme: 'grid',
+        headStyles: { fillColor: [0, 212, 255] } // Azul neon no cabeçalho
+    });
+
+    doc.save(`Relatorio_Entradas_${Date.now()}.pdf`);
+}
+
+function exportarExcelHistorico() {
+    const ws = XLSX.utils.json_to_sheet(historicoFiltrado.map(h => ({
+        Data: new Date(h.data).toLocaleString(),
+        Usuario: h.usuario,
+        Acao: h.acao,
+        Total: h.quantidade_total,
+        Itens: h.itens.map(i => `${i.produto}(${i.qtd})`).join(' | '),
+        Observacoes: h.observacoes
+    })));
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Entradas");
+    XLSX.writeFile(wb, `Estoque_Almoxarifado_${Date.now()}.xlsx`);
+}
+
+async function compartilharRelatorio() {
+    const inicio = document.getElementById('data-inicio').value;
+    const fim = document.getElementById('data-fim').value;
+    const totalItens = historicoFiltrado.reduce((acc, curr) => acc + curr.quantidade_total, 0);
+
+    const textoShare = `📦 *Relatório Almoxarifado Central*\n` +
+                       `📅 Período: ${inicio} a ${fim}\n` +
+                       `✅ Total de itens recebidos: ${totalItens}\n` +
+                       `💻 Gerado via Sistema CEL Renato Gomes.`;
+
+    if (navigator.share) {
+        try {
+            await navigator.share({
+                title: 'Relatório de Estoque',
+                text: textoShare,
+            });
+        } catch (err) {
+            console.log("Compartilhamento cancelado.");
+        }
+    } else {
+        // Fallback para PC caso não tenha suporte: copia para o clipboard
+        navigator.clipboard.writeText(textoShare);
+        notificar("Resumo copiado para a área de transferência!");
+    }
+}
+
+// --- BLOCO DE CONSULTA DE ESTOQUE (LOCAL 37) ---
+async function carregarConsultaEstoque() {
+    const app = document.getElementById('app-content');
+    if (!app) return;
+
+    let todosProdutos = [];
+
+    app.innerHTML = `
+        <style>
+            .consulta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 10px; }
+            .coluna-estoque { background: rgba(255, 255, 255, 0.05); border-radius: 15px; padding: 15px; border: 1px solid rgba(255,255,255,0.1); }
+            .coluna-titulo { color: #00d4ff; font-size: 0.9rem; font-weight: bold; margin-bottom: 15px; border-bottom: 1px solid rgba(0,212,255,0.2); padding-bottom: 5px; text-transform: uppercase; }
+            
+            .card-consulta { 
+                cursor: pointer; 
+                user-select: none; 
+                transition: transform 0.2s, background 0.2s;
+            }
+            .card-consulta:hover { background: rgba(255,255,255,0.08) !important; transform: translateY(-2px); }
+            .card-consulta:active { transform: scale(0.98); }
+
+            @media (max-width: 900px) { .consulta-grid { grid-template-columns: 1fr; } }
+        </style>
+
+        <div class="header-consulta animate__animated animate__fadeIn">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <button class="btn-voltar-vidro" onclick="carregarDashboard()">
+                    <i class="fas fa-arrow-left"></i> VOLTAR
+                </button>
+                <h2 class="titulo-sessao" style="color: white; margin: 0;">CONSULTA DE ESTOQUE</h2>
+                <div style="width: 100px;"></div> 
+            </div>
+        </div>
+
+        <div id="container-busca" style="margin-bottom: 20px;">
+            <div style="position: relative; display: flex; align-items: center;">
+                <i class="fas fa-search" style="position: absolute; left: 15px; color: rgba(255,255,255,0.5);"></i>
+                <input type="text" id="input-busca-estoque" placeholder="Buscar produto..." 
+                    style="width: 100%; padding: 12px 12px 12px 45px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.1); color: white; outline: none;">
+            </div>
+        </div>
+
+        <div class="consulta-grid">
+            <div class="coluna-estoque">
+                <div class="coluna-titulo"><i class="fas fa-tshirt"></i> Uniformes</div>
+                <div id="lista-uniformes"></div>
+            </div>
+            <div class="coluna-estoque">
+                <div class="coluna-titulo"><i class="fas fa-box"></i> Materiais</div>
+                <div id="lista-materiais"></div>
+            </div>
+        </div>
+
+        <div id="modal-historico-prod" class="modal-vidro" style="display:none;">
+            <div class="modal-content-hist glass-panel">
+                <div class="modal-header">
+                    <h3 id="hist-nome-produto" style="color: #00d4ff; margin: 0;"></h3>
+                    <button class="btn-fechar" onclick="fecharModalHist()">×</button>
+                </div>
+                <div class="modal-corpo-duplo">
+                    <div class="hist-metade">
+                        <h4><i class="fas fa-sign-in-alt text-success"></i> ENTRADAS</h4>
+                        <div id="hist-lista-entradas"></div>
+                    </div>
+                    <div class="hist-metade">
+                        <h4><i class="fas fa-sign-out-alt text-danger"></i> SAÍDAS</h4>
+                        <div id="hist-lista-saidas"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    const renderizarLista = (produtosParaExibir) => {
+        const divUniformes = document.getElementById('lista-uniformes');
+        const divMateriais = document.getElementById('lista-materiais');
+
+        const filtrados = produtosParaExibir.filter(p => p.tipo !== 'PATRIMONIO');
+        const uniformes = filtrados.filter(p => p.tipo === 'UNIFORMES').sort((a, b) => a.nome.localeCompare(b.nome));
+        const materiais = filtrados.filter(p => p.tipo === 'MATERIAL').sort((a, b) => a.nome.localeCompare(b.nome));
+
+        const gerarCard = (p) => {
+            const nivelBaixo = p.quantidade_estoque <= p.alerta_minimo;
+            const isUniforme = p.tipo === 'UNIFORMES';
+            const isTenis = p.nome.toUpperCase().includes('TENIS');
+            
+            // Lógica de ordenação da grade
+            let gradeOrdenada = p.grade || [];
+            if (isUniforme && !isTenis && gradeOrdenada.length > 0) {
+                const ordemDefinida = ['2', '4', '6', '8', '10', '12', '14', '16', 'PP', 'P', 'M', 'G', 'GG', 'EGG'];
+                gradeOrdenada = [...gradeOrdenada].sort((a, b) => {
+                    const idxA = ordemDefinida.indexOf(a.tamanho.toUpperCase());
+                    const idxB = ordemDefinida.indexOf(b.tamanho.toUpperCase());
+                    
+                    // Se ambos os tamanhos estão na lista de ordem definida
+                    if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+                    // Se apenas um está, ele vem primeiro
+                    if (idxA !== -1) return -1;
+                    if (idxB !== -1) return 1;
+                    // Caso contrário (tamanhos extras), ordem alfabética
+                    return a.tamanho.localeCompare(b.tamanho);
+                });
+            }
+
+            return `
+                <div class="card-consulta glass-panel" 
+                     onclick="gerenciarCliquesProduto(event, ${p.id}, '${p.nome}', ${isUniforme})"
+                     style="margin-bottom: 10px; padding: 12px; border-radius: 10px; border: 1px solid ${nivelBaixo ? '#ff4d4d' : 'rgba(255,255,255,0.1)'};">
+                    <div style="display: flex; justify-content: space-between; align-items: center; pointer-events: none;">
+                        <div>
+                            <p style="margin: 0; font-weight: bold; font-size: 0.95rem; color: white;">${p.nome}</p>
+                        </div>
+                        <div style="text-align: right;">
+                            <small style="font-size: 0.6rem; opacity: 0.6; display: block; color: white;">SALDO</small>
+                            <span style="font-weight: 900; color: ${nivelBaixo ? '#ff4d4d' : '#00d4ff'};">${p.quantidade_estoque}</span>
+                        </div>
+                    </div>
+                    ${isUniforme && gradeOrdenada.length > 0 ? `
+                        <div id="grade-${p.id}" class="grade-expansivel" style="display:none; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1);">
+                            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(45px, 1fr)); gap: 8px;">
+                                ${gradeOrdenada.map(g => `
+                                    <div style="background: rgba(255,255,255,0.1); padding: 4px; border-radius: 5px; text-align: center;">
+                                        <small style="display: block; font-size: 0.55rem; color: #00d4ff;">${g.tamanho}</small>
+                                        <strong style="font-size: 0.8rem; color: #ffffff;">${g.quantidade}</strong>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        };
+
+        divUniformes.innerHTML = uniformes.length ? uniformes.map(gerarCard).join('') : '<p class="empty-msg">Sem uniformes</p>';
+        divMateriais.innerHTML = materiais.length ? materiais.map(gerarCard).join('') : '<p class="empty-msg">Sem materiais</p>';
+    };
+
+    try {
+        const res = await fetch(`${API_URL}/estoque/consulta-exclusiva`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        todosProdutos = await res.json();
+        renderizarLista(todosProdutos);
+
+        document.getElementById('input-busca-estoque').addEventListener('input', (e) => {
+            const termo = e.target.value.toLowerCase();
+            const filtrados = todosProdutos.filter(p => p.nome.toLowerCase().includes(termo));
+            renderizarLista(filtrados);
+        });
+    } catch (err) { console.error("Erro:", err); }
+}
+
+async function abrirModalHistorico(produtoId, nomeProduto) {
+    const modal = document.getElementById('modal-historico-prod');
+    const nomeEl = document.getElementById('hist-nome-produto');
+    const entradasEl = document.getElementById('hist-lista-entradas');
+    const saidasEl = document.getElementById('hist-lista-saidas');
+
+    nomeEl.innerText = nomeProduto;
+    entradasEl.innerHTML = '<div class="spinner-small"></div>';
+    saidasEl.innerHTML = '<div class="spinner-small"></div>';
+    modal.style.display = 'flex';
+
+    try {
+        const res = await fetch(`${API_URL}/estoque/historico-produto/${produtoId}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+
+        // Renderiza as entradas
+        entradasEl.innerHTML = data.entradas.length ? data.entradas.map(e => `
+            <div class="hist-item">
+                <p><strong>${e.quantidade} un. ${e.tamanho ? `(${e.tamanho})` : ''}</strong></p>
+                <small>${new Date(e.data_hora).toLocaleString('pt-BR')}</small>
+                <small>Por: ${e.nome_usuario}</small>
+                <small>Obs: ${e.observacoes || 'N/A'}</small>
+            </div>
+        `).join('') : '<p class="empty-msg">Nenhuma entrada registrada.</p>';
+
+        // Renderiza as saídas
+        saidasEl.innerHTML = data.saidas.length ? data.saidas.map(s => `
+            <div class="hist-item">
+                <p><strong>${s.quantidade} un. ${s.tamanho ? `(${s.tamanho})` : ''}</strong></p>
+                <small>${new Date(s.data_hora).toLocaleString('pt-BR')}</small>
+                <small>Destino: ${s.observacoes}</small>
+                <small>Pedido por: ${s.nome_usuario || 'N/A'}</small>
+            </div>
+        `).join('') : '<p class="empty-msg">Nenhuma saída registrada.</p>';
+
+    } catch (err) {
+        notificar(`Erro ao carregar histórico: ${err.message}`, 'erro');
+        entradasEl.innerHTML = '<p class="text-danger">Erro ao carregar.</p>';
+        saidasEl.innerHTML = '<p class="text-danger">Erro ao carregar.</p>';
+    }
+}
+
+function gerenciarCliquesProduto(event, id, nome, isUniforme) {
+    // event.detail contém o número de cliques consecutivos
+    if (event.detail === 1) {
+        // Clique Simples: Abre/Fecha a grade se for uniforme
+        if (isUniforme) {
+            toggleGrade(id);
+        }
+    } else if (event.detail === 3) {
+        // Clique Triplo: Abre o Histórico (independente de ser uniforme ou material)
+        abrirModalHistorico(id, nome);
+    }
+}
+
+function fecharModalHist() {
+    document.getElementById('modal-historico-prod').style.display = 'none';
+}
+
+// Suporte para as abas (Evita conflito com mudarAba)
+function alternarVisualizacaoConsulta(sessao) {
+    const secaoEstoque = document.getElementById('secao-estoque');
+    const secaoHistorico = document.getElementById('secao-historico');
+    const botoes = document.querySelectorAll('.aba-item');
+
+    botoes.forEach(btn => btn.classList.remove('active'));
+    if(secaoEstoque) secaoEstoque.style.display = 'none';
+    if(secaoHistorico) secaoHistorico.style.display = 'none';
+
+    if (sessao === 'estoque') {
+        secaoEstoque.style.display = 'block';
+        botoes[0].classList.add('active');
+    } else {
+        secaoHistorico.style.display = 'block';
+        botoes[1].classList.add('active');
+        carregarHistoricoEntradas(); 
+    }
+}
+
+// Abre/Fecha grade de uniformes
+function toggleGrade(id) {
+    const grade = document.getElementById(`grade-${id}`);
+    if (grade) {
+        const isHidden = grade.style.display === 'none';
+        grade.style.display = isHidden ? 'block' : 'none';
+    }
+}
+
+// Carrega o histórico (Necessário para a aba funcionar)
+async function carregarHistoricoEntradas() {
+    const timeline = document.getElementById('timeline-historico');
+    if (!timeline) return;
+
+    timeline.innerHTML = '<p style="color: white; padding: 20px; text-align: center; opacity: 0.6;">⏳ Carregando registros...</p>';
+
+    try {
+        const res = await fetch(`${API_URL}/estoque/historico-completo`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+
+        if (!res.ok) throw new Error("Falha na requisição");
+
+        const registros = await res.json();
+        
+        if (!registros || registros.length === 0) {
+            timeline.innerHTML = '<p style="color: white; padding: 40px; text-align: center; opacity: 0.5;">Nenhuma entrada encontrada.</p>';
+            return;
+        }
+
+        // Usamos um array para montar o HTML e depois inserimos de uma vez (melhor performance)
+        const htmlFinal = registros.map(reg => {
+            const data = new Date(reg.data_hora).toLocaleString('pt-BR');
+            
+            // Gerar o HTML dos itens separadamente para evitar confusão de crases
+            const itensHtml = (reg.itens || []).map(item => {
+                const infoTamanho = item.tamanho ? `(Tam: ${item.tamanho})` : '';
+                return `
+                    <div style="display: flex; justify-content: space-between; color: white; font-size: 0.85rem; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                        <span>${item.nome_produto} ${infoTamanho}</span>
+                        <span style="font-weight: bold; color: #00d4ff;">+${item.quantidade}</span>
+                    </div>
+                `;
+            }).join('');
+
+            return `
+                <div class="card-historico glass-panel animate__animated animate__fadeIn" 
+                     style="background: rgba(255,255,255,0.05); padding: 15px; margin-bottom: 12px; border-radius: 12px; border-left: 4px solid #00d4ff;">
+                    
+                    <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: #00d4ff; margin-bottom: 10px;">
+                        <span>📅 ${data}</span>
+                        <span>ID #${reg.id}</span>
+                    </div>
+                    <div style="color: white; font-weight: bold; margin-bottom: 8px;">
+                        👤 Usuário: ${reg.nome_usuario || 'Sistema'}
+                    </div>
+                    <div class="lista-itens-hist" style="background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px;">
+                        ${itensHtml}
+                    </div>
+
+                    ${reg.observacoes ? `
+                        <div style="margin-top:10px; font-size:0.8rem; color:rgba(255,255,255,0.6); font-style: italic;">
+                            " ${reg.observacoes} "
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }).join('');
+
+        timeline.innerHTML = htmlFinal;
+
+    } catch (err) {
+        console.error("Erro no Histórico:", err);
+        timeline.innerHTML = '<p style="color: #ff4d4d; padding: 20px;">❌ Erro ao carregar histórico.</p>';
+    }
+}
+
+async function abrirTelaSaidaPedido() {
+    const app = document.getElementById('app-content');
+    if (!app) return;
+
+    // 1. Estrutura Inicial com seletor de destino
+    app.innerHTML = `
+        <div class="header-saida animate__animated animate__fadeIn">
+            <button class="btn-voltar-vidro" onclick="carregarDashboard()" style="margin-bottom: 20px;">
+                ⬅️ VOLTAR
+            </button>
+            <h2 class="titulo-sessao" style="color: white; margin-bottom: 20px;">SAÍDA DE ESTOQUE / NOVO PEDIDO</h2>
+            
+            <div class="glass-panel" style="padding: 20px; margin-bottom: 20px; border-radius: 15px;">
+                <label style="color: #00d4ff; font-weight: bold; display: block; margin-bottom: 10px;">📍 SELECIONE O LOCAL DESTINO:</label>
+                <select id="select-local-destino" style="width: 100%; padding: 12px; background: rgba(0,0,0,0.4); color: white; border: 1px solid #00d4ff; border-radius: 8px;">
+                    <option value="">Carregando locais...</option>
+                </select>
+            </div>
+        </div>
+        
+        <div id="lista-saida-produtos">
+            <p style="color: white; padding: 20px;">Sincronizando produtos...</p>
+        </div>
+
+        <div id="footer-acoes" style="position: sticky; bottom: 20px; display: flex; justify-content: flex-end; margin-top: 30px;">
+            <button class="btn-confirmar-saida" onclick="processarSaidaPedido()" 
+                style="padding: 15px 40px; border-radius: 30px; border: none; background: #ff4d4d; color: white; font-weight: bold; cursor: pointer; box-shadow: 0 10px 20px rgba(255,77,77,0.3);">
+                ✅ CONFIRMAR PEDIDO
+            </button>
+        </div>
+    `;
+
+    try {
+        // 2. Carregar Locais (Filtrando 37 e 50)
+        const resLocais = await fetch(`${API_URL}/locais`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+        const locais = await resLocais.json();
+        const selectDestino = document.getElementById('select-local-destino');
+        // Filtra conforme regra: não 37 (estoque próprio) e não 50 (transferência reservada)
+        selectDestino.innerHTML = '<option value="">-- SELECIONE A UNIDADE --</option>' + 
+            locais.filter(l => l.id !== 37 && l.id !== 50)
+                  .map(l => `<option value="${l.id}">${l.nome}</option>`).join('');
+
+        // 3. Carregar Produtos com saldo atualizado
+        const resProd = await fetch(`${API_URL}/estoque/consulta-exclusiva`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+        const produtos = await resProd.json();
+        const listaHtml = document.getElementById('lista-saida-produtos');
+        listaHtml.innerHTML = '';
+
+        produtos.forEach(p => {
+            const isUniforme = p.tipo === 'UNIFORMES';
+            listaHtml.innerHTML += `
+                <div class="card-saida glass-panel" id="card-saida-${p.id}" 
+                     style="background: rgba(255,255,255,0.05); margin-bottom: 12px; padding: 18px; border-radius: 15px; color: white; border: 1px solid rgba(255,255,255,0.1);">
+                    
+                    <div style="display: flex; justify-content: space-between; align-items: center;" 
+                         ${isUniforme ? `onclick="toggleGradeSaida(${p.id})"` : ''}>
+                        <div>
+                            <span style="font-size: 0.7rem; background: #00d4ff; padding: 3px 8px; border-radius: 5px; color: #001a2c; font-weight: bold;">
+                                ${p.tipo}
+                            </span>
+                            <p style="margin: 8px 0 0 0; font-weight: bold; font-size: 1.1rem;">${p.nome}</p>
+                            <small style="color: #aaa;">Estoque: <strong style="color: #00d4ff;">${p.quantidade_estoque}</strong></small>
+                        </div>
+
+                        ${!isUniforme ? `
+                            <div style="text-align: right;">
+                                <small style="display: block; font-size: 0.50rem; opacity: 0.6; margin-bottom: 5px;">QTD SAÍDA</small>
+                                <input type="number" class="input-saida-qtd" data-id="${p.id}" data-tipo="MATERIAL" data-max="${p.quantidade_estoque}"
+                                       onchange="validarEstoqueMax(this)"
+                                       style="width: 80px; background: rgba(0,0,0,0.3); border: 1px solid #ff4d4d; color: white; padding: 8px; border-radius: 8px; text-align: center;"
+                                       placeholder="0" min="0">
+                            </div>
+                        ` : `
+                            <div style="text-align: right;">
+                                <span id="total-uniforme-${p.id}" style="font-size: 1.2rem; font-weight: bold; color: #ff4d4d; display: block;">0</span>
+                                <small style="color: #00d4ff;">Grade 👕 <i class="fas fa-chevron-down"></i></small>
+                            </div>
+                        `}
+                    </div>
+
+                    ${isUniforme ? `
+                        <div id="grade-saida-${p.id}" class="grade-expansivel" style="display:none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);">
+                            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px;">
+                                ${p.grade.map(g => `
+                                    <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; text-align: center;">
+                                        <small style="display: block; font-size: 0.50rem; color: #00d4ff;">${g.tamanho}</small>
+                                        <small style="display: block; font-size: 0.50rem; color: #777;">Saldo: ${g.quantidade}</small>
+                                        <input type="number" class="input-saida-qtd" 
+                                               data-id="${p.id}" data-tipo="UNIFORMES" data-tamanho="${g.tamanho}" data-max="${g.quantidade}"
+                                               oninput="atualizarTotalGradeSaida(${p.id})" onchange="validarEstoqueMax(this)"
+                                               style="width: 100%; background: transparent; border: none; border-bottom: 1px solid #ff4d4d; color: white; text-align: center;"
+                                               placeholder="0" min="0">
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        });
+    } catch (err) {
+        console.error("Erro ao carregar tela de saída:", err);
+    }
+}
+
+// Funções Auxiliares de UI
+function toggleGradeSaida(id) {
+    const grade = document.getElementById(`grade-saida-${id}`);
+    if (grade) grade.style.display = grade.style.display === 'none' ? 'block' : 'none';
+}
+
+function atualizarTotalGradeSaida(produtoId) {
+    const inputs = document.querySelectorAll(`.input-saida-qtd[data-id="${produtoId}"]`);
+    let soma = 0;
+    inputs.forEach(i => soma += (parseInt(i.value) || 0));
+    document.getElementById(`total-uniforme-${produtoId}`).innerText = soma;
+}
+
+function validarEstoqueMax(input) {
+    const max = parseInt(input.dataset.max);
+    const atual = parseInt(input.value) || 0;
+    if (atual > max) {
+        notificar(`⚠️ Quantidade insuficiente! Estoque disponível: ${max}`);
+        input.value = 0;
+        input.focus();
+    }
+}
+
+async function processarSaidaPedido() {
+    const localDestinoId = document.getElementById('select-local-destino').value;
+    const usuarioId = localStorage.getItem('usuario_id');
+
+    if (!localDestinoId) {
+        notificar("⚠️ Selecione o Local de Destino!");
+        return;
+    }
+
+    const inputs = document.querySelectorAll('.input-saida-qtd');
+    const mapaItens = {};
+
+    inputs.forEach(input => {
+        const qtd = parseInt(input.value) || 0;
+        if (qtd <= 0) return;
+
+        const id = input.dataset.id;
+        const tipo = input.dataset.tipo;
+        const tamanho = input.dataset.tamanho;
+
+        if (!mapaItens[id]) {
+            mapaItens[id] = { 
+                produto_id: id, 
+                tipo: tipo, 
+                qtd_total: 0, 
+                grade: {} 
+            };
+        }
+
+        mapaItens[id].qtd_total += qtd;
+        if (tipo === 'UNIFORMES' && tamanho) {
+            mapaItens[id].grade[tamanho] = qtd;
+        }
+    });
+
+    const itensParaEnviar = Object.values(mapaItens);
+    if (itensParaEnviar.length === 0) {
+        notificar("⚠️ Informe as quantidades para saída.");
+        return;
+    }
+
+    if (!confirm("Confirmar a saída do estoque e geração do pedido?")) return;
+
+    try {
+        const res = await fetch(`${API_URL}/estoque/saida-pedido`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${TOKEN}` 
+            },
+            body: JSON.stringify({ 
+                itens: itensParaEnviar, 
+                local_destino_id: localDestinoId, 
+                usuario_id: usuarioId 
+            })
+        });
+
+        const resultado = await res.json();
+
+        if (res.ok) {
+            notificar("✅ Pedido APROVADO!");
+            carregarDashboard();
+        } else {
+            throw new Error(resultado.error);
+        }
+    } catch (err) {
+        notificar("❌ Erro no Pedido: " + err.message);
+    }
+}
+
+function verificarToken(req, res, next) {
+    // 1. Tenta pegar o token do cabeçalho 'Authorization' (padrão do fetch)
+    const authHeader = req.headers['authorization'];
+    const tokenHeader = authHeader && authHeader.split(' ')[1];
+
+    // 2. Tenta pegar o token da Query String (padrão usado no window.open)
+    const tokenQuery = req.query.token;
+
+    // 3. Define o token final: se houver no header, usa ele; se não, usa o da query
+    const token = tokenHeader || tokenQuery;
+
+    if (!token) {
+        return res.status(401).json({ error: "Token não fornecido" });
+    }
+
+    jwt.verify(token, SECRET, (err, decoded) => {
+        if (err) {
+            return res.status(403).json({ error: "Token inválido ou expirado" });
+        }
+
+        // Injeta os dados no req.user para uso nas rotas
+        req.user = decoded; 
+        
+        // Mantém req.userId para compatibilidade com rotas existentes
+        req.userId = decoded.id; 
+        
+        next();
+    });
+}
+
+async function abrirPainelGerencial() {
+    const container = document.getElementById('app-content');
+    container.innerHTML = '<div class="spinner"></div>';
+
+    try {
+        const res = await fetch(`${API_URL}/gerencial/resumo-status`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const resumo = await res.json();
+
+        // Mapeamento de Cores e Ícones por Status
+        const configStatus = {
+            'AGUARDANDO_AUTORIZACAO': { icon: '⏳', label: 'PENDENTES', cor: '#fbbf24' },
+            'APROVADO': { icon: '✅', label: 'APROVADOS', cor: '#4ade80' },
+            'SEPARACAO_INICIADA': { icon: '📦', label: 'EM SEPARAÇÃO', cor: '#60a5fa' },
+            'EM_TRANSPORTE': { icon: '🚚', label: 'A CAMINHO', cor: '#f472b6' },
+            'ENTREGUE': { icon: '🏠', label: 'ENTREGUES', cor: '#a78bfa' }
+        };
+
+        container.innerHTML = `
+            <div class="painel-gerencial-glass animate__animated animate__fadeIn">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:30px;">
+                    <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                    <h2 style="color:white; margin:0;">📈 PAINEL GERENCIAL DE PEDIDOS</h2>
+                </div>
+
+                <div class="grid-movel-celular" style="gap:20px;">
+                    ${Object.keys(configStatus).map(status => `
+                        <div class="card-status-gerencial" onclick="abrirListaPedidosStatus('${status}')">
+                            <span style="font-size:3rem; filter: drop-shadow(0 0 10px ${configStatus[status].cor});">${configStatus[status].icon}</span>
+                            <span style="color:white; font-weight:bold; letter-spacing:1px;">${configStatus[status].label}</span>
+                            <span class="badge-qtd">${resumo[status] || 0}</span>
+                        </div>
+                    `).join('')}
+                </div>
+                <p style="text-align:center; color:rgba(255,255,255,0.4); margin-top:30px; font-size:0.8rem;">
+                    💡 Clique em um card para ver a listagem das remessas em determinado status.
+                </p>
+            </div>
+        `;
+    } catch (err) {
+        notificar("Erro ao carregar painel.", "erro");
+    }
+}
+
+// --- MODAL NÍVEL 1: LISTAGEM DE PEDIDOS ---
+async function abrirListaPedidosStatus(status) {
+    const modal = document.createElement('div');
+    modal.className = 'modal-stack animate__animated animate__zoomIn';
+    modal.id = 'modal-lista-status';
+
+    try {
+        const res = await fetch(`${API_URL}/gerencial/lista-por-status/${status}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const pedidos = await res.json();
+
+        modal.innerHTML = `
+            <div class="painel-gerencial-glass" style="width:90%; max-width:800px; max-height:80vh; overflow-y:auto;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                    <button onclick="this.closest('.modal-stack').remove()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                    <h3 style="color:#00d4ff; margin:0;">PEDIDOS: ${status}</h3>
+                </div>
+
+                <table style="width:100%; color:white; border-collapse:collapse;">
+                    <thead>
+                        <tr style="border-bottom:2px solid rgba(255,255,255,0.1); text-align:left;">
+                            <th style="padding:10px;">ID</th>
+                            <th style="padding:10px;">DESTINO</th>
+                            <th style="padding:10px;">DATA</th>
+                            <th style="padding:10px;">AÇÃO</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${pedidos.map(p => `
+                            <tr style="border-bottom:1px solid rgba(255,255,255,0.05); hover:background:rgba(255,255,255,0.02);">
+                                <td style="padding:12px;">#${p.id}</td>
+                                <td style="padding:12px;">${p.destino}</td>
+                                <td style="padding:12px;">${new Date(p.data_criacao).toLocaleDateString()}</td>
+                                <td style="padding:12px;">
+                                    <button class="btn-vidro" style="padding:5px 10px; font-size:0.7rem;" onclick="abrirDetalhesItensGerencial(${p.id})">VER ITENS 🔍</button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    } catch (err) {
+        notificar("Erro ao listar pedidos.", "erro");
+    }
+}
+
+// --- MODAL NÍVEL 2: DETALHES DOS PRODUTOS (EM CIMA DO NÍVEL 1) ---
+async function abrirDetalhesItensGerencial(pedidoId) {
+    const modalItens = document.createElement('div');
+    modalItens.className = 'modal-stack animate__animated animate__fadeInUp';
+    modalItens.style.zIndex = '11000'; // Fica por cima do modal de lista
+
+    try {
+        const res = await fetch(`${API_URL}/pedidos/detalhes-estoque/${pedidoId}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const itens = await res.json();
+
+        modalItens.innerHTML = `
+            <div class="painel-gerencial-glass" style="width:80%; max-width:500px; border:2px solid #00d4ff;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                    <button onclick="this.closest('.modal-stack').remove()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                    <h4 style="color:white; margin:0;">ITENS DO PEDIDO #${pedidoId}</h4>
+                </div>
+
+                <div style="max-height:400px; overflow-y:auto;">
+                    ${itens.map(i => `
+                        <div style="display:flex; justify-content:space-between; padding:10px; border-bottom:1px solid rgba(255,255,255,0.1); color:white;">
+                            <span>${i.produto} ${i.tamanho ? `(${i.tamanho})` : ''}</span>
+                            <span style="font-weight:bold; color:#00d4ff;">QTD: ${i.solicitado}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modalItens);
+    } catch (err) {
+        notificar("Erro ao carregar itens.", "erro");
+    }
+}
+
+window.abrirModalInvestigarItens = async function(pedidoId) {
+    // 1. Criar o elemento do modal (Overlay)
+    const overlay = document.createElement('div');
+    overlay.id = 'modal-investigar-overlay';
+    overlay.style = `
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.7); backdrop-filter: blur(8px);
+        display: flex; align-items: center; justify-content: center;
+        z-index: 10000; animation: fadeIn 0.3s ease;
+    `;
+
+    // 2. Conteúdo Interno (O Painel de Vidro)
+    overlay.innerHTML = `
+        <div class="painel-vidro" style="width: 90%; max-width: 500px; padding: 25px; border: 1px solid rgba(255,255,255,0.2); box-shadow: 0 20px 50px rgba(0,0,0,0.5);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom:10px;">
+                <h3 style="color:white; margin:0;">📦 ITENS DO PEDIDO #${pedidoId}</h3>
+                <button onclick="document.getElementById('modal-investigar-overlay').remove()" 
+                        style="background:none; border:none; color:white; font-size:1.5rem; cursor:pointer; opacity:0.6;">&times;</button>
+            </div>
+            <div id="conteudo-itens-modal" style="max-height: 400px; overflow-y: auto;">
+                <div class="spinner" style="margin: 20px auto;"></div>
+            </div>
+            <div style="margin-top:20px; text-align:right;">
+                <button onclick="document.getElementById('modal-investigar-overlay').remove()" class="btn-voltar-vidro">FECHAR</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    try {
+        // 3. Buscar os dados no backend
+        const res = await fetch(`${API_URL}/admin/dashboard/itens/${pedidoId}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const itens = await res.json();
+
+        const modalContteudo = document.getElementById('conteudo-itens-modal');
+
+        if (itens.length === 0) {
+            modalContteudo.innerHTML = '<p style="color:white; opacity:0.5; text-align:center;">Nenhum item encontrado.</p>';
+            return;
+        }
+
+        modalContteudo.innerHTML = `
+            <table style="width:100%; color:white; border-collapse:collapse;">
+                <thead>
+                    <tr style="text-align:left; font-size:0.8rem; color:rgba(255,255,255,0.5);">
+                        <th style="padding:8px;">PRODUTO</th>
+                        <th style="padding:8px; text-align:center;">TAM.</th>
+                        <th style="padding:8px; text-align:right;">QTD.</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${itens.map(i => `
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                            <td style="padding:10px; font-size:0.9rem;">${i.produto}</td>
+                            <td style="padding:10px; text-align:center; color:#fbbf24;">${i.tamanho || '-'}</td>
+                            <td style="padding:10px; text-align:right; font-weight:bold;">${i.solicitado}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+    } catch (err) {
+        document.getElementById('conteudo-itens-modal').innerHTML = `<p style="color:#ef4444;">Erro: ${err.message}</p>`;
+    }
+};
+
+async function telaEscolaConsultaEstoque() {
+    const container = document.getElementById('app-content');
+    const localId = localStorage.getItem('local_id');
+    if (!container) return;
+
+    container.innerHTML = `
+        <style>
+            /* Layout ajustado para 2 colunas */
+            .estoque-colunas { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 25px; padding: 10px; }
+            .coluna-estoque { background: rgba(255, 255, 255, 0.03); border-radius: 15px; padding: 20px; border: 1px solid rgba(255,255,255,0.08); }
+            .coluna-titulo { color: #00d4ff; font-size: 1rem; font-weight: bold; margin-bottom: 20px; border-bottom: 2px solid rgba(0,212,255,0.2); padding-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; }
+            .card-estoque { background: rgba(255,255,255,0.05); border-radius: 12px; padding: 15px; margin-bottom: 12px; border: 1px solid rgba(255,255,255,0.1); transition: transform 0.2s; }
+            .card-estoque:hover { background: rgba(255,255,255,0.08); transform: translateY(-2px); }
+            .badge-status { padding: 3px 10px; border-radius: 12px; font-size: 0.65rem; font-weight: bold; text-transform: uppercase; }
+        </style>
+
+        <div class="painel-vidro" style="max-width: 1100px; margin: auto; padding: 25px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:25px;">
+                <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                <h2 style="color:white; margin:0; font-size:1.3rem; letter-spacing: 1px;">📦 MEU ESTOQUE DE CONSUMO</h2>
+                <div style="width: 80px;"></div>
+            </div>
+
+            <div style="margin-bottom:25px;">
+                <input type="text" id="busca-estoque-escola" placeholder="🔍 Filtrar produtos (ex: Camisa, Lápis...)" 
+                       style="width:100%; padding:14px; border-radius:10px; border:1px solid rgba(255,255,255,0.1); background:rgba(0,0,0,0.3); color:white; font-size: 1rem;">
+            </div>
+
+            <div class="estoque-colunas" id="container-categorias">
+                </div>
+        </div>
+    `;
+
+    try {
+        const res = await fetch(`${API_URL}/escola/meu-estoque?localId=${localId}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const todosItens = await res.json();
+
+        const renderizarCategorias = (itens) => {
+            const container = document.getElementById('container-categorias');
+            
+            const categorias = {
+                UNIFORMES: itens.filter(i => i.tipo_item === 'UNIFORMES'),
+                MATERIAL: itens.filter(i => i.tipo_item === 'MATERIAL')
+            };
+
+            let html = '';
+
+            const gerarCard = (p) => {
+                const isUniforme = p.tipo_item === 'UNIFORMES';
+                const isTenis = p.produto.toUpperCase().includes('TENIS');
+                
+                let gradeOrdenada = p.grade || [];
+                if (isUniforme && !isTenis && gradeOrdenada.length > 0) {
+                    const ordem = ['2', '4', '6', '8', '10', '12', '14', '16', 'PP', 'P', 'M', 'G', 'GG', 'EGG'];
+                    gradeOrdenada.sort((a, b) => {
+                        const idxA = ordem.indexOf(String(a.tamanho).toUpperCase());
+                        const idxB = ordem.indexOf(String(b.tamanho).toUpperCase());
+                        if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+                        if (idxA !== -1) return -1;
+                        if (idxB !== -1) return 1;
+                        return String(a.tamanho).localeCompare(String(b.tamanho));
+                    });
+                }
+
+                return `
+                    <div class="card-estoque" ${isUniforme ? `onclick="toggleGrade(${p.id})"` : ''} style="cursor:${isUniforme ? 'pointer' : 'default'}">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <div>
+                                <strong style="color:white; display:block; font-size:1rem;">${p.produto.toUpperCase()}</strong>
+                                <small style="color:rgba(255,255,255,0.5)">Qtd Total: ${p.quantidade}</small>
+                            </div>
+                            <span class="badge-status" style="background:${p.status === 'DISPONIVEL' ? '#064e3b' : '#7f1d1d'}; color:#34d399;">
+                                ${p.status}
+                            </span>
+                        </div>
+                        ${isUniforme ? `
+                            <div id="grade-${p.id}" style="display:none; margin-top:12px; border-top:1px solid rgba(255,255,255,0.1); padding-top:12px;">
+                                <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(50px, 1fr)); gap:8px;">
+                                    ${gradeOrdenada.map(g => `
+                                        <div style="text-align:center; background:rgba(0,0,0,0.4); padding:6px; border-radius:6px; border: 1px solid rgba(255,255,255,0.05);">
+                                            <small style="color:#00d4ff; display:block; font-size:0.65rem; margin-bottom:2px;">${g.tamanho}</small>
+                                            <strong style="color:white; font-size:0.9rem;">${g.quantidade}</strong>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            };
+
+            // Coluna Uniformes
+            html += `<div class="coluna-estoque">
+                <div class="coluna-titulo">👕 UNIFORMES</div>
+                ${categorias.UNIFORMES.map(gerarCard).join('') || '<p style="opacity:0.4; font-size:0.85rem; text-align:center; padding:20px;">Nenhum uniforme em estoque.</p>'}
+            </div>`;
+
+            // Coluna Materiais
+            html += `<div class="coluna-estoque">
+                <div class="coluna-titulo">📦 MATERIAIS</div>
+                ${categorias.MATERIAL.map(gerarCard).join('') || '<p style="opacity:0.4; font-size:0.85rem; text-align:center; padding:20px;">Nenhum material em estoque.</p>'}
+            </div>`;
+
+            container.innerHTML = html;
+        };
+
+        renderizarCategorias(todosItens);
+
+        document.getElementById('busca-estoque-escola').addEventListener('input', (e) => {
+            const termo = e.target.value.toUpperCase();
+            const filtrados = todosItens.filter(i => i.produto.toUpperCase().includes(termo));
+            renderizarCategorias(filtrados);
+        });
+
+    } catch (err) {
+        console.error(err);
+        notificar("Erro ao carregar estoque.", "erro");
+    }
+}
+
+// Função de filtro em tempo real (Sem refresh)
+function filtrarTabelaEstoque() {
+    const input = document.getElementById('busca-estoque-escola');
+    const filtro = input.value.toUpperCase();
+    const tabela = document.getElementById('tabela-estoque-escola');
+    const linhas = tabela.getElementsByTagName('tr');
+
+    for (let i = 1; i < linhas.length; i++) { // Começa em 1 para pular o cabeçalho
+        const textoLinha = linhas[i].textContent || linhas[i].innerText;
+        if (textoLinha.toUpperCase().indexOf(filtro) > -1) {
+            linhas[i].style.display = "";
+        } else {
+            linhas[i].style.display = "none";
+        }
+    }
+}
+
+async function telaEscolaGestaoTurmas() {
+    const container = document.getElementById('app-content');
+    container.innerHTML = '<div class="spinner" style="margin: 50px auto;"></div>';
+
+    try {
+        const res = await fetch(`${API_URL}/escola/turmas`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const turmas = await res.json();
+
+        container.innerHTML = `
+            <div class="painel-vidro" style="max-width: 900px; margin: auto; padding: 25px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:25px;">
+                    <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                    <div style="text-align:right;">
+                        <h2 style="color:white; margin:0; font-size:1.2rem;">🏫 GESTÃO DE TURMAS</h2>
+                        <small style="color:rgba(255,255,255,0.5);">Configuração de classes e anos escolares</small>
+                    </div>
+                </div>
+
+                <div style="margin-bottom:20px; text-align:right;">
+                    <button onclick="abrirModalNovaTurma()" class="btn-vidro" style="background:#3b82f6; border:none; padding:10px 20px;">
+                        ➕ CADASTRAR NOVA TURMA
+                    </button>
+                </div>
+
+                <div style="background:rgba(0,0,0,0.2); border-radius:15px; overflow:hidden;">
+                    <table style="width:100%; border-collapse:collapse; color:white;">
+                        <thead>
+                            <tr style="background:rgba(255,255,255,0.05); text-align:left; font-size:0.8rem; color:rgba(255,255,255,0.5);">
+                                <th style="padding:15px;">ETAPA / ANO</th>
+                                <th style="padding:15px;">IDENTIFICAÇÃO DA TURMA</th>
+                                <th style="padding:15px;">ANO LETIVO</th>
+                                <th style="padding:15px; text-align:center;">AÇÕES</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${turmas.length === 0 ? `<tr><td colspan="4" style="padding:40px; text-align:center; opacity:0.5;">Nenhuma turma cadastrada.</td></tr>` : 
+                            turmas.map(t => `
+                                <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                                    <td style="padding:15px;">${t.etapa_nome}</td>
+                                    <td style="padding:15px; font-weight:bold; color:#fbbf24;">${t.nome}</td>
+                                    <td style="padding:15px;">${t.ano_letivo}</td>
+                                    <td style="padding:15px; text-align:center;">
+                                        <button class="btn-vidro" style="padding:5px 10px; font-size:0.7rem; opacity:0.7;" onclick="notificar('Função em desenvolvimento', 'alerta')">⚙️ EDITAR</button>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+    } catch (err) {
+        notificar("Erro ao carregar módulo de turmas.", "erro");
+    }
+}
+
+async function abrirModalNovaTurma() {
+    // Busca as etapas para o Select
+    const res = await fetch(`${API_URL}/escola/etapas`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+    const etapas = await res.json();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'modal-turma-overlay';
+    overlay.style = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); backdrop-filter:blur(10px); display:flex; align-items:center; justify-content:center; z-index:1000;";
+    
+    overlay.innerHTML = `
+        <div class="painel-vidro" style="width:90%; max-width:400px; padding:30px;">
+            <h3 style="color:white; margin-top:0;">🆕 NOVA TURMA</h3>
+            
+            <label style="color:rgba(255,255,255,0.6); font-size:0.8rem;">Etapa de Ensino</label>
+            <select id="reg-turma-etapa" style="width:100%; padding:12px; margin-bottom:15px; border-radius:8px; background:rgba(0,0,0,0.3); color:white; border:1px solid rgba(255,255,255,0.2);">
+                ${etapas.map(e => `<option value="${e.id}">${e.nome}</option>`).join('')}
+            </select>
+
+            <label style="color:rgba(255,255,255,0.6); font-size:0.8rem;">Nome/Número da Turma (Ex: Turma A, 101...)</label>
+            <input type="text" id="reg-turma-nome" placeholder="Ex: TURMA A" style="width:100%; padding:12px; margin-bottom:20px; border-radius:8px; background:rgba(0,0,0,0.3); color:white; border:1px solid rgba(255,255,255,0.2);">
+
+            <div style="display:flex; gap:10px; justify-content:flex-end;">
+                <button onclick="document.getElementById('modal-turma-overlay').remove()" class="btn-voltar-vidro">CANCELAR</button>
+                <button onclick="salvarNovaTurma()" class="btn-vidro" style="background:#10b981; border:none;">SALVAR TURMA</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+}
+
+async function salvarNovaTurma() {
+    const etapaId = document.getElementById('reg-turma-etapa').value;
+    const nome = document.getElementById('reg-turma-nome').value;
+
+    if (!nome) return notificar("Digite o nome da turma.", "alerta");
+
+    try {
+        const res = await fetch(`${API_URL}/escola/turmas`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ etapaId, nome })
+        });
+
+        if (res.ok) {
+            notificar("Turma criada com sucesso!", "sucesso");
+            document.getElementById('modal-turma-overlay').remove();
+            telaEscolaGestaoTurmas();
+        } else {
+            const err = await res.json();
+            notificar(err.error, "erro");
+        }
+    } catch (err) {
+        notificar("Erro ao salvar.", "erro");
+    }
+}
+
+async function telaEscolaGestaoAlunos() {
+    const container = document.getElementById('app-content');
+    container.innerHTML = '<div class="spinner" style="margin: 50px auto;"></div>';
+
+    try {
+        const res = await fetch(`${API_URL}/escola/alunos`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const alunos = await res.json();
+
+        container.innerHTML = `
+            <div class="painel-vidro" style="max-width: 1000px; margin: auto; padding: 25px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:25px;">
+                    <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                    <div style="text-align:right;">
+                        <h2 style="color:white; margin:0; font-size:1.2rem;">👥 GESTÃO DE ALUNOS</h2>
+                        <small style="color:rgba(255,255,255,0.5);">Controle de matrículas da unidade</small>
+                    </div>
+                </div>
+
+                <div style="display:flex; gap:15px; margin-bottom:20px;">
+                    <input type="text" id="busca-aluno" placeholder="🔍 Buscar aluno por nome ou matrícula..." 
+                           style="flex:1; padding:12px; border-radius:8px; border:1px solid rgba(255,255,255,0.2); background:rgba(0,0,0,0.2); color:white;"
+                           onkeyup="filtrarAlunos()">
+                    <button onclick="abrirModalNovoAluno()" class="btn-vidro" style="background:#10b981; border:none; padding:10px 20px;">
+                        ➕ NOVO ALUNO
+                    </button>
+                </div>
+
+                <div style="background:rgba(0,0,0,0.2); border-radius:15px; overflow:hidden;">
+                    <table style="width:100%; border-collapse:collapse; color:white;">
+                        <thead>
+                            <tr style="background:rgba(255,255,255,0.05); text-align:left; font-size:0.8rem; color:rgba(255,255,255,0.5);">
+                                <th style="padding:15px;">MATRÍCULA</th>
+                                <th style="padding:15px;">NOME COMPLETO</th>
+                                <th style="padding:15px;">TURMA</th>
+                                <th style="padding:15px; text-align:center;">STATUS</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabela-alunos-corpo">
+                            ${alunos.length === 0 ? `<tr><td colspan="4" style="padding:40px; text-align:center; opacity:0.5;">Nenhum aluno cadastrado nesta unidade.</td></tr>` : 
+                            alunos.map(a => `
+                                <tr class="linha-aluno" style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                                    <td style="padding:15px; font-family:monospace; color:#fbbf24;">${a.matricula || '---'}</td>
+                                    <td style="padding:15px; font-weight:bold;">${a.nome}</td>
+                                    <td style="padding:15px;">${a.etapa_nome} - ${a.turma_nome}</td>
+                                    <td style="padding:15px; text-align:center;">
+                                        <span style="background:#064e3b; color:#34d399; padding:4px 10px; border-radius:20px; font-size:0.7rem; font-weight:bold;">${a.status}</span>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+    } catch (err) {
+        notificar("Erro ao carregar módulo de alunos.", "erro");
+    }
+}
+
+async function abrirModalNovoAluno() {
+    // Busca as turmas da escola para o select
+    const res = await fetch(`${API_URL}/escola/turmas`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+    const turmas = await res.json();
+
+    if (turmas.length === 0) {
+        return notificar("Cadastre ao menos uma turma antes de adicionar alunos.", "alerta");
+    }
+
+    const overlay = document.createElement('div');
+    overlay.id = 'modal-aluno-overlay';
+    overlay.className = 'modal-full-blur'; // Use sua classe de desfoque
+    overlay.style = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); backdrop-filter:blur(10px); display:flex; align-items:center; justify-content:center; z-index:1100;";
+    
+    overlay.innerHTML = `
+        <div class="painel-vidro" style="width:95%; max-width:450px; padding:30px;">
+            <h3 style="color:white; margin-top:0;">📝 MATRICULAR ALUNO</h3>
+            
+            <div style="margin-bottom:15px;">
+                <label style="color:rgba(255,255,255,0.6); font-size:0.8rem;">Nome Completo</label>
+                <input type="text" id="reg-aluno-nome" style="width:100%; padding:12px; border-radius:8px; background:rgba(0,0,0,0.3); color:white; border:1px solid rgba(255,255,255,0.2);">
+            </div>
+
+            <div style="margin-bottom:15px;">
+                <label style="color:rgba(255,255,255,0.6); font-size:0.8rem;">Número de Matrícula</label>
+                <input type="text" id="reg-aluno-matricula" placeholder="Ex: 20261234" style="width:100%; padding:12px; border-radius:8px; background:rgba(0,0,0,0.3); color:white; border:1px solid rgba(255,255,255,0.2);">
+            </div>
+
+            <div style="margin-bottom:25px;">
+                <label style="color:rgba(255,255,255,0.6); font-size:0.8rem;">Turma Destino</label>
+                <select id="reg-aluno-turma" style="width:100%; padding:12px; border-radius:8px; background:rgba(0,0,0,0.3); color:white; border:1px solid rgba(255,255,255,0.2);">
+                    ${turmas.map(t => `<option value="${t.id}">${t.etapa_nome} - ${t.nome}</option>`).join('')}
+                </select>
+            </div>
+
+            <div style="display:flex; gap:10px; justify-content:flex-end;">
+                <button onclick="document.getElementById('modal-aluno-overlay').remove()" class="btn-voltar-vidro">CANCELAR</button>
+                <button onclick="salvarNovoAluno()" class="btn-vidro" style="background:#3b82f6; border:none;">SALVAR MATRÍCULA</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+}
+
+async function salvarNovoAluno() {
+    const nome = document.getElementById('reg-aluno-nome').value;
+    const matricula = document.getElementById('reg-aluno-matricula').value;
+    const turmaId = document.getElementById('reg-aluno-turma').value;
+
+    if (!nome || !matricula) return notificar("Preencha todos os campos.", "alerta");
+
+    try {
+        const res = await fetch(`${API_URL}/escola/alunos`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ nome, matricula, turmaId })
+        });
+
+        if (res.ok) {
+            notificar("Aluno matriculado com sucesso!", "sucesso");
+            document.getElementById('modal-aluno-overlay').remove();
+            telaEscolaGestaoAlunos();
+        } else {
+            const err = await res.json();
+            notificar(err.error, "erro");
+        }
+    } catch (err) {
+        notificar("Erro ao salvar matrícula.", "erro");
+    }
+}
+
+function filtrarAlunos() {
+    const busca = document.getElementById('busca-aluno').value.toUpperCase();
+    const linhas = document.getElementsByClassName('linha-aluno');
+    for (let linha of linhas) {
+        linha.style.display = linha.innerText.toUpperCase().includes(busca) ? "" : "none";
+    }
+}
+
+async function telaEscolaEntregaMaterial() {
+    const container = document.getElementById('app-content');
+    container.innerHTML = '<div class="spinner" style="margin: 50px auto;"></div>';
+
+    try {
+        // Busca Alunos e Estoque Disponível simultaneamente
+        const [resAlunos, resEstoque] = await Promise.all([
+            fetch(`${API_URL}/escola/alunos`, { headers: { 'Authorization': `Bearer ${TOKEN}` } }),
+            fetch(`${API_URL}/escola/meu-estoque`, { headers: { 'Authorization': `Bearer ${TOKEN}` } })
+        ]);
+
+        const alunos = await resAlunos.json();
+        const estoque = await resEstoque.json();
+        const itensDisponiveis = estoque.filter(i => i.status === 'DISPONIVEL');
+
+        container.innerHTML = `
+            <div class="painel-vidro" style="max-width: 600px; margin: auto; padding: 30px;">
+                <div style="text-align:center; margin-bottom:25px;">
+                    <h2 style="color:white; margin:0; font-size:1.3rem;">📦 SAÍDA DE MATERIAL / UNIFORME</h2>
+                    <p style="color:rgba(255,255,255,0.5); font-size:0.8rem;">Vincular entrega ao prontuário do aluno</p>
+                </div>
+
+                <div style="margin-bottom:20px;">
+                    <label style="color:white; font-size:0.85rem; display:block; margin-bottom:8px;">1. Selecione o Aluno</label>
+                    <select id="entrega-aluno-id" style="width:100%; padding:12px; border-radius:8px; background:rgba(0,0,0,0.3); color:white; border:1px solid rgba(255,255,255,0.2);">
+                        <option value="">-- Escolha o aluno --</option>
+                        ${alunos.map(a => `<option value="${a.id}">${a.nome} (${a.turma_nome})</option>`).join('')}
+                    </select>
+                </div>
+
+                <div style="margin-bottom:20px;">
+                    <label style="color:white; font-size:0.85rem; display:block; margin-bottom:8px;">2. Selecione o Item do Estoque</label>
+                    <select id="entrega-estoque-id" style="width:100%; padding:12px; border-radius:8px; background:rgba(0,0,0,0.3); color:white; border:1px solid rgba(255,255,255,0.2);">
+                        <option value="">-- Escolha o item disponível --</option>
+                        ${itensDisponiveis.map(i => `<option value="${i.id}">${i.produto} - Lote: ${i.numero_serie}</option>`).join('')}
+                    </select>
+                </div>
+
+                <div style="margin-bottom:30px;">
+                    <label style="color:white; font-size:0.85rem; display:block; margin-bottom:8px;">3. Observação (Opcional)</label>
+                    <textarea id="entrega-obs" placeholder="Ex: Tamanho M entregue para o responsável." 
+                              style="width:100%; padding:12px; border-radius:8px; background:rgba(0,0,0,0.3); color:white; border:1px solid rgba(255,255,255,0.2); height:80px;"></textarea>
+                </div>
+
+                <div style="display:flex; gap:15px;">
+                    <button onclick="carregarDashboard()" class="btn-voltar-vidro" style="flex:1;">CANCELAR</button>
+                    <button onclick="processarEntregaAluno()" class="btn-vidro" style="flex:2; background:#10b981; border:none; font-weight:bold;">
+                        CONFIRMAR ENTREGA ✅
+                    </button>
+                </div>
+            </div>
+        `;
+    } catch (err) {
+        notificar("Erro ao carregar dados de entrega.", "erro");
+    }
+}
+
+async function processarEntregaAluno() {
+    const alunoId = document.getElementById('entrega-aluno-id').value;
+    const estoqueId = document.getElementById('entrega-estoque-id').value;
+    const observacao = document.getElementById('entrega-obs').value;
+
+    if (!alunoId || !estoqueId) {
+        return notificar("Por favor, selecione o aluno e o item.", "alerta");
+    }
+
+    try {
+        const res = await fetch(`${API_URL}/escola/entregar-item`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ alunoId, estoqueId, observacao })
+        });
+
+        if (res.ok) {
+            notificar("Entrega registrada e estoque atualizado!", "sucesso");
+            telaEscolaEntregaMaterial(); // Recarrega para limpar o item já entregue da lista
+        } else {
+            const data = await res.json();
+            throw new Error(data.error);
+        }
+    } catch (err) {
+        notificar(err.message, "erro");
+    }
+}
+
+// Substitua o conteúdo entre aspas pelo código Base64 do seu arquivo braque.png
+const LOGO_BASE64 = "/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoHBwYIDAoMDAsKCwsNDhIQDQ4RDgsLEBYQERMUFRUVDA8XGBYUGBIUFRT/2wBDAQMEBAUEBQkFBQkUDQsNFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBT/wgARCAAuAC8DAREAAhEBAxEB/8QAGgAAAgMBAQAAAAAAAAAAAAAABgcDBAUCCP/EABsBAAIDAQEBAAAAAAAAAAAAAAMEAAIFBgEH/9oADAMBAAIQAxAAAAH0dk+i+tUMns0h7ShFIFgWzRC4poqTL+sELXPtTV+fUFgLrR56gBgKd6JoJNMqKQBCg6Dy11+zFPPTMlguqQqmxfrFEqsNTshvnTPQ5HerWvaw1RnSsDU9rQk//8QAHxAAAgICAgMBAAAAAAAAAAAABAUCAwEGABITFBUR/9oACAEBAAEFAjDvTscvbheZKanA2tmY8qX+ZBiH0nZYV4rv2Fh6qJY9JY6rDZmhUNdOOcDrb8RZeP4h5hrGeOjfxz1bNuNUTZE4isz5ioEDsj2X6R9qWZxZy661bk6CoaBBZBHQ3b9WujfdZrV/LakV42pI7EQawiNltgsbb7x554xpgTWPm2WPTzMcBEKtI//EAC4RAAAFAgQDBwUBAAAAAAAAAAECAwQRAAUSITEyBhAiExQWUWFxgSAjQUJi0f/aAAgBAwEBPwGSgWRH6DmwBNFOBtKVDCMhThU5EgFMMxqyYnThNNwH7AA09tbBJYqaKE+etcW2xq0SRM0JGL19qn7mGfio7I+IxvOnDh2VQx0thaZv7g1ekUwTHVFLcUunBhdGR3ZbhpxfXF2IDVwXB2Xr50A9UR80cDFOE5614RvFxL3huToPnqFeFrtjnKdN4f7ROCr2cMJCzH9BRrA/tEmfk3+s6VACb2oQkwDXDN9RTQ7k4GI0GkmF6AegCiAe1NU7oxcEUcmKUn5zLpXEd2LdFwBLYXlGc8kXKzY2NI4gNCYTajz/AP/EACoRAAEEAQEFCAMAAAAAAAAAAAIAAQMRBDEQEhMhIgUUFSNBUWGBIMHw/9oACAECAQE/AZppwyQAR6PV/wACLda0xMWiNqe1PKYRs8bKKaQoSctWXeZ65useSWa2Pmr8yrReUbET6ocaA5AjKeiJrZkUOE8JT956Lr7Q4uEBvjcXmLXp6Lu2PwWyMeS2NM/VVIrEmvmvGygMd2Jn3W19Ufac5Q8JoWbnen6XjkrScR4W0p/lBnvmRcJ42Zh9vlVZV7J26lmYpb3EBPLjv/OjeCQXELd/tYcDwj1avsrnewgE2omVVt//xAAtEAACAQMDAgQFBQEAAAAAAAABAgMAESEEEjETIhRBUXEFJDIz0SNCYYGhkf/aAAgBAQAGPwK7lUhHLNUsHTKs325VPl60ke12C5uqFv8ARUAk3okfqu29PrJIGEG7aip3MfWpekb9Ntre9RvCqTzOZV9VU35PsL1pNYkF2Nu4i/TrW6trpNFG2yQYvjmnV/iI/lXAqaBzJqUj2bVV9m2hH4wZU/L7c49TSaibUMySiQ9I5u18W/o1O2m1E0WiB2hQfpFq8EZ5ypi+3flbUJ7y2c7AQ3nXxDTPqH0jBV772tzRi8LhS/zN+SWP4rSs6+MkKymJCPpa48/IWqURnZE2enfFA+J7+L7s0FEnapva/nWtEmmOvvsut/fNFAs8PQZ+DZOTj3zULBNxRGG0c5t+KOt0kZkhb60UZT+qLNE8chGbRnH+1JH8P0sraor2bUPNSS6gfry8oP2imFgO4sMW5pJTyilf+2/FBo5LEXwaCamCKdTIBkeV6UIEiXGFrpvK3GWXBp5oAys/Pcc1/8QAIhABAQACAgICAwEBAAAAAAAAAREAITFRQWGRoXGBsfDx/9oACAEBAAE/IZg0F8J536185NSI6G/65x1OixX5HlwpBUiM9Sb4ycGgekoeMMH50JIs+82OWHnGnhi78YhMBGrp4OP+ZYsASOcjjDYg12U9b1fjHwKzpKlob8Zthe1ElhtJinK/Zxx57AnrAii0htDeHcqgnpfjGrw8R6H+7wIO7Wo7ZysUWXcCfsfo7yAacDi/Qcv55szchiCjRPjIgTjPxZspkFQ7ZFcQcs7HrAEUHCsoPDsYNXnFtqT5nxgOEOSDXtIGNB0NAoXXsfbk3Di94e/X25LLFdseB97XCfYRSgu/vLWyR4RJ/nHpFgNN4v4zishpPJxzkn1UpqtOOpkFhY2L3TzigKW2KAbXfFr5Xtz/2gAMAwEAAgADAAAAEFQIj2QHqsVeMH4BNDJP/8QAJBEBAAIBBAICAgMAAAAAAAAAAREhADFBUWFxgRDwobHB4fH/2gAIAQMBAT8QVozgiSfIyBfGSfDIAJWfHMv6/Gac4PE4qdoGyKT9Mi0B0K2abqGGa8wOXXBWFYSN3nCHT/1OECklG7nb1Uf3l+iB1ZpzljxltIXj0RUIAngj7M5M16EkxSGTgxmWse2IAlEOmt9iMEJcQqGjaevOV5ao1K1N3rCRQpgUHxOveuW6sQondN7CYlgJD199Y+yA/wAYCI5TUI3C7I6bJhRkYLbDO9u/4MPNnabpKt6DrjHvkUHldXxRE8d/CUcfiuJRS6ONKyvPz//EACQRAQABAwMEAwEBAAAAAAAAAAERACExQVFhEHGBoZHB8OHx/9oACAECAQE/EDTKFTSMFZJ6lMJqcNFMQJb9v3+VelMHagNiYk4oMKXxYqczBOIvxQDg4igOjcRm82g7Ulh6CYInn87VNgXdiLoj59XoTZyaNzTMbVFsbfMNOyYGd6nWgx3k+qZAUAt3O14TWoKa7Ah8rTzmnMPgXHfbjFTQlYsIW2Le6jYJDxSoeH6pUGRyFFMqL7UbCMcvNK3+DolGzpHAlAEB1//EAB4QAQEAAgMAAwEAAAAAAAAAAAERACExQVFhcYGR/9oACAEBAAE/EIvcFJMVJNunQ7wDlTtQDhdig417cE9xt13SAkEjvwmJbIgFI4WkXUlOcTCFq26JsN48fMZahwoVsbgLMGWzQwci2FdbGtJWhUOO7VDoC0+0xsEqYExch8Ek+TCVkLYngz4Y9JUx2LM1WF47DyVUlx5ABelDsqBt/KNS9ibM+bUG8obYCbV+5a3ROTs1vGci/vBIJ4+9ZcfIhDAA+ePXE9PeTQLRRFdvjj7adMygB5QrryGDsV/WqSJQEKIBRwkkrRBcOgdAsOMSFO+aDU7st1iRQEQV0Onb/cYISV7HpQa/MBN3x6ycENmhwXbm50txBIg9gdL6wdWSqWB9KO0bdI45D46BRBtaEJrqScS0YDhHCjkddiIjivRUjR9YshLTEBQ9qYQ8NDOpiTLU/coejD9yEG2wBKG0W587x7mQBAQpUhsoPFBxhdXIBDQQiX2njgCkJbaXkCNUnNIxwbaUuIClryjTbb//2Q=="; 
+
+function aplicarCabecalhoPadrao(doc, orientacao = 'p') {
+    const larguraPagina = orientacao === 'p' ? 210 : 297;
+    
+    // 1. Inserir Logotipo (Lado esquerdo, topo)
+    // Parâmetros: imagem, tipo, x, y, largura, altura
+    try {
+        doc.addImage(LOGO_BASE64, 'PNG', 14, 10, 20, 20);
+    } catch (e) {
+        console.warn("Logo não carregado. Verifique o Base64.");
+    }
+
+    // 2. Textos do Cabeçalho (Ao lado do logo)
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text("PREFEITURA MUNICIPAL DE QUEIMADOS", 38, 18);
+    
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.text("SECRETARIA MUNICIPAL DE EDUCAÇÃO", 38, 23);
+
+    // 3. Linha divisória fina
+    doc.setDrawColor(200, 200, 200);
+    doc.line(14, 32, larguraPagina - 14, 32);
+}
+
+window.gerarReciboEntregaAluno = function(dados) {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+
+    aplicarCabecalhoPadrao(doc, 'p');
+
+    // Título do Documento
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.text("RECIBO DE ENTREGA DE MATERIAL/UNIFORME", 105, 45, { align: "center" });
+
+    // Conteúdo do Recibo
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "normal");
+    
+    const textoRecibo = `Declaramos para os devidos fins que o aluno(a) ${dados.alunoNome.toUpperCase()}, matriculado(a) na turma ${dados.turmaNome}, recebeu nesta data o seguinte item:`;
+    
+    const splitTexto = doc.splitTextToSize(textoRecibo, 180);
+    doc.text(splitTexto, 14, 60);
+
+    // Tabela do Item
+    doc.autoTable({
+        startY: 75,
+        head: [['ITEM / PRODUTO', 'LOTE / SÉRIE', 'DATA']],
+        body: [[dados.produto, dados.lote, new Date().toLocaleDateString()]],
+        theme: 'plain',
+        headStyles: { fontStyle: 'bold', textColor: 0 },
+        styles: { cellPadding: 5, fontSize: 10, borderBottom: 1 }
+    });
+
+    // Campos de Assinatura
+    doc.text("__________________________________________", 105, 130, { align: "center" });
+    doc.text("Assinatura do Responsável", 105, 135, { align: "center" });
+    
+    doc.setFontSize(8);
+    doc.text(`Documento gerado em ${new Date().toLocaleString()} - Unidade: ${localStorage.getItem('nome')}`, 105, 280, { align: "center" });
+
+    doc.save(`Recibo_Aluno_${dados.alunoId}.pdf`);
+};
+
+window.gerarListagemGeralAlunos = function(lista) {
+    const { jsPDF } = window.jspdf;
+    // 'l' define a orientação como Landscape (Paisagem)
+    const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4' });
+
+    aplicarCabecalhoPadrao(doc, 'l');
+
+    doc.setFontSize(14);
+    doc.text("RELAÇÃO GERAL DE ALUNOS MATRICULADOS", 148, 45, { align: "center" });
+
+    doc.autoTable({
+        startY: 50,
+        head: [['MATRÍCULA', 'NOME COMPLETO', 'TURMA', 'ETAPA', 'STATUS']],
+        body: lista.map(a => [a.matricula, a.nome, a.turma_nome, a.etapa_nome, a.status]),
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [30, 41, 59] } // Cor escura institucional
+    });
+
+    doc.save("Listagem_Alunos_Queimados.pdf");
+};
+
+// Função para abrir o submenu de Relatórios da Escola
+function telaEscolaRelatorios() {
+    const container = document.getElementById('app-content');
+    container.innerHTML = `
+        <div class="painel-vidro" style="max-width: 800px; margin: auto; padding: 30px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:30px; border-bottom: 2px solid rgba(255,255,255,0.1); padding-bottom:15px;">
+                <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                <div style="text-align:right;">
+                    <h2 style="color:white; margin:0; font-size:1.3rem;">📊 RELATÓRIOS GERENCIAIS</h2>
+                    <small style="color:rgba(255,255,255,0.5);">Indicadores e listagens da unidade escolar</small>
+                </div>
+            </div>
+
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap:20px;">
+                
+                <div class="card-estatistica" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); padding:25px; border-radius:12px; text-align:center;">
+                    <span style="font-size:2.5rem;">🛑</span>
+                    <h3 style="color:white; margin:15px 0 10px 0; font-size:1.1rem;">PENDÊNCIAS DE UNIFORME</h3>
+                    <p style="color:rgba(255,255,255,0.6); font-size:0.8rem; margin-bottom:20px;">Listagem de alunos ativos que ainda não receberam uniforme este ano.</p>
+                    <button onclick="gerarRelatorioAlunosPendentesPDF()" class="btn-vidro" style="background:#ef4444; border:none; padding:10px 20px; font-weight:bold;">
+                        ⬇️ BAIXAR PDF (RETRATO)
+                    </button>
+                </div>
+
+                <div class="card-estatistica" style="background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.05); padding:25px; border-radius:12px; text-align:center; opacity:0.3;">
+                    <span style="font-size:2.5rem;">📊</span>
+                    <h3 style="color:white; margin:15px 0 10px 0; font-size:1.1rem;">ESTOQUE CRÍTICO</h3>
+                    <button class="btn-vidro" disabled style="padding:10px 20px;">EM BREVE</button>
+                </div>
+
+            </div>
+        </div>
+    `;
+}
+
+// Função que chama a API e o gerador de PDF
+async function gerarRelatorioAlunosPendentesPDF() {
+    notificar("📊 Gerando relatório de pendências...", "alerta");
+    try {
+        const res = await fetch(`${API_URL}/escola/alunos-pendentes`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const alunos = await res.json();
+
+        if (alunos.length === 0) {
+            return notificar("✨ Ótima notícia! Todos os alunos ativos já receberam uniforme.", "sucesso");
+        }
+
+        // Chama a função geradora de PDF que criaremos abaixo
+        formataPDFAlunosPendentes(alunos);
+        notificar("📄 PDF gerado com sucesso!", "sucesso");
+    } catch (err) {
+        notificar("Erro ao gerar relatório.", "erro");
+    }
+}
+
+function formataPDFAlunosPendentes(alunos) {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+
+    // Aplica o cabeçalho mestre (Prefeitura + SEMED + Logo braque.png)
+    aplicarCabecalhoPadrao(doc, 'p');
+
+    // Título do Relatório
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.text("RELAÇÃO DE ALUNOS ATIVOS PENDENTES DE UNIFORME", 105, 45, { align: "center" });
+    
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Unidade: ${localStorage.getItem('nome')}`, 105, 50, { align: "center" });
+
+    // Tabela de Dados
+    doc.autoTable({
+        startY: 55,
+        head: [['MATRÍCULA', 'NOME DO ALUNO', 'ETAPA / ANO', 'TURMA']],
+        body: alunos.map(a => [
+            a.matricula || '---',
+            a.aluno_nome.toUpperCase(),
+            a.etapa_nome,
+            a.turma_nome
+        ]),
+        styles: { fontSize: 8, cellPadding: 3 },
+        headStyles: { fillColor: [185, 28, 28] }, // Vermelho escuro para indicar pendência
+        columnStyles: {
+            0: { halign: 'left', fontStyle: 'monospace' },
+            1: { halign: 'left' },
+            2: { halign: 'left' },
+            3: { halign: 'center' }
+        },
+        alternateRowStyles: { fillColor: [245, 245, 245] }
+    });
+
+    // Rodapé
+    const totalPaginas = doc.internal.getNumberOfPages();
+    doc.setFontSize(8);
+    doc.setTextColor(150);
+    doc.text(`Total de alunos pendentes: ${alunos.length}`, 14, doc.internal.pageSize.height - 10);
+    doc.text(`Gerado em: ${new Date().toLocaleString()}`, 105, doc.internal.pageSize.height - 10, { align: "center" });
+    
+    // Download do arquivo
+    doc.save(`Relatorio_Pendencias_${localStorage.getItem('nome')}.pdf`);
+}
+
+
+
+let dadosCacheLog = [];
+
+async function telaRelatorioLogStatus() {
+    const area = document.getElementById('app-content');
+    const hoje = new Date().toISOString().split('T')[0];
+    const inicioMes = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
+
+    area.innerHTML = `
+        <div class="painel-vidro" style="max-width: 1300px; margin: auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                <h2 style="color:white; margin:0;">🕵️ AUDITORIA DE STATUS</h2>
+                <div style="display:flex; gap:10px;">
+                    <button onclick="imprimirLogStatusPDF()" class="btn-vidro" style="background:#2563eb; font-size:0.7rem;">🖨️ IMPRIMIR PDF</button>
+                    <button onclick="compartilharLogWhatsApp()" class="btn-vidro" style="background:#16a34a; font-size:0.7rem;">📱 WHATSAPP</button>
+                </div>
+            </div>
+            
+            <div style="display:flex; gap:15px; justify-content:center; background:rgba(255,255,255,0.05); padding:15px; border-radius:12px; margin-bottom:20px;">
+                <input type="date" id="log_inicio" value="${inicioMes}" class="input-vidro" style="width:160px;">
+                <input type="date" id="log_fim" value="${hoje}" class="input-vidro" style="width:160px;">
+                <button onclick="carregarDadosLogStatus()" class="btn-vidro" style="background:#3b82f6; margin:0; font-weight:bold;">
+                    🔍 FILTRAR LOGS
+                </button>
+            </div>
+
+            <div id="cards-resumo-log" style="display:grid; grid-template-columns: repeat(3, 1fr); gap:15px; margin-bottom:20px;">
+                <div class="painel-vidro" style="text-align:center;"><h3 id="total-logs">0</h3><small>TOTAL DE ALTERAÇÕES</small></div>
+                <div class="painel-vidro" style="text-align:center; color:#fbbf24;"><h3 id="usuario-mais-ativo">---</h3><small>OPERADOR MAIS ATIVO</small></div>
+                <div id="card-mais-frequente" class="painel-vidro" style="text-align:center; color:#60a5fa;"><h3>---</h3><small>STATUS MAIS FREQUENTE</small></div>
+            </div>
+
+            <div class="painel-vidro" style="background:rgba(0,0,0,0.3); padding:0; overflow:hidden;">
+                <div style="max-height: 500px; overflow-y: auto;">
+                    <table style="width:100%; border-collapse:collapse; color:white; font-size:0.85rem;">
+                        <thead style="background:rgba(255,255,255,0.1); position: sticky; top:0;">
+                            <tr>
+                                <th style="padding:12px; text-align:left;">DATA/HORA</th>
+                                <th style="padding:12px; text-align:left;">PEDIDO</th>
+                                <th style="padding:12px; text-align:left;">UNIDADE</th>
+                                <th style="padding:12px; text-align:left;">USUÁRIO</th>
+                                <th style="padding:12px; text-align:left;">FLUXO (DE -> PARA)</th>
+                                <th style="padding:12px; text-align:left;">OBSERVAÇÃO</th>
+                            </tr>
+                        </thead>
+                        <tbody id="corpo-tabela-log"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    `;
+    carregarDadosLogStatus();
+}
+
+async function carregarDadosLogStatus() {
+    const inicio = document.getElementById('log_inicio').value;
+    const fim = document.getElementById('log_fim').value;
+    
+    const res = await fetch(`${API_URL}/admin/relatorios/log-status?inicio=${inicio}&fim=${fim}`, {
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+    const { registros, stats } = await res.json();
+    dadosCacheLog = registros;
+
+    // Atualizar Cards
+    document.getElementById('total-logs').innerText = stats.total;
+    
+    const usuarioAtivo = Object.entries(stats.porUsuario).sort((a,b) => b[1] - a[1])[0]?.[0] || 'N/A';
+    document.getElementById('usuario-mais-ativo').innerText = usuarioAtivo;
+
+    // Preencher Tabela
+    document.getElementById('corpo-tabela-log').innerHTML = registros.map(r => `
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+            <td style="padding:12px; white-space:nowrap;">${new Date(r.data_hora).toLocaleString('pt-BR')}</td>
+            <td style="padding:12px; font-weight:bold; color:#fbbf24;">#${r.pedido_id}</td>
+            <td style="padding:12px; font-size:0.75rem;">${r.unidade_destino}</td>
+            <td style="padding:12px;">${r.usuario_nome}</td>
+            <td style="padding:12px;">
+                <span style="opacity:0.5;">${r.status_anterior}</span> 
+                <span style="color:#4ade80;">➜</span> 
+                <strong>${r.status_novo}</strong>
+            </td>
+            <td style="padding:12px; font-size:0.75rem; opacity:0.8;">${r.observacao || '-'}</td>
+        </tr>
+    `).join('');
+}
+
+window.imprimirLogStatusPDF = function() {
+    if (dadosCacheLog.length === 0) return notificar("Sem dados para exportar.", "alerta");
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4' });
+
+    // Aplica o cabeçalho institucional (Prefeitura/SEMED/Logo)
+    aplicarCabecalhoPadrao(doc, 'l');
+
+    doc.setFontSize(14);
+    doc.text("RELATÓRIO DE AUDITORIA - MOVIMENTAÇÃO DE STATUS", 148, 45, { align: "center" });
+
+    doc.autoTable({
+        startY: 52,
+        head: [['DATA/HORA', 'PEDIDO', 'UNIDADE', 'OPERADOR', 'DE', 'PARA', 'OBSERVAÇÃO']],
+        body: dadosCacheLog.map(r => [
+            new Date(r.data_hora).toLocaleString('pt-BR'),
+            r.pedido_id,
+            r.unidade_destino,
+            r.usuario_nome,
+            r.status_anterior,
+            r.status_novo,
+            r.observacao
+        ]),
+        styles: { fontSize: 7, cellPadding: 2 },
+        headStyles: { fillColor: [31, 41, 55] },
+        columnStyles: {
+            6: { cellWidth: 60 } // Dá mais espaço para a observação
+        }
+    });
+
+    doc.save(`Auditoria_Status_${new Date().getTime()}.pdf`);
+};
+
+window.imprimirRelatorioPedidosPDF = function() {
+    if (cachePedidosRelatorio.length === 0) return notificar("Não há dados para exportar.", "alerta");
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4' });
+
+    // Aplica o cabeçalho mestre da prefeitura
+    aplicarCabecalhoPadrao(doc, 'l');
+
+    doc.setFontSize(14);
+    doc.text("RELATÓRIO GERENCIAL DE PEDIDOS POR PERÍODO", 148, 45, { align: "center" });
+
+    doc.autoTable({
+        startY: 52,
+        head: [['DATA', 'ID', 'UNIDADE DESTINO', 'SOLICITANTE', 'VOLUMES', 'STATUS']],
+        body: cachePedidosRelatorio.map(r => [
+            new Date(r.data_criacao).toLocaleDateString('pt-BR'),
+            `#${r.id}`,
+            r.unidade_nome.toUpperCase(),
+            r.solicitante_nome,
+            r.volumes || 0,
+            r.status
+        ]),
+        styles: { fontSize: 8, cellPadding: 3 },
+        headStyles: { fillColor: [30, 41, 59] },
+        columnStyles: {
+            2: { cellWidth: 80 } // Mais espaço para o nome da escola
+        }
+    });
+
+    doc.save(`Relatorio_Pedidos_${new Date().getTime()}.pdf`);
+};
+
+async function telaRelatorioPatrimonioLocal() {
+    const area = document.getElementById('app-content');
+    
+    // Busca a lista de locais para preencher o select
+    const resLocais = await fetch(`${API_URL}/locais`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+    const locais = await resLocais.json();
+
+    area.innerHTML = `
+        <div class="painel-vidro" style="max-width: 1300px; margin: auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                <h2 style="color:white; margin:0;">📋 INVENTÁRIO DE PATRIMÔNIO</h2>
+                <div style="display:flex; gap:10px;">
+                    <button onclick="imprimirPatrimonioPDF()" class="btn-vidro" style="background:#2563eb; font-size:0.7rem;">🖨️ PDF PAISAGEM</button>
+                    <button onclick="notificar('Exportação Excel em breve', 'alerta')" class="btn-vidro" style="background:#16a34a; font-size:0.7rem;">📊 EXCEL</button>
+                </div>
+            </div>
+            
+            <div style="display:flex; gap:15px; justify-content:center; background:rgba(255,255,255,0.05); padding:20px; border-radius:12px; margin-bottom:20px;">
+                <div style="flex:1; max-width:400px;">
+                    <label style="color:rgba(255,255,255,0.5); font-size:0.75rem; margin-left:5px;">SELECIONE A UNIDADE ESCOLAR / SETOR</label>
+                    <select id="pat_local_id" class="input-vidro" style="width:100%; margin-top:5px;">
+                        <option value="">-- Escolha um local para listar os bens --</option>
+                        ${locais.map(l => `<option value="${l.id}">${l.nome.toUpperCase()}</option>`).join('')}
+                    </select>
+                </div>
+                <button onclick="carregarDadosPatrimonioLocal()" class="btn-vidro" 
+                    style="background:#3b82f6; margin-top:22px; height:45px; width:150px; font-weight:bold;">
+                    VER BENS
+                </button>
+            </div>
+
+            <div class="grid-movel-celular" id="cards-patrimonio" style="display:grid; grid-template-columns: repeat(3, 1fr); gap:15px; margin-bottom:20px;">
+                <div class="painel-vidro" style="text-align:center;"><h3 id="stat-pat-total">0</h3><small>ITENS NO LOCAL</small></div>
+                <div class="painel-vidro" style="text-align:center; color:#4ade80;"><h3 id="stat-pat-bom">0</h3><small>EM BOM ESTADO</small></div>
+                <div class="painel-vidro" style="text-align:center; color:#fbbf24;"><h3 id="stat-pat-uso">0</h3><small>EM USO / ATIVOS</small></div>
+            </div>
+
+            <div class="painel-vidro" style="background:rgba(0,0,0,0.3); padding:0; overflow:hidden;">
+                <div style="max-height: 500px; overflow-y: auto;">
+                    <table style="width:100%; border-collapse:collapse; color:white; font-size:0.85rem;">
+                        <thead style="background:rgba(255,255,255,0.1); position: sticky; top:0; z-index:10;">
+                            <tr>
+                                <th style="padding:12px; text-align:left;">SETOR / SALA</th>
+                                <th style="padding:12px; text-align:left;">Nº PATRIMÔNIO</th>
+                                <th style="padding:12px; text-align:left;">DESCRIÇÃO DO BEM</th>
+                                <th style="padding:12px; text-align:left;">SÉRIE</th>
+                                <th style="padding:12px; text-align:center;">ESTADO</th>
+                                <th style="padding:12px; text-align:center;">NF</th>
+                            </tr>
+                        </thead>
+                        <tbody id="corpo-tabela-patrimonio">
+                            <tr><td colspan="6" style="padding:40px; text-align:center; opacity:0.5;">Selecione um local acima para carregar o inventário.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+let cachePatrimonioLocal = [];
+
+async function carregarDadosPatrimonioLocal() {
+    const localId = document.getElementById('pat_local_id').value;
+    if(!localId) return notificar("Selecione um local.", "alerta");
+
+    try {
+        const res = await fetch(`${API_URL}/admin/relatorios/patrimonio-local?localId=${localId}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const { registros, stats } = await res.json();
+        cachePatrimonioLocal = registros;
+
+        document.getElementById('stat-pat-total').innerText = stats.total;
+        document.getElementById('stat-pat-bom').innerText = stats.bomEstado;
+        document.getElementById('stat-pat-uso').innerText = stats.emUso;
+
+        document.getElementById('corpo-tabela-patrimonio').innerHTML = registros.map(r => `
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                <td style="padding:12px; color:#60a5fa; font-weight:bold;">${r.setor_nome || 'NÃO DEFINIDO'}</td>
+                <td style="padding:12px; font-family:monospace; color:#fbbf24;">${r.tag || 'S/N'}</td>
+                <td style="padding:12px;">${r.produto_nome}</td>
+                <td style="padding:12px; font-size:0.75rem;">${r.numero_serie || '-'}</td>
+                <td style="padding:12px; text-align:center;">
+                    <span style="color:${r.estado === 'BOM' ? '#4ade80' : '#f87171'}">${r.estado}</span>
+                </td>
+                <td style="padding:12px; text-align:center; font-size:0.7rem;">${r.nota_fiscal || '-'}</td>
+            </tr>
+        `).join('');
+    } catch (err) {
+        notificar("Erro ao carregar bens.", "erro");
+    }
+}
+
+window.imprimirPatrimonioPDF = function() {
+    if (cachePatrimonioLocal.length === 0) return notificar("Sem dados para exportar.", "alerta");
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4' });
+    const nomeLocal = document.getElementById('pat_local_id').options[document.getElementById('pat_local_id').selectedIndex].text;
+
+    aplicarCabecalhoPadrao(doc, 'l');
+
+    doc.setFontSize(14);
+    doc.text("INVENTÁRIO FÍSICO DE BENS PATRIMONIAIS", 148, 45, { align: "center" });
+    
+    doc.setFontSize(10);
+    doc.text(`Unidade: ${nomeLocal}`, 148, 50, { align: "center" });
+
+    doc.autoTable({
+        startY: 55,
+        head: [['SETOR/SALA', 'Nº PATRIMÔNIO', 'DESCRIÇÃO DO BEM', 'Nº SÉRIE', 'ESTADO', 'NOTA FISCAL']],
+        body: cachePatrimonioLocal.map(r => [
+            r.setor_nome || 'N/D',
+            r.tag || '-',
+            r.produto_nome.toUpperCase(),
+            r.numero_serie || '-',
+            r.estado,
+            r.nota_fiscal || '-'
+        ]),
+        styles: { fontSize: 7, cellPadding: 2 },
+        headStyles: { fillColor: [30, 41, 59] },
+        columnStyles: {
+            2: { cellWidth: 70 } // Espaço maior para a descrição do produto
+        },
+        // Agrupamento visual por setor (Opcional, mas ajuda na leitura)
+        didDrawPage: function (data) {
+            doc.setFontSize(8);
+            doc.text(`Página ${doc.internal.getNumberOfPages()}`, 280, 200);
+        }
+    });
+
+    doc.save(`Inventario_${nomeLocal.replace(/ /g, '_')}.pdf`);
+};
+
+async function telaRelatorioTransferenciasExternas() {
+    const area = document.getElementById('app-content');
+    const hoje = new Date().toISOString().split('T')[0];
+    const inicioMes = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
+
+    area.innerHTML = `
+        <div class="painel-vidro" style="max-width: 1350px; margin: auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                <h2 style="color:white; margin:0;">🚚 TRANSFERÊNCIAS ENTRE UNIDADES</h2>
+                <div style="display:flex; gap:10px;">
+                    <button onclick="imprimirTransferenciasPDF()" class="btn-vidro" style="background:#2563eb; font-size:0.7rem;">🖨️ PDF PAISAGEM</button>
+                    <button onclick="notificar('Exportação Excel em breve', 'alerta')" class="btn-vidro" style="background:#16a34a; font-size:0.7rem;">📊 EXCEL</button>
+                </div>
+            </div>
+            
+            <div style="display:flex; gap:15px; justify-content:center; background:rgba(255,255,255,0.05); padding:15px; border-radius:12px; margin-bottom:20px;">
+                <input type="date" id="trans_inicio" value="${inicioMes}" class="input-vidro" style="width:160px;">
+                <input type="date" id="trans_fim" value="${hoje}" class="input-vidro" style="width:160px;">
+                <button onclick="carregarDadosTransferencias()" class="btn-vidro" style="background:#3b82f6; font-weight:bold;">FILTRAR</button>
+            </div>
+
+            <div class="grid-movel-celular" style="display:grid; grid-template-columns: repeat(3, 1fr); gap:15px; margin-bottom:20px;">
+                <div class="painel-vidro" style="text-align:center;"><h3 id="stat-trans-total">0</h3><small>TOTAL DE MOVIMENTOS</small></div>
+                <div class="painel-vidro" style="text-align:center; color:#4ade80;"><h3 id="stat-trans-ok">0</h3><small>CONCLUÍDAS</small></div>
+                <div class="painel-vidro" style="text-align:center; color:#f87171;"><h3 id="stat-trans-erro">0</h3><small>RECUSADAS</small></div>
+            </div>
+
+            <div class="painel-vidro" style="background:rgba(0,0,0,0.3); padding:0; overflow:hidden;">
+                <div style="max-height: 500px; overflow-y: auto;">
+                    <table style="width:100%; border-collapse:collapse; color:white; font-size:0.8rem;">
+                        <thead style="background:rgba(255,255,255,0.1); position: sticky; top:0; z-index:10;">
+                            <tr>
+                                <th style="padding:12px; text-align:left;">DATA</th>
+                                <th style="padding:12px; text-align:left;">BEM / PATRIMÔNIO</th>
+                                <th style="padding:12px; text-align:left;">ORIGEM</th>
+                                <th style="padding:12px; text-align:left;">DESTINO</th>
+                                <th style="padding:12px; text-align:center;">STATUS</th>
+                                <th style="padding:12px; text-align:left;">MOTIVO / OBSERVAÇÃO</th>
+                            </tr>
+                        </thead>
+                        <tbody id="corpo-tabela-trans"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    `;
+    carregarDadosTransferencias();
+}
+
+let cacheTransferencias = [];
+
+async function carregarDadosTransferencias() {
+    const inicio = document.getElementById('trans_inicio').value;
+    const fim = document.getElementById('trans_fim').value;
+    
+    const res = await fetch(`${API_URL}/admin/relatorios/transferencias-externas?inicio=${inicio}&fim=${fim}`, {
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+    const { registros, stats } = await res.json();
+    cacheTransferencias = registros;
+
+    document.getElementById('stat-trans-total').innerText = stats.total;
+    document.getElementById('stat-trans-ok').innerText = stats.concluidas;
+    document.getElementById('stat-trans-erro').innerText = stats.recusadas;
+
+    document.getElementById('corpo-tabela-trans').innerHTML = registros.map(r => `
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+            <td style="padding:12px;">${new Date(r.data_movimentacao).toLocaleDateString()}</td>
+            <td style="padding:12px;">
+                <div style="font-weight:bold; color:#fbbf24;">${r.tag}</div>
+                <div style="font-size:0.7rem; opacity:0.7;">${r.produto}</div>
+            </td>
+            <td style="padding:12px; font-size:0.75rem;">${r.origem}</td>
+            <td style="padding:12px; font-size:0.75rem;">${r.destino}</td>
+            <td style="padding:12px; text-align:center;">
+                <span style="color:${r.status === 'RECUSADO' ? '#f87171' : '#4ade80'}; font-weight:bold;">${r.status}</span>
+            </td>
+            <td style="padding:12px; font-size:0.75rem; color:rgba(255,255,255,0.6); max-width:200px;">
+                ${r.motivo || '-'}
+            </td>
+        </tr>
+    `).join('');
+}
+
+window.imprimirTransferenciasPDF = function() {
+    if (cacheTransferencias.length === 0) return notificar("Sem dados para exportar.", "alerta");
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4' });
+
+    aplicarCabecalhoPadrao(doc, 'l');
+
+    doc.setFontSize(14);
+    doc.text("RELATÓRIO DE TRANSFERÊNCIAS EXTERNAS DE BENS", 148, 45, { align: "center" });
+
+    doc.autoTable({
+        startY: 52,
+        head: [['DATA', 'PATRIMÔNIO', 'PRODUTO', 'ORIGEM', 'DESTINO', 'STATUS', 'MOTIVO/OBSERVAÇÃO']],
+        body: cacheTransferencias.map(r => [
+            new Date(r.data_movimentacao).toLocaleDateString(),
+            r.tag,
+            r.produto.toUpperCase(),
+            r.origem,
+            r.destino,
+            r.status,
+            r.motivo || '-'
+        ]),
+        styles: { fontSize: 7, cellPadding: 2 },
+        headStyles: { fillColor: [30, 41, 59] },
+        columnStyles: {
+            2: { cellWidth: 40 },
+            6: { cellWidth: 50 }
+        }
+    });
+
+    doc.save(`Transferencias_Externas_${new Date().getTime()}.pdf`);
+};
+
+async function telaRelatorioColetaLiberada() {
+    const area = document.getElementById('app-content');
+    
+    area.innerHTML = `
+        <div class="painel-vidro" style="max-width: 1100px; margin: auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:25px;">
+                <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                <div style="text-align:center;">
+                    <h2 style="color:white; margin:0;">🚚 MAPA DE EXPEDIÇÃO</h2>
+                    <small style="color:#4ade80; font-weight:bold;">STATUS: COLETA LIBERADA</small>
+                </div>
+                <div style="display:flex; gap:10px;">
+                    <button onclick="imprimirColetaLiberadaPDF()" class="btn-vidro" style="background:#2563eb; font-size:0.7rem;">🖨️ IMPRIMIR LISTA</button>
+                    <button onclick="carregarDadosColetaLiberada()" class="btn-vidro" style="background:rgba(255,255,255,0.1); font-size:0.7rem;">🔄 ATUALIZAR</button>
+                </div>
+            </div>
+
+            <div style="display:grid; grid-template-columns: 1fr; gap:20px; margin-bottom:25px;">
+                <div class="painel-vidro" style="text-align:center; border-left: 5px solid #3b82f6;">
+                    <h3 id="exp-total-pedidos" style="font-size:2rem; margin:0;">0</h3>
+                    <small style="color:rgba(255,255,255,0.6);">PEDIDOS AGUARDANDO COLETA</small>
+                </div>
+            </div>
+
+            <div class="painel-vidro" style="background:rgba(0,0,0,0.3); padding:0; overflow:hidden;">
+                <table style="width:100%; border-collapse:collapse; color:white; font-size:0.9rem;">
+                    <thead style="background:rgba(255,255,255,0.05);">
+                        <tr>
+                            <th style="padding:15px; text-align:left;">ID PEDIDO</th>
+                            <th style="padding:15px; text-align:left;">DESTINO</th>
+                            <th style="padding:15px; text-align:left;">TIPO</th>
+                            <th style="padding:15px; text-align:left;">PRONTO DESDE</th>
+                        </tr>
+                    </thead>
+                    <tbody id="corpo-tabela-coleta">
+                        <tr><td colspan="4" style="padding:40px; text-align:center; opacity:0.5;">Verificando doca de expedição...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    `;
+    carregarDadosColetaLiberada();
+}
+
+async function carregarDadosColetaLiberada() {
+    try {
+        const res = await fetch(`${API_URL}/admin/relatorios/coleta-liberada`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const { registros, stats } = await res.json();
+        cacheColeta = registros;
+
+        document.getElementById('exp-total-pedidos').innerText = stats.totalPedidos;
+
+        const corpo = document.getElementById('corpo-tabela-coleta');
+
+        if (!registros || registros.length === 0) {
+            corpo.innerHTML = `
+                <tr><td colspan="4" style="padding:40px; text-align:center; opacity:0.5;">
+                    ✅ Tudo certo! Nenhuma carga pendente de coleta.
+                </td></tr>`;
+            return;
+        }
+
+        corpo.innerHTML = registros.map(r => {
+            // Se já vier pronto_desde da API, use-o; senão, use data_separacao/data_criacao
+            const baseDate = r.pronto_desde || r.data_separacao || r.data_criacao;
+            let textoData = '-';
+
+            if (baseDate) {
+                const d = new Date(baseDate);
+                // Evita 1969/1970 ou datas inválidas
+                if (!isNaN(d.getTime()) && d.getFullYear() > 1970) {
+                    textoData = d.toLocaleString('pt-BR');
+                }
+            }
+
+            return `
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                    <td style="padding:15px; font-weight:bold; color:#fbbf24;">#${r.id}</td>
+                    <td style="padding:15px;">${(r.unidade_destino || '').toUpperCase()}</td>
+                    <td style="padding:15px; font-size:0.8rem;">${r.tipo_pedido || 'DIVERSOS'}</td>
+                    <td style="padding:15px; font-size:0.8rem; opacity:0.7;">${textoData}</td>
+                </tr>
+            `;
+        }).join('');
+    } catch (err) {
+        notificar("Erro ao carregar mapa de expedição.", "erro");
+    }
+}
+
+window.imprimirColetaLiberadaPDF = function() {
+    if (cacheColeta.length === 0) return notificar("Nada para imprimir.", "alerta");
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+
+    aplicarCabecalhoPadrao(doc, 'p');
+
+    doc.setFontSize(14);
+    doc.text("MAPA DE CARGAS PRONTAS PARA EXPEDIÇÃO", 105, 45, { align: "center" });
+    
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Emitido em: ${new Date().toLocaleString()}`, 105, 50, { align: "center" });
+
+    doc.autoTable({
+        startY: 55,
+        head: [['PEDIDO', 'DESTINO (UNIDADE ESCOLAR)', 'VOLS', 'DATA SEPARAÇÃO']],
+        body: cacheColeta.map(r => [
+            `#${r.id}`,
+            r.unidade_destino.toUpperCase(),
+            r.volumes,
+            new Date(r.data_separacao).toLocaleDateString()
+        ]),
+        theme: 'grid',
+        headStyles: { fillColor: [5, 150, 105] }, // Verde sucesso para indicar "Pronto"
+        columnStyles: {
+            2: { halign: 'center', fontStyle: 'bold' }
+        }
+    });
+
+    const totalVols = cacheColeta.reduce((a, b) => a + b.volumes, 0);
+    doc.setFont("helvetica", "bold");
+    doc.text(`TOTAL DE VOLUMES PARA CARREGAMENTO: ${totalVols}`, 14, doc.lastAutoTable.finalY + 15);
+
+    doc.save(`Mapa_Coleta_${new Date().getTime()}.pdf`);
+};
+
+// 1. Tela principal de pendências
+window.infra_telaPendentes = async function() {
+    const container = document.getElementById('app-content');
+    container.innerHTML = `
+        <div class="painel-vidro animar-entrada" style="padding:30px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:30px;">
+                <button onclick="carregarDashboard()" class="btn-sair-vidro">⬅ VOLTAR</button>
+                <h2 style="color:white; margin:0;">🏗️ SEPARAÇÃO DE PATRIMÔNIO</h2>
+            </div>
+            <div id="lista-infra-pendente" style="display:grid; gap:15px;">🔍 Buscando solicitações...</div>
+        </div>`;
+
+    const res = await fetch(`${API_URL}/infra/pendentes`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+    const dados = await res.json();
+    
+    document.getElementById('lista-infra-pendente').innerHTML = dados.map(p => `
+        <div class="item-setor-global" onclick="infra_abrirModalAcao(${JSON.stringify(p).replace(/"/g, '&quot;')})" 
+             style="display:flex; justify-content:space-between; padding:20px; cursor:pointer; background:rgba(255,255,255,0.02); border-radius:12px;">
+            <div>
+                <strong style="color:white; font-size:1.1rem;">${p.produto_nome}</strong>
+                <p style="color:#60a5fa; margin:5px 0 0 0;">📍 DESTINO: ${p.destino_nome}</p>
+            </div>
+            <div style="background:#3b82f6; color:white; padding:10px 20px; border-radius:8px; font-weight:900;">
+                ${p.quantidade} UN
+            </div>
+        </div>
+    `).join('') || '<p style="color:gray; text-align:center;">Nenhuma solicitação aguardando separação.</p>';
+};
+
+window.infra_abrirAcao = function(s) {
+    const modal = document.createElement('div');
+    modal.id = 'modal-infra';
+    modal.style = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:9999; display:flex; align-items:center; justify-content:center; backdrop-filter:blur(5px);";
+    modal.innerHTML = `
+        <div class="painel-vidro" style="width:400px; padding:30px; text-align:center;">
+            <h3>GESTÃO DE SOLICITAÇÃO</h3>
+            <p>Deseja processar o envio de ${s.quantidade} ${s.produto_nome} para ${s.destino_nome}?</p>
+            <div style="display:flex; gap:10px; margin-top:20px;">
+                <button onclick="this.closest('#modal-infra').remove()" class="btn-voltar-vidro">VOLTAR</button>
+                <button onclick="infra_telaSelecaoTags(${s.id}, ${s.produto_id}, ${s.local_destino_id}, ${s.quantidade}, '${s.produto_nome}')" 
+                        class="btn-vidro" style="background:#22c55e;">ACEITAR ✅</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+};
+
+window.infra_contar = function(qtd) {
+    const sel = document.querySelectorAll('input[name="tag_infra"]:checked').length;
+    document.getElementById('btn-infra-fim').style.display = (sel === qtd) ? 'block' : 'none';
+};
+
+window.infra_finalizarEnvio = async function(pedidoId, destId, qtd, prodId) {
+    const selecionados = Array.from(document.querySelectorAll('input[name="tag_infra_check"]:checked')).map(cb => parseInt(cb.value));
+
+    if (selecionados.length !== qtd) {
+        return notificar(`Selecione exatamente ${qtd} itens!`, "alerta");
+    }
+
+    // Bloqueia o botão para evitar cliques duplos
+    const btn = document.getElementById('btn-infra-finalizar');
+    btn.disabled = true;
+    btn.innerText = "PROCESSANDO...";
+
+    try {
+        const res = await fetch(`${API_URL}/infra/finalizar-envio`, {
+            method: 'POST',
+            headers: { 
+                'Authorization': `Bearer ${TOKEN}`,
+                'Content-Type': 'application/json' 
+            },
+            body: JSON.stringify({
+                pedidoId: pedidoId,
+                tagsIds: selecionados,
+                localDestinoId: destId
+            })
+        });
+
+        const dados = await res.json();
+
+        if (res.ok) {
+            notificar("Solicitação autorizada! Gerando Romaneio...", "sucesso");
+            
+            // DISPARO AUTOMÁTICO DO PDF (Sem burocracia)
+            // Abre o romaneio em uma nova aba imediatamente
+            window.open(`${API_URL}/relatorios/romaneio-infra/${dados.romaneioId}`, '_blank');
+
+            // Volta para a lista de pendentes já atualizada
+            infra_telaPendentes();
+        } else {
+            notificar(dados.error, "erro");
+            btn.disabled = false;
+            btn.innerText = "GERAR REMESSA E LIBERAR COLETA 📤";
+        }
+    } catch (err) {
+        notificar("Erro ao finalizar processo.", "erro");
+        btn.disabled = false;
+    }
+};
+
+window.infra_abrirModalAcao = function(p) {
+    const modal = document.createElement('div');
+    modal.id = 'modal-decisao-infra';
+    modal.className = 'alerta-vidro-overlay';
+    
+    modal.innerHTML = `
+        <div class="painel-vidro animar-entrada" style="width:450px; padding:30px; text-align:center;">
+            <h3 style="color:white; margin-bottom:20px;">AUTORIZAR SAÍDA</h3>
+            <p style="color:#ccc;">Enviar <b>${p.quantidade} ${p.produto_nome}</b> para <b>${p.destino_nome}</b>?</p>
+            <div style="display:flex; gap:10px; margin-top:30px;">
+                <button onclick="document.getElementById('modal-decisao-infra').remove()" class="btn-sair-vidro" style="flex:1;">CANCELAR</button>
+                <button onclick="processarAprovacaoDireta(${p.id})" 
+                        id="btn-confirmar-infra"
+                        style="flex:2; background:#22c55e; color:white; border:none; border-radius:10px; font-weight:bold; cursor:pointer;">
+                    CONFIRMAR E GERAR ROMANEIO
+                </button>
+            </div>
+        </div>`;
+    document.body.appendChild(modal);
+};
+
+async function processarAprovacaoDireta(pedidoId) {
+    const btn = document.getElementById('btn-confirmar-infra');
+    if (!btn) return;
+
+    btn.disabled = true;
+    btn.innerText = "PROCESSANDO...";
+
+    try {
+        const res = await fetch(`${API_URL}/infra/aprovar-automatico`, {
+            method: 'POST',
+            headers: { 
+                'Authorization': `Bearer ${TOKEN}`, 
+                'Content-Type': 'application/json' 
+            },
+            body: JSON.stringify({ pedidoId })
+        });
+
+        const dados = await res.json();
+
+        if (res.ok) {
+            const modal = document.getElementById('modal-decisao-infra');
+            if (modal) modal.remove();
+
+            notificar("Saída autorizada! O bem foi movido para o setor de trânsito.", "sucesso");
+            
+            // Atualiza a tela de pendentes sem recarregar a página
+            infra_telaPendentes(); 
+        } else {
+            notificar(dados.error || "Erro na aprovação.", "erro");
+            btn.disabled = false;
+            btn.innerText = "CONFIRMAR";
+        }
+    } catch (err) {
+        console.error(err);
+        notificar("Erro de comunicação com o servidor.", "erro");
+        btn.disabled = false;
+    }
+}
+
+window.infra_aprovarDireto = async function(pedidoId) {
+    const btn = document.getElementById('btn-confirmar-infra');
+    btn.disabled = true;
+    btn.innerText = "PROCESSANDO...";
+
+    try {
+        const res = await fetch(`${API_URL}/infra/aprovar-e-gerar-romaneio`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pedidoId })
+        });
+        const dados = await res.json();
+
+        if (res.ok) {
+            document.getElementById('modal-decisao-infra').remove();
+            notificar("Solicitação autorizada com sucesso!", "sucesso");
+            // Abre o PDF automático conforme seu padrão
+            window.open(`${API_URL}/relatorios/romaneio-infra/${dados.romaneioId}`, '_blank');
+            infra_telaPendentes();
+        } else {
+            notificar(dados.error, "erro");
+            btn.disabled = false;
+        }
+    } catch (err) {
+        notificar("Erro ao processar aprovação.", "erro");
+        btn.disabled = false;
+    }
+};
+
+// Nova função intermediária para garantir a transição limpa
+window.infra_irParaTags = function(p) {
+    const modal = document.getElementById('modal-decisao-infra');
+    if(modal) modal.remove();
+    
+    // Chama a tela de tags diretamente
+    infra_telaSelecaoTags(p.id, p.produto_id, p.local_destino_id, p.quantidade, p.produto_nome);
+};
+
+window.infra_telaSelecaoTags = async function(pedidoId, prodId, destId, qtdNecessaria, nomeProduto) {
+    // 1. Remove o modal de decisão para limpar a tela
+    const modalAcao = document.querySelector('#modal-infra') || document.querySelector('.alerta-vidro-overlay');
+    if (modalAcao) modalAcao.remove();
+
+    const container = document.getElementById('app-content');
+    
+    // 2. Desenha a interface de seleção
+    container.innerHTML = `
+        <div class="painel-vidro animar-entrada" style="padding: 30px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <button onclick="infra_telaPendentes()" class="btn-sair-vidro">⬅ VOLTAR</button>
+                <div style="text-align:right;">
+                    <h2 style="color: white; margin:0; font-size:1.2rem;">🏷️ SELEÇÃO DE ETIQUETAS</h2>
+                    <p style="color:#60a5fa; margin:0; font-weight:bold;">${nomeProduto}</p>
+                </div>
+            </div>
+
+            <div style="background:rgba(255,255,255,0.05); padding:15px; border-radius:10px; margin-bottom:20px; text-align:center;">
+                <span style="color:white; font-size:0.9rem;">Selecione exatamente </span>
+                <b style="color:#fbbf24; font-size:1.1rem;">${qtdNecessaria}</b> 
+                <span style="color:white; font-size:0.9rem;"> itens para o pedido #${pedidoId}</span>
+                <div id="contador-tags" style="margin-top:10px; font-weight:900; color:#4ade80; font-size:1.2rem;">0 / ${qtdNecessaria}</div>
+            </div>
+
+            <div id="grid-tags-infra" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; max-height: 400px; overflow-y: auto; padding: 10px;">
+                <p style="color:white; text-align:center; grid-column:1/-1;">🔍 Buscando etiquetas no Almoxarifado Central...</p>
+            </div>
+
+            <div style="margin-top:30px;">
+                <button id="btn-infra-finalizar" class="btn-vidro" 
+                        style="width:100%; background:#22c55e; display:none; height:50px; font-size:1rem; font-weight:bold;"
+                        onclick="infra_finalizarEnvio(${pedidoId}, ${destId}, ${qtdNecessaria}, ${prodId})">
+                    GERAR REMESSA E LIBERAR COLETA 📤
+                </button>
+            </div>
+        </div>
+    `;
+
+    try {
+        const res = await fetch(`${API_URL}/infra/tags-disponiveis?prodId=${prodId}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const tags = await res.json();
+        const grid = document.getElementById('grid-tags-infra');
+
+        if (!tags || tags.length === 0) {
+            grid.innerHTML = '<p style="color:#ef4444; text-align:center; grid-column:1/-1;">Nenhum patrimônio deste item encontrado no Local 37.</p>';
+            return;
+        }
+
+        // 4. Renderiza as etiquetas com checkboxes
+        grid.innerHTML = tags.map(t => `
+            <label class="tag-selector" style="cursor:pointer; display:flex; align-items:center; gap:10px; background:rgba(255,255,255,0.03); padding:12px; border-radius:8px; border:1px solid rgba(255,255,255,0.1); transition:0.2s;">
+                <input type="checkbox" name="tag_infra_check" value="${t.id}" style="width:18px; height:18px; cursor:pointer;" 
+                       onchange="infra_validarQuantidade(${qtdNecessaria})">
+                <span style="color:white; font-family:monospace; font-size:1rem;">${t.patrimonio}</span>
+            </label>
+        `).join('');
+
+    } catch (err) {
+        notificar("Erro ao carregar etiquetas.", "erro");
+    }
+};
+
+// FUNÇÃO: Valida se a quantidade marcada é a correta
+window.infra_validarQuantidade = function(max) {
+    const selecionados = document.querySelectorAll('input[name="tag_infra_check"]:checked');
+    const contador = document.getElementById('contador-tags');
+    const btn = document.getElementById('btn-infra-finalizar');
+
+    contador.innerText = `${selecionados.length} / ${max}`;
+
+    if (selecionados.length === max) {
+        contador.style.color = "#4ade80"; // Verde se estiver correto
+        btn.style.display = "block";
+    } else if (selecionados.length > max) {
+        contador.style.color = "#ef4444"; // Vermelho se passar
+        btn.style.display = "none";
+        notificar(`Você só pode selecionar ${max} itens!`, "alerta");
+    } else {
+        contador.style.color = "#fbbf24"; // Amarelo enquanto falta
+        btn.style.display = "none";
+    }
+};
+
+async function telaVisualizarRomaneios() {
+    const container = document.getElementById('app-content');
+    
+    // Layout Base
+    container.innerHTML = `
+        <div style="display:flex; flex-direction:column; height: calc(100vh - 20px); color:white; font-family:sans-serif;">
+            <div style="padding:15px; background:rgba(0,0,0,0.3); display:flex; align-items:center; gap:20px;">
+                <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                <h3 style="margin:0; font-size:1.2rem; letter-spacing:1px;">📂 ARQUIVO DIGITAL DE ROMANEIOS</h3>
+            </div>
+
+            <div style="display:flex; flex:1; overflow:hidden;">
+                <div id="coluna-lista-pdf" style="width:380px; background:rgba(255,255,255,0.05); border-right:1px solid rgba(255,255,255,0.1); overflow-y:auto; padding:10px;">
+                    <div id="lista-arquivos-pdf" style="display:flex; flex-direction:column; gap:8px;">
+                        <p style="text-align:center; padding:20px; opacity:0.5;">Buscando arquivos...</p>
+                    </div>
+                </div>
+
+                <div id="visualizador-pdf" style="flex:1; background:rgba(0,0,0,0.2); display:flex; align-items:center; justify-content:center;">
+                    <div id="placeholder-pdf" style="text-align:center; opacity:0.3;">
+                        <span style="font-size:5rem;">📄</span>
+                        <p>Selecione um documento ao lado para visualizar</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    try {
+        const res = await fetch(`${API_URL}/admin/listar-romaneios`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const arquivos = await res.json();
+
+        const listaDiv = document.getElementById('lista-arquivos-pdf');
+        
+        if (arquivos.length === 0) {
+            listaDiv.innerHTML = '<p style="text-align:center; padding:20px; color:gray;">Nenhum PDF encontrado.</p>';
+            return;
+        }
+
+        listaDiv.innerHTML = arquivos.map(arq => {
+            const dataFormatada = new Date(arq.data).toLocaleString('pt-BR');
+            return `
+                <div class="card-arquivo-pdf" onclick="carregarPreviewPDF('${arq.nome}')" 
+                     style="padding:12px; background:rgba(255,255,255,0.03); border-radius:8px; cursor:pointer; border:1px solid transparent; transition:0.2s;">
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <span style="font-size:1.5rem;">📕</span>
+                        <div style="flex:1; overflow:hidden;">
+                            <strong style="font-size:0.85rem; display:block; white-space:nowrap; text-overflow:ellipsis; overflow:hidden;">${arq.nome}</strong>
+                            <small style="color:gray; font-size:0.7rem;">${dataFormatada} • ${arq.tamanho}</small>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+    } catch (err) {
+        document.getElementById('lista-arquivos-pdf').innerHTML = '<p style="color:#ef4444;">Erro ao carregar lista.</p>';
+    }
+}
+
+// Função para injetar o PDF no lado direito
+function carregarPreviewPDF(nomeArquivo) {
+    const viewer = document.getElementById('visualizador-pdf');
+    
+    // Destaca o item selecionado na lista (estética)
+    document.querySelectorAll('.card-arquivo-pdf').forEach(el => {
+        el.style.borderColor = 'transparent';
+        el.style.background = 'rgba(255,255,255,0.03)';
+    });
+    event.currentTarget.style.borderColor = '#3b82f6';
+    event.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)';
+
+    // Injeta o Iframe com o arquivo
+    // Nota: O caminho '/romaneios/' deve ser acessível via URL no seu servidor
+    viewer.innerHTML = `
+        <iframe src="romaneios/${nomeArquivo}" style="width:100%; height:100%; border:none;" title="Visualizador de PDF"></iframe>
+    `;
+}
+
+async function telaAuditoriaPedidos() {
+    const container = document.getElementById('app-content');
+    container.innerHTML = `
+        <div style="display:flex; flex-direction:column; height: 100vh; color:white;">
+            <div style="padding:15px; background:rgba(0,0,0,0.3); display:flex; align-items:center; gap:20px;">
+                <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                <h3 style="margin:0;">🔍 RASTREABILIDADE E FLUXO DE PEDIDOS</h3>
+            </div>
+
+            <div style="display:flex; flex:1; overflow:hidden;">
+                <div style="width:400px; background:rgba(255,255,255,0.05); border-right:1px solid rgba(255,255,255,0.1); padding:20px; overflow-y:auto;">
+                    <div style="margin-bottom:20px; background:rgba(0,0,0,0.2); padding:15px; border-radius:10px;">
+                        <label style="font-size:0.8rem; color:gray;">PERÍODO:</label>
+                        <input type="date" id="audit-inicio" class="select-vidro" style="width:100%; margin:5px 0;">
+                        <input type="date" id="audit-fim" class="select-vidro" style="width:100%; margin:5px 0;">
+                        <button onclick="buscarAuditoria()" class="btn-confirmar-v2" style="width:100%; margin-top:10px;">PESQUISAR</button>
+                    </div>
+                    <div id="lista-pedidos-auditoria">
+                        <p style="text-align:center; color:gray; margin-top:50px;">Selecione um período acima.</p>
+                    </div>
+                </div>
+
+                <div id="detalhe-fluxo-pedido" style="flex:1; padding:30px; overflow-y:auto; background:rgba(0,0,0,0.1);">
+                    <div style="text-align:center; margin-top:100px; opacity:0.3;">
+                        <span style="font-size:5rem;">🕵️‍♂️</span>
+                        <p>Selecione um pedido para investigar o fluxo completo</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+async function buscarAuditoria() {
+    const inicio = document.getElementById('audit-inicio').value;
+    const fim = document.getElementById('audit-fim').value;
+    if(!inicio || !fim) return notificar("Defina o período!", "erro");
+
+    const lista = document.getElementById('lista-pedidos-auditoria');
+    lista.innerHTML = '<div class="spinner"></div>';
+
+    try {
+        const res = await fetch(`${API_URL}/admin/auditoria/filtrar?inicio=${inicio}&fim=${fim}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const dados = await res.json();
+
+        lista.innerHTML = dados.map(p => `
+            <div class="card-arquivo-pdf" onclick="visualizarFluxoPedido(${p.id})" style="margin-bottom:8px; padding:12px;">
+                <div style="display:flex; justify-content:space-between;">
+                    <strong style="color:#fbbf24;">#${p.id}</strong>
+                    <span style="font-size:0.7rem; background:rgba(255,255,255,0.1); padding:2px 6px; border-radius:4px;">${p.status}</span>
+                </div>
+                <div style="font-size:0.8rem; margin-top:5px;">${p.destino}</div>
+                <small style="color:gray;">${new Date(p.data_criacao).toLocaleDateString('pt-BR')}</small>
+            </div>
+        `).join('');
+    } catch (err) { lista.innerHTML = "Erro ao buscar."; }
+}
+
+async function visualizarFluxoPedido(id) {
+    const painel = document.getElementById('detalhe-fluxo-pedido');
+    painel.innerHTML = '<div class="spinner"></div>';
+
+    try {
+        const res = await fetch(`${API_URL}/admin/auditoria/pedido/${id}/fluxo`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const dados = await res.json();
+
+        painel.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:30px;">
+                <div>
+                    <h2 style="margin:0;">FLUXO DO PEDIDO #${dados.info.id}</h2>
+                    <p style="color:#60a5fa;">Solicitante: ${dados.info.solicitante} | Destino: ${dados.info.destino}</p>
+                </div>
+                <button onclick='exportarFluxoPDF(${JSON.stringify(dados)})' class="btn-vidro" style="background:#10b981;">📄 EXPORTAR PAISAGEM (A4)</button>
+            </div>
+
+            <div class="timeline-container">
+                ${dados.historico.map(log => `
+                    <div style="margin-bottom:20px; border-left:3px solid #fbbf24; padding-left:15px; position:relative;">
+                        <div style="font-weight:bold; color:#fbbf24;">${log.status_novo}</div>
+                        <div style="font-size:0.85rem; color:white;">${log.observacao || 'Sem observação'}</div>
+                        <small style="color:gray;">Por: ${log.executor} em ${new Date(log.data_hora).toLocaleString('pt-BR')}</small>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    } catch (err) { painel.innerHTML = "Erro ao carregar fluxo."; }
+}
+
+async function exportarFluxoPDF(dados) {
+    try {
+        const res = await fetch(`${API_URL}/admin/relatorio/exportar-fluxo`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ dados })
+        });
+        
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Fluxo_Pedido_${dados.info.id}.pdf`;
+        a.click();
+    } catch (err) {
+        notificar("Erro ao exportar PDF", "erro");
+    }
+}
+
+async function telaEntregaUniformes() {
+    const app = document.getElementById('app-content');
+    app.innerHTML = `<div class="loading-spinner"></div>`;
+
+    try {
+        const res = await fetch(`${API_URL}/escola/turmas-local`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+
+        if (!res.ok) {
+            const errData = await res.json();
+            throw new Error(errData.error || 'Falha ao carregar turmas.');
+        }
+
+        const turmas = await res.json();
+
+        app.innerHTML = `
+            <div class="header-animado animate__animated animate__fadeIn">
+                <button class="btn-voltar-vidro" onclick="carregarDashboard()" style="margin-bottom: 20px;">
+                    <i class="fas fa-arrow-left"></i> VOLTAR
+                </button>
+                <h2 class="titulo-sessao" style="color: white;">ENTREGA DE UNIFORMES</h2>
+                <p style="color: rgba(255,255,255,0.7); max-width: 600px; margin: 10px auto 30px auto; text-align: center;">
+                    Selecione uma turma para iniciar o processo de registro de entrega dos uniformes aos alunos.
+                </p>
+            </div>
+            
+            <div class="animate__animated animate__fadeInUp" style="max-width: 500px; margin: 0 auto;">
+                <div class="glass-panel" style="padding: 30px;">
+                    <label for="select-turma" style="display: block; color: #00d4ff; font-weight: bold; margin-bottom: 10px;">
+                        SELECIONE A TURMA
+                    </label>
+                    <select id="select-turma" class="select-vidro" style="width: 100%; font-size: 1.2rem;">
+                        <option value="">-- Escolha uma turma --</option>
+                        ${turmas.map(t => `<option value="${t.id}">${t.nome}</option>`).join('')}
+                    </select>
+                    
+                    <button id="btn-iniciar-entrega" class="btn-confirmar-entrada" 
+                            style="width: 100%; margin-top: 25px; background: #00d4ff; color: #001a2c; display: none;"
+                            onclick="carregarGradeDeEntrega()">
+                        <i class="fas fa-arrow-right"></i> PROSSEGUIR PARA A ENTREGA
+                    </button>
+                </div>
+            </div>
+        `;
+
+        const selectTurma = document.getElementById('select-turma');
+        const btnIniciar = document.getElementById('btn-iniciar-entrega');
+
+        selectTurma.addEventListener('change', () => {
+            if (selectTurma.value) {
+                btnIniciar.style.display = 'block';
+                btnIniciar.classList.add('animate__animated', 'animate__pulse');
+            } else {
+                btnIniciar.style.display = 'none';
+            }
+        });
+
+    } catch (err) {
+        console.error("Erro na tela de entrega de uniformes:", err);
+        app.innerHTML = `<p style="color: #ff4d4d; padding: 20px;">❌ ${err.message}</p>`;
+        notificar(`Erro: ${err.message}`, 'erro');
+    }
+}
+
+function carregarGradeDeEntrega() {
+    const selectTurma = document.getElementById('select-turma');
+    const turmaId = selectTurma.value;
+    const turmaNome = selectTurma.options[selectTurma.selectedIndex].text;
+    if (!turmaId) {
+        notificar('Por favor, selecione uma turma.', 'aviso');
+        return;
+    }
+    renderizarMatrizEntrega(turmaId, turmaNome);
+}
+
+async function renderizarMatrizEntrega(turmaId, turmaNome) {
+    const app = document.getElementById('app-content');
+    app.innerHTML = `<div class="loading-spinner"></div>`;
+
+    try {
+        const res = await fetch(`${API_URL}/turma/${turmaId}/grade-entrega`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        if (!res.ok) throw new Error((await res.json()).error || 'Falha ao carregar dados.');
+        const data = await res.json();
+
+        if (!data.alunos || data.alunos.length === 0) {
+            app.innerHTML = `
+                <div class="glass-panel" style="text-align:center; padding: 40px; margin: 20px;">
+                    <h2>A turma "${turmaNome}" não possui alunos cadastrados.</h2>
+                    <button class="btn-voltar-vidro" onclick="telaEntregaUniformes()">Voltar</button>
+                </div>`;
+            return;
+        }
+
+        const opcoesPorProduto = {};
+        data.produtos.forEach(produto => {
+            const estoque = data.estoqueEscola[produto.id] || [];
+            opcoesPorProduto[produto.id] = estoque
+                .map(e => `<option value="${e.tamanho}">${e.tamanho} (${e.qtd})</option>`)
+                .join('');
+        });
+
+        app.innerHTML = `
+            <style>
+                .tabela-entrega-wrapper {
+                    max-height: 65vh;
+                    overflow-y: auto;
+                    overflow-x: hidden;
+                    border-radius: 8px;
+                    background: rgba(0, 26, 44, 0.6);
+                    margin-bottom: 15px;
+                    border: 1px solid rgba(255,255,255,0.1);
+                }
+
+                .tabela-entrega {
+                    width: 100%;
+                    border-collapse: collapse;
+                    table-layout: fixed; /* Trava o layout */
+                }
+
+                /* Coluna do Aluno: 20% do total */
+                .col-aluno {
+                    width: 20%;
+                    min-width: 20%;
+                    max-width: 20%;
+                    text-align: left !important;
+                    padding-left: 10px !important;
+                    font-size: 0.7rem;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+
+                /* Colunas de Uniformes (9 colunas): Cada uma recebe exatamente 1/9 dos 80% restantes */
+                .col-uniforme {
+                    width: calc(80% / ${data.produtos.length});
+                    min-width: calc(80% / ${data.produtos.length});
+                    max-width: calc(80% / ${data.produtos.length});
+                    padding: 5px 2px !important;
+                }
+
+                .tabela-entrega thead th {
+                    position: sticky;
+                    top: 0;
+                    z-index: 10;
+                    background: #001a2c;
+                    font-size: 0.55rem; /* Fonte levemente menor para garantir que caiba */
+                    color: #00d4ff;
+                    height: 45px;
+                    border-bottom: 2px solid #00d4ff;
+                    word-wrap: break-word; /* Força quebra de linha em nomes longos como CALCA MAS */
+                }
+
+                .tabela-entrega .linha-todos th, 
+                .tabela-entrega .linha-todos td {
+                    position: sticky;
+                    top: 45px;
+                    z-index: 9;
+                    background: #002a44;
+                    border-bottom: 1px solid rgba(255,255,255,0.2);
+                }
+
+                .tabela-entrega td {
+                    text-align: center;
+                    border: 1px solid rgba(255,255,255,0.05);
+                    height: 38px;
+                }
+
+                .select-tamanho-entrega, .select-todos {
+                    width: 90%; /* Reduzido de 98% para 90% para dar respiro */
+                    margin: 0 auto; /* Centraliza perfeitamente na célula */
+                    display: block; /* Garante que o alinhamento funcione */
+                    font-size: 0.65rem;
+                    padding: 2px;
+                    background: rgba(0,0,0,0.5);
+                    color: white;
+                    border: 1px solid rgba(0,212,255,0.3);
+                    border-radius: 3px;
+                }
+
+                .tabela-entrega th:last-child, 
+                .tabela-entrega td:last-child {
+                    padding-right: 15px !important;
+                }
+
+                .titulo-turma-central {
+                    width: 100%;
+                    text-align: center;
+                    color: #00d4ff;
+                    font-size: 1.6rem;
+                    font-weight: 800;
+                    text-transform: uppercase;
+                    margin-bottom: 20px;
+                    letter-spacing: 2px;
+                    text-shadow: 0 0 15px rgba(0, 212, 255, 0.4);
+                }
+                
+                .celula-entregue { font-size: 0.6rem; color: #00ff88; line-height: 1; }
+                .celula-nao-aplica { color: rgba(255,255,255,0.1); font-size: 0.7rem; }
+                
+                #footer-acoes-entrega {
+                    display: flex;
+                    gap: 10px;
+                    justify-content: center;
+                    padding: 10px;
+                }
+            </style>
+
+            <div class="header-animado animate__animated animate__fadeIn">
+                <button class="btn-voltar-vidro" onclick="telaEntregaUniformes()" style="padding: 4px 12px; font-size: 0.8rem;">
+                    <i class="fas fa-arrow-left"></i> TROCAR TURMA
+                </button>
+                <h1 class="titulo-turma-central">
+                    <i class="fas fa-users"></i> TURMA: ${turmaNome}
+                </h1>
+            </div>
+
+            <div class="tabela-entrega-wrapper animate__animated animate__fadeInUp">
+                <table class="tabela-entrega">
+                    <thead>
+                        <tr>
+                            <th class="col-aluno">ALUNO</th>
+                            ${data.produtos.map(p => `
+                                <th class="col-uniforme">
+                                    ${p.nome.toUpperCase()}
+                                </th>`).join('')}
+                        </tr>
+
+                        <tr class="linha-todos">
+                            <th class="col-aluno" style="color: #00d4ff;">TODOS</th>
+                            ${data.produtos.map(produto => `
+                                <td class="col-uniforme" data-produto-id="${produto.id}">
+                                    <select class="select-todos" data-produto-id="${produto.id}">
+                                        <option value="">--</option>
+                                        ${opcoesPorProduto[produto.id]}
+                                    </select>
+                                </td>
+                            `).join('')}
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        ${data.alunos.map(aluno => `
+                            <tr id="aluno-row-${aluno.id}">
+                                <td class="col-aluno" title="${aluno.nome}">${aluno.nome}</td>
+                                ${data.produtos.map(produto => {
+                                    const status = aluno.statusItens?.[produto.id];
+                                    if (!status) return `<td class="col-uniforme celula-nao-aplica">—</td>`;
+
+                                    if (status.status === 'entregue') {
+                                        return `
+                                            <td class="col-uniforme celula-entregue">
+                                                <i class="fas fa-check"></i> ${status.tamanho}
+                                            </td>`;
+                                    }
+
+                                    return `
+                                        <td class="col-uniforme">
+                                            <select class="select-tamanho-entrega"
+                                                    data-aluno-id="${aluno.id}"
+                                                    data-produto-id="${produto.id}"
+                                                    data-origem="manual">
+                                                <option value="">--</option>
+                                                ${opcoesPorProduto[produto.id]}
+                                            </select>
+                                        </td>`;
+                                }).join('')}
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+
+            <div id="footer-acoes-entrega">
+                <button class="btn-imprimir-comprovante" onclick="gerarComprovanteTurma(${turmaId})" 
+                        style="background: #3b82f6; color: white; padding: 12px 20px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer;">
+                    COMPROVANTE
+                </button>
+                <button class="btn-confirmar-entrega" onclick="confirmarEntregasTurma(${turmaId})" 
+                        style="background: #00ff88; color: #001a2c; padding: 12px 30px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer;">
+                    CONFIRMAR SELECIONADAS
+                </button>
+            </div>
+        `;
+
+        configurarAcoesEmMassa();
+
+    } catch (err) {
+        console.error("Erro ao renderizar matriz de entrega:", err);
+        notificar(`Erro: ${err.message}`, 'erro');
+    }
+}
+
+// ============================================================
+// ✅ LÓGICA CORRIGIDA DO "TODOS" COM CONTROLE DE ORIGEM
+// ============================================================
+function configurarAcoesEmMassa() {
+
+    // --- Select "TODOS" de cada coluna ---
+    document.querySelectorAll('.select-todos').forEach(selectMaster => {
+        selectMaster.addEventListener('change', (event) => {
+            const produtoId = event.target.dataset.produtoId;
+            const tamanhoSelecionado = event.target.value;
+            const celulaHeader = document.querySelector(`.celula-todos[data-produto-id="${produtoId}"]`);
+            const selectsAlunos = document.querySelectorAll(
+                `.select-tamanho-entrega[data-produto-id="${produtoId}"]`
+            );
+
+            // ✅ DESFAZER: limpa APENAS os que foram marcados pelo "Todos"
+            if (tamanhoSelecionado === '') {
+                selectsAlunos.forEach(s => {
+                    if (s.dataset.origem === 'todos') {
+                        s.value = '';
+                        s.dataset.origem = 'manual';
+                    }
+                });
+                celulaHeader?.classList.remove('coluna-em-massa-ativa');
+                return;
+            }
+
+            // ✅ Validação de estoque (só conta pendentes desta coluna)
+            const totalPendentes = selectsAlunos.length;
+            const textoOpcao = event.target.options[event.target.selectedIndex]?.textContent || '';
+            const match = textoOpcao.match(/\((\d+)\)/);
+            const estoqueDisponivel = match ? parseInt(match[1], 10) : 0;
+
+            if (totalPendentes > estoqueDisponivel) {
+                const prosseguir = confirm(
+                    `⚠️ Atenção!\n\n` +
+                    `Tamanho "${tamanhoSelecionado}": apenas ${estoqueDisponivel} unidade(s) em estoque.\n` +
+                    `Alunos pendentes nesta coluna: ${totalPendentes}.\n\n` +
+                    `O estoque pode não ser suficiente para todos.\n` +
+                    `Deseja aplicar assim mesmo e ajustar individualmente?`
+                );
+                if (!prosseguir) {
+                    event.target.value = '';
+                    return;
+                }
+            }
+
+            // ✅ Aplica o tamanho e registra origem como "todos"
+            selectsAlunos.forEach(s => {
+                const temOpcao = Array.from(s.options).some(opt => opt.value === tamanhoSelecionado);
+                if (temOpcao) {
+                    s.value = tamanhoSelecionado;
+                    s.dataset.origem = 'todos';
+                }
+            });
+
+            // ✅ Destaque visual na célula do "Todos" desta coluna
+            celulaHeader?.classList.add('coluna-em-massa-ativa');
+        });
+    });
+
+    // --- Selects individuais dos alunos ---
+    document.querySelectorAll('.select-tamanho-entrega').forEach(selectAluno => {
+        selectAluno.addEventListener('change', (event) => {
+            // ✅ Ao alterar manualmente, marca como "manual"
+            event.target.dataset.origem = 'manual';
+
+            // ✅ Sincroniza o select "Todos" desta coluna com a realidade
+            const produtoId = event.target.dataset.produtoId;
+            sincronizarSelectTodos(produtoId);
+        });
+    });
+}
+
+function sincronizarSelectTodos(produtoId) {
+    const selectMaster = document.querySelector(`.select-todos[data-produto-id="${produtoId}"]`);
+    const celulaHeader = document.querySelector(`.celula-todos[data-produto-id="${produtoId}"]`);
+    if (!selectMaster) return;
+
+    const selectsAlunos = Array.from(
+        document.querySelectorAll(`.select-tamanho-entrega[data-produto-id="${produtoId}"]`)
+    );
+    if (selectsAlunos.length === 0) return;
+
+    const valores = selectsAlunos.map(s => s.value);
+    const todosPreenchidos = valores.every(v => v !== '');
+    const todosIguais = todosPreenchidos && valores.every(v => v === valores[0]);
+
+    if (todosIguais) {
+        // Todos os alunos desta coluna têm o mesmo tamanho → reflete no "Todos"
+        selectMaster.value = valores[0];
+        celulaHeader?.classList.add('coluna-em-massa-ativa');
+    } else {
+        // Há divergência → "Todos" volta para --
+        selectMaster.value = '';
+        celulaHeader?.classList.remove('coluna-em-massa-ativa');
+    }
+}
+
+async function gerarComprovanteTurma(turmaId) {
+    notificar('Gerando comprovante...', 'info');
+
+    try {
+        const res = await fetch(`${API_URL}/turma/${turmaId}/comprovante`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+            throw new Error(data.error || 'Não foi possível gerar o comprovante.');
+        }
+
+        // ── 1. Monta as linhas da tabela de alunos ──────────────────────────
+        const linhasAlunos = data.alunos.map(aluno => `
+            <tr>
+                <td style="
+                    width: 36%;
+                    border: 1px solid #999;
+                    padding: 5px 6px;
+                    font-size: 8pt;
+                    word-break: break-word;
+                ">${aluno.nome}</td>
+                <td style="
+                    width: 15%;
+                    border: 1px solid #999;
+                    padding: 5px 6px;
+                    font-size: 9pt;
+                    text-align: center;
+                ">${aluno.matricula}</td>
+                <td style="
+                    width: 22%;
+                    border: 1px solid #999;
+                    padding: 5px 6px;
+                    font-size: 9pt;
+                    text-align: center;
+                    color: #aaa;
+                    letter-spacing: 1px;
+                    white-space: nowrap;
+                ">___/ ___/ ____</td>
+                <td style="
+                    width: 27%;
+                    border: 1px solid #999;
+                    padding: 5px 6px;
+                "></td>
+            </tr>
+        `).join('');
+
+        // ── 2. Monta o HTML completo do documento A4 ─────────────────────────
+        const htmlDocumento = `
+            <!DOCTYPE html>
+            <html lang="pt-BR">
+            <head>
+                <meta charset="UTF-8">
+                <title>Lista de Entrega de Uniformes - ${data.turmaNome}</title>
+                <style>
+                    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+                    body {
+                        font-family: Arial, sans-serif;
+                        background: #fff;
+                        color: #222;
+                    }
+
+                    /* Página A4 com margens de 1cm */
+                    .pagina-a4 {
+                        width: 210mm;
+                        min-height: 297mm;
+                        padding: 1cm;
+                        margin: 0 auto;
+                        background: #fff;
+                    }
+
+                    /* Cabeçalho: logo + textos lado a lado */
+                    .cabecalho {
+                        display: flex;
+                        align-items: center;
+                        justify-content: space-between; /* Alinha os logos nas extremidades */
+                        margin-bottom: 18px;
+                        padding-bottom: 10px;
+                        border-bottom: 1px solid #eee; /* Opcional: linha sutil para separar o topo */
+                    }
+                    .cabecalho img {
+                        height: 60px; /* Aumentei um pouco para melhor legibilidade */
+                        width: auto;
+                        object-fit: contain;
+                    }
+                    .cabecalho-textos {
+                        display: flex;
+                        flex-direction: column;
+                        justify-content: center;
+                        text-align: center; /* Centraliza o bloco de texto entre as imagens */
+                        flex-grow: 1;
+                    }
+                    .cabecalho-textos p {
+                        margin: 0;
+                        line-height: 1.2;
+                    }
+                    .cabecalho-textos p:nth-child(1) {
+                        font-size: 11pt;
+                        font-weight: bold;
+                    }
+                    .cabecalho-textos p:nth-child(2) {
+                        font-size: 10pt;
+                        font-weight: bold;
+                    }
+                    .cabecalho-textos p:nth-child(3) {
+                        font-size: 10pt;
+                        font-weight: bold;
+                        margin-top: 2px;
+                        text-transform: uppercase; /* Nome da escola em destaque */
+                    }
+
+                    /* Título centralizado */
+                    .titulo-documento {
+                        text-align: center;
+                        font-size: 11pt;
+                        font-weight: bold;
+                        margin-bottom: 14px;
+                        letter-spacing: 0.3px;
+                    }
+
+                    /* Tabela de alunos */
+                    .tabela-lista {
+                        width: 100%;
+                        border-collapse: collapse;
+                        margin-bottom: 28px;
+                    }
+                    .tabela-lista thead tr {
+                        background-color: #e8e8e8;
+                    }
+                    .tabela-lista thead th {
+                        border: 1px solid #999;
+                        padding: 6px;
+                        font-size: 9pt;
+                        font-weight: bold;
+                        text-align: center;
+                    }
+                    .tabela-lista thead th:first-child {
+                        width: 42%;
+                        text-align: left;
+                    }
+                    .tabela-lista thead th:nth-child(2) {
+                        width: 15%;
+                    }
+                    .tabela-lista thead th:nth-child(3) {
+                        width: 18%;
+                    }
+                    .tabela-lista thead th:nth-child(4) {
+                        width: 25%;
+                    }
+
+                    /* Área de assinatura do responsável */
+                    .area-responsavel {
+                        display: flex;
+                        flex-direction: column;
+                        align-items: flex-end;
+                        gap: 10px;
+                        margin-top: 10px;
+                    }
+                    .linha-responsavel {
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        width: 220px;
+                    }
+                    .linha-responsavel .underline {
+                        width: 100%;
+                        border-bottom: 1px solid #333;
+                        height: 22px;
+                    }
+                    .linha-responsavel span {
+                        font-size: 8pt;
+                        margin-top: 3px;
+                        color: #444;
+                        text-align: center;
+                    }
+
+                    /* Regras de impressão */
+                    @media print {
+                        html, body {
+                            width: 210mm;
+                            height: 297mm;
+                            margin: 0;
+                        }
+                        .pagina-a4 {
+                            margin: 0;
+                            box-shadow: none;
+                            border: none;
+                        }
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="pagina-a4">
+
+                    <!-- CABEÇALHO -->
+                    <div class="cabecalho">
+                        <img src="assets/braque.png" alt="Brasão"> 
+                        
+                        <div class="cabecalho-textos">
+                            <p>PREFEITURA MUNICIPAL DE QUEIMADOS</p>
+                            <p>SECRETARIA MUNICIPAL DE EDUCAÇÃO</p>
+                            <p>${data.nomeOficial || data.localNome || 'NOME DA UNIDADE ESCOLAR'}</p>
+                        </div>
+
+                        <img src="assets/logap.png" alt="Logo Educação">
+                    </div>
+
+                    <!-- TÍTULO -->
+                    <div class="titulo-documento">
+                        LISTA DE ENTREGA DE UNIFORMES DA TURMA ${data.turmaNome.toUpperCase()}
+                    </div>
+
+                    <!-- TABELA DE ALUNOS -->
+                    <table class="tabela-lista">
+                        <thead>
+                            <tr>
+                                <th>NOME</th>
+                                <th>MATRÍCULA</th>
+                                <th>DATA RECEBIMENTO</th>
+                                <th>ASSINATURA</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${linhasAlunos}
+                        </tbody>
+                    </table>
+
+                    <!-- ASSINATURA DO RESPONSÁVEL -->
+                    <div class="area-responsavel">
+                        <div class="linha-responsavel">
+                            <div class="underline"></div>
+                            <span>Assinatura do Responsável pela Entrega</span>
+                        </div>
+                        <div class="linha-responsavel">
+                            <div class="underline"></div>
+                            <span>Matrícula do Responsável</span>
+                        </div>
+                    </div>
+
+                </div>
+            </body>
+            </html>
+        `;
+
+        // ── 3. Converte o HTML em Blob PDF via iframe oculto ─────────────────
+        // Cria um Blob com o HTML e gera uma URL temporária
+        const blob = new Blob([htmlDocumento], { type: 'text/html; charset=utf-8' });
+        const blobUrl = URL.createObjectURL(blob);
+
+        // ── 4. Remove modal anterior se existir ──────────────────────────────
+        const modalAnterior = document.getElementById('modal-comprovante-uniforme');
+        if (modalAnterior) modalAnterior.remove();
+
+        // ── 5. Cria o Modal ──────────────────────────────────────────────────
+        const modal = document.createElement('div');
+        modal.id = 'modal-comprovante-uniforme';
+        modal.style.cssText = `
+            position: fixed;
+            top: 0; left: 0;
+            width: 100vw; height: 100vh;
+            background: rgba(0,0,0,0.75);
+            z-index: 99999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            padding-top: 20px;
+        `;
+
+        modal.innerHTML = `
+            <!-- Barra de ações do modal -->
+            <div style="
+                display: flex;
+                gap: 12px;
+                margin-bottom: 14px;
+                align-items: center;
+            ">
+                <span style="color:#fff; font-size:13pt; font-weight:bold; margin-right:10px;">
+                    Comprovante — ${data.turmaNome}
+                </span>
+
+                <!-- Botão Salvar -->
+                <a
+                    id="btn-salvar-comprovante"
+                    href="${blobUrl}"
+                    download="Lista_Entrega_${data.turmaNome.replace(/\s+/g,'_')}.html"
+                    style="
+                        background: #1976d2;
+                        color: #fff;
+                        border: none;
+                        padding: 9px 20px;
+                        border-radius: 6px;
+                        font-size: 10pt;
+                        font-weight: bold;
+                        cursor: pointer;
+                        text-decoration: none;
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 6px;
+                    "
+                ">
+                    <i class="fas fa-download"></i> SALVAR
+                </a>
+
+                <!-- Botão Imprimir -->
+                <button
+                    id="btn-imprimir-comprovante"
+                    style="
+                        background: #388e3c;
+                        color: #fff;
+                        border: none;
+                        padding: 9px 20px;
+                        border-radius: 6px;
+                        font-size: 10pt;
+                        font-weight: bold;
+                        cursor: pointer;
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 6px;
+                    "
+                >
+                    <i class="fas fa-print"></i> IMPRIMIR
+                </button>
+
+                <!-- Botão Fechar -->
+                <button
+                    id="btn-fechar-comprovante"
+                    style="
+                        background: #c62828;
+                        color: #fff;
+                        border: none;
+                        padding: 9px 20px;
+                        border-radius: 6px;
+                        font-size: 10pt;
+                        font-weight: bold;
+                        cursor: pointer;
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 6px;
+                    "
+                >
+                    <i class="fas fa-times"></i> FECHAR
+                </button>
+            </div>
+
+            <!-- Iframe que exibe o documento -->
+            <iframe
+                id="iframe-comprovante"
+                src="${blobUrl}"
+                style="
+                    width: 220mm;
+                    height: 80vh;
+                    border: none;
+                    border-radius: 4px;
+                    background: #fff;
+                    box-shadow: 0 4px 32px rgba(0,0,0,0.5);
+                "
+            ></iframe>
+        `;
+
+        document.body.appendChild(modal);
+
+        // ── 6. Eventos dos botões ────────────────────────────────────────────
+
+        // Imprimir: aciona o print dentro do iframe
+        document.getElementById('btn-imprimir-comprovante').addEventListener('click', () => {
+            const iframe = document.getElementById('iframe-comprovante');
+            iframe.contentWindow.focus();
+            iframe.contentWindow.print();
+        });
+
+        // Fechar: remove o modal e libera a URL do blob
+        document.getElementById('btn-fechar-comprovante').addEventListener('click', () => {
+            URL.revokeObjectURL(blobUrl);
+            modal.remove();
+        });
+
+        // Fechar também ao clicar no fundo escuro (fora do conteúdo)
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                URL.revokeObjectURL(blobUrl);
+                modal.remove();
+            }
+        });
+
+    } catch (err) {
+        console.error("Erro ao gerar comprovante:", err);
+        notificar(`Erro: ${err.message}`, 'erro');
+    }
+}
+
+async function confirmarEntregasTurma(turmaId) {
+    const selects = document.querySelectorAll('.select-tamanho-entrega');
+    const entregasParaEnviar = [];
+
+    // 1. Coletar todas as seleções válidas da matriz
+    selects.forEach(select => {
+        if (select.value) { // Apenas se um tamanho foi escolhido
+            entregasParaEnviar.push({
+                alunoId: select.dataset.alunoId,
+                produtoId: select.dataset.produtoId,
+                tamanho: select.value
+            });
+        }
+    });
+
+    if (entregasParaEnviar.length === 0) {
+        notificar('Nenhuma nova entrega foi selecionada.', 'aviso');
+        return;
+    }
+
+    // 2. Diálogo de confirmação para o usuário
+    if (!confirm(`Você está prestes a confirmar a entrega de ${entregasParaEnviar.length} item(ns).\n\nEsta ação dará baixa no estoque e não poderá ser desfeita.\n\nContinuar?`)) {
+        return;
+    }
+
+    const btn = document.querySelector('.btn-confirmar-entrega');
+    const btnOriginalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> PROCESSANDO...';
+
+    try {
+        // 3. Enviar os dados para o backend
+        const res = await fetch(`${API_URL}/entregas/lote`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${TOKEN}`
+            },
+            body: JSON.stringify({ entregas: entregasParaEnviar })
+        });
+
+        const resultado = await res.json();
+
+        if (!res.ok) {
+            throw new Error(resultado.error || 'Ocorreu uma falha no servidor.');
+        }
+
+        notificar(resultado.message || 'Entregas registradas com sucesso!', 'sucesso');
+        
+        // 4. Recarregar a matriz para refletir as mudanças (essencial!)
+        // Encontra o nome da turma no título da página para passar para a função de recarregamento
+        const turmaNome = document.querySelector('.titulo-sessao').innerText.replace('Entregas para: ', '');
+        await renderizarMatrizEntrega(turmaId, turmaNome);
+
+    } catch (err) {
+        console.error('Erro ao confirmar entregas:', err);
+        notificar(`Erro: ${err.message}`, 'erro');
+    } finally {
+        // Garante que o botão volte ao normal mesmo em caso de erro
+        btn.disabled = false;
+        btn.innerHTML = btnOriginalText;
+    }
+}
+
+function telaRelatoriosUniformes() {
+    const app = document.getElementById('app-content');
+    app.innerHTML = `
+        <div class="header-animado animate__animated animate__fadeIn">
+            <button class="btn-voltar-vidro" onclick="carregarDashboard()">
+                <i class="fas fa-arrow-left"></i> VOLTAR
+            </button>
+            <h2 class="titulo-sessao" style="color: white;">Relatórios de Uniformes</h2>
+            <p style="color: rgba(255,255,255,0.7);">Selecione um tipo de relatório para visualizar o status das entregas.</p>
+        </div>
+
+        <div class="animate__animated animate__fadeInUp" style="padding: 20px; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+            
+            <!-- Card 1: Status Geral por Turma -->
+            <div class="glass-panel" style="padding: 20px;">
+                <h3 style="color: #00d4ff;">Status por Turma</h3>
+                <p style="color: rgba(255,255,255,0.6); font-size: 0.9rem;">Veja o progresso geral de entrega para cada turma da sua escola.</p>
+                <button class="btn-vidro" style="width: 100%; margin-top: 15px;" onclick="gerarRelatorioStatusTurmas()">
+                    <i class="fas fa-chart-bar"></i> Visualizar Relatório
+                </button>
+            </div>
+
+            <!-- Card 2: Alunos com Kit Pendente -->
+            <div class="glass-panel" style="padding: 20px;">
+                <h3 style="color: #f59e0b;">Alunos Pendentes</h3>
+                <p style="color: rgba(255,255,255,0.6); font-size: 0.9rem;">Liste todos os alunos que ainda não receberam o kit completo de uniformes.</p>
+                <button class="btn-vidro" style="width: 100%; margin-top: 15px;" onclick="gerarRelatorioAlunosPendentes()">
+                    <i class="fas fa-user-clock"></i> Visualizar Relatório
+                </button>
+            </div>
+            
+            <!-- Card 3: Alunos com Kit Completo -->
+            <div class="glass-panel" style="padding: 20px;">
+                <h3 style="color: #10b981;">Alunos Contemplados</h3>
+                <p style="color: rgba(255,255,255,0.6); font-size: 0.9rem;">Liste todos os alunos que já receberam o kit completo de uniformes.</p>
+                <button class="btn-vidro" style="width: 100%; margin-top: 15px;" onclick="gerarRelatorioAlunosCompletos()">
+                    <i class="fas fa-user-check"></i> Visualizar Relatório
+                </button>
+            </div>
+
+        </div>
+        
+        <!-- Área para exibir o resultado do relatório -->
+        <div id="resultado-relatorio" style="margin-top: 30px; padding: 0 20px;"></div>
+    `;
+}
+
+async function gerarRelatorioStatusTurmas() {
+    const container = document.getElementById('resultado-relatorio');
+    if (!container) {
+        console.error("Container 'resultado-relatorio' não encontrado na tela.");
+        return;
+    }
+
+    container.innerHTML = `<div class="loading-spinner"></div>`;
+
+    try {
+        const res = await fetch(`${API_URL}/relatorios/status-turmas-geral`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+
+        const turmas = await res.json();
+
+        if (!res.ok) throw new Error(turmas.error || 'Falha ao carregar relatório.');
+        if (turmas.length === 0) {
+            container.innerHTML = `<p style="text-align:center; color:white;">Nenhuma turma encontrada nesta unidade.</p>`;
+            return;
+        }
+
+        container.innerHTML = `
+            <h3 style="color:white; border-bottom: 2px solid #00d4ff; padding-bottom: 10px;">
+                Progresso Geral de Entregas por Turma
+            </h3>
+
+            <div class="tabela-entrega-container" style="max-height: none;">
+                <table class="tabela-entrega">
+                    <thead>
+                        <tr>
+                            <th style="text-align:left;">TURMA</th>
+                            <th>ALUNOS</th>
+                            <th style="width: 25%;">PROGRESSO UNIFORMES</th>
+                            <th style="width: 25%;">PROGRESSO KIT's</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${turmas.map(t => {
+                            const totalAlunos = parseInt(t.total_alunos, 10) || 0;
+
+                            const uniformesCompletos = parseInt(t.uniformes_completos, 10) || 0;
+                            const uniformesParciais = parseInt(t.uniformes_parciais, 10) || 0;
+                            const uniformesPendentes = parseInt(t.uniformes_pendentes, 10) || 0;
+
+                            const materialRecebido = parseInt(t.material_recebido, 10) || 0;
+                            const materialPendentes = parseInt(t.material_pendentes, 10) || 0;
+
+                            const percUniformes = totalAlunos > 0
+                                ? ((uniformesCompletos / totalAlunos) * 100).toFixed(0)
+                                : 0;
+
+                            const percMaterial = totalAlunos > 0
+                                ? ((materialRecebido / totalAlunos) * 100).toFixed(0)
+                                : 0;
+
+                            return `
+                                <tr>
+                                    <td style="text-align:left; font-weight:bold;">${t.turma_nome}</td>
+                                    <td style="font-size: 1.2rem; font-weight:bold;">${totalAlunos}</td>
+
+                                    <td>
+                                        <div class="barra-progresso-container">
+                                            <div class="barra-progresso" style="width: ${percUniformes}%; background: linear-gradient(90deg, #0284c7, #00d4ff);"></div>
+                                            <span>${uniformesCompletos} / ${totalAlunos} (${percUniformes}%)</span>
+                                        </div>
+                                        <small style="display:block; margin-top:6px; color: rgba(255,255,255,0.7);">
+                                            Parciais: ${uniformesParciais} | Pendentes: ${uniformesPendentes}
+                                        </small>
+                                    </td>
+
+                                    <td>
+                                        <div class="barra-progresso-container">
+                                            <div class="barra-progresso" style="width: ${percMaterial}%; background: linear-gradient(90deg, #15803d, #10b981);"></div>
+                                            <span>${materialRecebido} / ${totalAlunos} (${percMaterial}%)</span>
+                                        </div>
+                                        <small style="display:block; margin-top:6px; color: rgba(255,255,255,0.7);">
+                                            Pendentes: ${materialPendentes}
+                                        </small>
+                                    </td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    } catch (err) {
+        container.innerHTML = `<p style="color: #ff4d4d; text-align:center;">${err.message}</p>`;
+    }
+}
+
+function telaEntregaMaterial() {
+    telaEntregaUniformes();
+    
+    setTimeout(() => {
+        const titulo = document.querySelector('.titulo-sessao');
+        const desc = document.querySelector('p[style*="color: rgba(255,255,255,0.7)"]');
+        if(titulo) titulo.innerText = 'ENTREGA DE MATERIAL ESCOLAR';
+        if(desc) desc.innerText = 'Selecione uma turma para registrar a entrega dos kits de material.';
+        
+        const btn = document.getElementById('btn-iniciar-entrega');
+        if(btn) btn.setAttribute('onclick', 'carregarGradeDeEntregaMaterial()');
+    }, 100);
+}
+
+function carregarGradeDeEntregaMaterial() {
+    const turmaId = document.getElementById('select-turma').value;
+    if (!turmaId) {
+        notificar('Por favor, selecione uma turma.', 'aviso');
+        return;
+    }
+    renderizarMatrizEntregaMaterial(turmaId);
+}
+
+async function renderizarMatrizEntregaMaterial(turmaId) {
+    const app = document.getElementById('app-content');
+    app.innerHTML = `<div class="loading-spinner"></div>`;
+
+    try {
+        const res = await fetch(`${API_URL}/turma/${turmaId}/grade-entrega-material`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const data = await res.json();
+        
+        if (!res.ok) throw new Error(data.error || 'Falha ao carregar dados da turma.');
+
+        const turmaNome = data.turmaInfo.nome;
+
+        if (!data.produtos || data.produtos.length === 0) {
+            app.innerHTML = `
+                <div class="glass-panel" style="text-align:center; padding: 40px; margin: 20px;">
+                    <h2>Nenhum Kit de Material Escolar Encontrado</h2>
+                    <button class="btn-voltar-vidro" onclick="telaEntregaMaterial()">Voltar</button>
+                </div>`;
+            return;
+        }
+
+        app.innerHTML = `
+            <style>
+                .tabela-material-wrapper {
+                    max-height: 65vh;
+                    overflow-y: auto;
+                    overflow-x: hidden;
+                    border-radius: 8px;
+                    background: rgba(0, 26, 44, 0.6);
+                    margin-bottom: 15px;
+                    border: 1px solid rgba(255,255,255,0.1);
+                }
+
+                .tabela-entrega {
+                    width: 100%;
+                    border-collapse: collapse;
+                    table-layout: fixed;
+                }
+
+                .col-aluno {
+                    width: 20%;
+                    min-width: 20%;
+                    max-width: 20%;
+                    text-align: left !important;
+                    padding-left: 10px !important;
+                    font-size: 0.75rem;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+
+                .col-prod-mat {
+                    width: calc(80% / ${data.produtos.length});
+                    min-width: calc(80% / ${data.produtos.length});
+                    max-width: calc(80% / ${data.produtos.length});
+                }
+
+                .tabela-entrega thead th {
+                    position: sticky;
+                    top: 0;
+                    z-index: 10;
+                    background: #001a2c;
+                    font-size: 0.55rem;
+                    color: #00d4ff;
+                    height: 45px;
+                    border-bottom: 2px solid #00d4ff;
+                    word-wrap: break-word;
+                }
+
+                .tabela-entrega .linha-todos th, 
+                .tabela-entrega .linha-todos td {
+                    position: sticky;
+                    top: 45px;
+                    z-index: 9;
+                    background: #002a44;
+                    border-bottom: 1px solid rgba(255,255,255,0.2);
+                }
+
+                .tabela-entrega td {
+                    text-align: center;
+                    border: 1px solid rgba(255,255,255,0.05);
+                    height: 40px;
+                }
+
+                /* Inputs e Labels restaurados para funcionalidade original */
+                .celula-radio input[type="radio"], .celula-radio input[type="checkbox"] {
+                    cursor: pointer;
+                    margin: 0;
+                }
+
+                .titulo-turma-central {
+                    width: 100%;
+                    text-align: center;
+                    color: #00d4ff;
+                    font-size: 1.6rem;
+                    font-weight: 800;
+                    text-transform: uppercase;
+                    margin-bottom: 20px;
+                    letter-spacing: 2px;
+                    text-shadow: 0 0 15px rgba(0, 212, 255, 0.4);
+                }
+
+                .celula-entregue { font-size: 0.6rem; color: #00ff88; line-height: 1; }
+                .celula-bloqueada { background: rgba(0,0,0,0.1); opacity: 0.2; }
+                
+                #footer-material {
+                    display: flex;
+                    gap: 10px;
+                    justify-content: center;
+                    padding: 10px;
+                }
+            </style>
+
+            <div class="header-animado animate__animated animate__fadeIn">
+                <button class="btn-voltar-vidro" onclick="telaEntregaMaterial()" style="padding: 4px 12px; font-size: 0.8rem;">
+                    <i class="fas fa-arrow-left"></i> TROCAR TURMA
+                </button>
+                <h1 class="titulo-turma-central">
+                    <i class="fas fa-users"></i> TURMA: ${turmaNome}
+                </h1>
+            </div>
+
+            <div class="tabela-material-wrapper animate__animated animate__fadeInUp">
+                <table class="tabela-entrega">
+                    <thead>
+                        <tr>
+                            <th class="col-aluno">ALUNO</th>
+                            ${data.produtos.map(p => `
+                                <th class="col-prod-mat">
+                                    ${p.nome.toUpperCase()}<br>
+                                    <small style="opacity:0.6">(${data.estoqueEscola[p.id] || 0} un)</small>
+                                </th>`).join('')}
+                        </tr>
+                        <tr class="linha-todos">
+                            <th class="col-aluno" style="color: #00d4ff;">TODOS</th>
+                            ${data.produtos.map(produto => `
+                                <td class="col-prod-mat">
+                                    <input type="checkbox" class="checkbox-todos" 
+                                           data-produto-id="${produto.id}" 
+                                           id="todos-${produto.id}">
+                                </td>
+                            `).join('')}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${data.alunos.map(aluno => {
+                            const jaEntregue = aluno.status === 'entregue';
+                            const dataFormatada = jaEntregue && aluno.entregaInfo.data_entrega 
+                                ? new Date(aluno.entregaInfo.data_entrega).toLocaleDateString('pt-BR') : '';
+
+                            return `
+                                <tr id="aluno-row-${aluno.id}">
+                                    <td class="col-aluno" title="${aluno.nome}">${aluno.nome}</td>
+                                    ${data.produtos.map(produto => {
+                                        if (jaEntregue) {
+                                            if (aluno.entregaInfo.produto_id === produto.id) {
+                                                return `<td class="col-prod-mat celula-entregue"><i class="fas fa-check"></i><br>${dataFormatada}</td>`;
+                                            } else {
+                                                return `<td class="col-prod-mat celula-bloqueada"></td>`;
+                                            }
+                                        }
+                                        // RESTAURADO: Input de seleção para o aluno
+                                        return `
+                                            <td class="col-prod-mat celula-radio">
+                                                <input type="radio" 
+                                                       name="radio_aluno_${aluno.id}" 
+                                                       class="radio-aluno" 
+                                                       data-aluno-id="${aluno.id}" 
+                                                       data-produto-id="${produto.id}" 
+                                                       id="al${aluno.id}-pr${produto.id}">
+                                                <label for="al${aluno.id}-pr${produto.id}"></label>
+                                            </td>`;
+                                    }).join('')}
+                                </tr>`;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
+
+            <div id="footer-material">
+                <button class="btn-imprimir-comprovante" onclick="gerarComprovanteTurmaMaterial(${turmaId})" 
+                        style="background: #3b82f6; color: white; padding: 12px 20px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer;">
+                    COMPROVANTE
+                </button>
+                <button class="btn-confirmar-entrega" onclick="confirmarEntregasMaterial(${turmaId})" 
+                        style="background: #00ff88; color: #001a2c; padding: 12px 30px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer;">
+                    CONFIRMAR ENTREGAS
+                </button>
+            </div>
+        `;
+        
+        configurarAcoesEmMassaMaterial(data.produtos, data.estoqueEscola);
+
+    } catch (err) {
+        console.error("Erro ao renderizar matriz de material:", err.message);
+        notificar(`Erro: ${err.message}`, 'erro');
+    }
+}
+
+// ============================================================
+// LÓGICA CORRIGIDA DO BOTÃO "TODOS" E INTERAÇÕES
+// ============================================================
+function configurarAcoesEmMassaMaterial(produtos, estoque) {
+
+    // --- 1. Lógica do checkbox "Todos" ---
+    document.querySelectorAll('.checkbox-todos').forEach(chk => {
+        chk.addEventListener('change', (e) => {
+            const produtoId = e.target.dataset.produtoId;
+            const marcar = e.target.checked;
+
+            if (marcar) {
+                // Verificar estoque
+                const estoqueDisponivel = estoque[produtoId] || 0;
+                const alunosPendentes = new Set(
+                    Array.from(document.querySelectorAll('.radio-aluno'))
+                        .map(r => r.dataset.alunoId)
+                );
+                
+                if (alunosPendentes.size > estoqueDisponivel) {
+                    alert(`Atenção: Há ${alunosPendentes.size} alunos pendentes, mas só existem ${estoqueDisponivel} unidades em estoque.`);
+                }
+
+                // Desmarcar os outros checkboxes "Todos" (só 1 coluna por vez)
+                document.querySelectorAll('.checkbox-todos').forEach(outro => {
+                    if (outro !== e.target) outro.checked = false;
+                });
+
+                // Marcar todos os radios desta coluna
+                document.querySelectorAll(`.radio-aluno[data-produto-id="${produtoId}"]`).forEach(r => {
+                    r.checked = true;
+                });
+
+            } else {
+                // DESMARCAR: limpa todos os radios de TODAS as colunas
+                // (porque ao marcar "Todos" já tinha desmarcado os de outras colunas)
+                document.querySelectorAll('.radio-aluno').forEach(r => {
+                    r.checked = false;
+                });
+            }
+        });
+    });
+
+    // --- 2. Clique individual no radio do aluno ---
+    // Permite desmarcar um radio clicando nele de novo
+    // e atualiza o estado do checkbox "Todos"
+    document.querySelectorAll('.radio-aluno').forEach(radio => {
+        // Guardamos o estado anterior para permitir toggle
+        radio.addEventListener('click', (e) => {
+            const aluno = e.target;
+            const alunoId = aluno.dataset.alunoId;
+            const produtoId = aluno.dataset.produtoId;
+
+            // Se já estava marcado no mesmo, desmarcar (toggle)
+            if (aluno.dataset.wasChecked === 'true') {
+                aluno.checked = false;
+                aluno.dataset.wasChecked = 'false';
+            } else {
+                // Marcar este e atualizar o flag de todos do mesmo grupo
+                document.querySelectorAll(`input[name="radio_aluno_${alunoId}"]`).forEach(r => {
+                    r.dataset.wasChecked = 'false';
+                });
+                aluno.dataset.wasChecked = 'true';
+            }
+
+            // Atualizar estado dos checkboxes "Todos"
+            atualizarEstadoCheckboxTodos();
+        });
+    });
+
+    // Inicializa o flag wasChecked em todos os radios
+    document.querySelectorAll('.radio-aluno').forEach(r => {
+        r.dataset.wasChecked = r.checked ? 'true' : 'false';
+    });
+}
+
+// Função auxiliar: verifica se todos da coluna estão marcados
+// e atualiza o checkbox "Todos" correspondente
+function atualizarEstadoCheckboxTodos() {
+    document.querySelectorAll('.checkbox-todos').forEach(chk => {
+        const produtoId = chk.dataset.produtoId;
+        const radiosColuna = document.querySelectorAll(`.radio-aluno[data-produto-id="${produtoId}"]`);
+        
+        if (radiosColuna.length === 0) {
+            chk.checked = false;
+            return;
+        }
+
+        const todosMarcados = Array.from(radiosColuna).every(r => r.checked);
+        chk.checked = todosMarcados;
+    });
+}
+
+// ============================================================
+// COMPROVANTE (sem alteração)
+// ============================================================
+async function gerarComprovanteTurmaMaterial(turmaId) {
+    return gerarComprovanteTurma(turmaId);
+}
+
+// ============================================================
+// CONFIRMAR ENTREGAS (sem alteração na lógica)
+// ============================================================
+async function confirmarEntregasMaterial(turmaId) {
+    const radiosMarcados = document.querySelectorAll('.radio-aluno:checked');
+    
+    // Agora enviamos 'N/A' explicitamente para materiais
+    const entregasParaEnviar = Array.from(radiosMarcados).map(radio => ({
+        alunoId: radio.dataset.alunoId,
+        produtoId: radio.dataset.produtoId,
+        tamanho: 'N/A' 
+    }));
+
+    if (entregasParaEnviar.length === 0) {
+        return notificar('Nenhum kit de material foi marcado para entrega.', 'aviso');
+    }
+    
+    // REMOVIDO: confirm() desnecessário a pedido do usuário
+
+    const btn = document.querySelector('.btn-confirmar-entrega');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> PROCESSANDO...';
+
+    try {
+        const res = await fetch(`${API_URL}/entregas/lote`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ entregas: entregasParaEnviar })
+        });
+        
+        const resultado = await res.json();
+        if (!res.ok) throw new Error(resultado.error || 'Falha no servidor.');
+
+        notificar(resultado.message, 'sucesso');
+        renderizarMatrizEntregaMaterial(turmaId);
+
+    } catch (err) {
+        // Se o erro for de estoque, a mensagem virá limpa do backend
+        notificar(`${err.message}`, 'erro');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-check"></i> CONFIRMAR ENTREGAS MARCADAS';
+    }
+}
+
+function telaRelatoriosGeral() {
+    const app = document.getElementById('app-content');
+    app.innerHTML = `
+        <div class="header-animado animate__animated animate__fadeIn">
+            <button class="btn-voltar-vidro" onclick="carregarDashboard()">
+                <i class="fas fa-arrow-left"></i> VOLTAR
+            </button>
+            <h2 class="titulo-sessao" style="color: white;">Painel de Relatórios</h2>
+            <p style="color: rgba(255,255,255,0.7);">
+                Selecione um relatório para visualizar o status das entregas.
+            </p>
+        </div>
+
+        <!-- Seção de UNIFORMES -->
+        <div class="secao-relatorio">
+            <h3 class="titulo-secao-relatorio">
+                <i class="fas fa-tshirt"></i> UNIFORMES
+            </h3>
+            <div class="grid-relatorios">
+                <button class="btn-relatorio" onclick="gerarRelatorioAlunos('UNIFORMES', 'pendente')">
+                    <i class="fas fa-user-clock"></i>
+                    <span>Pendentes</span>
+                    <small style="color:rgba(255,255,255,0.6);">Não recebeu nenhuma peça</small>
+                </button>
+                <button class="btn-relatorio" onclick="gerarRelatorioAlunos('UNIFORMES', 'parcial')">
+                    <i class="fas fa-user-minus"></i>
+                    <span>Parcialmente Contemplados</span>
+                    <small style="color:rgba(255,255,255,0.6);">Recebeu apenas algumas peças</small>
+                </button>
+                <button class="btn-relatorio" onclick="gerarRelatorioAlunos('UNIFORMES', 'completo')">
+                    <i class="fas fa-user-check"></i>
+                    <span>Completamente Contemplados</span>
+                    <small style="color:rgba(255,255,255,0.6);">Recebeu todas as peças</small>
+                </button>
+            </div>
+        </div>
+
+        <!-- Seção de MATERIAL -->
+        <div class="secao-relatorio">
+            <h3 class="titulo-secao-relatorio">
+                <i class="fas fa-pencil-ruler"></i> MATERIAL ESCOLAR
+            </h3>
+            <div class="grid-relatorios">
+                <button class="btn-relatorio" onclick="gerarRelatorioAlunos('MATERIAL', 'pendente')">
+                    <i class="fas fa-user-clock"></i>
+                    <span>Pendentes</span>
+                    <small style="color:rgba(255,255,255,0.6);">Não recebeu o kit</small>
+                </button>
+                <button class="btn-relatorio" onclick="gerarRelatorioAlunos('MATERIAL', 'completo')">
+                    <i class="fas fa-user-check"></i>
+                    <span>Contemplados</span>
+                    <small style="color:rgba(255,255,255,0.6);">Recebeu o kit</small>
+                </button>
+            </div>
+        </div>
+
+        <div id="resultado-relatorio" style="margin-top: 20px; padding: 0 20px;"></div>
+    `;
+}
+
+async function gerarRelatorioAlunos(tipoProduto, status) {
+    const container = document.getElementById('resultado-relatorio');
+    container.innerHTML = `<div class="loading-spinner"></div>`;
+
+    const rotulos = {
+        pendente: { texto: 'PENDENTE',                cor: '#f59e0b', icone: 'fa-user-clock'  },
+        parcial:  { texto: 'PARCIALMENTE CONTEMPLADO', cor: '#3b82f6', icone: 'fa-user-minus'  },
+        completo: { texto: 'COMPLETAMENTE CONTEMPLADO', cor: '#10b981', icone: 'fa-user-check' }
+    };
+
+    const rotulo     = rotulos[status] || { texto: status.toUpperCase(), cor: 'white', icone: 'fa-user' };
+    const mostrarItens = status !== 'pendente';
+    const titulo     = `Relatório: Alunos com Kit ${tipoProduto} — ${rotulo.texto}`;
+
+    try {
+        const res = await fetch(
+            `${API_URL}/relatorios/alunos-status?tipoProduto=${tipoProduto}&status=${status}`,
+            { headers: { 'Authorization': `Bearer ${TOKEN}` } }
+        );
+
+        const alunos = await res.json();
+        if (!res.ok) throw new Error(alunos.error || 'Falha ao carregar.');
+
+        container.innerHTML = `
+            <div class="painel-vidro animate__animated animate__fadeInUp" style="padding: 20px;">
+                <h3 style="color: ${rotulo.cor}; display: flex; align-items: center; gap: 10px;">
+                    <i class="fas ${rotulo.icone}"></i>
+                    ${titulo}
+                    <span style="
+                        background: rgba(255,255,255,0.1);
+                        border-radius: 20px;
+                        padding: 2px 12px;
+                        font-size: 0.9rem;
+                        color: white;
+                    ">${alunos.length} alunos</span>
+                </h3>
+
+                <div class="tabela-entrega-container" style="max-height: 55vh;">
+                    <table class="tabela-entrega">
+                        <thead>
+                            <tr>
+                                <th style="text-align: left;">#</th>
+                                <th style="text-align: left;">ALUNO</th>
+                                <th style="text-align: left;">TURMA</th>
+                                ${mostrarItens
+                                    ? '<th style="text-align: left;">ITENS RECEBIDOS / ÚLTIMA ENTREGA</th>'
+                                    : ''}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${alunos.length === 0
+                                ? `<tr>
+                                       <td colspan="${mostrarItens ? 4 : 3}"
+                                           style="text-align: center; padding: 20px; color: rgba(255,255,255,0.5);">
+                                           Nenhum aluno encontrado nesta categoria.
+                                       </td>
+                                   </tr>`
+                                : alunos.map((aluno, i) => `
+                                    <tr>
+                                        <td style="text-align: left; color: rgba(255,255,255,0.4);">
+                                            ${i + 1}
+                                        </td>
+                                        <td style="text-align: left;">${aluno.aluno_nome}</td>
+                                        <td style="text-align: left;">${aluno.turma_nome}</td>
+                                        ${mostrarItens ? `
+                                            <td style="text-align: left;">
+                                                <span style="font-size: 0.85rem;">
+                                                    ${aluno.produto_recebido || '—'}
+                                                </span>
+                                                ${aluno.data_entrega ? `
+                                                    <br>
+                                                    <small style="color: rgba(255,255,255,0.5);">
+                                                        Última entrega:
+                                                        ${new Date(aluno.data_entrega).toLocaleDateString('pt-BR')}
+                                                    </small>
+                                                ` : ''}
+                                            </td>
+                                        ` : ''}
+                                    </tr>
+                                `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+    } catch (err) {
+        container.innerHTML = `
+            <div style="color: #ff4d4d; padding: 20px; text-align: center;">
+                <i class="fas fa-exclamation-triangle"></i> ${err.message}
+            </div>
+        `;
+    }
+}
+
+async function telaRelatorioConsolidado() {
+    const app = document.getElementById('app-content');
+    app.innerHTML = `<div class="loading-spinner"></div>`;
+
+    try {
+        const res = await fetch(`${API_URL}/relatorios/consolidado-geral`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const dados = await res.json();
+        if (!res.ok) throw new Error(dados.error);
+
+        // Totalizadores (Lógica original preservada)
+        const totais = dados.reduce((acc, d) => {
+            acc.turmas     += Number(d.total_turmas);
+            acc.alunos     += Number(d.total_alunos);
+            acc.unifRec    += Number(d.uniformes_recebidos);
+            acc.unifParc   += Number(d.uniformes_parciais);
+            acc.unifPend   += Number(d.uniformes_pendentes);
+            acc.matRec     += Number(d.material_recebido);
+            acc.matPend    += Number(d.material_pendentes);
+            return acc;
+        }, {
+            turmas: 0, alunos: 0,
+            unifRec: 0, unifParc: 0, unifPend: 0,
+            matRec: 0, matPend: 0
+        });
+
+        app.innerHTML = `
+            <style>
+                .wrapper-relatorio {
+                    max-height: 70vh;
+                    overflow-y: auto;
+                    border-radius: 8px;
+                    background: rgba(0, 26, 44, 0.6);
+                    margin: 20px;
+                    border: 1px solid rgba(255,255,255,0.1);
+                }
+
+                .tabela-entrega {
+                    width: 100%;
+                    border-collapse: collapse;
+                    table-layout: fixed; /* Trava o redimensionamento automático */
+                }
+
+                /* ESCOLA: 30% da largura */
+                .col-escola {
+                    width: 30%;
+                    min-width: 30%;
+                    max-width: 30%;
+                    text-align: left !important;
+                    padding-left: 15px !important;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+
+                /* DEMAIS 7 COLUNAS: 70% / 7 = 10% cada uma */
+                .col-dado {
+                    width: 10%;
+                    min-width: 10%;
+                    max-width: 10%;
+                    text-align: center;
+                }
+
+                .tabela-entrega thead th {
+                    position: sticky;
+                    top: 0;
+                    z-index: 10;
+                    background: #001a2c;
+                    font-size: 0.65rem;
+                    color: #00d4ff;
+                    height: 50px;
+                    border-bottom: 2px solid #00d4ff;
+                    word-wrap: break-word;
+                }
+
+                .tabela-entrega tbody td {
+                    padding: 10px 5px;
+                    border-bottom: 1px solid rgba(255,255,255,0.05);
+                    font-size: 0.85rem;
+                    color: white;
+                }
+
+                .tabela-entrega tfoot {
+                    position: sticky;
+                    bottom: 0;
+                    z-index: 10;
+                    background: #001a2c;
+                }
+
+                .tabela-entrega tfoot td {
+                    border-top: 2px solid rgba(0, 212, 255, 0.5);
+                    padding: 12px 5px;
+                    font-weight: bold;
+                    font-size: 0.9rem;
+                    color: white;
+                }
+            </style>
+
+            <div class="header-animado animate__animated animate__fadeIn">
+                <button class="btn-voltar-vidro" onclick="carregarDashboard()">
+                    <i class="fas fa-arrow-left"></i> VOLTAR
+                </button>
+                <h2 class="titulo-sessao" style="color: white;">Relatório Consolidado por Escola</h2>
+            </div>
+
+            <div class="wrapper-relatorio animate__animated animate__fadeInUp">
+                <table class="tabela-entrega">
+                    <thead>
+                        <tr>
+                            <th class="col-escola">ESCOLA</th>
+                            <th class="col-dado">TURMAS</th>
+                            <th class="col-dado">ALUNOS</th>
+                            <th class="col-dado" style="color: #10b981;">UNIF. COMPLETOS</th>
+                            <th class="col-dado" style="color: #3b82f6;">UNIF. PARCIAIS</th>
+                            <th class="col-dado" style="color: #f59e0b;">UNIF. PENDENTES</th>
+                            <th class="col-dado" style="color: #10b981;">MAT. RECEBIDOS</th>
+                            <th class="col-dado" style="color: #f59e0b;">MAT. PENDENTES</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${dados.map(d => `
+                            <tr>
+                                <td class="col-escola" title="${d.local_nome}">${d.local_nome}</td>
+                                <td class="col-dado">${d.total_turmas}</td>
+                                <td class="col-dado">${d.total_alunos}</td>
+                                <td class="col-dado" style="color: #10b981; font-weight: bold;">${d.uniformes_recebidos}</td>
+                                <td class="col-dado" style="color: #3b82f6; font-weight: bold;">${d.uniformes_parciais}</td>
+                                <td class="col-dado" style="color: #f59e0b; font-weight: bold;">${d.uniformes_pendentes}</td>
+                                <td class="col-dado" style="color: #10b981; font-weight: bold;">${d.material_recebido}</td>
+                                <td class="col-dado" style="color: #f59e0b; font-weight: bold;">${d.material_pendentes}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td class="col-escola">TOTAL GERAL</td>
+                            <td class="col-dado">${totais.turmas}</td>
+                            <td class="col-dado">${totais.alunos}</td>
+                            <td class="col-dado" style="color: #10b981;">${totais.unifRec}</td>
+                            <td class="col-dado" style="color: #3b82f6;">${totais.unifParc}</td>
+                            <td class="col-dado" style="color: #f59e0b;">${totais.unifPend}</td>
+                            <td class="col-dado" style="color: #10b981;">${totais.matRec}</td>
+                            <td class="col-dado" style="color: #f59e0b;">${totais.matPend}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        `;
+    } catch (err) {
+        notificar(`Erro: ${err.message}`, 'erro');
+    }
+}
+
+async function telaProgressoGeralEscolas() {
+    const app = document.getElementById('app-content');
+    app.innerHTML = `<div class="loading-spinner"></div>`;
+
+    try {
+        const res = await fetch(`${API_URL}/relatorios/progresso-geral-escolas`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const escolas = await res.json();
+        
+        if (!res.ok) throw new Error(escolas.error || 'Falha ao carregar relatório.');
+
+        app.innerHTML = `
+            <style>
+                .wrapper-progresso {
+                    max-height: 70vh;
+                    overflow-y: auto;
+                    overflow-x: hidden;
+                    border-radius: 8px;
+                    background: rgba(0, 26, 44, 0.6);
+                    margin: 20px;
+                    border: 1px solid rgba(255,255,255,0.1);
+                }
+
+                .tabela-entrega {
+                    width: 100%;
+                    border-collapse: collapse;
+                    table-layout: fixed; /* Trava o layout */
+                }
+
+                /* Coluna Escola: 30% */
+                .col-escola-prog {
+                    width: 30%;
+                    min-width: 30%;
+                    max-width: 30%;
+                    text-align: left !important;
+                    padding-left: 15px !important;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+
+                /* Colunas Turmas e Alunos: 7% cada */
+                .col-info-prog {
+                    width: 7%;
+                    min-width: 7%;
+                    max-width: 7%;
+                    text-align: center;
+                }
+
+                /* Colunas de Progresso: 28% cada */
+                .col-barra-prog {
+                    width: 28%;
+                    min-width: 28%;
+                    max-width: 28%;
+                    text-align: center;
+                    padding: 10px 8px !important;
+                }
+
+                .tabela-entrega thead th {
+                    position: sticky;
+                    top: 0;
+                    z-index: 10;
+                    background: #001a2c;
+                    font-size: 0.65rem;
+                    color: #00d4ff;
+                    height: 55px;
+                    border-bottom: 2px solid #00d4ff;
+                    word-wrap: break-word;
+                }
+
+                .tabela-entrega tbody td {
+                    border-bottom: 1px solid rgba(255,255,255,0.05);
+                    height: 60px; /* Um pouco mais alto para as barras */
+                }
+
+                /* Estilização das Barras de Progresso */
+                .barra-progresso-container {
+                    position: relative;
+                    height: 35px;
+                    background: rgba(255,255,255,0.05);
+                    border-radius: 6px;
+                    overflow: hidden;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+
+                .barra-progresso {
+                    position: absolute;
+                    left: 0;
+                    top: 0;
+                    height: 100%;
+                    transition: width 0.5s ease;
+                    opacity: 0.3;
+                }
+
+                .barra-progresso-container span {
+                    position: relative;
+                    z-index: 2;
+                    font-size: 0.65rem;
+                    line-height: 1.1;
+                    color: white;
+                    font-weight: 500;
+                }
+
+                .verde { background-color: #10b981; }
+                .amarelo { background-color: #f59e0b; }
+                .vermelho { background-color: #ef4444; }
+
+                .verde .barra-progresso { background-color: #10b981; }
+                .amarelo .barra-progresso { background-color: #f59e0b; }
+                .vermelho .barra-progresso { background-color: #ef4444; }
+            </style>
+
+            <div class="header-animado animate__animated animate__fadeIn">
+                <button class="btn-voltar-vidro" onclick="carregarDashboard()">
+                    <i class="fas fa-arrow-left"></i> VOLTAR
+                </button>
+                <h2 class="titulo-sessao" style="color: white; font-size: 1.2rem; margin: 10px 0;">Progresso Geral de Entregas</h2>
+                <p style="color: rgba(255,255,255,0.7); font-size: 0.8rem; margin-bottom: 10px;">
+                    🟢 &ge;90% | 🟡 60-89% | 🔴 &lt;60%
+                </p>
+            </div>
+
+            <div class="wrapper-progresso animate__animated animate__fadeInUp">
+                <table class="tabela-entrega">
+                    <thead>
+                        <tr>
+                            <th class="col-escola-prog">ESCOLA</th>
+                            <th class="col-info-prog">TURMAS</th>
+                            <th class="col-info-prog">ALUNOS</th>
+                            <th class="col-barra-prog">PROGRESSO UNIFORMES</th>
+                            <th class="col-barra-prog">PROGRESSO KITS</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${escolas.length === 0 
+                            ? `<tr><td colspan="5" style="padding:40px; text-align:center; color:#ffcccb;">Nenhum dado encontrado.</td></tr>`
+                            : escolas.map(e => {
+                                const percUniformes = Number(e.perc_uniformes) || 0;
+                                const corUniformes = getCorProgresso(percUniformes);
+                                const percMaterial = Number(e.perc_material) || 0;
+                                const corMaterial = getCorProgresso(percMaterial);
+
+                                return `
+                                    <tr>
+                                        <td class="col-escola-prog" title="${e.local_nome}"><strong>${e.local_nome}</strong></td>
+                                        <td class="col-info-prog">${e.total_turmas}</td>
+                                        <td class="col-info-prog">${Number(e.total_alunos).toLocaleString()}</td>
+                                        
+                                        <td class="col-barra-prog">
+                                            <div class="barra-progresso-container ${corUniformes}">
+                                                <div class="barra-progresso" style="width: ${Math.min(percUniformes, 100)}%;"></div>
+                                                <span>
+                                                    ${e.uniformes_completos} entregues • ${e.uniformes_faltantes} faltam<br>
+                                                    <strong>${percUniformes}%</strong>
+                                                </span>
+                                            </div>
+                                        </td>
+
+                                        <td class="col-barra-prog">
+                                            <div class="barra-progresso-container ${corMaterial}">
+                                                <div class="barra-progresso" style="width: ${Math.min(percMaterial, 100)}%;"></div>
+                                                <span>
+                                                    ${e.material_recebido} entregues • ${e.material_faltante} faltam<br>
+                                                    <strong>${percMaterial}%</strong>
+                                                </span>
+                                            </div>
+                                        </td>
+                                    </tr>`;
+                            }).join('')
+                        }
+                    </tbody>
+                </table>
+            </div>
+        `;
+
+        function getCorProgresso(perc) {
+            if (perc >= 90) return 'verde';
+            if (perc >= 60) return 'amarelo';
+            return 'vermelho';
+        }
+
+    } catch (err) {
+        notificar("Erro ao carregar relatório: " + err.message, "erro");
+    }
+}
+
+async function gerarRelatorioStatusTurmasEmTelaCheia() {
+    const app = document.getElementById('app-content');
+
+    app.innerHTML = `
+        <div class="header-animado animate__animated animate__fadeIn">
+            <button class="btn-voltar-vidro" onclick="carregarDashboard()">
+                <i class="fas fa-arrow-left"></i> VOLTAR AO PAINEL
+            </button>
+            <h2 class="titulo-sessao" style="color: white;">
+                Progresso Geral de Entregas por Turma
+            </h2>
+        </div>
+        <div id="resultado-relatorio" style="padding: 0 20px;">
+            <div class="loading-spinner"></div>
+        </div>
+    `;
+
+    await gerarRelatorioStatusTurmas();
+}
+
+async function telaHistoricoRemessas() {
+    const area = document.getElementById('app-content');
+    const hoje = new Date().toISOString().split('T')[0];
+    // Define o início do mês como padrão
+    const inicioMes = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
+
+    area.innerHTML = `
+        <div class="painel-vidro" style="max-width: 1300px; margin: auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                <h2 style="color:white; margin:0;">📋 HISTÓRICO DE REMESSAS / ROMANEIOS</h2>
+                <div></div> </div>
+            
+            <div style="display:flex; gap:15px; justify-content:center; background:rgba(255,255,255,0.05); padding:15px; border-radius:12px; margin-bottom:20px;">
+                <div style="display:flex; flex-direction:column;">
+                    <small style="color:white; margin-bottom:4px;">Início:</small>
+                    <input type="date" id="remessa_inicio" value="${inicioMes}" class="input-vidro" style="width:160px;">
+                </div>
+                <div style="display:flex; flex-direction:column;">
+                    <small style="color:white; margin-bottom:4px;">Fim:</small>
+                    <input type="date" id="remessa_fim" value="${hoje}" class="input-vidro" style="width:160px;">
+                </div>
+                <button onclick="carregarDadosHistoricoRemessas()" class="btn-vidro" style="background:#3b82f6; margin-top:18px; font-weight:bold;">
+                    🔍 FILTRAR REMESSAS
+                </button>
+            </div>
+
+            <div class="painel-vidro" style="background:rgba(0,0,0,0.3); padding:0; overflow:hidden;">
+                <div style="max-height: 600px; overflow-y: auto;">
+                    <table style="width:100%; border-collapse:collapse; color:white; font-size:0.85rem;">
+                        <thead style="background:rgba(255,255,255,0.1); position: sticky; top:0; z-index:1;">
+                            <tr>
+                                <th style="padding:12px; text-align:left;">REMESSA</th>
+                                <th style="padding:12px; text-align:left;">DATA CRIAÇÃO</th>
+                                <th style="padding:12px; text-align:left;">UNIDADE / DESTINO</th>
+                                <th style="padding:12px; text-align:left;">STATUS</th>
+                                <th style="padding:12px; text-align:center;">AÇÃO</th>
+                            </tr>
+                        </thead>
+                        <tbody id="corpo-tabela-remessas">
+                            </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Chama a carga inicial assim que monta a tela
+    carregarDadosHistoricoRemessas();
+}
+async function carregarDadosHistoricoRemessas() {
+    const corpoTabela = document.getElementById('corpo-tabela-remessas');
+    const dataInicio = document.getElementById('remessa_inicio').value;
+    const dataFim = document.getElementById('remessa_fim').value;
+
+    corpoTabela.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px;">⏳ Buscando remessas...</td></tr>';
+
+    try {
+        const url = `${API_URL}/remessas/listagem?inicio=${dataInicio}&fim=${dataFim}`;
+        const res = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+
+        if (!res.ok) throw new Error('Erro ao buscar dados do servidor');
+
+        const remessas = await res.json();
+
+        if (remessas.length === 0) {
+            corpoTabela.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px;">Nenhuma remessa encontrada para este período.</td></tr>';
+            return;
+        }
+
+        corpoTabela.innerHTML = remessas.map(r => `
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                <td style="padding:12px; font-weight:bold;">#${r.remessa_id}</td>
+                <td style="padding:12px;">${new Date(r.data_criacao).toLocaleString('pt-BR')}</td>
+                <td style="padding:12px;">${r.escola_nome}</td>
+                <td style="padding:12px;">
+                    <span style="background:${r.status === 'RECEBIDO' ? '#16a34a' : '#2563eb'}; padding:2px 8px; border-radius:4px; font-size:0.7rem;">
+                        ${r.status}
+                    </span>
+                </td>
+                <td style="padding:12px; text-align:center;">
+                    <button onclick="gerarRomaneio(${r.remessa_id})" class="btn-vidro" style="background:#0ea5e9; font-size:0.7rem; margin:0;">
+                        📄 GERAR ROMANEIO
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+
+    } catch (err) {
+        console.error(err);
+        corpoTabela.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:20px; color:#f87171;">Erro: ${err.message}</td></tr>`;
+    }
+}
+
+async function telaHistoricoGeral() {
+    const area = document.getElementById('app-content');
+    const hoje = new Date().toISOString().split('T')[0];
+    const inicioMes = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
+
+    area.innerHTML = `
+        <div class="painel-vidro" style="max-width: 1300px; margin: auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                <h2 style="color:white; margin:0;">📜 HISTÓRICO GERAL DE MOVIMENTAÇÕES</h2>
+                <div style="display:flex; gap:10px;">
+                    <button onclick="imprimirHistoricoPDF()" class="btn-vidro" style="background:#2563eb; font-size:0.7rem;">🖨️ PDF</button>
+                </div>
+            </div>
+            
+            <div style="display:flex; gap:15px; justify-content:center; background:rgba(255,255,255,0.05); padding:15px; border-radius:12px; margin-bottom:20px;">
+                <div style="display:flex; flex-direction:column; gap:5px;">
+                    <small style="color:rgba(255,255,255,0.6); margin-left:5px;">Data Inicial</small>
+                    <input type="date" id="hist_inicio" value="${inicioMes}" class="input-vidro" style="width:160px;">
+                </div>
+                <div style="display:flex; flex-direction:column; gap:5px;">
+                    <small style="color:rgba(255,255,255,0.6); margin-left:5px;">Data Final</small>
+                    <input type="date" id="hist_fim" value="${hoje}" class="input-vidro" style="width:160px;">
+                </div>
+                <button onclick="carregarDadosHistorico()" class="btn-vidro" 
+                    style="background:#3b82f6; 
+                        margin:0; 
+                        font-weight:bold; 
+                        height:45px; 
+                        display:flex; 
+                        align-items:center; 
+                        justify-content:center; 
+                        gap:10px; 
+                        padding: 0 20px;">
+                    <span>🔍</span> 
+                    <span>FILTRAR HISTÓRICO</span>
+                </button>
+            </div>
+
+            <div class="painel-vidro" style="background:rgba(0,0,0,0.3); padding:0; overflow:hidden;">
+                <div style="max-height: 600px; overflow-y: auto;">
+                    <table style="width:100%; border-collapse:collapse; color:white; font-size:0.85rem;">
+                        <thead style="background:rgba(255,255,255,0.1); position: sticky; top:0; z-index:10;">
+                            <tr>
+                                <th style="padding:12px; text-align:left;">DATA/HORA</th>
+                                <th style="padding:12px; text-align:left;">AÇÃO</th>
+                                <th style="padding:12px; text-align:left;">TIPO</th>
+                                <th style="padding:12px; text-align:center;">QTD</th>
+                                <th style="padding:12px; text-align:left;">LOCAL</th>
+                                <th style="padding:12px; text-align:left;">USUÁRIO</th>
+                                <th style="padding:12px; text-align:left;">OBSERVAÇÕES</th>
+                            </tr>
+                        </thead>
+                        <tbody id="corpo-tabela-historico">
+                            <tr><td colspan="7" style="padding:20px; text-align:center; opacity:0.5;">Carregando dados...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    `;
+    carregarDadosHistorico();
+}
+
+async function carregarDadosHistorico() {
+    const inicio = document.getElementById('hist_inicio').value;
+    const fim = document.getElementById('hist_fim').value;
+    const tbody = document.getElementById('corpo-tabela-historico');
+
+    // Feedback visual enquanto carrega
+    tbody.innerHTML = `<tr><td colspan="7" style="padding:20px; text-align:center;">⌛ Buscando registros...</td></tr>`;
+    
+    try {
+        const res = await fetch(`${API_URL}/admin/historico/geral?inicio=${inicio}&fim=${fim}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        
+        const registros = await res.json();
+        
+        if (registros.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="7" style="padding:20px; text-align:center; opacity:0.5;">Nenhuma movimentação neste período.</td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = registros.map(r => {
+            // Lógica simples para cor do tipo
+            const corTipo = r.tipo === 'ENTRADA' ? '#4ade80' : (r.tipo === 'SAIDA' ? '#f87171' : '#fbbf24');
+            
+            return `
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.05); transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
+                    <td style="padding:12px; white-space:nowrap; opacity:0.8;">
+                        ${new Date(r.data).toLocaleString('pt-BR')}
+                    </td>
+                    <td style="padding:12px; font-weight:500;">${r.acao}</td>
+                    <td style="padding:12px;">
+                        <span style="background:${corTipo}22; color:${corTipo}; padding:2px 8px; border-radius:4px; font-size:0.7rem; font-weight:bold; border:1px solid ${corTipo}44;">
+                            ${r.tipo}
+                        </span>
+                    </td>
+                    <td style="padding:12px; text-align:center; font-weight:bold;">${r.quantidade_total}</td>
+                    <td style="padding:12px; font-size:0.8rem; opacity:0.9;">${r.local_nome || r.local_id || '-'}</td>
+                    <td style="padding:12px; font-size:0.8rem;">${r.usuario_nome || 'ID: ' + r.usuario_id}</td>
+                    <td style="padding:12px; font-size:0.75rem; opacity:0.7; max-width:250px; overflow:hidden; text-overflow:ellipsis;">
+                        ${r.observacoes || '-'}
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="7" style="padding:20px; text-align:center; color:#ff4d4d;">❌ Erro de conexão com o servidor.</td></tr>`;
+    }
+}
+
+async function telaRelatoriosFaltantes() {
+    const app = document.getElementById('app-content');
+    app.innerHTML = `<div class="loading-spinner"></div>`;
+
+    try {
+        // 1. Corrigido para a nova rota que você criou
+        // 2. Verificamos se a lista está vazia antes de buscar
+        if (!listaLocaisRelatorio || listaLocaisRelatorio.length === 0) {
+            const res = await fetch(`${API_URL}/locais/lista-simples`, { 
+                headers: { 'Authorization': `Bearer ${TOKEN}` } 
+            });
+
+            if (!res.ok) throw new Error(`Erro na requisição: ${res.status}`);
+            
+            listaLocaisRelatorio = await res.json();
+        }
+
+        let options = '<option value="">-- Selecione uma Escola --</option>';
+        
+        // Verificação de segurança caso o banco retorne vazio
+        if (Array.isArray(listaLocaisRelatorio)) {
+            listaLocaisRelatorio.forEach(l => {
+                options += `<option value="${l.id}">${l.nome}</option>`;
+            });
+        }
+
+        app.innerHTML = `
+            <div class="header-acoes" style="padding: 20px;">
+                <button class="btn-voltar-vidro" onclick="carregarDashboard()">
+                    <i class="fas fa-arrow-left"></i> VOLTAR
+                </button>
+            </div>
+            
+            <div style="text-align: center; padding: 40px;">
+                <h2 style="color: #00d4ff; margin-bottom: 20px;">RELATÓRIO DE FALTANTES</h2>
+                <select id="select-escola-rel" onchange="telaBotaoRelatorioSelecionado()"
+                        style="padding: 12px; font-size: 1rem; width: 60%; max-width: 400px; border-radius: 5px; background: white; color: #333;">
+                    ${options}
+                </select>
+            </div>
+        `;
+    } catch (err) {
+        // Agora você verá o erro real no console se falhar de novo
+        console.error("Erro detalhado ao carregar locais:", err);
+        notificar("Erro ao carregar locais. Verifique o console.", "erro");
+        // Removi o carregarDashboard() momentaneamente para você conseguir ler o erro na tela se houver
+    }
+}
+
+// 2. TELA APÓS SELECIONAR O LOCAL (Mostra o botão do PDF)
+function telaBotaoRelatorioSelecionado() {
+    const select = document.getElementById('select-escola-rel');
+    const localId = select.value;
+    const localNome = select.options[select.selectedIndex].text;
+
+    if (!localId) return;
+
+    const app = document.getElementById('app-content');
+    app.innerHTML = `
+        <div class="header-acoes" style="padding: 20px;">
+            <button class="btn-voltar-vidro" onclick="telaRelatoriosFaltantes()">
+                <i class="fas fa-arrow-left"></i> VOLTAR
+            </button>
+        </div>
+        
+        <div style="text-align: center; padding: 20px; animation: fadeIn 0.3s;">
+            <h3 style="color: white; margin-bottom: 5px;">ESCOLA SELECIONADA:</h3>
+            <h2 style="color: #00d4ff; margin-bottom: 40px; text-transform: uppercase;">${localNome}</h2>
+            
+            <div style="display: flex; flex-direction: column; gap: 20px; align-items: center;">
+                
+                <button onclick="gerarPdfFaltantes(${localId}, 'UNIFORME')" 
+                        style="background: #3b82f6; color: white; padding: 20px; width: 350px; border: none; border-radius: 8px; font-weight: 800; cursor: pointer; font-size: 1rem; box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);">
+                    <i class="fas fa-tshirt"></i> ALUNOS FALTANDO UNIFORME
+                </button>
+
+                <button onclick="gerarPdfFaltantes(${localId}, 'MATERIAL')" 
+                        style="background: #10b981; color: white; padding: 20px; width: 350px; border: none; border-radius: 8px; font-weight: 800; cursor: pointer; font-size: 1rem; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);">
+                    <i class="fas fa-book"></i> ALUNOS FALTANDO MATERIAL
+                </button>
+
+            </div>
+        </div>
+    `;
+}
+
+async function gerarPdfFaltantes(localId, tipo) {
+    // Define dinamicamente o endpoint e os títulos com base no tipo (UNIFORME ou MATERIAL)
+    const endpoint = tipo === 'MATERIAL' ? 'faltantes-material' : 'faltantes-uniforme';
+    const tituloRelatorio = tipo === 'MATERIAL' ? 'ALUNOS QUE FALTAM RECEBER MATERIAL' : 'ALUNOS QUE FALTAM RECEBER UNIFORMES';
+    
+    notificar(`Processando relatório de ${tipo.toLowerCase()}, aguarde...`, "info");
+
+    try {
+        const res = await fetch(`${API_URL}/relatorios/escola/${localId}/${endpoint}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        if (!res.ok) throw new Error("Erro ao buscar dados no servidor.");
+        const data = await res.json();
+
+        // INÍCIO DO CÓDIGO HTML DO PDF (Estrutura Completa e Corrigida)
+        let htmlPdf = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Relatório de Faltantes - ${data.escola}</title>
+                <style>
+                    /* Configuração estrita para a folha A4 e Margens de 1cm */
+                    @page { size: A4 portrait; margin: 1cm; }
+                    body { font-family: Arial, sans-serif; background: #525659; margin: 0; padding: 0; }
+                    
+                    /* Barra superior de controle (some na hora de imprimir) */
+                    .barra-controle { position: fixed; top: 0; left: 0; width: 100%; background: #2c3e50; padding: 15px; text-align: center; z-index: 9999; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+                    .btn-controle { padding: 10px 20px; font-weight: bold; font-size: 14px; border: none; border-radius: 5px; cursor: pointer; margin: 0 10px; transition: 0.2s; }
+                    .btn-imprimir { background: #3498db; color: white; }
+                    .btn-imprimir:hover { background: #2980b9; }
+                    .btn-fechar { background: #e74c3c; color: white; }
+                    .btn-fechar:hover { background: #c0392b; }
+                    
+                    /* Design da Folha na tela */
+                    .folha { background: white; width: 21cm; min-height: 29.7cm; margin: 80px auto 20px auto; padding: 1cm; box-sizing: border-box; box-shadow: 0 0 10px rgba(0,0,0,0.5); }
+                    
+                    /* O Segredo: Uma folha por turma */
+                    .quebra-pagina { page-break-after: always; }
+                    .folha:last-child { page-break-after: auto; }
+
+                    /* Textos e Layout exigidos */
+                    .cabecalho { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000; padding-bottom: 5px; margin-bottom: 20px; font-size: 14px; }
+                    .nome-local { text-transform: uppercase; max-width: 70%; }
+                    .nome-turma { font-weight: bold; text-transform: uppercase; }
+                    .titulo-central { text-align: center; font-weight: bold; font-size: 16px; margin-bottom: 25px; text-transform: uppercase; }
+                    
+                    /* Lista de Alunos - Letra Pequena conforme solicitado */
+                    .lista-alunos { font-size: 11px; line-height: 1.8; margin: 0; padding-left: 25px; }
+                    .lista-alunos li { border-bottom: 1px dashed #ccc; padding: 2px 0; text-transform: uppercase; }
+
+                    /* Ajustes para Impressão Real */
+                    @media print {
+                        body { background: white; }
+                        .barra-controle { display: none !important; }
+                        .folha { margin: 0; box-shadow: none; width: auto; min-height: auto; }
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="barra-controle">
+                    <button class="btn-controle btn-imprimir" onclick="window.print()">IMPRIMIR / SALVAR COMO PDF</button>
+                    <button class="btn-controle btn-fechar" onclick="window.close()">FECHAR JANELA</button>
+                </div>
+        `;
+
+        const turmas = Object.keys(data.turmas).sort();
+
+        if (turmas.length === 0) {
+            htmlPdf += `
+                <div class="folha">
+                    <div class="titulo-central">NÃO HÁ ALUNOS PENDENTES DE ${tipo} NESTA UNIDADE.</div>
+                </div>`;
+        } else {
+            // Gera uma folha completa para cada turma do local
+            turmas.forEach(turmaNome => {
+                const alunos = data.turmas[turmaNome];
+                
+                htmlPdf += `
+                    <div class="folha quebra-pagina">
+                        <div class="cabecalho">
+                            <div class="nome-local">${data.escola}</div>
+                            <div class="nome-turma">TURMA: ${turmaNome}</div>
+                        </div>
+                        <div class="titulo-central">${tituloRelatorio}</div>
+                        
+                        <ol class="lista-alunos">
+                            ${alunos.map(aluno => `<li>${aluno}</li>`).join('')}
+                        </ol>
+                    </div>
+                `;
+            });
+        }
+
+        htmlPdf += `</body></html>`;
+
+        // Execução: Abre a nova aba e renderiza o conteúdo
+        const novaAba = window.open('', '_blank');
+        if (novaAba) {
+            novaAba.document.write(htmlPdf);
+            novaAba.document.close();
+        } else {
+            notificar("O navegador bloqueou a abertura do PDF. Verifique o bloqueador de pop-ups.", "erro");
+        }
+
+    } catch (err) {
+        console.error("Erro ao gerar PDF:", err);
+        notificar(`Erro: ${err.message}`, "erro");
+    }
+}
+
 window.telaVisualizarEstoque = telaVisualizarEstoque;
 window.telaAbastecerEstoque = telaAbastecerEstoque;
 window.telaAdminGerenciarSolicitacoes = telaAdminGerenciarSolicitacoes;

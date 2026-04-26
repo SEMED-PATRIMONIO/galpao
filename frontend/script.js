@@ -20573,6 +20573,18 @@ async function renderizarMatrizEntrega(turmaId, turmaNome) {
                     border-radius: 3px;
                 }
 
+                .titulo-turma-central {
+                    width: 100%;
+                    text-align: center;
+                    color: #00d4ff;
+                    font-size: 1.6rem;
+                    font-weight: 800;
+                    text-transform: uppercase;
+                    margin-bottom: 20px;
+                    letter-spacing: 2px;
+                    text-shadow: 0 0 15px rgba(0, 212, 255, 0.4);
+                }
+                
                 .celula-entregue { font-size: 0.6rem; color: #00ff88; line-height: 1; }
                 .celula-nao-aplica { color: rgba(255,255,255,0.1); font-size: 0.7rem; }
                 
@@ -20588,7 +20600,9 @@ async function renderizarMatrizEntrega(turmaId, turmaNome) {
                 <button class="btn-voltar-vidro" onclick="telaEntregaUniformes()" style="padding: 4px 12px; font-size: 0.8rem;">
                     <i class="fas fa-arrow-left"></i> TROCAR TURMA
                 </button>
-                <h2 class="titulo-sessao" style="color: white; font-size: 1.1rem; margin: 8px 0;">Entregas: ${turmaNome}</h2>
+                <h1 class="titulo-turma-central">
+                    <i class="fas fa-users"></i> TURMA: ${nomeDaTurma}
+                </h1>
             </div>
 
             <div class="tabela-entrega-wrapper animate__animated animate__fadeInUp">
@@ -21477,6 +21491,18 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
                     margin: 0;
                 }
 
+                .titulo-turma-central {
+                    width: 100%;
+                    text-align: center;
+                    color: #00d4ff;
+                    font-size: 1.6rem;
+                    font-weight: 800;
+                    text-transform: uppercase;
+                    margin-bottom: 20px;
+                    letter-spacing: 2px;
+                    text-shadow: 0 0 15px rgba(0, 212, 255, 0.4);
+                }
+
                 .celula-entregue { font-size: 0.6rem; color: #00ff88; line-height: 1; }
                 .celula-bloqueada { background: rgba(0,0,0,0.1); opacity: 0.2; }
                 
@@ -21492,7 +21518,9 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
                 <button class="btn-voltar-vidro" onclick="telaEntregaMaterial()" style="padding: 4px 12px; font-size: 0.8rem;">
                     <i class="fas fa-arrow-left"></i> TROCAR TURMA
                 </button>
-                <h2 class="titulo-sessao" style="color: white; font-size: 1.1rem; margin: 8px 0;">Material: ${turmaNome}</h2>
+                <h1 class="titulo-turma-central">
+                    <i class="fas fa-users"></i> TURMA: ${nomeDaTurma}
+                </h1>
             </div>
 
             <div class="tabela-material-wrapper animate__animated animate__fadeInUp">

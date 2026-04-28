@@ -17729,17 +17729,22 @@ async function abrirTelaEntrada() {
             const isTenis = p.nome.toUpperCase().includes('TENIS');
             const corTag = p.tipo === 'MATERIAL' ? '#10b981' : '#00d4ff';
             
-            // Lógica de ordenação da grade para Uniformes (exceto tênis)
+            // Lógica de ordenação da grade padronizada com Zeros
             let gradeOrdenada = p.grade || [];
             if (isUniforme && !isTenis && gradeOrdenada.length > 0) {
-                const ordemDefinida = ['2', '4', '6', '8', '10', '12', '14', '16', 'PP', 'P', 'M', 'G', 'GG', 'EGG'];
+                const ordemDefinida = ['02', '04', '06', '08', '10', '12', '14', '16', 'PP', 'P', 'M', 'G', 'GG', 'EGG'];
+                
                 gradeOrdenada = [...gradeOrdenada].sort((a, b) => {
-                    const idxA = ordemDefinida.indexOf(String(a.tamanho).toUpperCase());
-                    const idxB = ordemDefinida.indexOf(String(b.tamanho).toUpperCase());
+                    const tamA = String(a.tamanho).toUpperCase().padStart(2, '0');
+                    const tamB = String(b.tamanho).toUpperCase().padStart(2, '0');
+
+                    const idxA = ordemDefinida.indexOf(tamA);
+                    const idxB = ordemDefinida.indexOf(tamB);
+                    
                     if (idxA !== -1 && idxB !== -1) return idxA - idxB;
                     if (idxA !== -1) return -1;
                     if (idxB !== -1) return 1;
-                    return String(a.tamanho).localeCompare(String(b.tamanho));
+                    return tamA.localeCompare(tamB);
                 });
             }
 
@@ -17775,16 +17780,19 @@ async function abrirTelaEntrada() {
                     ${isUniforme ? `
                         <div id="grade-${p.id}" class="grade-expansivel" style="display:none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);">
                             <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px;">
-                                ${gradeOrdenada.map(g => `
+                                ${gradeOrdenada.map(g => {
+                                    // Formatação do tamanho para exibir '02' e enviar '02'
+                                    const tamFormatado = String(g.tamanho).toUpperCase().padStart(2, '0');
+                                    return `
                                     <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; text-align: center; border: 1px solid rgba(255,255,255,0.05);">
-                                        <small style="display: block; font-size: 0.6rem; color: #00d4ff; margin-bottom: 5px;">${g.tamanho}</small>
+                                        <small style="display: block; font-size: 0.6rem; color: #00d4ff; margin-bottom: 5px;">${tamFormatado}</small>
                                         <input type="number" class="input-entrada-qtd" 
-                                                data-id="${p.id}" data-tipo="UNIFORMES" data-tamanho="${g.tamanho}"
+                                                data-id="${p.id}" data-tipo="UNIFORMES" data-tamanho="${tamFormatado}"
                                                 style="width: 100%; background: transparent; border: none; border-bottom: 1px solid #00d4ff; color: white; text-align: center;"
                                                 placeholder="0" min="0">
                                         <small style="display: block; font-size: 0.55rem; opacity: 0.4; margin-top: 4px;">Atual: ${g.quantidade}</small>
                                     </div>
-                                `).join('')}
+                                `;}).join('')}
                             </div>
                         </div>
                     ` : ''}
@@ -18065,21 +18073,24 @@ async function carregarConsultaEstoque() {
             const isUniforme = p.tipo === 'UNIFORMES';
             const isTenis = p.nome.toUpperCase().includes('TENIS');
             
-            // Lógica de ordenação da grade
+            // Lógica de ordenação da grade padronizada
             let gradeOrdenada = p.grade || [];
             if (isUniforme && !isTenis && gradeOrdenada.length > 0) {
-                const ordemDefinida = ['2', '4', '6', '8', '10', '12', '14', '16', 'PP', 'P', 'M', 'G', 'GG', 'EGG'];
+                // Grade atualizada com Zeros
+                const ordemDefinida = ['02', '04', '06', '08', '10', '12', '14', '16', 'PP', 'P', 'M', 'G', 'GG', 'EGG'];
+                
                 gradeOrdenada = [...gradeOrdenada].sort((a, b) => {
-                    const idxA = ordemDefinida.indexOf(a.tamanho.toUpperCase());
-                    const idxB = ordemDefinida.indexOf(b.tamanho.toUpperCase());
+                    // Normaliza para comparação (garante o zero à esquerda se for número de 1 dígito)
+                    const tamA = a.tamanho.toString().toUpperCase().padStart(2, '0');
+                    const tamB = b.tamanho.toString().toUpperCase().padStart(2, '0');
+
+                    const idxA = ordemDefinida.indexOf(tamA);
+                    const idxB = ordemDefinida.indexOf(tamB);
                     
-                    // Se ambos os tamanhos estão na lista de ordem definida
                     if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-                    // Se apenas um está, ele vem primeiro
                     if (idxA !== -1) return -1;
                     if (idxB !== -1) return 1;
-                    // Caso contrário (tamanhos extras), ordem alfabética
-                    return a.tamanho.localeCompare(b.tamanho);
+                    return tamA.localeCompare(tamB);
                 });
             }
 
@@ -18099,12 +18110,15 @@ async function carregarConsultaEstoque() {
                     ${isUniforme && gradeOrdenada.length > 0 ? `
                         <div id="grade-${p.id}" class="grade-expansivel" style="display:none; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1);">
                             <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(45px, 1fr)); gap: 8px;">
-                                ${gradeOrdenada.map(g => `
+                                ${gradeOrdenada.map(g => {
+                                    // Formatação visual do tamanho para garantir o '02', '04', etc.
+                                    const tamanhoVisual = g.tamanho.toString().toUpperCase().padStart(2, '0');
+                                    return `
                                     <div style="background: rgba(255,255,255,0.1); padding: 4px; border-radius: 5px; text-align: center;">
-                                        <small style="display: block; font-size: 0.55rem; color: #00d4ff;">${g.tamanho}</small>
+                                        <small style="display: block; font-size: 0.55rem; color: #00d4ff;">${tamanhoVisual}</small>
                                         <strong style="font-size: 0.8rem; color: #ffffff;">${g.quantidade}</strong>
                                     </div>
-                                `).join('')}
+                                `;}).join('')}
                             </div>
                         </div>
                     ` : ''}

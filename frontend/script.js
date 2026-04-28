@@ -18308,7 +18308,6 @@ async function abrirTelaSaidaPedido() {
     const app = document.getElementById('app-content');
     if (!app) return;
 
-    // 1. Estrutura Inicial com seletor de destino
     app.innerHTML = `
         <div class="header-saida animate__animated animate__fadeIn">
             <button class="btn-voltar-vidro" onclick="carregarDashboard()" style="margin-bottom: 20px;">
@@ -18337,7 +18336,6 @@ async function abrirTelaSaidaPedido() {
     `;
 
     try {
-        // 2. Carregar Locais (Filtrando 37 e 50 conforme sua regra)
         const resLocais = await fetch(`${API_URL}/locais`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
         const locais = await resLocais.json();
         const selectDestino = document.getElementById('select-local-destino');
@@ -18346,31 +18344,29 @@ async function abrirTelaSaidaPedido() {
             locais.filter(l => l.id !== 37 && l.id !== 50)
                   .map(l => `<option value="${l.id}">${l.nome}</option>`).join('');
 
-        // 3. Carregar Produtos com saldo atualizado
         const resProd = await fetch(`${API_URL}/estoque/consulta-exclusiva`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
         const produtos = await resProd.json();
         const listaHtml = document.getElementById('lista-saida-produtos');
         listaHtml.innerHTML = '';
 
+        // Padronização da Grade (A Ordem que você mandou)
+        const ordemDesejada = ['02', '04', '06', '08', '10', '12', '14', '16', 'PP', 'P', 'M', 'G', 'GG', 'EGG'];
+
         produtos.forEach(p => {
             const isUniforme = p.tipo === 'UNIFORMES';
             const isTenis = p.nome.toUpperCase().includes('TENIS');
             
-            // --- LÓGICA DE PADRONIZAÇÃO DA GRADE ---
-            let gradeExibicao = p.grade || [];
-            if (isUniforme && !isTenis && gradeExibicao.length > 0) {
-                const ordemDefinida = ['02', '04', '06', '08', '10', '12', '14', '16', 'PP', 'P', 'M', 'G', 'GG', 'EGG'];
-                
-                gradeExibicao = [...gradeExibicao].sort((a, b) => {
-                    const tamA = String(a.tamanho).toUpperCase().padStart(2, '0');
-                    const tamB = String(b.tamanho).toUpperCase().padStart(2, '0');
-                    const idxA = ordemDefinida.indexOf(tamA);
-                    const idxB = ordemDefinida.indexOf(tamB);
-                    
-                    if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-                    if (idxA !== -1) return -1;
-                    if (idxB !== -1) return 1;
-                    return tamA.localeCompare(tamB);
+            let gradeFinal = p.grade || [];
+
+            if (isUniforme && !isTenis && gradeFinal.length > 0) {
+                gradeFinal = [...gradeFinal].sort((a, b) => {
+                    // Função interna para normalizar o que vem do banco para o seu padrão
+                    const formatar = (t) => {
+                        let s = String(t).toUpperCase().trim();
+                        // Se for número de 1 a 9, vira 01, 02... Se for P, M, etc, mantém.
+                        return (s.length === 1 && !isNaN(s)) ? s.padStart(2, '0') : s;
+                    };
+                    return ordemDesejada.indexOf(formatar(a.tamanho)) - ordemDesejada.indexOf(formatar(b.tamanho));
                 });
             }
 
@@ -18407,15 +18403,17 @@ async function abrirTelaSaidaPedido() {
                     ${isUniforme ? `
                         <div id="grade-saida-${p.id}" class="grade-expansivel" style="display:none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);">
                             <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px;">
-                                ${gradeExibicao.map(g => {
-                                    // Garante que o tamanho seja exibido e armazenado como '02', '04', etc.
-                                    const tamPadrao = String(g.tamanho).toUpperCase().padStart(2, '0');
+                                ${gradeFinal.map(g => {
+                                    // Formatação visual idêntica ao que você pediu
+                                    const s = String(g.tamanho).toUpperCase().trim();
+                                    const visual = (s.length === 1 && !isNaN(s)) ? s.padStart(2, '0') : s;
+                                    
                                     return `
                                     <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; text-align: center;">
-                                        <small style="display: block; font-size: 0.50rem; color: #00d4ff;">${tamPadrao}</small>
+                                        <small style="display: block; font-size: 0.50rem; color: #00d4ff;">${visual}</small>
                                         <small style="display: block; font-size: 0.50rem; color: #777;">Saldo: ${g.quantidade}</small>
                                         <input type="number" class="input-saida-qtd" 
-                                               data-id="${p.id}" data-tipo="UNIFORMES" data-tamanho="${tamPadrao}" data-max="${g.quantidade}"
+                                               data-id="${p.id}" data-tipo="UNIFORMES" data-tamanho="${visual}" data-max="${g.quantidade}"
                                                oninput="atualizarTotalGradeSaida(${p.id})" onchange="validarEstoqueMax(this)"
                                                style="width: 100%; background: transparent; border: none; border-bottom: 1px solid #ff4d4d; color: white; text-align: center;"
                                                placeholder="0" min="0">
@@ -18428,9 +18426,7 @@ async function abrirTelaSaidaPedido() {
             `;
         });
     } catch (err) {
-        console.error("Erro ao carregar tela de saída:", err);
-        const listaHtml = document.getElementById('lista-saida-produtos');
-        if(listaHtml) listaHtml.innerHTML = `<p style="color: #ff4d4d; padding: 20px;">❌ Erro ao sincronizar produtos.</p>`;
+        console.error("Erro:", err);
     }
 }
 

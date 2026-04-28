@@ -21599,7 +21599,8 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
                                                        name="radio_aluno_${aluno.id}" 
                                                        class="radio-aluno" 
                                                        data-aluno-id="${aluno.id}" 
-                                                       data-produto-id="${produto.id}" 
+                                                       data-produto-id="${produto.id}"
+                                                       data-entrega-id="${aluno.entregaInfo ? aluno.entregaInfo.id : ''}" 
                                                        id="al${aluno.id}-pr${produto.id}">
                                                 <label for="al${aluno.id}-pr${produto.id}"></label>
                                             </td>`;
@@ -21734,45 +21735,46 @@ async function gerarComprovanteTurmaMaterial(turmaId) {
 // CONFIRMAR ENTREGAS (sem alteração na lógica)
 // ============================================================
 async function confirmarEntregasMaterial(turmaId) {
-    const radiosMarcados = document.querySelectorAll('.radio-aluno:checked');
+    const selecionados = document.querySelectorAll('.radio-aluno:checked');
     
-    // Agora enviamos 'N/A' explicitamente para materiais
-    const entregasParaEnviar = Array.from(radiosMarcados).map(radio => ({
-        alunoId: radio.dataset.alunoId,
-        produtoId: radio.dataset.produtoId,
-        tamanho: 'N/A' 
-    }));
-
-    if (entregasParaEnviar.length === 0) {
-        return notificar('Nenhum kit de material foi marcado para entrega.', 'aviso');
+    if (selecionados.length === 0) {
+        notificar('Selecione ao menos uma entrega para confirmar.', 'aviso');
+        return;
     }
-    
-    // REMOVIDO: confirm() desnecessário a pedido do usuário
 
-    const btn = document.querySelector('.btn-confirmar-entrega');
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> PROCESSANDO...';
+    let sucessos = 0;
+    let falhas = 0;
 
-    try {
-        const res = await fetch(`${API_URL}/entregas/lote`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
-            body: JSON.stringify({ entregas: entregasParaEnviar })
-        });
-        
-        const resultado = await res.json();
-        if (!res.ok) throw new Error(resultado.error || 'Falha no servidor.');
+    for (const input of selecionados) {
+        const idEntrega = input.dataset.entregaId; // Aqui pegamos o ID que adicionamos no HTML
 
-        notificar(resultado.message, 'sucesso');
-        renderizarMatrizEntregaMaterial(turmaId);
+        // PROTEÇÃO: Se o ID for nulo ou string "null", não faz o fetch
+        if (!idEntrega || idEntrega === 'null' || idEntrega === 'undefined') {
+            console.error("Erro: ID de entrega não encontrado para o aluno", input.dataset.alunoId);
+            falhas++;
+            continue; 
+        }
 
-    } catch (err) {
-        // Se o erro for de estoque, a mensagem virá limpa do backend
-        notificar(`${err.message}`, 'erro');
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-check"></i> CONFIRMAR ENTREGAS MARCADAS';
+        try {
+            const res = await fetch(`${API_URL}/escola/confirmar-recebimento2/${idEntrega}`, {
+                method: 'PATCH',
+                headers: { 
+                    'Authorization': `Bearer ${TOKEN}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (res.ok) sucessos++;
+            else falhas++;
+
+        } catch (err) {
+            console.error(err);
+            falhas++;
+        }
     }
+
+    notificar(`Sucesso: ${sucessos} | Falhas: ${falhas}`, sucessos > 0 ? 'sucesso' : 'erro');
+    renderizarMatrizEntregaMaterial(turmaId); // Recarrega a tela
 }
 
 function telaRelatoriosGeral() {

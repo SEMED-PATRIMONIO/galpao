@@ -18337,11 +18337,11 @@ async function abrirTelaSaidaPedido() {
     `;
 
     try {
-        // 2. Carregar Locais (Filtrando 37 e 50)
+        // 2. Carregar Locais (Filtrando 37 e 50 conforme sua regra)
         const resLocais = await fetch(`${API_URL}/locais`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
         const locais = await resLocais.json();
         const selectDestino = document.getElementById('select-local-destino');
-        // Filtra conforme regra: não 37 (estoque próprio) e não 50 (transferência reservada)
+        
         selectDestino.innerHTML = '<option value="">-- SELECIONE A UNIDADE --</option>' + 
             locais.filter(l => l.id !== 37 && l.id !== 50)
                   .map(l => `<option value="${l.id}">${l.nome}</option>`).join('');
@@ -18354,13 +18354,33 @@ async function abrirTelaSaidaPedido() {
 
         produtos.forEach(p => {
             const isUniforme = p.tipo === 'UNIFORMES';
+            const isTenis = p.nome.toUpperCase().includes('TENIS');
+            
+            // --- LÓGICA DE PADRONIZAÇÃO DA GRADE ---
+            let gradeExibicao = p.grade || [];
+            if (isUniforme && !isTenis && gradeExibicao.length > 0) {
+                const ordemDefinida = ['02', '04', '06', '08', '10', '12', '14', '16', 'PP', 'P', 'M', 'G', 'GG', 'EGG'];
+                
+                gradeExibicao = [...gradeExibicao].sort((a, b) => {
+                    const tamA = String(a.tamanho).toUpperCase().padStart(2, '0');
+                    const tamB = String(b.tamanho).toUpperCase().padStart(2, '0');
+                    const idxA = ordemDefinida.indexOf(tamA);
+                    const idxB = ordemDefinida.indexOf(tamB);
+                    
+                    if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+                    if (idxA !== -1) return -1;
+                    if (idxB !== -1) return 1;
+                    return tamA.localeCompare(tamB);
+                });
+            }
+
             listaHtml.innerHTML += `
                 <div class="card-saida glass-panel" id="card-saida-${p.id}" 
                      style="background: rgba(255,255,255,0.05); margin-bottom: 12px; padding: 18px; border-radius: 15px; color: white; border: 1px solid rgba(255,255,255,0.1);">
                     
                     <div style="display: flex; justify-content: space-between; align-items: center;" 
                          ${isUniforme ? `onclick="toggleGradeSaida(${p.id})"` : ''}>
-                        <div>
+                        <div style="cursor: ${isUniforme ? 'pointer' : 'default'}">
                             <span style="font-size: 0.7rem; background: #00d4ff; padding: 3px 8px; border-radius: 5px; color: #001a2c; font-weight: bold;">
                                 ${p.tipo}
                             </span>
@@ -18377,7 +18397,7 @@ async function abrirTelaSaidaPedido() {
                                        placeholder="0" min="0">
                             </div>
                         ` : `
-                            <div style="text-align: right;">
+                            <div style="text-align: right; cursor: pointer;">
                                 <span id="total-uniforme-${p.id}" style="font-size: 1.2rem; font-weight: bold; color: #ff4d4d; display: block;">0</span>
                                 <small style="color: #00d4ff;">Grade 👕 <i class="fas fa-chevron-down"></i></small>
                             </div>
@@ -18387,17 +18407,20 @@ async function abrirTelaSaidaPedido() {
                     ${isUniforme ? `
                         <div id="grade-saida-${p.id}" class="grade-expansivel" style="display:none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);">
                             <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px;">
-                                ${p.grade.map(g => `
+                                ${gradeExibicao.map(g => {
+                                    // Garante que o tamanho seja exibido e armazenado como '02', '04', etc.
+                                    const tamPadrao = String(g.tamanho).toUpperCase().padStart(2, '0');
+                                    return `
                                     <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; text-align: center;">
-                                        <small style="display: block; font-size: 0.50rem; color: #00d4ff;">${g.tamanho}</small>
+                                        <small style="display: block; font-size: 0.50rem; color: #00d4ff;">${tamPadrao}</small>
                                         <small style="display: block; font-size: 0.50rem; color: #777;">Saldo: ${g.quantidade}</small>
                                         <input type="number" class="input-saida-qtd" 
-                                               data-id="${p.id}" data-tipo="UNIFORMES" data-tamanho="${g.tamanho}" data-max="${g.quantidade}"
+                                               data-id="${p.id}" data-tipo="UNIFORMES" data-tamanho="${tamPadrao}" data-max="${g.quantidade}"
                                                oninput="atualizarTotalGradeSaida(${p.id})" onchange="validarEstoqueMax(this)"
                                                style="width: 100%; background: transparent; border: none; border-bottom: 1px solid #ff4d4d; color: white; text-align: center;"
                                                placeholder="0" min="0">
                                     </div>
-                                `).join('')}
+                                `;}).join('')}
                             </div>
                         </div>
                     ` : ''}
@@ -18406,6 +18429,8 @@ async function abrirTelaSaidaPedido() {
         });
     } catch (err) {
         console.error("Erro ao carregar tela de saída:", err);
+        const listaHtml = document.getElementById('lista-saida-produtos');
+        if(listaHtml) listaHtml.innerHTML = `<p style="color: #ff4d4d; padding: 20px;">❌ Erro ao sincronizar produtos.</p>`;
     }
 }
 

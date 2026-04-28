@@ -5705,7 +5705,7 @@ async function telaSolicitarUniforme() {
                         const isTenis = p.nome.toUpperCase().includes('TENIS') || p.nome.toUpperCase().includes('TÊNIS');
                         const grade = isTenis 
                             ? ['22', '23', '24', '25', '26', '27', '28', '29', '30', '31', '32', '33', '34', '35', '36', '37', '38', '39', '40', '41', '42', '43']
-                            : ['2', '4', '6', '8', '10', '12', '14', '16', 'PP', 'P', 'M', 'G', 'GG', 'EGG'];
+                            : ['02', '04', '06', '08', '10', '12', '14', '16', 'PP', 'P', 'M', 'G', 'GG', 'EGG'];
 
                         return `
                             <div class="card-uniforme" onclick="document.getElementById('grade-${p.id}').style.display = document.getElementById('grade-${p.id}').style.display === 'block' ? 'none' : 'block'">

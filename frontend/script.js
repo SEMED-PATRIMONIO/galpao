@@ -21471,21 +21471,20 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
                 }
 
                 .col-aluno {
-                    width: 20%;
-                    min-width: 20%;
-                    max-width: 20%;
+                    width: 25%;
+                    min-width: 200px;
                     text-align: left !important;
-                    padding-left: 10px !important;
+                    padding-left: 15px !important;
                     font-size: 0.75rem;
                     white-space: nowrap;
                     overflow: hidden;
                     text-overflow: ellipsis;
+                    color: white;
                 }
 
                 .col-prod-mat {
-                    width: calc(80% / ${data.produtos.length});
-                    min-width: calc(80% / ${data.produtos.length});
-                    max-width: calc(80% / ${data.produtos.length});
+                    width: calc(75% / ${data.produtos.length});
+                    min-width: 80px;
                 }
 
                 .tabela-entrega thead th {
@@ -21493,17 +21492,18 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
                     top: 0;
                     z-index: 10;
                     background: #001a2c;
-                    font-size: 0.55rem;
+                    font-size: 0.60rem;
                     color: #00d4ff;
-                    height: 45px;
+                    height: 50px;
                     border-bottom: 2px solid #00d4ff;
                     word-wrap: break-word;
+                    padding: 5px;
                 }
 
                 .tabela-entrega .linha-todos th, 
                 .tabela-entrega .linha-todos td {
                     position: sticky;
-                    top: 45px;
+                    top: 50px;
                     z-index: 9;
                     background: #002a44;
                     border-bottom: 1px solid rgba(255,255,255,0.2);
@@ -21512,12 +21512,17 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
                 .tabela-entrega td {
                     text-align: center;
                     border: 1px solid rgba(255,255,255,0.05);
-                    height: 40px;
+                    height: 45px;
+                    vertical-align: middle;
                 }
 
-                /* Inputs e Labels restaurados para funcionalidade original */
-                .celula-radio input[type="radio"], .celula-radio input[type="checkbox"] {
+                .celula-radio {
+                    position: relative;
+                }
+
+                .celula-radio input[type="radio"] {
                     cursor: pointer;
+                    transform: scale(1.2);
                     margin: 0;
                 }
 
@@ -21533,23 +21538,37 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
                     text-shadow: 0 0 15px rgba(0, 212, 255, 0.4);
                 }
 
-                .celula-entregue { font-size: 0.6rem; color: #00ff88; line-height: 1; }
-                .celula-bloqueada { background: rgba(0,0,0,0.1); opacity: 0.2; }
+                .celula-entregue { 
+                    font-size: 0.65rem; 
+                    color: #00ff88; 
+                    font-weight: bold;
+                    line-height: 1.2;
+                }
+
+                .celula-bloqueada { 
+                    background: rgba(0,0,0,0.2); 
+                    opacity: 0.3; 
+                }
                 
                 #footer-material {
                     display: flex;
-                    gap: 10px;
+                    gap: 15px;
                     justify-content: center;
-                    padding: 10px;
+                    padding: 15px;
+                }
+
+                .checkbox-todos {
+                    transform: scale(1.1);
+                    cursor: pointer;
                 }
             </style>
 
             <div class="header-animado animate__animated animate__fadeIn">
-                <button class="btn-voltar-vidro" onclick="telaEntregaMaterial()" style="padding: 4px 12px; font-size: 0.8rem;">
+                <button class="btn-voltar-vidro" onclick="telaEntregaMaterial()" style="padding: 6px 15px; font-size: 0.8rem;">
                     <i class="fas fa-arrow-left"></i> TROCAR TURMA
                 </button>
                 <h1 class="titulo-turma-central">
-                    <i class="fas fa-users"></i> TURMA: ${turmaNome}
+                    <i class="fas fa-box-open"></i> TURMA: ${turmaNome}
                 </h1>
             </div>
 
@@ -21561,11 +21580,13 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
                             ${data.produtos.map(p => `
                                 <th class="col-prod-mat">
                                     ${p.nome.toUpperCase()}<br>
-                                    <small style="opacity:0.6">(${data.estoqueEscola[p.id] || 0} un)</small>
+                                    <small style="opacity:0.8; color: #fff;">
+                                        Disp: ${data.estoqueEscola[p.id] || 0}
+                                    </small>
                                 </th>`).join('')}
                         </tr>
                         <tr class="linha-todos">
-                            <th class="col-aluno" style="color: #00d4ff;">TODOS</th>
+                            <th class="col-aluno" style="color: #00d4ff;">SELECIONAR TODOS</th>
                             ${data.produtos.map(produto => `
                                 <td class="col-prod-mat">
                                     <input type="checkbox" class="checkbox-todos" 
@@ -21577,30 +21598,41 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
                     </thead>
                     <tbody>
                         ${data.alunos.map(aluno => {
+                            // Verifica se o aluno já recebeu algum item de material
                             const jaEntregue = aluno.status === 'entregue';
-                            const dataFormatada = jaEntregue && aluno.entregaInfo.data_entrega 
-                                ? new Date(aluno.entregaInfo.data_entrega).toLocaleDateString('pt-BR') : '';
+                            const dataFormatada = (jaEntregue && aluno.entregaInfo && aluno.entregaInfo.data_entrega)
+                                ? new Date(aluno.entregaInfo.data_entrega).toLocaleDateString('pt-BR') 
+                                : '';
 
                             return `
                                 <tr id="aluno-row-${aluno.id}">
                                     <td class="col-aluno" title="${aluno.nome}">${aluno.nome}</td>
                                     ${data.produtos.map(produto => {
+                                        
+                                        // Se este aluno específico já recebeu este produto específico
+                                        if (jaEntregue && aluno.entregaInfo && aluno.entregaInfo.produto_id === produto.id) {
+                                            return `
+                                                <td class="col-prod-mat celula-entregue">
+                                                    <i class="fas fa-check-circle"></i><br>
+                                                    ${dataFormatada}
+                                                </td>`;
+                                        } 
+                                        
+                                        // Se o aluno já recebeu OUTRO produto (bloqueia as outras células da linha se sua lógica for de 1 kit por aluno)
+                                        // Ou apenas renderiza o rádio se estiver disponível
                                         if (jaEntregue) {
-                                            if (aluno.entregaInfo.produto_id === produto.id) {
-                                                return `<td class="col-prod-mat celula-entregue"><i class="fas fa-check"></i><br>${dataFormatada}</td>`;
-                                            } else {
-                                                return `<td class="col-prod-mat celula-bloqueada"></td>`;
-                                            }
+                                            return `<td class="col-prod-mat celula-bloqueada"></td>`;
                                         }
-                                        // RESTAURADO: Input de seleção para o aluno
+
+                                        // Caso padrão: rádio disponível para seleção
                                         return `
                                             <td class="col-prod-mat celula-radio">
                                                 <input type="radio" 
                                                        name="radio_aluno_${aluno.id}" 
                                                        class="radio-aluno" 
                                                        data-aluno-id="${aluno.id}" 
-                                                       data-produto-id="${produto.id}"
-                                                       data-entrega-id="${aluno.entregaInfo ? aluno.entregaInfo.id : ''}" 
+                                                       data-produto-id="${produto.id}" 
+                                                       data-entrega-id="${(aluno.entregaInfo && aluno.entregaInfo.id) ? aluno.entregaInfo.id : ''}"
                                                        id="al${aluno.id}-pr${produto.id}">
                                                 <label for="al${aluno.id}-pr${produto.id}"></label>
                                             </td>`;
@@ -21613,16 +21645,17 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
 
             <div id="footer-material">
                 <button class="btn-imprimir-comprovante" onclick="gerarComprovanteTurmaMaterial(${turmaId})" 
-                        style="background: #3b82f6; color: white; padding: 12px 20px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer;">
-                    COMPROVANTE
+                        style="background: #3b82f6; color: white; padding: 12px 20px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-print"></i> COMPROVANTE
                 </button>
                 <button class="btn-confirmar-entrega" onclick="confirmarEntregasMaterial(${turmaId})" 
-                        style="background: #00ff88; color: #001a2c; padding: 12px 30px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer;">
-                    CONFIRMAR ENTREGAS
+                        style="background: #00ff88; color: #001a2c; padding: 12px 30px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-check"></i> CONFIRMAR ENTREGAS
                 </button>
             </div>
         `;
         
+        // Inicializa os listeners para os checkboxes de "Selecionar Todos"
         configurarAcoesEmMassaMaterial(data.produtos, data.estoqueEscola);
 
     } catch (err) {
@@ -21738,43 +21771,54 @@ async function confirmarEntregasMaterial(turmaId) {
     const selecionados = document.querySelectorAll('.radio-aluno:checked');
     
     if (selecionados.length === 0) {
-        notificar('Selecione ao menos uma entrega para confirmar.', 'aviso');
+        notificar('Por favor, selecione ao menos uma entrega.', 'aviso');
         return;
     }
 
-    let sucessos = 0;
-    let falhas = 0;
+    // 1. Preparamos os dados para o registro em lote (O que faz a baixa no estoque e grava no banco)
+    const dadosEntrega = Array.from(selecionados).map(input => ({
+        aluno_id: input.dataset.alunoId,
+        produto_id: input.dataset.produtoId,
+        tipo: 'MATERIAL'
+    }));
 
-    for (const input of selecionados) {
-        const idEntrega = input.dataset.entregaId; // Aqui pegamos o ID que adicionamos no HTML
+    try {
+        // Chamada principal que você viu no Network (lote201)
+        const resLote = await fetch(`${API_URL}/escola/registrar-entrega-lote`, {
+            method: 'POST',
+            headers: { 
+                'Authorization': `Bearer ${TOKEN}`,
+                'Content-Type': 'application/json' 
+            },
+            body: JSON.stringify({ turma_id: turmaId, entregas: dadosEntrega })
+        });
 
-        // PROTEÇÃO: Se o ID for nulo ou string "null", não faz o fetch
-        if (!idEntrega || idEntrega === 'null' || idEntrega === 'undefined') {
-            console.error("Erro: ID de entrega não encontrado para o aluno", input.dataset.alunoId);
-            falhas++;
-            continue; 
+        if (!resLote.ok) throw new Error('Falha ao registrar entrega no estoque.');
+
+        // 2. Agora tratamos o PATCH individual (confirmar-recebimento2)
+        // Só fazemos a chamada se o ID existir. Se for null, o código pula e não dá erro no console.
+        for (const input of selecionados) {
+            const idEntrega = input.dataset.entregaId;
+
+            if (idEntrega && idEntrega !== 'null' && idEntrega !== 'undefined' && idEntrega !== '') {
+                // Só entra aqui se houver um ID válido para confirmar
+                await fetch(`${API_URL}/escola/confirmar-recebimento2/${idEntrega}`, {
+                    method: 'PATCH',
+                    headers: { 'Authorization': `Bearer ${TOKEN}` }
+                }).catch(e => console.warn("Aviso: Falha na confirmação individual, mas o lote foi processado."));
+            }
         }
 
-        try {
-            const res = await fetch(`${API_URL}/escola/confirmar-recebimento2/${idEntrega}`, {
-                method: 'PATCH',
-                headers: { 
-                    'Authorization': `Bearer ${TOKEN}`,
-                    'Content-Type': 'application/json'
-                }
-            });
+        // Se o lote deu certo, damos a mensagem de Sucesso!
+        notificar(`SUCESSO! Foram registradas ${selecionados.length} entrega(s) com sucesso.`, 'sucesso');
+        
+        // Recarrega a tela para mostrar os checks verdes
+        renderizarMatrizEntregaMaterial(turmaId);
 
-            if (res.ok) sucessos++;
-            else falhas++;
-
-        } catch (err) {
-            console.error(err);
-            falhas++;
-        }
+    } catch (err) {
+        console.error("Erro na entrega:", err);
+        notificar(`Erro: ${err.message}`, 'erro');
     }
-
-    notificar(`Sucesso: ${sucessos} | Falhas: ${falhas}`, sucessos > 0 ? 'sucesso' : 'erro');
-    renderizarMatrizEntregaMaterial(turmaId); // Recarrega a tela
 }
 
 function telaRelatoriosGeral() {

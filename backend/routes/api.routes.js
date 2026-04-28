@@ -1563,10 +1563,7 @@ router.post('/pedidos/estoque/finalizar-remessa', verificarToken, async (req, re
         for (const item of itens) {
             const { produto_id, quantidade_enviada } = item;
 
-            // 🟢 CORREÇÃO CRÍTICA AQUI:
-            // Sincronizando com a Entrada: Se for MATERIAL (sem tamanho), usamos 'N/A'
-            // Se o front enviar 'Único', vazio ou undefined, normalizamos para 'N/A'
-            const tamanho = (item.tamanho === undefined || item.tamanho === '' || item.tamanho === 'Único' || item.tamanho === '10')
+            const tamanho = (item.tamanho === undefined || item.tamanho === null || item.tamanho === '' || item.tamanho === 'Único')
                 ? 'N/A'
                 : item.tamanho;
 

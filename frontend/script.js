@@ -6912,22 +6912,20 @@ async function abrirTelaConferenciaItens(pedidoId) {
 
 async function salvarRemessa(pedidoId) {
     const inputs = document.querySelectorAll('.qtd-envio');
-
-    // ✅ Map para evitar duplicatas (mesmo produto/tamanho aparecendo 2x no DOM)
     const itensMap = new Map();
 
     inputs.forEach(input => {
         const qtd = parseInt(input.value) || 0;
         if (qtd > 0) {
-            const tamanhoRaw = input.dataset.tam;
-            const tamanho = (tamanhoRaw === 'null' || tamanhoRaw === '') 
+            // AJUSTE AQUI: Tenta ler 'tamanho' ou 'tam'
+            const tamanhoRaw = input.dataset.tamanho || input.dataset.tam;
+            const tamanho = (tamanhoRaw === 'null' || tamanhoRaw === '' || !tamanhoRaw) 
                 ? null 
                 : tamanhoRaw;
 
             const chave = `${input.dataset.prodId}_${tamanho ?? 'NULL'}`;
 
             if (itensMap.has(chave)) {
-                // Soma se vier duplicado no DOM
                 itensMap.get(chave).quantidade_enviada += qtd;
             } else {
                 itensMap.set(chave, {
@@ -6938,7 +6936,7 @@ async function salvarRemessa(pedidoId) {
             }
         }
     });
-
+    
     if (itensMap.size === 0) {
         return notificar(
             "Informe a quantidade de pelo menos um item para a remessa.", 
@@ -18318,7 +18316,7 @@ async function abrirTelaSaidaPedido() {
             <div class="glass-panel" style="padding: 20px; margin-bottom: 20px; border-radius: 15px;">
                 <label style="color: #00d4ff; font-weight: bold; display: block; margin-bottom: 10px;">📍 SELECIONE O LOCAL DESTINO:</label>
                 <select id="select-local-destino" style="width: 100%; padding: 12px; background: rgba(0,0,0,0.4); color: white; border: 1px solid #00d4ff; border-radius: 8px;">
-                    <option value="">Carregando locais...</option>
+                    <option value="">-- SELECIONE A UNIDADE --</option>
                 </select>
             </div>
         </div>
@@ -18339,7 +18337,6 @@ async function abrirTelaSaidaPedido() {
         const resLocais = await fetch(`${API_URL}/locais`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
         const locais = await resLocais.json();
         const selectDestino = document.getElementById('select-local-destino');
-        
         selectDestino.innerHTML = '<option value="">-- SELECIONE A UNIDADE --</option>' + 
             locais.filter(l => l.id !== 37 && l.id !== 50)
                   .map(l => `<option value="${l.id}">${l.nome}</option>`).join('');
@@ -18349,21 +18346,17 @@ async function abrirTelaSaidaPedido() {
         const listaHtml = document.getElementById('lista-saida-produtos');
         listaHtml.innerHTML = '';
 
-        // Padronização da Grade (A Ordem que você mandou)
         const ordemDesejada = ['02', '04', '06', '08', '10', '12', '14', '16', 'PP', 'P', 'M', 'G', 'GG', 'EGG'];
 
         produtos.forEach(p => {
             const isUniforme = p.tipo === 'UNIFORMES';
             const isTenis = p.nome.toUpperCase().includes('TENIS');
-            
             let gradeFinal = p.grade || [];
 
             if (isUniforme && !isTenis && gradeFinal.length > 0) {
                 gradeFinal = [...gradeFinal].sort((a, b) => {
-                    // Função interna para normalizar o que vem do banco para o seu padrão
                     const formatar = (t) => {
                         let s = String(t).toUpperCase().trim();
-                        // Se for número de 1 a 9, vira 01, 02... Se for P, M, etc, mantém.
                         return (s.length === 1 && !isNaN(s)) ? s.padStart(2, '0') : s;
                     };
                     return ordemDesejada.indexOf(formatar(a.tamanho)) - ordemDesejada.indexOf(formatar(b.tamanho));
@@ -18371,63 +18364,48 @@ async function abrirTelaSaidaPedido() {
             }
 
             listaHtml.innerHTML += `
-                <div class="card-saida glass-panel" id="card-saida-${p.id}" 
-                     style="background: rgba(255,255,255,0.05); margin-bottom: 12px; padding: 18px; border-radius: 15px; color: white; border: 1px solid rgba(255,255,255,0.1);">
-                    
+                <div class="card-saida glass-panel" style="background: rgba(255,255,255,0.05); margin-bottom: 12px; padding: 18px; border-radius: 15px; color: white; border: 1px solid rgba(255,255,255,0.1);">
                     <div style="display: flex; justify-content: space-between; align-items: center;" 
                          ${isUniforme ? `onclick="toggleGradeSaida(${p.id})"` : ''}>
                         <div style="cursor: ${isUniforme ? 'pointer' : 'default'}">
-                            <span style="font-size: 0.7rem; background: #00d4ff; padding: 3px 8px; border-radius: 5px; color: #001a2c; font-weight: bold;">
-                                ${p.tipo}
-                            </span>
+                            <span style="font-size: 0.7rem; background: #00d4ff; padding: 3px 8px; border-radius: 5px; color: #001a2c; font-weight: bold;">${p.tipo}</span>
                             <p style="margin: 8px 0 0 0; font-weight: bold; font-size: 1.1rem;">${p.nome}</p>
                             <small style="color: #aaa;">Estoque: <strong style="color: #00d4ff;">${p.quantidade_estoque}</strong></small>
                         </div>
-
                         ${!isUniforme ? `
                             <div style="text-align: right;">
-                                <small style="display: block; font-size: 0.50rem; opacity: 0.6; margin-bottom: 5px;">QTD SAÍDA</small>
                                 <input type="number" class="input-saida-qtd" data-id="${p.id}" data-tipo="MATERIAL" data-max="${p.quantidade_estoque}"
                                        onchange="validarEstoqueMax(this)"
-                                       style="width: 80px; background: rgba(0,0,0,0.3); border: 1px solid #ff4d4d; color: white; padding: 8px; border-radius: 8px; text-align: center;"
-                                       placeholder="0" min="0">
+                                       style="width: 80px; background: rgba(0,0,0,0.3); border: 1px solid #ff4d4d; color: white; padding: 8px; border-radius: 8px; text-align: center;" placeholder="0">
                             </div>
                         ` : `
-                            <div style="text-align: right; cursor: pointer;">
+                            <div style="text-align: right;">
                                 <span id="total-uniforme-${p.id}" style="font-size: 1.2rem; font-weight: bold; color: #ff4d4d; display: block;">0</span>
                                 <small style="color: #00d4ff;">Grade 👕 <i class="fas fa-chevron-down"></i></small>
                             </div>
                         `}
                     </div>
-
                     ${isUniforme ? `
-                        <div id="grade-saida-${p.id}" class="grade-expansivel" style="display:none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);">
+                        <div id="grade-saida-${p.id}" style="display:none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);">
                             <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px;">
                                 ${gradeFinal.map(g => {
-                                    // Formatação visual idêntica ao que você pediu
-                                    const s = String(g.tamanho).toUpperCase().trim();
-                                    const visual = (s.length === 1 && !isNaN(s)) ? s.padStart(2, '0') : s;
-                                    
+                                    const visual = (String(g.tamanho).length === 1 && !isNaN(g.tamanho)) ? String(g.tamanho).padStart(2, '0') : g.tamanho;
                                     return `
                                     <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; text-align: center;">
                                         <small style="display: block; font-size: 0.50rem; color: #00d4ff;">${visual}</small>
-                                        <small style="display: block; font-size: 0.50rem; color: #777;">Saldo: ${g.quantidade}</small>
                                         <input type="number" class="input-saida-qtd" 
                                                data-id="${p.id}" data-tipo="UNIFORMES" data-tamanho="${visual}" data-max="${g.quantidade}"
                                                oninput="atualizarTotalGradeSaida(${p.id})" onchange="validarEstoqueMax(this)"
-                                               style="width: 100%; background: transparent; border: none; border-bottom: 1px solid #ff4d4d; color: white; text-align: center;"
-                                               placeholder="0" min="0">
-                                    </div>
-                                `;}).join('')}
+                                               style="width: 100%; background: transparent; border: none; border-bottom: 1px solid #ff4d4d; color: white; text-align: center;" placeholder="0">
+                                    </div>`;
+                                }).join('')}
                             </div>
                         </div>
                     ` : ''}
                 </div>
             `;
         });
-    } catch (err) {
-        console.error("Erro:", err);
-    }
+    } catch (err) { console.error(err); }
 }
 
 // Funções Auxiliares de UI

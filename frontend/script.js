@@ -582,7 +582,7 @@ function renderSubmenuUniformesKits() {
     const botoes = `
         <button class="btn-grande btn-vidro" onclick="telaEscolaConsultaEstoque()"><i>📦</i><span>MEU ESTOQUE</span></button>
         <button class="btn-grande btn-vidro" onclick="telaSolicitarUniforme()"><i>📝</i><span>SOLICITAR</span></button>
-        <button class="btn-grande btn-vidro" onclick="renderizarMatrizEntregaUniforme()"><i>👕</i><span>ENTREGA DE UNIFORMES</span></button>
+        <button class="btn-grande btn-vidro" onclick="telaEntregaUniformes()"><i>👕</i><span>ENTREGA DE UNIFORMES</span></button>
         <button class="btn-grande btn-vidro" onclick="telaEntregaMaterial()"><i>✏️</i><span>ENTREGA DE KITS</span></button>
         <button class="btn-grande btn-vidro" onclick="telaDevolucaoUniforme()"><i>🔄</i><span>DEVOLVER</span></button>
     `;
@@ -20454,7 +20454,7 @@ async function telaEntregaUniformes() {
                     
                     <button id="btn-iniciar-entrega" class="btn-confirmar-entrada" 
                             style="width: 100%; margin-top: 25px; background: #00d4ff; color: #001a2c; display: none;"
-                            onclick="carregarGradeDeEntrega()">
+                            onclick="renderizarMatrizEntregaUniforme()">
                         <i class="fas fa-arrow-right"></i> PROSSEGUIR PARA A ENTREGA
                     </button>
                 </div>

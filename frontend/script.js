@@ -424,6 +424,7 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="telaSolicitarServicoImpressora('recarga')"><i>🧪</i><span>SOLICITAR RECARGA</span></button>
             <button class="btn-grande btn-vidro" onclick="telaSolicitarManutencaoPC('')"><i>💻</i><span>MANUTENÇÃO INFORMÁTICA</span></button>
             <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()"><i>🗝️</i><span>ALTERAR SENHA</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaGestaoProfessores()"><i>👥</i><span>CADASTRO DE PROFESSORES</span></button>
         `;
     }
     // --- PERFIL: DTI ---
@@ -472,7 +473,7 @@ async function carregarDashboard() {
                 ${contagemSolicitacoes > 0 ? `<div class="badge-alerta-entrega">${contagemSolicitacoes}</div>` : ''}
                 <i>📝</i><span>PEDIDOS</span>
             </button>
-
+            <button class="btn-grande btn-vidro" onclick="telaGestaoProfessores()"><i>👥</i><span>CADASTRO DE PROFESSORES</span></button>
             <button class="btn-grande btn-vidro" onclick="carregarConsultaEstoque()"><i>🔎</i><span>CONSULTA ESTOQUE</span></button>
             <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('RELATÓRIOS', getBotoesSubmenu('admin', 'RELATÓRIOS'))"><i>📊</i><span>RELATÓRIOS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()"><i>🗝️</i><span>ALTERAR SENHA</span></button>
@@ -574,6 +575,7 @@ function renderSubmenuCadastrosEscola() {
     const botoes = `
         <button class="btn-grande btn-vidro" onclick="telaEscolaGestaoTurmas()"><i>🏫</i><span>CADASTRO DE TURMAS</span></button>
         <button class="btn-grande btn-vidro" onclick="telaEscolaGestaoAlunos()"><i>👥</i><span>CADASTRO DE ALUNOS</span></button>
+        <button class="btn-grande btn-vidro" onclick="telaGestaoProfessores()"><i>👥</i><span>CADASTRO DE PROFESSORES</span></button>
     `;
     abrirSubmenuVitrificado('CADASTROS', botoes);
 }
@@ -593,6 +595,8 @@ function renderSubmenuRelatoriosEscola() {
     const botoes = `
         <button class="btn-grande btn-vidro" onclick="gerarRelatorioStatusTurmasEmTelaCheia()"><i>📊</i><span>ENTREGAS POR TURMA</span></button>
         <button class="btn-grande btn-vidro" onclick="telaRelatoriosGeral()"><i>📈</i><span>ENTREGAS DETALHADAS</span></button>
+        <button class="btn-grande btn-vidro" onclick="telaRelatorioProfessores()"><i>👥</i><span>ENTREGAS DETALHADAS</span></button>
+        <button class="btn-grande btn-vidro" onclick="telaRelatorioPendenciaKit6()"><i>🚨</i><span>PROFESSORES QUE FALTAM RECEBER O KIT 6</span></button>
     `;
     abrirSubmenuVitrificado('RELATÓRIOS', botoes);
 }
@@ -624,6 +628,8 @@ function getBotoesSubmenu(perfil, titulo, contagem = 0, contagemProntos = 0) {
             <button class="btn-grande btn-vidro" onclick="telaRelatoriosFaltantes()"><i>👕</i><span>ALUNOS QUE FALTAM RECEBER UNIFORME/KIT</span></button>            
             <button class="btn-grande btn-vidro" onclick="telaProgressoGeralEscolas()"><i>📐</i><span>ENTREGA DE UNIFORMES E KITS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaRelatorioConsolidado()"><i>🚨</i><span>LISTAGEM RECEBIDO/FALTA RECEBER</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioProfessores()"><i>👥</i><span>ENTREGAS DETALHADAS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioPendenciaKit6()"><i>🚨</i><span>PROFESSORES QUE FALTAM RECEBER O KIT 6</span></button>
         `;
     }
 
@@ -646,6 +652,8 @@ function getBotoesSubmenu(perfil, titulo, contagem = 0, contagemProntos = 0) {
             <button class="btn-grande btn-vidro" onclick="telaRelatoriosFaltantes()"><i>👕</i><span>ALUNOS QUE FALTAM RECEBER UNIFORME/KIT</span></button>            
             <button class="btn-grande btn-vidro" onclick="telaProgressoGeralEscolas()"><i>📐</i><span>ENTREGA DE UNIFORMES E KITS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaRelatorioConsolidado()"><i>🚨</i><span>LISTAGEM RECEBIDO/FALTA RECEBER</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioProfessores()"><i>👥</i><span>ENTREGAS DETALHADAS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioPendenciaKit6()"><i>🚨</i><span>PROFESSORES QUE FALTAM RECEBER O KIT 6</span></button>
         `;
     }
     return '';
@@ -22673,6 +22681,526 @@ async function gerarPdfFaltantes(localId, tipo) {
         console.error("Erro ao gerar PDF:", err);
         notificar(`Erro: ${err.message}`, "erro");
     }
+}
+
+// --- 1. TELA PRINCIPAL DE PROFESSORES ---
+async function telaGestaoProfessores() {
+    const app = document.getElementById('app-content');
+    app.innerHTML = '<div style="color:white; padding:20px;">Buscando docentes...</div>';
+
+    try {
+        const res = await fetch(`${API_URL}/professores`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const professores = await res.json();
+
+        app.innerHTML = `
+            <style>
+                .prof-wrapper { background: #fff; height: 100vh; display: flex; flex-direction: column; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+                .prof-header { padding: 15px 20px; background: #2c3e50; color: white; display: flex; justify-content: space-between; align-items: center; }
+                .prof-content { flex: 1; overflow: auto; padding: 10px; }
+                .prof-table { width: 100%; border-collapse: collapse; background: white; color: #333; }
+                .prof-table th, .prof-table td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+                .prof-table thead th { background: #f8f9fa; position: sticky; top: 0; z-index: 10; color: #333; }
+                .btn-add { background: #27ae60; color: white; border: none; padding: 10px 20px; font-weight: bold; cursor: pointer; border-radius: 4px; }
+                .btn-kit { background: #e67e22; color: white; border: none; padding: 6px 12px; cursor: pointer; font-weight: bold; border-radius: 4px; }
+                .btn-kit:disabled { background: #bdc3c7; cursor: not-allowed; }
+                .btn-edit { background: #3498db; color: white; border: none; padding: 6px 12px; cursor: pointer; border-radius: 4px; margin-right: 5px; }
+                .btn-status { background: #95a5a6; color: white; border: none; padding: 6px 12px; cursor: pointer; border-radius: 4px; }
+                .status-ativo { color: #27ae60; font-weight: bold; }
+                .status-inativo { color: #e74c3c; font-weight: bold; }
+            </style>
+
+            <div class="prof-wrapper">
+                <div class="prof-header">
+                    <div style="display: flex; align-items: center;">
+                        <button onclick="carregarDashboard()" style="background:none; border:1px solid #fff; color:white; padding:5px 10px; cursor:pointer; margin-right:15px;">← VOLTAR</button>
+                        <h2 style="margin:0;">GESTÃO DE PROFESSORES</h2>
+                    </div>
+                    <button class="btn-add" onclick="modalProfessor()">+ NOVO PROFESSOR</button>
+                </div>
+
+                <div class="prof-content">
+                    <table class="prof-table">
+                        <thead>
+                            <tr>
+                                <th>NOME DO PROFESSOR</th>
+                                <th style="width: 100px; text-align:center;">STATUS</th>
+                                <th style="width: 180px; text-align:center;">ENTREGA (KIT 6)</th>
+                                <th style="width: 200px; text-align:center;">AÇÕES</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${professores.map(p => `
+                                <tr>
+                                    <td style="font-weight: 500;">${p.nome.toUpperCase()}</td>
+                                    <td style="text-align:center;" class="${p.status === 'ATIVO' ? 'status-ativo' : 'status-inativo'}">
+                                        ${p.status}
+                                    </td>
+                                    <td style="text-align:center;">
+                                        ${p.ja_recebeu ? 
+                                            '<span style="color:#27ae60; font-weight:bold;">✓ ENTREGUE</span>' : 
+                                            `<button class="btn-kit" ${p.status !== 'ATIVO' ? 'disabled' : ''} 
+                                                onclick="entregarKitProfessor(${p.id}, '${p.nome}')">ENTREGAR KIT</button>`
+                                        }
+                                    </td>
+                                    <td style="text-align:center;">
+                                        <button class="btn-edit" onclick="modalProfessor(${JSON.stringify(p).replace(/"/g, '&quot;')})">EDITAR</button>
+                                        <button class="btn-status" onclick="alternarStatusProfessor(${p.id}, '${p.status}')">
+                                            ${p.status === 'ATIVO' ? 'INATIVAR' : 'REATIVAR'}
+                                        </button>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+    } catch (err) {
+        notificar('Erro ao carregar lista de professores', 'erro');
+    }
+}
+
+// --- 2. MODAL CADASTRO/EDIÇÃO (SEM CPF E LOCAL_ID) ---
+function modalProfessor(dados = null) {
+    const titulo = dados ? 'EDITAR DOCENTE' : 'NOVO DOCENTE';
+    const nomeValor = dados ? dados.nome : '';
+
+    Swal.fire({
+        title: titulo,
+        html: `
+            <div style="text-align:left;">
+                <label style="font-weight:bold; color:#333;">Nome Completo:</label>
+                <input type="text" id="swal-prof-nome" class="swal2-input" value="${nomeValor}" placeholder="Nome sem abreviações">
+            </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: 'SALVAR',
+        cancelButtonText: 'CANCELAR',
+        preConfirm: () => {
+            const nome = document.getElementById('swal-prof-nome').value.trim();
+            if (!nome) return Swal.showValidationMessage('O nome é obrigatório');
+            return { nome };
+        }
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            try {
+                const metodo = dados ? 'PUT' : 'POST';
+                const url = dados ? `${API_URL}/professores/${dados.id}` : `${API_URL}/professores`;
+                
+                const res = await fetch(url, {
+                    method: metodo,
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+                    body: JSON.stringify(result.value)
+                });
+
+                if (!res.ok) {
+                    const erro = await res.json();
+                    throw new Error(erro.error || 'Erro ao processar');
+                }
+
+                notificar('Professor salvo com sucesso!', 'sucesso');
+                telaGestaoProfessores();
+            } catch (err) {
+                notificar(err.message, 'erro');
+            }
+        }
+    });
+}
+
+// --- 3. LOGICA DE ENTREGA KIT 6 ---
+async function entregarKitProfessor(id, nome) {
+    const confirmacao = await Swal.fire({
+        title: 'Confirmar Entrega?',
+        text: `Deseja registrar a entrega do KIT 6 para: ${nome}?`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#e67e22',
+        confirmButtonText: 'SIM, ENTREGAR',
+        cancelButtonText: 'NÃO'
+    });
+
+    if (confirmacao.isConfirmed) {
+        try {
+            const res = await fetch(`${API_URL}/entregas/professor`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+                body: JSON.stringify({ professorId: id })
+            });
+
+            if (!res.ok) {
+                const erro = await res.json();
+                throw new Error(erro.error || 'Erro na entrega');
+            }
+
+            notificar('KIT PROFESSOR ENTREGUE!', 'sucesso');
+            telaGestaoProfessores();
+        } catch (err) {
+            Swal.fire('Erro', err.message, 'error');
+        }
+    }
+}
+
+// --- 4. ALTERNAR STATUS ---
+async function alternarStatusProfessor(id, statusAtual) {
+    const novoStatus = statusAtual === 'ATIVO' ? 'INATIVO' : 'ATIVO';
+    try {
+        const res = await fetch(`${API_URL}/professores/${id}/status`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ status: novoStatus })
+        });
+        
+        if (!res.ok) throw new Error('Erro ao mudar status');
+        telaGestaoProfessores();
+    } catch (err) {
+        notificar(err.message, 'erro');
+    }
+}
+
+// --- 1. EXIBIÇÃO EM TELA ---
+async function telaRelatorioProfessores() {
+    const app = document.getElementById('app-content');
+    app.innerHTML = '<div style="color:white; padding:20px;">Carregando lista de professores ativos...</div>';
+
+    try {
+        const res = await fetch(`${API_URL}/relatorios/professores-ativos`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        
+        if (!res.ok) throw new Error('Erro ao buscar dados.');
+        const professores = await res.json();
+
+        // Guardamos os dados globalmente de forma temporária para o PDF acessar fácil
+        window.professoresParaPDF = professores;
+
+        app.innerHTML = `
+            <style>
+                .rel-wrapper { background: #fff; height: 100vh; display: flex; flex-direction: column; font-family: Arial, sans-serif; }
+                .rel-header { padding: 15px 20px; background: #2c3e50; color: white; display: flex; justify-content: space-between; align-items: center; }
+                .rel-content { flex: 1; overflow: auto; padding: 20px; }
+                .btn-pdf { background: #c0392b; color: white; border: none; padding: 10px 20px; font-weight: bold; cursor: pointer; border-radius: 4px; display: flex; align-items: center; gap: 8px; }
+                .btn-pdf:hover { background: #e74c3c; }
+                .rel-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+                .rel-table th, .rel-table td { border: 1px solid #ccc; padding: 10px; text-align: left; }
+                .rel-table th { background: #f4f4f4; color: #333; position: sticky; top: 0; }
+            </style>
+
+            <div class="rel-wrapper">
+                <div class="rel-header">
+                    <div style="display: flex; align-items: center;">
+                        <button onclick="carregarDashboard()" style="background:none; border:1px solid #fff; color:white; padding:5px 10px; cursor:pointer; margin-right:15px;">← VOLTAR</button>
+                        <h2 style="margin:0; font-size: 1.2rem;">PROFESSORES ATIVOS</h2>
+                    </div>
+                    <button class="btn-pdf" onclick="gerarPDFProfessores()">
+                        <i class="fas fa-file-pdf"></i> SALVAR EM PDF
+                    </button>
+                </div>
+
+                <div class="rel-content">
+                    <p style="color: #666; font-size: 14px; margin-bottom: 10px;">Total de registros: <b>${professores.length}</b></p>
+                    <table class="rel-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 150px;">MATRÍCULA</th>
+                                <th>NOME DO DOCENTE</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${professores.map(p => `
+                                <tr>
+                                    <td style="font-family: monospace; font-weight: bold; color: #555;">${p.matric}</td>
+                                    <td>${p.nome}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+    } catch (err) {
+        notificar(err.message, 'erro');
+    }
+}
+
+// --- 2. GERAÇÃO DO PDF (LAYOUT ESPECÍFICO) ---
+function gerarPDFProfessores() {
+    const professores = window.professoresParaPDF || [];
+    if (professores.length === 0) {
+        notificar('Não há dados para gerar o PDF.', 'aviso');
+        return;
+    }
+
+    // Cria a estrutura HTML que será impressa/salva em PDF
+    const htmlPDF = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Listagem de Professores Ativos</title>
+            <style>
+                /* Configurações obrigatórias para a folha A4 com 1cm de margem */
+                @page { size: A4; margin: 1cm; }
+                
+                body { 
+                    font-family: Arial, sans-serif; 
+                    margin: 0; 
+                    padding: 0; 
+                    color: #000;
+                }
+                
+                /* Layout do Cabeçalho: Imagem + Textos na mesma altura */
+                .header-pdf { 
+                    display: flex; 
+                    align-items: center; 
+                    margin-bottom: 20px; 
+                }
+                
+                .header-pdf img { 
+                    height: 45px; /* Altura exata da imagem */
+                    margin-right: 15px; 
+                }
+                
+                .header-text { 
+                    display: flex; 
+                    flex-direction: column; 
+                    justify-content: space-between; 
+                    height: 45px; /* Força os textos a ocuparem a mesma altura da imagem */
+                }
+                
+                .header-text span { 
+                    font-size: 12px; 
+                    font-weight: bold; 
+                }
+                
+                /* Título centralizado e em negrito */
+                .title-pdf { 
+                    text-align: center; 
+                    font-weight: bold; 
+                    font-size: 16px; 
+                    margin-bottom: 20px; 
+                    margin-top: 10px;
+                }
+                
+                /* Tabela listrada para PDF */
+                table { 
+                    width: 100%; 
+                    border-collapse: collapse; 
+                    font-size: 12px; 
+                }
+                
+                th, td { 
+                    border: 1px solid #000; 
+                    padding: 6px 8px; 
+                    text-align: left; 
+                }
+                
+                th { background-color: #eee; font-weight: bold; }
+                
+                /* Impede que linhas quebrem de uma página para outra no meio do texto */
+                tr { page-break-inside: avoid; }
+            </style>
+        </head>
+        <body>
+            <div class="header-pdf">
+                <img src="braque.png" alt="Brasão Queimados">
+                <div class="header-text">
+                    <span>PREFEITURA MUNICIPAL DE QUEIMADOS</span>
+                    <span>SECRETARIA MUNICIPAL DE EDUCAÇÃO</span>
+                </div>
+            </div>
+
+            <div class="title-pdf">LISTAGEM DOS PROFESSORES ATIVOS</div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 120px;">MATRÍCULA</th>
+                        <th>NOME DO PROFESSOR</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${professores.map(p => `
+                        <tr>
+                            <td>${p.matric || '---'}</td>
+                            <td>${p.nome.toUpperCase()}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+            
+            <script>
+                // Dispara a janela de impressão assim que o conteúdo carrega
+                window.onload = () => {
+                    window.print();
+                    // Opcional: fecha a janela após a impressão (alguns navegadores bloqueiam se não for comentado)
+                    setTimeout(() => { window.close(); }, 500); 
+                }
+            </script>
+        </body>
+        </html>
+    `;
+
+    // Abre uma nova janela invisível/pop-up para renderizar e imprimir o PDF
+    const printWindow = window.open('', '_blank', 'width=800,height=600');
+    if (!printWindow) {
+        alert('O navegador bloqueou a abertura do PDF. Permita os pop-ups para este site.');
+        return;
+    }
+    
+    printWindow.document.open();
+    printWindow.document.write(htmlPDF);
+    printWindow.document.close();
+}
+
+// --- 1. EXIBIÇÃO DA LISTA DE PENDÊNCIAS ---
+async function telaRelatorioPendenciaKit6() {
+    const app = document.getElementById('app-content');
+    app.innerHTML = '<div style="color:white; padding:20px;">Localizando pendências de entrega...</div>';
+
+    try {
+        const res = await fetch(`${API_URL}/relatorios/pendencia-kit-professores`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        
+        if (!res.ok) throw new Error('Erro ao buscar pendências.');
+        const pendentes = await res.json();
+
+        // Armazena para o PDF
+        window.professoresPendentesPDF = pendentes;
+
+        app.innerHTML = `
+            <style>
+                .pend-wrapper { background: #fff; height: 100vh; display: flex; flex-direction: column; font-family: sans-serif; }
+                .pend-header { padding: 15px 20px; background: #c0392b; color: white; display: flex; justify-content: space-between; align-items: center; }
+                .pend-content { flex: 1; overflow: auto; padding: 20px; }
+                .btn-pdf-pend { background: #27ae60; color: white; border: none; padding: 10px 20px; font-weight: bold; cursor: pointer; border-radius: 4px; display: flex; align-items: center; gap: 8px; }
+                .tab-pend { width: 100%; border-collapse: collapse; margin-top: 15px; background: #fff; }
+                .tab-pend th, .tab-pend td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+                .tab-pend th { background: #f2f2f2; position: sticky; top: 0; }
+            </style>
+
+            <div class="pend-wrapper">
+                <div class="pend-header">
+                    <div style="display: flex; align-items: center;">
+                        <button onclick="carregarDashboard()" style="background:none; border:1px solid #fff; color:white; padding:5px 10px; cursor:pointer; margin-right:15px;">← VOLTAR</button>
+                        <h2 style="margin:0; font-size: 1.1rem;">PROFESSORES SEM KIT (PENDENTES)</h2>
+                    </div>
+                    <button class="btn-pdf-pend" onclick="gerarPDFPendenciaKit6()">
+                        <i class="fas fa-file-pdf"></i> GERAR LISTA DE ENTREGA
+                    </button>
+                </div>
+
+                <div class="pend-content">
+                    <div style="background: #fff3cd; color: #856404; padding: 10px; border-radius: 4px; margin-bottom: 20px; border: 1px solid #ffeeba;">
+                        Atenção: Esta lista exibe apenas professores <b>ATIVOS</b> que não possuem registro de recebimento do Kit ID 6.
+                    </div>
+                    <p>Total pendente: <b>${pendentes.length}</b></p>
+                    <table class="tab-pend">
+                        <thead>
+                            <tr>
+                                <th style="width: 150px;">MATRÍCULA</th>
+                                <th>NOME DO PROFESSOR</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${pendentes.map(p => `
+                                <tr>
+                                    <td style="font-family: monospace; font-weight: bold;">${p.matric}</td>
+                                    <td>${p.nome.toUpperCase()}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+    } catch (err) {
+        notificar(err.message, 'erro');
+    }
+}
+
+// --- 2. GERAÇÃO DO PDF DE PENDÊNCIA ---
+function gerarPDFPendenciaKit6() {
+    const lista = window.professoresPendentesPDF || [];
+    if (lista.length === 0) {
+        notificar('Não há pendências para listar.', 'aviso');
+        return;
+    }
+
+    const htmlPDF = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Pendência de Entrega - Kit Professor</title>
+            <style>
+                @page { size: A4; margin: 1cm; }
+                body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
+                
+                .header-pdf { display: flex; align-items: center; margin-bottom: 20px; }
+                .header-pdf img { height: 45px; margin-right: 15px; }
+                .header-text { display: flex; flex-direction: column; justify-content: space-between; height: 45px; }
+                .header-text span { font-size: 12px; font-weight: bold; }
+                
+                .title-pdf { 
+                    text-align: center; 
+                    font-weight: bold; 
+                    font-size: 14px; 
+                    margin-bottom: 20px; 
+                    text-decoration: underline;
+                }
+                
+                table { width: 100%; border-collapse: collapse; font-size: 11px; }
+                th, td { border: 1px solid #000; padding: 8px; text-align: left; }
+                th { background-color: #eee; }
+                
+                .assinatura { margin-top: 50px; text-align: center; font-size: 10px; }
+            </style>
+        </head>
+        <body>
+            <div class="header-pdf">
+                <img src="braque.png" alt="Logo">
+                <div class="header-text">
+                    <span>PREFEITURA MUNICIPAL DE QUEIMADOS</span>
+                    <span>SECRETARIA MUNICIPAL DE EDUCAÇÃO</span>
+                </div>
+            </div>
+
+            <div class="title-pdf">RELATÓRIO DE PROFESSORES PENDENTES DE RETIRADA (KIT ID 6)</div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 100px;">MATRÍCULA</th>
+                        <th>NOME DO DOCENTE</th>
+                        <th style="width: 200px;">ASSINATURA DE RECEBIMENTO</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${lista.map(p => `
+                        <tr>
+                            <td>${p.matric}</td>
+                            <td>${p.nome.toUpperCase()}</td>
+                            <td></td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+
+            <div class="assinatura">
+                <p>Relatório gerado em: ${new Date().toLocaleString('pt-BR')}</p>
+            </div>
+            
+            <script>
+                window.onload = () => { window.print(); setTimeout(() => { window.close(); }, 500); }
+            </script>
+        </body>
+        </html>
+    `;
+
+    const win = window.open('', '_blank');
+    win.document.write(htmlPDF);
+    win.document.close();
 }
 
 window.telaVisualizarEstoque = telaVisualizarEstoque;

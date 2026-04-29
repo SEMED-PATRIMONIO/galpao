@@ -21598,7 +21598,6 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
                     </thead>
                     <tbody>
                         ${data.alunos.map(aluno => {
-                            // Verifica se o aluno já recebeu algum item de material
                             const jaEntregue = aluno.status === 'entregue';
                             const dataFormatada = (jaEntregue && aluno.entregaInfo && aluno.entregaInfo.data_entrega)
                                 ? new Date(aluno.entregaInfo.data_entrega).toLocaleDateString('pt-BR') 
@@ -21608,8 +21607,6 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
                                 <tr id="aluno-row-${aluno.id}">
                                     <td class="col-aluno" title="${aluno.nome}">${aluno.nome}</td>
                                     ${data.produtos.map(produto => {
-                                        
-                                        // Se este aluno específico já recebeu este produto específico
                                         if (jaEntregue && aluno.entregaInfo && aluno.entregaInfo.produto_id === produto.id) {
                                             return `
                                                 <td class="col-prod-mat celula-entregue">
@@ -21618,13 +21615,10 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
                                                 </td>`;
                                         } 
                                         
-                                        // Se o aluno já recebeu OUTRO produto (bloqueia as outras células da linha se sua lógica for de 1 kit por aluno)
-                                        // Ou apenas renderiza o rádio se estiver disponível
                                         if (jaEntregue) {
                                             return `<td class="col-prod-mat celula-bloqueada"></td>`;
                                         }
 
-                                        // Caso padrão: rádio disponível para seleção
                                         return `
                                             <td class="col-prod-mat celula-radio">
                                                 <input type="radio" 
@@ -21632,6 +21626,8 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
                                                        class="radio-aluno" 
                                                        data-aluno-id="${aluno.id}" 
                                                        data-produto-id="${produto.id}" 
+                                                       data-tipo="MATERIAL"
+                                                       data-tamanho="N/A"
                                                        data-entrega-id="${(aluno.entregaInfo && aluno.entregaInfo.id) ? aluno.entregaInfo.id : ''}"
                                                        id="al${aluno.id}-pr${produto.id}">
                                                 <label for="al${aluno.id}-pr${produto.id}"></label>
@@ -21655,7 +21651,6 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
             </div>
         `;
         
-        // Inicializa os listeners para os checkboxes de "Selecionar Todos"
         configurarAcoesEmMassaMaterial(data.produtos, data.estoqueEscola);
 
     } catch (err) {
@@ -21775,15 +21770,18 @@ async function confirmarEntregasMaterial(turmaId) {
         return;
     }
 
-    // 1. Preparamos os dados para o registro em lote (O que faz a baixa no estoque e grava no banco)
+    // 1. MAPEAMENTO DINÂMICO: Pegamos os dados direto do dataset do rádio.
+    // Isso garante que se for UNIFORME, leve o tamanho (02, P, M...),
+    // e se for MATERIAL, leve 'N/A', sem quebrar um ao outro.
     const dadosEntrega = Array.from(selecionados).map(input => ({
         aluno_id: input.dataset.alunoId,
         produto_id: input.dataset.produtoId,
-        tipo: 'MATERIAL'
+        tipo: input.dataset.tipo || 'MATERIAL', // Pega do HTML
+        tamanho: input.dataset.tamanho || 'N/A'  // Pega o tamanho real ou N/A
     }));
 
     try {
-        // Chamada principal que você viu no Network (lote201)
+        // Chamada principal para registro em lote e baixa no estoque
         const resLote = await fetch(`${API_URL}/escola/registrar-entrega-lote`, {
             method: 'POST',
             headers: { 
@@ -21793,15 +21791,18 @@ async function confirmarEntregasMaterial(turmaId) {
             body: JSON.stringify({ turma_id: turmaId, entregas: dadosEntrega })
         });
 
-        if (!resLote.ok) throw new Error('Falha ao registrar entrega no estoque.');
+        if (!resLote.ok) {
+            const erroApi = await resLote.json();
+            throw new Error(erroApi.error || 'Falha ao registrar entrega no estoque.');
+        }
 
-        // 2. Agora tratamos o PATCH individual (confirmar-recebimento2)
-        // Só fazemos a chamada se o ID existir. Se for null, o código pula e não dá erro no console.
+        // 2. Tratamento do PATCH individual (confirmar-recebimento2)
+        // Evita o erro 500 no console verificando se o ID é válido antes de disparar.
         for (const input of selecionados) {
             const idEntrega = input.dataset.entregaId;
 
             if (idEntrega && idEntrega !== 'null' && idEntrega !== 'undefined' && idEntrega !== '') {
-                // Só entra aqui se houver um ID válido para confirmar
+                // Só dispara o PATCH se houver um ID de remessa/entrega prévio
                 await fetch(`${API_URL}/escola/confirmar-recebimento2/${idEntrega}`, {
                     method: 'PATCH',
                     headers: { 'Authorization': `Bearer ${TOKEN}` }
@@ -21809,10 +21810,10 @@ async function confirmarEntregasMaterial(turmaId) {
             }
         }
 
-        // Se o lote deu certo, damos a mensagem de Sucesso!
+        // Sucesso total no processo de baixa e registro
         notificar(`SUCESSO! Foram registradas ${selecionados.length} entrega(s) com sucesso.`, 'sucesso');
         
-        // Recarrega a tela para mostrar os checks verdes
+        // Recarrega a matriz para atualizar os status na tela
         renderizarMatrizEntregaMaterial(turmaId);
 
     } catch (err) {

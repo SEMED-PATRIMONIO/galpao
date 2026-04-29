@@ -9716,4 +9716,59 @@ router.get('/relatorios/escola/:localId/faltantes-material', verificarToken, asy
     }
 });
 
+// ROTA EXCLUSIVA PARA MATERIAIS
+router.post('/escola/registrar-entrega-material-lote', verificarToken, async (req, res) => {
+    const { turma_id, entregas } = req.body;
+    
+    // Pegue o ID do local/escola de acordo com sua autenticação (exemplo abaixo)
+    const local_id = req.user.local_id; 
+
+    // Inicia a conexão com o banco (ajuste 'pool' para sua variável de banco)
+    const client = await pool.connect(); 
+
+    try {
+        await client.query('BEGIN');
+
+        for (const entrega of entregas) {
+            // 1. O SEGREDO ESTÁ AQUI: Busca o estoque aceitando NULL, vazio ou 'N/A' no tamanho
+            const resEstoque = await client.query(`
+                SELECT id, quantidade 
+                FROM estoque_por_local 
+                WHERE local_id = $1 AND produto_id = $2 
+                AND (tamanho IS NULL OR tamanho = '' OR tamanho = 'N/A')
+                FOR UPDATE
+            `, [local_id, entrega.produto_id]);
+
+            if (resEstoque.rows.length === 0 || resEstoque.rows[0].quantidade <= 0) {
+                throw new Error(`Estoque insuficiente para o produto ID ${entrega.produto_id}`);
+            }
+
+            const estoqueId = resEstoque.rows[0].id;
+
+            // 2. Realiza a baixa do estoque fisicamente
+            await client.query(`
+                UPDATE estoque_por_local 
+                SET quantidade = quantidade - 1 
+                WHERE id = $1
+            `, [estoqueId]);
+
+            // 3. Registra na tabela de entregas dos alunos (AJUSTE para o nome exato da sua tabela/colunas)
+            await client.query(`
+                INSERT INTO entregas_alunos (aluno_id, produto_id, tipo, data_entrega) 
+                VALUES ($1, $2, 'MATERIAL', NOW())
+            `, [entrega.aluno_id, entrega.produto_id]);
+        }
+
+        await client.query('COMMIT');
+        res.status(200).json({ success: true, message: 'Baixa de materiais realizada com sucesso.' });
+
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error(error);
+        res.status(400).json({ error: error.message });
+    } finally {
+        client.release();
+    }
+});
+
 module.exports = router;

@@ -21781,50 +21781,42 @@ async function confirmarEntregasMaterial(turmaId) {
     const selecionados = document.querySelectorAll('.radio-aluno:checked');
     
     if (selecionados.length === 0) {
-        notificar('Selecione ao menos uma entrega.', 'aviso');
+        notificar('Por favor, selecione ao menos uma entrega.', 'aviso');
         return;
     }
 
-    // Monta o lote pegando os dados do HTML (dataset)
+    // Pega os dados dos rádios (sem tamanho, pois a rota saberá que é material)
     const entregas = Array.from(selecionados).map(input => ({
         aluno_id: input.dataset.alunoId,
-        produto_id: input.dataset.produtoId,
-        tipo: input.dataset.tipo,      // Pega MATERIAL ou UNIFORME
-        tamanho: input.dataset.tamanho // Pega N/A ou o tamanho real (P, M, G, 02...)
+        produto_id: input.dataset.produtoId
     }));
 
     try {
-        // Passo 1: Registrar o lote (Baixa no estoque)
-        const resLote = await fetch(`${API_URL}/escola/registrar-entrega-lote`, {
+        // CHAMA A ROTA EXCLUSIVA DE MATERIAL
+        const res = await fetch(`${API_URL}/escola/registrar-entrega-material-lote`, {
             method: 'POST',
-            headers: { 'Authorization': `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+            headers: { 
+                'Authorization': `Bearer ${TOKEN}`,
+                'Content-Type': 'application/json' 
+            },
             body: JSON.stringify({ turma_id: turmaId, entregas: entregas })
         });
 
-        if (!resLote.ok) {
-            const erro = await resLote.json();
-            throw new Error(erro.error || 'Erro ao registrar no estoque.');
+        const resultado = await res.json();
+
+        if (!res.ok) {
+            throw new Error(resultado.error || 'Falha ao processar baixa no estoque.');
         }
 
-        // Passo 2: Confirmar remessas individuais (PATCH)
-        // Executamos sem 'await' rigoroso para que um erro aqui não anule o sucesso do estoque
-        for (const input of selecionados) {
-            const id = input.dataset.entregaId;
-            if (id && id !== 'null' && id !== '') {
-                fetch(`${API_URL}/escola/confirmar-recebimento2/${id}`, {
-                    method: 'PATCH',
-                    headers: { 'Authorization': `Bearer ${TOKEN}` }
-                }).catch(() => console.warn("Confirmação individual falhou, mas o lote foi processado."));
-            }
-        }
-
-        // Se o código chegou aqui, o POST (Lote) funcionou!
-        notificar(`SUCESSO! ${entregas.length} entrega(s) registradas com baixa no estoque.`, 'sucesso');
+        // Sucesso garantido e sem patch individual para dar erro de innerText
+        notificar(`SUCESSO! ${entregas.length} entrega(s) de material confirmadas.`, 'sucesso');
+        
+        // Recarrega a tela
         renderizarMatrizEntregaMaterial(turmaId);
 
     } catch (err) {
-        console.error(err);
-        notificar(err.message, 'erro');
+        console.error("Erro na entrega de material:", err);
+        notificar(`ERRO: ${err.message}`, 'erro');
     }
 }
 

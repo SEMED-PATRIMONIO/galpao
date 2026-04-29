@@ -9717,6 +9717,7 @@ router.get('/relatorios/escola/:localId/faltantes-material', verificarToken, asy
 });
 
 // ROTA EXCLUSIVA PARA MATERIAIS
+// ROTA EXCLUSIVA PARA MATERIAIS
 router.post('/escola/registrar-entrega-material-lote', verificarToken, async (req, res) => {
     const { turma_id, entregas } = req.body;
     

@@ -9803,4 +9803,154 @@ router.post('/entregas/lote-material', verificarToken, async (req, res) => {
     }
 });
 
+// --- 1. LISTAGEM (Todos enxergam todos) ---
+router.get('/professores', verificarToken, async (req, res) => {
+    try {
+        const query = `
+            SELECT p.id, p.nome, p.status,
+            EXISTS(SELECT 1 FROM entregas_professores ep WHERE ep.professor_id = p.id AND ep.produto_id = 6) as ja_recebeu
+            FROM professores p 
+            ORDER BY p.nome ASC
+        `;
+        const result = await db.pool.query(query);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao listar professores" });
+    }
+});
+
+// --- 2. CADASTRO (Nome Único) ---
+router.post('/professores', verificarToken, async (req, res) => {
+    const { nome } = req.body;
+    const localIdDefault = req.user.local_id; // Registra o local de quem cadastrou apenas como referência
+
+    try {
+        const check = await db.pool.query('SELECT id FROM professores WHERE UPPER(nome) = UPPER($1)', [nome]);
+        if (check.rows.length > 0) return res.status(400).json({ error: "Este nome de professor já existe." });
+
+        await db.pool.query(
+            'INSERT INTO professores (nome, local_id, status) VALUES ($1, $2, $3)',
+            [nome, localIdDefault, 'ATIVO']
+        );
+        res.status(201).json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// --- 3. EDIÇÃO ---
+router.put('/professores/:id', verificarToken, async (req, res) => {
+    const { id } = req.params;
+    const { nome } = req.body;
+
+    try {
+        const check = await db.pool.query('SELECT id FROM professores WHERE UPPER(nome) = UPPER($1) AND id <> $2', [nome, id]);
+        if (check.rows.length > 0) return res.status(400).json({ error: "Outro professor já utiliza este nome." });
+
+        await db.pool.query('UPDATE professores SET nome = $1 WHERE id = $2', [nome, id]);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// --- 4. STATUS ---
+router.patch('/professores/:id/status', verificarToken, async (req, res) => {
+    const { id } = req.params;
+    const { status } = req.body;
+    try {
+        await db.pool.query('UPDATE professores SET status = $1 WHERE id = $2', [status, id]);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// --- 5. ENTREGA DO KIT 6 (Lógica de Estoque e Nova Tabela) ---
+router.post('/entregas/professor', verificarToken, async (req, res) => {
+    const { professorId } = req.body;
+    const { id: usuarioId, local_id: localId } = req.user;
+
+    const client = await db.pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // Validação 1: Já recebeu?
+        const check = await client.query(
+            "SELECT id FROM entregas_professores WHERE professor_id = $1 AND produto_id = 6",
+            [professorId]
+        );
+        if (check.rows.length > 0) throw new Error("Este professor já recebeu o kit.");
+
+        // Validação 2: Tem estoque na escola atual (Local do Usuário)?
+        // Nota: Material Escolar usa tamanho 'N/A'
+        const estoque = await client.query(
+            `UPDATE estoque_por_local SET quantidade = quantidade - 1 
+             WHERE local_id = $1 AND produto_id = 6 AND tamanho = 'N/A' AND quantidade > 0`,
+            [localId]
+        );
+
+        if (estoque.rowCount === 0) {
+            throw new Error("Não há KIT PROFESSOR disponível no estoque desta unidade.");
+        }
+
+        // Registro 3: Inserir na nova tabela
+        await client.query(
+            `INSERT INTO entregas_professores (professor_id, produto_id, usuario_id, local_id)
+             VALUES ($1, 6, $2, $3)`,
+            [professorId, usuarioId, localId]
+        );
+
+        await client.query('COMMIT');
+        res.status(201).json({ success: true });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
+// --- ROTA DE RELATÓRIO: PROFESSORES ATIVOS ---
+router.get('/relatorios/professores-ativos', verificarToken, async (req, res) => {
+    try {
+        const query = `
+            SELECT matric, nome
+            FROM professores
+            WHERE status = 'ATIVO'
+            ORDER BY nome ASC
+        `;
+        
+        const result = await db.pool.query(query);
+        res.json(result.rows);
+    } catch (err) {
+        console.error("Erro no relatório de professores:", err);
+        res.status(500).json({ error: "Erro ao gerar listagem de professores ativos." });
+    }
+});
+
+// --- ROTA: PROFESSORES ATIVOS QUE NÃO RECEBERAM O KIT 6 ---
+router.get('/relatorios/pendencia-kit-professores', verificarToken, async (req, res) => {
+    try {
+        const query = `
+            SELECT p.id, p.nome, p.matric 
+            FROM professores p
+            WHERE p.status = 'ATIVO'
+              AND NOT EXISTS (
+                  SELECT 1 
+                  FROM entregas_professores ep 
+                  WHERE ep.professor_id = p.id 
+                    AND ep.produto_id = 6
+              )
+            ORDER BY p.nome ASC
+        `;
+        
+        const result = await db.pool.query(query);
+        res.json(result.rows);
+    } catch (err) {
+        console.error("Erro no relatório de pendências:", err);
+        res.status(500).json({ error: "Erro ao gerar lista de pendências." });
+    }
+});
+
 module.exports = router;

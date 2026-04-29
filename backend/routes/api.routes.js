@@ -9772,4 +9772,48 @@ router.post('/escola/registrar-entrega-material-lote', verificarToken, async (re
     }
 });
 
+// Rota exclusiva no seu arquivo de rotas (Node.js/Express)
+router.post('/escola/registrar-entrega-uniforme-lote', verificarToken, async (req, res) => {
+    const { entregas } = req.body;
+    const local_id = req.user.local_id; // Pegando do Token
+
+    const client = await pool.connect();
+
+    try {
+        await client.query('BEGIN');
+
+        for (const item of entregas) {
+            // 1. Verifica e dá baixa no estoque por tamanho
+            const updateEstoque = await client.query(`
+                UPDATE estoque_por_local 
+                SET quantidade = quantidade - 1 
+                WHERE local_id = $1 
+                  AND produto_id = $2 
+                  AND tamanho = $3 
+                  AND quantidade > 0
+                RETURNING id
+            `, [local_id, item.produto_id, item.tamanho]);
+
+            if (updateEstoque.rowCount === 0) {
+                throw new Error(`Estoque insuficiente ou não encontrado para o produto ${item.produto_id} tamanho ${item.tamanho}`);
+            }
+
+            // 2. Registra a entrega para o aluno (Histórico)
+            await client.query(`
+                INSERT INTO entregas_alunos (aluno_id, produto_id, tamanho, tipo, data_entrega, local_id)
+                VALUES ($1, $2, $3, 'UNIFORME', NOW(), $4)
+            `, [item.aluno_id, item.produto_id, item.tamanho, local_id]);
+        }
+
+        await client.query('COMMIT');
+        res.status(200).json({ success: true });
+
+    } catch (error) {
+        await client.query('ROLLBACK');
+        res.status(400).json({ error: error.message });
+    } finally {
+        client.release();
+    }
+});
+
 module.exports = router;

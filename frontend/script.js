@@ -21398,18 +21398,49 @@ async function gerarRelatorioStatusTurmas() {
     }
 }
 
-function telaEntregaMaterial() {
-    telaEntregaUniformes();
-    
-    setTimeout(() => {
-        const titulo = document.querySelector('.titulo-sessao');
-        const desc = document.querySelector('p[style*="color: rgba(255,255,255,0.7)"]');
-        if(titulo) titulo.innerText = 'ENTREGA DE MATERIAL ESCOLAR';
-        if(desc) desc.innerText = 'Selecione uma turma para registrar a entrega dos kits de material.';
-        
-        const btn = document.getElementById('btn-iniciar-entrega');
-        if(btn) btn.setAttribute('onclick', 'carregarGradeDeEntregaMaterial()');
-    }, 100);
+async function telaEntregaMaterial() {
+    const app = document.getElementById('app-content');
+    app.innerHTML = '<div style="color:white; padding:20px;">Carregando turmas...</div>';
+
+    try {
+        const res = await fetch(`${API_URL}/escola/turmas-local`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const turmas = await res.json();
+
+        app.innerHTML = `
+            <div style="padding: 20px; font-family: sans-serif;">
+                <button onclick="carregarDashboard()" style="cursor:pointer; padding: 5px 15px; margin-bottom: 20px;">← VOLTAR</button>
+                <h2 style="color: white; margin-bottom: 15px;">DISTRIBUIÇÃO DE KITS DE MATERIAL</h2>
+                
+                <div style="background: #fff; padding: 25px; border-radius: 4px; max-width: 450px; border: 1px solid #ccc;">
+                    <label style="display: block; font-weight: bold; margin-bottom: 8px; color: #333;">TURMA ATENDIDA:</label>
+                    <select id="select-turma-mat" style="width: 100%; padding: 12px; font-size: 16px; margin-bottom: 20px; border: 1px solid #999;">
+                        <option value="">-- Selecione a Turma --</option>
+                        ${turmas.map(t => `<option value="${t.id}">${t.nome}</option>`).join('')}
+                    </select>
+                    
+                    <button onclick="abrirGradeMaterial()" style="width: 100%; padding: 15px; background: #e67e22; color: white; border: none; font-weight: bold; cursor: pointer;">
+                        GERAR PLANILHA DE MATERIAL
+                    </button>
+                </div>
+            </div>
+        `;
+    } catch (err) {
+        notificar(`Erro: ${err.message}`, 'erro');
+    }
+}
+
+function abrirGradeMaterial() {
+    const sel = document.getElementById('select-turma-mat');
+    if (!sel.value) return;
+    renderizarMatrizEntregaMaterial(sel.value, sel.options[sel.selectedIndex].text);
+}
+
+function validaAberturaMaterial() {
+    const sel = document.getElementById('select-turma-mat');
+    if (!sel.value) return;
+    renderizarMatrizEntregaMaterial(sel.value, sel.options[sel.selectedIndex].text);
 }
 
 function carregarGradeDeEntregaMaterial() {
@@ -21421,204 +21452,158 @@ function carregarGradeDeEntregaMaterial() {
     renderizarMatrizEntregaMaterial(turmaId);
 }
 
-async function renderizarMatrizEntregaMaterial(turmaId) {
+async function renderizarMatrizEntregaMaterial(turmaId, turmaNome) {
     const app = document.getElementById('app-content');
-    app.innerHTML = `<div class="loading-spinner"></div>`;
+    app.innerHTML = '<div style="color:white; padding:20px;">Validando etapa de ensino...</div>';
 
     try {
-        const res = await fetch(`${API_URL}/turma/${turmaId}/grade-entrega-material`, {
+        const res = await fetch(`${API_URL}/turma/${turmaId}/grade-material`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
         const data = await res.json();
-        
-        if (!res.ok) throw new Error(data.error || 'Falha ao carregar dados da turma.');
 
-        const turmaNome = data.turmaInfo.nome;
+        const etapa = data.turmaInfo.etapa_id;
+        let idPermitido = 0;
 
-        if (!data.produtos || data.produtos.length === 0) {
-            app.innerHTML = `
-                <div class="glass-panel" style="text-align:center; padding: 40px; margin: 20px;">
-                    <h2>Nenhum Kit de Material Escolar Encontrado</h2>
-                    <button class="btn-voltar-vidro" onclick="telaEntregaMaterial()">Voltar</button>
-                </div>`;
-            return;
-        }
+        // Regra de Negócio solicitada
+        if (etapa === 1 || etapa === 2) idPermitido = 1;
+        else if (etapa === 3 || etapa === 4) idPermitido = 2;
+        else if (etapa >= 5 && etapa <= 9) idPermitido = 3;
+        else if (etapa >= 10 && etapa <= 13) idPermitido = 4;
+        else if (etapa >= 14 && etapa <= 22) idPermitido = 5;
 
         app.innerHTML = `
             <style>
-                .tabela-material-wrapper {
-                    max-height: 65vh;
-                    overflow-y: auto;
-                    overflow-x: hidden;
-                    border-radius: 8px;
-                    background: rgba(0, 26, 44, 0.6);
-                    margin-bottom: 15px;
-                    border: 1px solid rgba(255,255,255,0.1);
-                }
-
-                .tabela-entrega {
-                    width: 100%;
-                    border-collapse: collapse;
-                    table-layout: fixed;
-                }
-
-                .col-aluno {
-                    width: 20%;
-                    min-width: 20%;
-                    max-width: 20%;
-                    text-align: left !important;
-                    padding-left: 10px !important;
-                    font-size: 0.75rem;
-                    white-space: nowrap;
-                    overflow: hidden;
-                    text-overflow: ellipsis;
-                }
-
-                .col-prod-mat {
-                    width: calc(80% / ${data.produtos.length});
-                    min-width: calc(80% / ${data.produtos.length});
-                    max-width: calc(80% / ${data.produtos.length});
-                }
-
-                .tabela-entrega thead th {
-                    position: sticky;
-                    top: 0;
-                    z-index: 10;
-                    background: #001a2c;
-                    font-size: 0.55rem;
-                    color: #00d4ff;
-                    height: 45px;
-                    border-bottom: 2px solid #00d4ff;
-                    word-wrap: break-word;
-                }
-
-                .tabela-entrega .linha-todos th, 
-                .tabela-entrega .linha-todos td {
-                    position: sticky;
-                    top: 45px;
-                    z-index: 9;
-                    background: #002a44;
-                    border-bottom: 1px solid rgba(255,255,255,0.2);
-                }
-
-                .tabela-entrega td {
-                    text-align: center;
-                    border: 1px solid rgba(255,255,255,0.05);
-                    height: 40px;
-                }
-
-                /* Inputs e Labels restaurados para funcionalidade original */
-                .celula-radio input[type="radio"], .celula-radio input[type="checkbox"] {
-                    cursor: pointer;
-                    margin: 0;
-                }
-
-                .titulo-turma-central {
-                    width: 100%;
-                    text-align: center;
-                    color: #00d4ff;
-                    font-size: 1.6rem;
-                    font-weight: 800;
-                    text-transform: uppercase;
-                    margin-bottom: 20px;
-                    letter-spacing: 2px;
-                    text-shadow: 0 0 15px rgba(0, 212, 255, 0.4);
-                }
-
-                .celula-entregue { font-size: 0.6rem; color: #00ff88; line-height: 1; }
-                .celula-bloqueada { background: rgba(0,0,0,0.1); opacity: 0.2; }
-                
-                #footer-material {
-                    display: flex;
-                    gap: 10px;
-                    justify-content: center;
-                    padding: 10px;
-                }
+                .wrapper-mat { background: #fff; height: 100vh; display: flex; flex-direction: column; font-family: Arial; }
+                .top-mat { padding: 10px; background: #eee; border-bottom: 1px solid #999; display: flex; justify-content: space-between; }
+                .tab-mat { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 11px; }
+                .tab-mat th, .tab-mat td { border: 1px solid #ccc; padding: 4px; text-align: center; color: #000; height: 35px; }
+                .tab-mat thead th { background: #dcdde1; position: sticky; top: 0; z-index: 2; }
+                .col-aluno { width: 250px; text-align: left !important; padding-left: 10px !important; background: #f9f9f9; font-weight: bold; }
+                .col-bloqueada { background: #f2f2f2; color: #aaa !important; }
+                .col-liberada { background: #fff; }
+                .check-mat { transform: scale(1.6); cursor: pointer; }
             </style>
 
-            <div class="header-animado animate__animated animate__fadeIn">
-                <button class="btn-voltar-vidro" onclick="telaEntregaMaterial()" style="padding: 4px 12px; font-size: 0.8rem;">
-                    <i class="fas fa-arrow-left"></i> TROCAR TURMA
-                </button>
-                <h1 class="titulo-turma-central">
-                    <i class="fas fa-users"></i> TURMA: ${turmaNome}
-                </h1>
-            </div>
-
-            <div class="tabela-material-wrapper animate__animated animate__fadeInUp">
-                <table class="tabela-entrega">
-                    <thead>
-                        <tr>
-                            <th class="col-aluno">ALUNO</th>
-                            ${data.produtos.map(p => `
-                                <th class="col-prod-mat">
-                                    ${p.nome.toUpperCase()}<br>
-                                    <small style="opacity:0.6">(${data.estoqueEscola[p.id] || 0} un)</small>
-                                </th>`).join('')}
-                        </tr>
-                        <tr class="linha-todos">
-                            <th class="col-aluno" style="color: #00d4ff;">TODOS</th>
-                            ${data.produtos.map(produto => `
-                                <td class="col-prod-mat">
-                                    <input type="checkbox" class="checkbox-todos" 
-                                           data-produto-id="${produto.id}" 
-                                           id="todos-${produto.id}">
-                                </td>
-                            `).join('')}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${data.alunos.map(aluno => {
-                            const jaEntregue = aluno.status === 'entregue';
-                            const dataFormatada = jaEntregue && aluno.entregaInfo.data_entrega 
-                                ? new Date(aluno.entregaInfo.data_entrega).toLocaleDateString('pt-BR') : '';
-
-                            return `
-                                <tr id="aluno-row-${aluno.id}">
-                                    <td class="col-aluno" title="${aluno.nome}">${aluno.nome}</td>
-                                    ${data.produtos.map(produto => {
-                                        if (jaEntregue) {
-                                            if (aluno.entregaInfo.produto_id === produto.id) {
-                                                return `<td class="col-prod-mat celula-entregue"><i class="fas fa-check"></i><br>${dataFormatada}</td>`;
-                                            } else {
-                                                return `<td class="col-prod-mat celula-bloqueada"></td>`;
-                                            }
-                                        }
-                                        // RESTAURADO: Input de seleção para o aluno
-                                        return `
-                                            <td class="col-prod-mat celula-radio">
-                                                <input type="radio" 
-                                                       name="radio_aluno_${aluno.id}" 
-                                                       class="radio-aluno" 
-                                                       data-aluno-id="${aluno.id}" 
-                                                       data-produto-id="${produto.id}" 
-                                                       id="al${aluno.id}-pr${produto.id}">
-                                                <label for="al${aluno.id}-pr${produto.id}"></label>
+            <div class="wrapper-mat">
+                <div class="top-mat">
+                    <strong>MATERIAL: ${turmaNome} | ETAPA ID: ${etapa}</strong>
+                    <button onclick="telaEntregaMaterial()">VOLTAR</button>
+                </div>
+                
+                <div style="flex:1; overflow:auto;">
+                    <table class="tab-mat">
+                        <thead>
+                            <tr>
+                                <th class="col-aluno">NOME DO ALUNO</th>
+                                ${data.produtos.map(p => `
+                                    <th class="${p.id === idPermitido ? 'col-liberada' : 'col-bloqueada'}">
+                                        ${p.nome.replace('KIT ', 'KIT<br>')}<br>
+                                        ${p.id === idPermitido ? 
+                                            `<input type="checkbox" onclick="toggleTudoMat(this.checked)"> <small>TODOS</small>` : ''}
+                                    </th>
+                                `).join('')}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${data.alunos.map(aluno => `
+                                <tr>
+                                    <td class="col-aluno">${aluno.nome.toUpperCase()}</td>
+                                    ${data.produtos.map(prod => {
+                                        const jaRecebeu = aluno.statusItens[prod.id]?.status === 'entregue';
+                                        
+                                        if (jaRecebeu) return `<td class="col-bloqueada" style="color:green !important;">✓ OK</td>`;
+                                        
+                                        if (prod.id === idPermitido) {
+                                            return `<td class="col-liberada">
+                                                <input type="checkbox" class="check-mat mat-check" 
+                                                       data-aluno-id="${aluno.id}" data-produto-id="${prod.id}">
                                             </td>`;
+                                        }
+                                        return `<td class="col-bloqueada">-</td>`;
                                     }).join('')}
-                                </tr>`;
-                        }).join('')}
-                    </tbody>
-                </table>
-            </div>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
 
-            <div id="footer-material">
-                <button class="btn-imprimir-comprovante" onclick="gerarComprovanteTurmaMaterial(${turmaId})" 
-                        style="background: #3b82f6; color: white; padding: 12px 20px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer;">
-                    COMPROVANTE
-                </button>
-                <button class="btn-confirmar-entrega" onclick="confirmarEntregasMaterial(${turmaId})" 
-                        style="background: #00ff88; color: #001a2c; padding: 12px 30px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer;">
-                    CONFIRMAR ENTREGAS
-                </button>
+                <div style="padding: 15px; text-align: right; background: #eee;">
+                    <button onclick="salvarEntregasMaterialLote(${turmaId}, '${turmaNome}')" 
+                            style="background: #217346; color: white; padding: 12px 40px; border: none; font-weight: bold; cursor: pointer;">
+                        CONFIRMAR ENTREGA
+                    </button>
+                </div>
             </div>
         `;
-        
-        configurarAcoesEmMassaMaterial(data.produtos, data.estoqueEscola);
-
     } catch (err) {
-        console.error("Erro ao renderizar matriz de material:", err.message);
         notificar(`Erro: ${err.message}`, 'erro');
+    }
+}
+
+function toggleTudoMat(status) {
+    document.querySelectorAll('.mat-check').forEach(c => c.checked = status);
+}
+
+async function salvarEntregasMaterialLote(turmaId, turmaNome) {
+    const selecionados = document.querySelectorAll('.mat-check:checked');
+    const entregas = Array.from(selecionados).map(i => ({
+        alunoId: i.dataset.alunoId,
+        produtoId: i.dataset.produtoId,
+        tamanho: 'N/A'
+    }));
+
+    if (entregas.length === 0) return;
+
+    try {
+        const res = await fetch(`${API_URL}/entregas/lote-material`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ entregas })
+        });
+
+        if (!res.ok) throw new Error('Falha ao processar material.');
+
+        notificar('MATERIAIS REGISTRADOS', 'sucesso');
+        renderizarMatrizEntregaMaterial(turmaId, turmaNome);
+    } catch (err) {
+        notificar(err.message, 'erro');
+    }
+}
+
+function toggleTodosMaterial(valor) {
+    const checks = document.querySelectorAll('.mat-checkbox-input');
+    checks.forEach(c => c.checked = valor);
+}
+
+function selecionarTodosMaterial(status) {
+    const inputs = document.querySelectorAll('.input-mat');
+    inputs.forEach(i => i.checked = status);
+}
+
+async function processarEnvioMaterialLote(turmaId, turmaNome) {
+    const selecionados = document.querySelectorAll('.mat-checkbox-input:checked');
+    const entregas = Array.from(selecionados).map(i => ({
+        alunoId: i.dataset.alunoId,
+        produtoId: i.dataset.produtoId,
+        tamanho: 'N/A' 
+    }));
+
+    if (entregas.length === 0) return;
+
+    try {
+        const res = await fetch(`${API_URL}/entregas/lote-material`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ entregas })
+        });
+
+        if (!res.ok) throw new Error('Falha no registro do material.');
+
+        notificar('MATERIAIS REGISTRADOS COM SUCESSO', 'sucesso');
+        renderizarMatrizEntregaMaterial(turmaId, turmaNome);
+    } catch (err) {
+        notificar(err.message, 'erro');
     }
 }
 

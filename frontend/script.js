@@ -6912,20 +6912,22 @@ async function abrirTelaConferenciaItens(pedidoId) {
 
 async function salvarRemessa(pedidoId) {
     const inputs = document.querySelectorAll('.qtd-envio');
+
+    // ✅ Map para evitar duplicatas (mesmo produto/tamanho aparecendo 2x no DOM)
     const itensMap = new Map();
 
     inputs.forEach(input => {
         const qtd = parseInt(input.value) || 0;
         if (qtd > 0) {
-            // AJUSTE AQUI: Tenta ler 'tamanho' ou 'tam'
-            const tamanhoRaw = input.dataset.tamanho || input.dataset.tam;
-            const tamanho = (tamanhoRaw === 'null' || tamanhoRaw === '' || !tamanhoRaw) 
+            const tamanhoRaw = input.dataset.tam;
+            const tamanho = (tamanhoRaw === 'null' || tamanhoRaw === '') 
                 ? null 
                 : tamanhoRaw;
 
             const chave = `${input.dataset.prodId}_${tamanho ?? 'NULL'}`;
 
             if (itensMap.has(chave)) {
+                // Soma se vier duplicado no DOM
                 itensMap.get(chave).quantidade_enviada += qtd;
             } else {
                 itensMap.set(chave, {
@@ -6936,7 +6938,7 @@ async function salvarRemessa(pedidoId) {
             }
         }
     });
-    
+
     if (itensMap.size === 0) {
         return notificar(
             "Informe a quantidade de pelo menos um item para a remessa.", 
@@ -7055,6 +7057,7 @@ async function telaAbastecerEstoque() {
         app.innerHTML = `<div class="painel-vidro" style="color:#ef4444; max-width: 500px; margin: auto;">⚠️ Erro ao carregar dados. Verifique a conexão com o servidor.</div>`;
     }
 }
+
 
 async function enviarEntradaEstoque() {
     const inputs = document.querySelectorAll('.input-entrada-estoque');
@@ -18315,7 +18318,7 @@ async function abrirTelaSaidaPedido() {
             <div class="glass-panel" style="padding: 20px; margin-bottom: 20px; border-radius: 15px;">
                 <label style="color: #00d4ff; font-weight: bold; display: block; margin-bottom: 10px;">📍 SELECIONE O LOCAL DESTINO:</label>
                 <select id="select-local-destino" style="width: 100%; padding: 12px; background: rgba(0,0,0,0.4); color: white; border: 1px solid #00d4ff; border-radius: 8px;">
-                    <option value="">-- SELECIONE A UNIDADE --</option>
+                    <option value="">Carregando locais...</option>
                 </select>
             </div>
         </div>
@@ -18336,6 +18339,7 @@ async function abrirTelaSaidaPedido() {
         const resLocais = await fetch(`${API_URL}/locais`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
         const locais = await resLocais.json();
         const selectDestino = document.getElementById('select-local-destino');
+        
         selectDestino.innerHTML = '<option value="">-- SELECIONE A UNIDADE --</option>' + 
             locais.filter(l => l.id !== 37 && l.id !== 50)
                   .map(l => `<option value="${l.id}">${l.nome}</option>`).join('');
@@ -18345,17 +18349,21 @@ async function abrirTelaSaidaPedido() {
         const listaHtml = document.getElementById('lista-saida-produtos');
         listaHtml.innerHTML = '';
 
+        // Padronização da Grade (A Ordem que você mandou)
         const ordemDesejada = ['02', '04', '06', '08', '10', '12', '14', '16', 'PP', 'P', 'M', 'G', 'GG', 'EGG'];
 
         produtos.forEach(p => {
             const isUniforme = p.tipo === 'UNIFORMES';
             const isTenis = p.nome.toUpperCase().includes('TENIS');
+            
             let gradeFinal = p.grade || [];
 
             if (isUniforme && !isTenis && gradeFinal.length > 0) {
                 gradeFinal = [...gradeFinal].sort((a, b) => {
+                    // Função interna para normalizar o que vem do banco para o seu padrão
                     const formatar = (t) => {
                         let s = String(t).toUpperCase().trim();
+                        // Se for número de 1 a 9, vira 01, 02... Se for P, M, etc, mantém.
                         return (s.length === 1 && !isNaN(s)) ? s.padStart(2, '0') : s;
                     };
                     return ordemDesejada.indexOf(formatar(a.tamanho)) - ordemDesejada.indexOf(formatar(b.tamanho));
@@ -18363,48 +18371,63 @@ async function abrirTelaSaidaPedido() {
             }
 
             listaHtml.innerHTML += `
-                <div class="card-saida glass-panel" style="background: rgba(255,255,255,0.05); margin-bottom: 12px; padding: 18px; border-radius: 15px; color: white; border: 1px solid rgba(255,255,255,0.1);">
+                <div class="card-saida glass-panel" id="card-saida-${p.id}" 
+                     style="background: rgba(255,255,255,0.05); margin-bottom: 12px; padding: 18px; border-radius: 15px; color: white; border: 1px solid rgba(255,255,255,0.1);">
+                    
                     <div style="display: flex; justify-content: space-between; align-items: center;" 
                          ${isUniforme ? `onclick="toggleGradeSaida(${p.id})"` : ''}>
                         <div style="cursor: ${isUniforme ? 'pointer' : 'default'}">
-                            <span style="font-size: 0.7rem; background: #00d4ff; padding: 3px 8px; border-radius: 5px; color: #001a2c; font-weight: bold;">${p.tipo}</span>
+                            <span style="font-size: 0.7rem; background: #00d4ff; padding: 3px 8px; border-radius: 5px; color: #001a2c; font-weight: bold;">
+                                ${p.tipo}
+                            </span>
                             <p style="margin: 8px 0 0 0; font-weight: bold; font-size: 1.1rem;">${p.nome}</p>
                             <small style="color: #aaa;">Estoque: <strong style="color: #00d4ff;">${p.quantidade_estoque}</strong></small>
                         </div>
+
                         ${!isUniforme ? `
                             <div style="text-align: right;">
+                                <small style="display: block; font-size: 0.50rem; opacity: 0.6; margin-bottom: 5px;">QTD SAÍDA</small>
                                 <input type="number" class="input-saida-qtd" data-id="${p.id}" data-tipo="MATERIAL" data-max="${p.quantidade_estoque}"
                                        onchange="validarEstoqueMax(this)"
-                                       style="width: 80px; background: rgba(0,0,0,0.3); border: 1px solid #ff4d4d; color: white; padding: 8px; border-radius: 8px; text-align: center;" placeholder="0">
+                                       style="width: 80px; background: rgba(0,0,0,0.3); border: 1px solid #ff4d4d; color: white; padding: 8px; border-radius: 8px; text-align: center;"
+                                       placeholder="0" min="0">
                             </div>
                         ` : `
-                            <div style="text-align: right;">
+                            <div style="text-align: right; cursor: pointer;">
                                 <span id="total-uniforme-${p.id}" style="font-size: 1.2rem; font-weight: bold; color: #ff4d4d; display: block;">0</span>
                                 <small style="color: #00d4ff;">Grade 👕 <i class="fas fa-chevron-down"></i></small>
                             </div>
                         `}
                     </div>
+
                     ${isUniforme ? `
-                        <div id="grade-saida-${p.id}" style="display:none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);">
+                        <div id="grade-saida-${p.id}" class="grade-expansivel" style="display:none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);">
                             <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px;">
                                 ${gradeFinal.map(g => {
-                                    const visual = (String(g.tamanho).length === 1 && !isNaN(g.tamanho)) ? String(g.tamanho).padStart(2, '0') : g.tamanho;
+                                    // Formatação visual idêntica ao que você pediu
+                                    const s = String(g.tamanho).toUpperCase().trim();
+                                    const visual = (s.length === 1 && !isNaN(s)) ? s.padStart(2, '0') : s;
+                                    
                                     return `
                                     <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; text-align: center;">
                                         <small style="display: block; font-size: 0.50rem; color: #00d4ff;">${visual}</small>
+                                        <small style="display: block; font-size: 0.50rem; color: #777;">Saldo: ${g.quantidade}</small>
                                         <input type="number" class="input-saida-qtd" 
                                                data-id="${p.id}" data-tipo="UNIFORMES" data-tamanho="${visual}" data-max="${g.quantidade}"
                                                oninput="atualizarTotalGradeSaida(${p.id})" onchange="validarEstoqueMax(this)"
-                                               style="width: 100%; background: transparent; border: none; border-bottom: 1px solid #ff4d4d; color: white; text-align: center;" placeholder="0">
-                                    </div>`;
-                                }).join('')}
+                                               style="width: 100%; background: transparent; border: none; border-bottom: 1px solid #ff4d4d; color: white; text-align: center;"
+                                               placeholder="0" min="0">
+                                    </div>
+                                `;}).join('')}
                             </div>
                         </div>
                     ` : ''}
                 </div>
             `;
         });
-    } catch (err) { console.error(err); }
+    } catch (err) {
+        console.error("Erro:", err);
+    }
 }
 
 // Funções Auxiliares de UI
@@ -20454,7 +20477,7 @@ async function telaEntregaUniformes() {
                     
                     <button id="btn-iniciar-entrega" class="btn-confirmar-entrada" 
                             style="width: 100%; margin-top: 25px; background: #00d4ff; color: #001a2c; display: none;"
-                            onclick="renderizarMatrizEntregaUniforme()">
+                            onclick="carregarGradeDeEntrega()">
                         <i class="fas fa-arrow-right"></i> PROSSEGUIR PARA A ENTREGA
                     </button>
                 </div>
@@ -21470,20 +21493,21 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
                 }
 
                 .col-aluno {
-                    width: 25%;
-                    min-width: 200px;
+                    width: 20%;
+                    min-width: 20%;
+                    max-width: 20%;
                     text-align: left !important;
-                    padding-left: 15px !important;
+                    padding-left: 10px !important;
                     font-size: 0.75rem;
                     white-space: nowrap;
                     overflow: hidden;
                     text-overflow: ellipsis;
-                    color: white;
                 }
 
                 .col-prod-mat {
-                    width: calc(75% / ${data.produtos.length});
-                    min-width: 80px;
+                    width: calc(80% / ${data.produtos.length});
+                    min-width: calc(80% / ${data.produtos.length});
+                    max-width: calc(80% / ${data.produtos.length});
                 }
 
                 .tabela-entrega thead th {
@@ -21491,18 +21515,17 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
                     top: 0;
                     z-index: 10;
                     background: #001a2c;
-                    font-size: 0.60rem;
+                    font-size: 0.55rem;
                     color: #00d4ff;
-                    height: 50px;
+                    height: 45px;
                     border-bottom: 2px solid #00d4ff;
                     word-wrap: break-word;
-                    padding: 5px;
                 }
 
                 .tabela-entrega .linha-todos th, 
                 .tabela-entrega .linha-todos td {
                     position: sticky;
-                    top: 50px;
+                    top: 45px;
                     z-index: 9;
                     background: #002a44;
                     border-bottom: 1px solid rgba(255,255,255,0.2);
@@ -21511,17 +21534,12 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
                 .tabela-entrega td {
                     text-align: center;
                     border: 1px solid rgba(255,255,255,0.05);
-                    height: 45px;
-                    vertical-align: middle;
+                    height: 40px;
                 }
 
-                .celula-radio {
-                    position: relative;
-                }
-
-                .celula-radio input[type="radio"] {
+                /* Inputs e Labels restaurados para funcionalidade original */
+                .celula-radio input[type="radio"], .celula-radio input[type="checkbox"] {
                     cursor: pointer;
-                    transform: scale(1.2);
                     margin: 0;
                 }
 
@@ -21537,37 +21555,23 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
                     text-shadow: 0 0 15px rgba(0, 212, 255, 0.4);
                 }
 
-                .celula-entregue { 
-                    font-size: 0.65rem; 
-                    color: #00ff88; 
-                    font-weight: bold;
-                    line-height: 1.2;
-                }
-
-                .celula-bloqueada { 
-                    background: rgba(0,0,0,0.2); 
-                    opacity: 0.3; 
-                }
+                .celula-entregue { font-size: 0.6rem; color: #00ff88; line-height: 1; }
+                .celula-bloqueada { background: rgba(0,0,0,0.1); opacity: 0.2; }
                 
                 #footer-material {
                     display: flex;
-                    gap: 15px;
+                    gap: 10px;
                     justify-content: center;
-                    padding: 15px;
-                }
-
-                .checkbox-todos {
-                    transform: scale(1.1);
-                    cursor: pointer;
+                    padding: 10px;
                 }
             </style>
 
             <div class="header-animado animate__animated animate__fadeIn">
-                <button class="btn-voltar-vidro" onclick="telaEntregaMaterial()" style="padding: 6px 15px; font-size: 0.8rem;">
+                <button class="btn-voltar-vidro" onclick="telaEntregaMaterial()" style="padding: 4px 12px; font-size: 0.8rem;">
                     <i class="fas fa-arrow-left"></i> TROCAR TURMA
                 </button>
                 <h1 class="titulo-turma-central">
-                    <i class="fas fa-box-open"></i> TURMA: ${turmaNome}
+                    <i class="fas fa-users"></i> TURMA: ${turmaNome}
                 </h1>
             </div>
 
@@ -21579,13 +21583,11 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
                             ${data.produtos.map(p => `
                                 <th class="col-prod-mat">
                                     ${p.nome.toUpperCase()}<br>
-                                    <small style="opacity:0.8; color: #fff;">
-                                        Disp: ${data.estoqueEscola[p.id] || 0}
-                                    </small>
+                                    <small style="opacity:0.6">(${data.estoqueEscola[p.id] || 0} un)</small>
                                 </th>`).join('')}
                         </tr>
                         <tr class="linha-todos">
-                            <th class="col-aluno" style="color: #00d4ff;">SELECIONAR TODOS</th>
+                            <th class="col-aluno" style="color: #00d4ff;">TODOS</th>
                             ${data.produtos.map(produto => `
                                 <td class="col-prod-mat">
                                     <input type="checkbox" class="checkbox-todos" 
@@ -21598,26 +21600,21 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
                     <tbody>
                         ${data.alunos.map(aluno => {
                             const jaEntregue = aluno.status === 'entregue';
-                            const dataFormatada = (jaEntregue && aluno.entregaInfo && aluno.entregaInfo.data_entrega)
-                                ? new Date(aluno.entregaInfo.data_entrega).toLocaleDateString('pt-BR') 
-                                : '';
+                            const dataFormatada = jaEntregue && aluno.entregaInfo.data_entrega 
+                                ? new Date(aluno.entregaInfo.data_entrega).toLocaleDateString('pt-BR') : '';
 
                             return `
                                 <tr id="aluno-row-${aluno.id}">
                                     <td class="col-aluno" title="${aluno.nome}">${aluno.nome}</td>
                                     ${data.produtos.map(produto => {
-                                        if (jaEntregue && aluno.entregaInfo && aluno.entregaInfo.produto_id === produto.id) {
-                                            return `
-                                                <td class="col-prod-mat celula-entregue">
-                                                    <i class="fas fa-check-circle"></i><br>
-                                                    ${dataFormatada}
-                                                </td>`;
-                                        } 
-                                        
                                         if (jaEntregue) {
-                                            return `<td class="col-prod-mat celula-bloqueada"></td>`;
+                                            if (aluno.entregaInfo.produto_id === produto.id) {
+                                                return `<td class="col-prod-mat celula-entregue"><i class="fas fa-check"></i><br>${dataFormatada}</td>`;
+                                            } else {
+                                                return `<td class="col-prod-mat celula-bloqueada"></td>`;
+                                            }
                                         }
-
+                                        // RESTAURADO: Input de seleção para o aluno
                                         return `
                                             <td class="col-prod-mat celula-radio">
                                                 <input type="radio" 
@@ -21625,9 +21622,6 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
                                                        class="radio-aluno" 
                                                        data-aluno-id="${aluno.id}" 
                                                        data-produto-id="${produto.id}" 
-                                                       data-tipo="MATERIAL"
-                                                       data-tamanho="N/A"
-                                                       data-entrega-id="${(aluno.entregaInfo && aluno.entregaInfo.id) ? aluno.entregaInfo.id : ''}"
                                                        id="al${aluno.id}-pr${produto.id}">
                                                 <label for="al${aluno.id}-pr${produto.id}"></label>
                                             </td>`;
@@ -21640,12 +21634,12 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
 
             <div id="footer-material">
                 <button class="btn-imprimir-comprovante" onclick="gerarComprovanteTurmaMaterial(${turmaId})" 
-                        style="background: #3b82f6; color: white; padding: 12px 20px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 8px;">
-                    <i class="fas fa-print"></i> COMPROVANTE
+                        style="background: #3b82f6; color: white; padding: 12px 20px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer;">
+                    COMPROVANTE
                 </button>
                 <button class="btn-confirmar-entrega" onclick="confirmarEntregasMaterial(${turmaId})" 
-                        style="background: #00ff88; color: #001a2c; padding: 12px 30px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 8px;">
-                    <i class="fas fa-check"></i> CONFIRMAR ENTREGAS
+                        style="background: #00ff88; color: #001a2c; padding: 12px 30px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer;">
+                    CONFIRMAR ENTREGAS
                 </button>
             </div>
         `;
@@ -21668,46 +21662,34 @@ function configurarAcoesEmMassaMaterial(produtos, estoque) {
         chk.addEventListener('change', (e) => {
             const produtoId = e.target.dataset.produtoId;
             const marcar = e.target.checked;
-            
-            // Pega APENAS os rádios do produto (coluna) que o usuário clicou
-            const radiosDestaColuna = document.querySelectorAll(`.radio-aluno[data-produto-id="${produtoId}"]`);
 
             if (marcar) {
-                // Verificar estoque real
+                // Verificar estoque
                 const estoqueDisponivel = estoque[produtoId] || 0;
-                let selecionadosComSucesso = 0;
+                const alunosPendentes = new Set(
+                    Array.from(document.querySelectorAll('.radio-aluno'))
+                        .map(r => r.dataset.alunoId)
+                );
+                
+                if (alunosPendentes.size > estoqueDisponivel) {
+                    alert(`Atenção: Há ${alunosPendentes.size} alunos pendentes, mas só existem ${estoqueDisponivel} unidades em estoque.`);
+                }
 
-                // Desmarcar os outros checkboxes "Todos" (só 1 coluna ativa por vez)
+                // Desmarcar os outros checkboxes "Todos" (só 1 coluna por vez)
                 document.querySelectorAll('.checkbox-todos').forEach(outro => {
                     if (outro !== e.target) outro.checked = false;
                 });
 
-                // Marcar os rádios RESPEITANDO O LIMITE DO ESTOQUE
-                radiosDestaColuna.forEach(r => {
-                    if (selecionadosComSucesso < estoqueDisponivel) {
-                        r.checked = true;
-                        r.dataset.wasChecked = 'true'; // Mantém o toggle sincronizado
-                        selecionadosComSucesso++;
-                    } else {
-                        r.checked = false;
-                        r.dataset.wasChecked = 'false';
-                    }
+                // Marcar todos os radios desta coluna
+                document.querySelectorAll(`.radio-aluno[data-produto-id="${produtoId}"]`).forEach(r => {
+                    r.checked = true;
                 });
 
-                // Dá o feedback correto se faltou produto
-                if (radiosDestaColuna.length > estoqueDisponivel) {
-                    if (typeof notificar === 'function') {
-                        notificar(`Atenção: Apenas ${estoqueDisponivel} itens marcados (limite do estoque).`, 'aviso');
-                    } else {
-                        alert(`Atenção: Apenas ${estoqueDisponivel} itens marcados (limite do estoque).`);
-                    }
-                }
-
             } else {
-                // DESMARCAR: limpa APENAS os radios desta coluna específica!
-                radiosDestaColuna.forEach(r => {
+                // DESMARCAR: limpa todos os radios de TODAS as colunas
+                // (porque ao marcar "Todos" já tinha desmarcado os de outras colunas)
+                document.querySelectorAll('.radio-aluno').forEach(r => {
                     r.checked = false;
-                    r.dataset.wasChecked = 'false';
                 });
             }
         });
@@ -21715,35 +21697,32 @@ function configurarAcoesEmMassaMaterial(produtos, estoque) {
 
     // --- 2. Clique individual no radio do aluno ---
     // Permite desmarcar um radio clicando nele de novo
+    // e atualiza o estado do checkbox "Todos"
     document.querySelectorAll('.radio-aluno').forEach(radio => {
+        // Guardamos o estado anterior para permitir toggle
         radio.addEventListener('click', (e) => {
             const aluno = e.target;
             const alunoId = aluno.dataset.alunoId;
+            const produtoId = aluno.dataset.produtoId;
 
             // Se já estava marcado no mesmo, desmarcar (toggle)
             if (aluno.dataset.wasChecked === 'true') {
                 aluno.checked = false;
                 aluno.dataset.wasChecked = 'false';
             } else {
-                // Desmarca os outros da mesma linha (mesmo aluno) e marca este
+                // Marcar este e atualizar o flag de todos do mesmo grupo
                 document.querySelectorAll(`input[name="radio_aluno_${alunoId}"]`).forEach(r => {
                     r.dataset.wasChecked = 'false';
                 });
                 aluno.dataset.wasChecked = 'true';
             }
 
-            // CORREÇÃO DO ERRO DA FUNÇÃO FANTASMA:
-            // Se o usuário desmarcar um aluno manualmente, o checkbox "Todos" lá em cima 
-            // tem que ser desmarcado para não confundir visualmente.
-            const produtoId = aluno.dataset.produtoId;
-            const checkTodos = document.getElementById(`todos-${produtoId}`);
-            if (checkTodos && !aluno.checked) {
-                checkTodos.checked = false;
-            }
+            // Atualizar estado dos checkboxes "Todos"
+            atualizarEstadoCheckboxTodos();
         });
     });
 
-    // Inicializa o flag wasChecked em todos os radios logo que a tela carrega
+    // Inicializa o flag wasChecked em todos os radios
     document.querySelectorAll('.radio-aluno').forEach(r => {
         r.dataset.wasChecked = r.checked ? 'true' : 'false';
     });
@@ -21777,45 +21756,44 @@ async function gerarComprovanteTurmaMaterial(turmaId) {
 // CONFIRMAR ENTREGAS (sem alteração na lógica)
 // ============================================================
 async function confirmarEntregasMaterial(turmaId) {
-    const selecionados = document.querySelectorAll('.radio-aluno:checked');
+    const radiosMarcados = document.querySelectorAll('.radio-aluno:checked');
     
-    if (selecionados.length === 0) {
-        notificar('Por favor, selecione ao menos uma entrega.', 'aviso');
-        return;
-    }
-
-    // Pega os dados dos rádios (sem tamanho, pois a rota saberá que é material)
-    const entregas = Array.from(selecionados).map(input => ({
-        aluno_id: input.dataset.alunoId,
-        produto_id: input.dataset.produtoId
+    // Agora enviamos 'N/A' explicitamente para materiais
+    const entregasParaEnviar = Array.from(radiosMarcados).map(radio => ({
+        alunoId: radio.dataset.alunoId,
+        produtoId: radio.dataset.produtoId,
+        tamanho: 'N/A' 
     }));
 
+    if (entregasParaEnviar.length === 0) {
+        return notificar('Nenhum kit de material foi marcado para entrega.', 'aviso');
+    }
+    
+    // REMOVIDO: confirm() desnecessário a pedido do usuário
+
+    const btn = document.querySelector('.btn-confirmar-entrega');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> PROCESSANDO...';
+
     try {
-        // CHAMA A ROTA EXCLUSIVA DE MATERIAL
-        const res = await fetch(`${API_URL}/escola/registrar-entrega-material-lote`, {
+        const res = await fetch(`${API_URL}/entregas/lote`, {
             method: 'POST',
-            headers: { 
-                'Authorization': `Bearer ${TOKEN}`,
-                'Content-Type': 'application/json' 
-            },
-            body: JSON.stringify({ turma_id: turmaId, entregas: entregas })
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ entregas: entregasParaEnviar })
         });
-
-        const resultado = await res.json();
-
-        if (!res.ok) {
-            throw new Error(resultado.error || 'Falha ao processar baixa no estoque.');
-        }
-
-        // Sucesso garantido e sem patch individual para dar erro de innerText
-        notificar(`SUCESSO! ${entregas.length} entrega(s) de material confirmadas.`, 'sucesso');
         
-        // Recarrega a tela
+        const resultado = await res.json();
+        if (!res.ok) throw new Error(resultado.error || 'Falha no servidor.');
+
+        notificar(resultado.message, 'sucesso');
         renderizarMatrizEntregaMaterial(turmaId);
 
     } catch (err) {
-        console.error("Erro na entrega de material:", err);
-        notificar(`ERRO: ${err.message}`, 'erro');
+        // Se o erro for de estoque, a mensagem virá limpa do backend
+        notificar(`${err.message}`, 'erro');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-check"></i> CONFIRMAR ENTREGAS MARCADAS';
     }
 }
 
@@ -22739,176 +22717,6 @@ async function gerarPdfFaltantes(localId, tipo) {
     } catch (err) {
         console.error("Erro ao gerar PDF:", err);
         notificar(`Erro: ${err.message}`, "erro");
-    }
-}
-
-async function renderizarMatrizEntregaUniforme(turmaId) {
-    const app = document.getElementById('app-content');
-    app.innerHTML = `<div style="color: white; text-align: center; padding: 20px;">Carregando planilha de uniformes...</div>`;
-
-    try {
-        const res = await fetch(`${API_URL}/turma/${turmaId}/grade-entrega-uniforme`, {
-            headers: { 'Authorization': `Bearer ${TOKEN}` }
-        });
-        const data = await res.json();
-        
-        if (!res.ok) throw new Error(data.error);
-
-        // CSS Estilo Planilha Corporativa
-        app.innerHTML = `
-            <style>
-                .planilha-container {
-                    background: #fff;
-                    color: #333;
-                    padding: 10px;
-                    border-radius: 4px;
-                    font-family: 'Segoe UI', Arial, sans-serif;
-                    overflow-x: hidden;
-                }
-                .tabela-uniforme {
-                    width: 100%;
-                    border-collapse: collapse;
-                    font-size: 11px; /* Fonte menor, estilo Excel */
-                    table-layout: fixed;
-                }
-                .tabela-uniforme th, .tabela-uniforme td {
-                    border: 1px solid #ccc;
-                    padding: 4px;
-                    text-align: center;
-                    overflow: hidden;
-                    text-overflow: ellipsis;
-                    white-space: nowrap;
-                }
-                .tabela-uniforme thead th {
-                    background: #f2f2f2;
-                    color: #000;
-                    font-weight: bold;
-                    height: 40px;
-                    vertical-align: middle;
-                }
-                .col-aluno { width: 180px; text-align: left !important; padding-left: 8px !important; background: #fafafa; }
-                
-                /* Select Boxes de Alto Contraste */
-                .select-tamanho {
-                    width: 100%;
-                    font-size: 11px;
-                    padding: 2px;
-                    border: 1px solid #999;
-                    background: #fff; /* Fundo branco */
-                    color: #000; /* Letra preta */
-                    cursor: pointer;
-                }
-                .select-tamanho:focus { border-color: #0078d4; outline: none; }
-                .select-tamanho option { background: #fff; color: #000; }
-
-                .btn-confirmar-direct {
-                    background: #28a745;
-                    color: white;
-                    border: none;
-                    padding: 10px 20px;
-                    font-weight: bold;
-                    border-radius: 3px;
-                    cursor: pointer;
-                    margin-top: 10px;
-                    width: 100%;
-                }
-                .header-info { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; color: #000; }
-            </style>
-
-            <div class="planilha-container">
-                <div class="header-info">
-                    <strong>TURMA: ${data.turmaInfo.nome}</strong>
-                    <button class="btn-voltar-vidro" onclick="telaEntregaMaterial()" style="color: #000; border: 1px solid #ccc;">← VOLTAR</button>
-                </div>
-
-                <table class="tabela-uniforme">
-                    <thead>
-                        <tr>
-                            <th class="col-aluno">ALUNO</th>
-                            ${data.produtos.map(p => {
-                                // Quebra o nome do produto: CALCA MAS -> CALCA<br>MAS
-                                const nomeFormatado = p.nome.replace(' ', '<br>');
-                                return `<th>${nomeFormatado}</th>`;
-                            }).join('')}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${data.alunos.map(aluno => `
-                            <tr>
-                                <td class="col-aluno" title="${aluno.nome}">${aluno.nome.toUpperCase()}</td>
-                                ${data.produtos.map(produto => {
-                                    const grades = data.grades[produto.id] || [];
-                                    return `
-                                        <td>
-                                            <select class="select-tamanho" 
-                                                    data-aluno-id="${aluno.id}" 
-                                                    data-produto-id="${produto.id}">
-                                                <option value="">--</option>
-                                                ${grades.map(g => `
-                                                    <option value="${g.tamanho}">${g.tamanho} (${g.quantidade})</option>
-                                                `).join('')}
-                                            </select>
-                                        </td>
-                                    `;
-                                }).join('')}
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-
-                <button class="btn-confirmar-direct" onclick="confirmarEntregasUniformes(${turmaId})">
-                    CONFIRMAR SELECIONADAS
-                </button>
-            </div>
-        `;
-    } catch (err) {
-        notificar(`Erro: ${err.message}`, 'erro');
-    }
-}
-
-async function confirmarEntregasUniformes(turmaId) {
-    const selects = document.querySelectorAll('.select-tamanho');
-    const entregas = [];
-
-    selects.forEach(sel => {
-        if (sel.value !== "") {
-            entregas.push({
-                aluno_id: sel.dataset.alunoId,
-                produto_id: sel.dataset.produtoId,
-                tamanho: sel.value
-            });
-        }
-    });
-
-    if (entregas.length === 0) {
-        return; // Não faz nada se não houver seleção
-    }
-
-    try {
-        const res = await fetch(`${API_URL}/escola/registrar-entrega-uniforme-lote`, {
-            method: 'POST',
-            headers: { 
-                'Authorization': `Bearer ${TOKEN}`,
-                'Content-Type': 'application/json' 
-            },
-            body: JSON.stringify({ turma_id: turmaId, entregas: entregas })
-        });
-
-        if (!res.ok) {
-            const errorData = await res.json();
-            throw new Error(errorData.error || 'Erro ao processar.');
-        }
-
-        // Única mensagem permitida
-        notificar('ENTREGA REGISTRADA', 'sucesso');
-        
-        // Atualiza a tabela para mostrar o estoque atualizado
-        renderizarMatrizEntregaUniforme(turmaId);
-
-    } catch (err) {
-        console.error(err);
-        // Exibe o erro apenas se algo realmente falhar no banco/rede
-        notificar(`ATENÇÃO! ${err.message}`, 'erro');
     }
 }
 

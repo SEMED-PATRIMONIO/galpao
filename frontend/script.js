@@ -21669,34 +21669,46 @@ function configurarAcoesEmMassaMaterial(produtos, estoque) {
         chk.addEventListener('change', (e) => {
             const produtoId = e.target.dataset.produtoId;
             const marcar = e.target.checked;
+            
+            // Pega APENAS os rádios do produto (coluna) que o usuário clicou
+            const radiosDestaColuna = document.querySelectorAll(`.radio-aluno[data-produto-id="${produtoId}"]`);
 
             if (marcar) {
-                // Verificar estoque
+                // Verificar estoque real
                 const estoqueDisponivel = estoque[produtoId] || 0;
-                const alunosPendentes = new Set(
-                    Array.from(document.querySelectorAll('.radio-aluno'))
-                        .map(r => r.dataset.alunoId)
-                );
-                
-                if (alunosPendentes.size > estoqueDisponivel) {
-                    alert(`Atenção: Há ${alunosPendentes.size} alunos pendentes, mas só existem ${estoqueDisponivel} unidades em estoque.`);
-                }
+                let selecionadosComSucesso = 0;
 
-                // Desmarcar os outros checkboxes "Todos" (só 1 coluna por vez)
+                // Desmarcar os outros checkboxes "Todos" (só 1 coluna ativa por vez)
                 document.querySelectorAll('.checkbox-todos').forEach(outro => {
                     if (outro !== e.target) outro.checked = false;
                 });
 
-                // Marcar todos os radios desta coluna
-                document.querySelectorAll(`.radio-aluno[data-produto-id="${produtoId}"]`).forEach(r => {
-                    r.checked = true;
+                // Marcar os rádios RESPEITANDO O LIMITE DO ESTOQUE
+                radiosDestaColuna.forEach(r => {
+                    if (selecionadosComSucesso < estoqueDisponivel) {
+                        r.checked = true;
+                        r.dataset.wasChecked = 'true'; // Mantém o toggle sincronizado
+                        selecionadosComSucesso++;
+                    } else {
+                        r.checked = false;
+                        r.dataset.wasChecked = 'false';
+                    }
                 });
 
+                // Dá o feedback correto se faltou produto
+                if (radiosDestaColuna.length > estoqueDisponivel) {
+                    if (typeof notificar === 'function') {
+                        notificar(`Atenção: Apenas ${estoqueDisponivel} itens marcados (limite do estoque).`, 'aviso');
+                    } else {
+                        alert(`Atenção: Apenas ${estoqueDisponivel} itens marcados (limite do estoque).`);
+                    }
+                }
+
             } else {
-                // DESMARCAR: limpa todos os radios de TODAS as colunas
-                // (porque ao marcar "Todos" já tinha desmarcado os de outras colunas)
-                document.querySelectorAll('.radio-aluno').forEach(r => {
+                // DESMARCAR: limpa APENAS os radios desta coluna específica!
+                radiosDestaColuna.forEach(r => {
                     r.checked = false;
+                    r.dataset.wasChecked = 'false';
                 });
             }
         });
@@ -21704,32 +21716,35 @@ function configurarAcoesEmMassaMaterial(produtos, estoque) {
 
     // --- 2. Clique individual no radio do aluno ---
     // Permite desmarcar um radio clicando nele de novo
-    // e atualiza o estado do checkbox "Todos"
     document.querySelectorAll('.radio-aluno').forEach(radio => {
-        // Guardamos o estado anterior para permitir toggle
         radio.addEventListener('click', (e) => {
             const aluno = e.target;
             const alunoId = aluno.dataset.alunoId;
-            const produtoId = aluno.dataset.produtoId;
 
             // Se já estava marcado no mesmo, desmarcar (toggle)
             if (aluno.dataset.wasChecked === 'true') {
                 aluno.checked = false;
                 aluno.dataset.wasChecked = 'false';
             } else {
-                // Marcar este e atualizar o flag de todos do mesmo grupo
+                // Desmarca os outros da mesma linha (mesmo aluno) e marca este
                 document.querySelectorAll(`input[name="radio_aluno_${alunoId}"]`).forEach(r => {
                     r.dataset.wasChecked = 'false';
                 });
                 aluno.dataset.wasChecked = 'true';
             }
 
-            // Atualizar estado dos checkboxes "Todos"
-            atualizarEstadoCheckboxTodos();
+            // CORREÇÃO DO ERRO DA FUNÇÃO FANTASMA:
+            // Se o usuário desmarcar um aluno manualmente, o checkbox "Todos" lá em cima 
+            // tem que ser desmarcado para não confundir visualmente.
+            const produtoId = aluno.dataset.produtoId;
+            const checkTodos = document.getElementById(`todos-${produtoId}`);
+            if (checkTodos && !aluno.checked) {
+                checkTodos.checked = false;
+            }
         });
     });
 
-    // Inicializa o flag wasChecked em todos os radios
+    // Inicializa o flag wasChecked em todos os radios logo que a tela carrega
     document.querySelectorAll('.radio-aluno').forEach(r => {
         r.dataset.wasChecked = r.checked ? 'true' : 'false';
     });
@@ -21766,59 +21781,50 @@ async function confirmarEntregasMaterial(turmaId) {
     const selecionados = document.querySelectorAll('.radio-aluno:checked');
     
     if (selecionados.length === 0) {
-        notificar('Por favor, selecione ao menos uma entrega.', 'aviso');
+        notificar('Selecione ao menos uma entrega.', 'aviso');
         return;
     }
 
-    // 1. MAPEAMENTO DINÂMICO: Pegamos os dados direto do dataset do rádio.
-    // Isso garante que se for UNIFORME, leve o tamanho (02, P, M...),
-    // e se for MATERIAL, leve 'N/A', sem quebrar um ao outro.
-    const dadosEntrega = Array.from(selecionados).map(input => ({
+    // Monta o lote pegando os dados do HTML (dataset)
+    const entregas = Array.from(selecionados).map(input => ({
         aluno_id: input.dataset.alunoId,
         produto_id: input.dataset.produtoId,
-        tipo: input.dataset.tipo || 'MATERIAL', // Pega do HTML
-        tamanho: input.dataset.tamanho || 'N/A'  // Pega o tamanho real ou N/A
+        tipo: input.dataset.tipo,      // Pega MATERIAL ou UNIFORME
+        tamanho: input.dataset.tamanho // Pega N/A ou o tamanho real (P, M, G, 02...)
     }));
 
     try {
-        // Chamada principal para registro em lote e baixa no estoque
+        // Passo 1: Registrar o lote (Baixa no estoque)
         const resLote = await fetch(`${API_URL}/escola/registrar-entrega-lote`, {
             method: 'POST',
-            headers: { 
-                'Authorization': `Bearer ${TOKEN}`,
-                'Content-Type': 'application/json' 
-            },
-            body: JSON.stringify({ turma_id: turmaId, entregas: dadosEntrega })
+            headers: { 'Authorization': `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ turma_id: turmaId, entregas: entregas })
         });
 
         if (!resLote.ok) {
-            const erroApi = await resLote.json();
-            throw new Error(erroApi.error || 'Falha ao registrar entrega no estoque.');
+            const erro = await resLote.json();
+            throw new Error(erro.error || 'Erro ao registrar no estoque.');
         }
 
-        // 2. Tratamento do PATCH individual (confirmar-recebimento2)
-        // Evita o erro 500 no console verificando se o ID é válido antes de disparar.
+        // Passo 2: Confirmar remessas individuais (PATCH)
+        // Executamos sem 'await' rigoroso para que um erro aqui não anule o sucesso do estoque
         for (const input of selecionados) {
-            const idEntrega = input.dataset.entregaId;
-
-            if (idEntrega && idEntrega !== 'null' && idEntrega !== 'undefined' && idEntrega !== '') {
-                // Só dispara o PATCH se houver um ID de remessa/entrega prévio
-                await fetch(`${API_URL}/escola/confirmar-recebimento2/${idEntrega}`, {
+            const id = input.dataset.entregaId;
+            if (id && id !== 'null' && id !== '') {
+                fetch(`${API_URL}/escola/confirmar-recebimento2/${id}`, {
                     method: 'PATCH',
                     headers: { 'Authorization': `Bearer ${TOKEN}` }
-                }).catch(e => console.warn("Aviso: Falha na confirmação individual, mas o lote foi processado."));
+                }).catch(() => console.warn("Confirmação individual falhou, mas o lote foi processado."));
             }
         }
 
-        // Sucesso total no processo de baixa e registro
-        notificar(`SUCESSO! Foram registradas ${selecionados.length} entrega(s) com sucesso.`, 'sucesso');
-        
-        // Recarrega a matriz para atualizar os status na tela
+        // Se o código chegou aqui, o POST (Lote) funcionou!
+        notificar(`SUCESSO! ${entregas.length} entrega(s) registradas com baixa no estoque.`, 'sucesso');
         renderizarMatrizEntregaMaterial(turmaId);
 
     } catch (err) {
-        console.error("Erro na entrega:", err);
-        notificar(`Erro: ${err.message}`, 'erro');
+        console.error(err);
+        notificar(err.message, 'erro');
     }
 }
 

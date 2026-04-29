@@ -7056,7 +7056,6 @@ async function telaAbastecerEstoque() {
     }
 }
 
-
 async function enviarEntradaEstoque() {
     const inputs = document.querySelectorAll('.input-entrada-estoque');
     const itens = [];
@@ -22740,6 +22739,176 @@ async function gerarPdfFaltantes(localId, tipo) {
     } catch (err) {
         console.error("Erro ao gerar PDF:", err);
         notificar(`Erro: ${err.message}`, "erro");
+    }
+}
+
+async function renderizarMatrizEntregaUniforme(turmaId) {
+    const app = document.getElementById('app-content');
+    app.innerHTML = `<div style="color: white; text-align: center; padding: 20px;">Carregando planilha de uniformes...</div>`;
+
+    try {
+        const res = await fetch(`${API_URL}/turma/${turmaId}/grade-entrega-uniforme`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const data = await res.json();
+        
+        if (!res.ok) throw new Error(data.error);
+
+        // CSS Estilo Planilha Corporativa
+        app.innerHTML = `
+            <style>
+                .planilha-container {
+                    background: #fff;
+                    color: #333;
+                    padding: 10px;
+                    border-radius: 4px;
+                    font-family: 'Segoe UI', Arial, sans-serif;
+                    overflow-x: hidden;
+                }
+                .tabela-uniforme {
+                    width: 100%;
+                    border-collapse: collapse;
+                    font-size: 11px; /* Fonte menor, estilo Excel */
+                    table-layout: fixed;
+                }
+                .tabela-uniforme th, .tabela-uniforme td {
+                    border: 1px solid #ccc;
+                    padding: 4px;
+                    text-align: center;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
+                .tabela-uniforme thead th {
+                    background: #f2f2f2;
+                    color: #000;
+                    font-weight: bold;
+                    height: 40px;
+                    vertical-align: middle;
+                }
+                .col-aluno { width: 180px; text-align: left !important; padding-left: 8px !important; background: #fafafa; }
+                
+                /* Select Boxes de Alto Contraste */
+                .select-tamanho {
+                    width: 100%;
+                    font-size: 11px;
+                    padding: 2px;
+                    border: 1px solid #999;
+                    background: #fff; /* Fundo branco */
+                    color: #000; /* Letra preta */
+                    cursor: pointer;
+                }
+                .select-tamanho:focus { border-color: #0078d4; outline: none; }
+                .select-tamanho option { background: #fff; color: #000; }
+
+                .btn-confirmar-direct {
+                    background: #28a745;
+                    color: white;
+                    border: none;
+                    padding: 10px 20px;
+                    font-weight: bold;
+                    border-radius: 3px;
+                    cursor: pointer;
+                    margin-top: 10px;
+                    width: 100%;
+                }
+                .header-info { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; color: #000; }
+            </style>
+
+            <div class="planilha-container">
+                <div class="header-info">
+                    <strong>TURMA: ${data.turmaInfo.nome}</strong>
+                    <button class="btn-voltar-vidro" onclick="telaEntregaMaterial()" style="color: #000; border: 1px solid #ccc;">← VOLTAR</button>
+                </div>
+
+                <table class="tabela-uniforme">
+                    <thead>
+                        <tr>
+                            <th class="col-aluno">ALUNO</th>
+                            ${data.produtos.map(p => {
+                                // Quebra o nome do produto: CALCA MAS -> CALCA<br>MAS
+                                const nomeFormatado = p.nome.replace(' ', '<br>');
+                                return `<th>${nomeFormatado}</th>`;
+                            }).join('')}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${data.alunos.map(aluno => `
+                            <tr>
+                                <td class="col-aluno" title="${aluno.nome}">${aluno.nome.toUpperCase()}</td>
+                                ${data.produtos.map(produto => {
+                                    const grades = data.grades[produto.id] || [];
+                                    return `
+                                        <td>
+                                            <select class="select-tamanho" 
+                                                    data-aluno-id="${aluno.id}" 
+                                                    data-produto-id="${produto.id}">
+                                                <option value="">--</option>
+                                                ${grades.map(g => `
+                                                    <option value="${g.tamanho}">${g.tamanho} (${g.quantidade})</option>
+                                                `).join('')}
+                                            </select>
+                                        </td>
+                                    `;
+                                }).join('')}
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+
+                <button class="btn-confirmar-direct" onclick="confirmarEntregasUniformes(${turmaId})">
+                    CONFIRMAR SELECIONADAS
+                </button>
+            </div>
+        `;
+    } catch (err) {
+        notificar(`Erro: ${err.message}`, 'erro');
+    }
+}
+
+async function confirmarEntregasUniformes(turmaId) {
+    const selects = document.querySelectorAll('.select-tamanho');
+    const entregas = [];
+
+    selects.forEach(sel => {
+        if (sel.value !== "") {
+            entregas.push({
+                aluno_id: sel.dataset.alunoId,
+                produto_id: sel.dataset.produtoId,
+                tamanho: sel.value
+            });
+        }
+    });
+
+    if (entregas.length === 0) {
+        return; // Não faz nada se não houver seleção
+    }
+
+    try {
+        const res = await fetch(`${API_URL}/escola/registrar-entrega-uniforme-lote`, {
+            method: 'POST',
+            headers: { 
+                'Authorization': `Bearer ${TOKEN}`,
+                'Content-Type': 'application/json' 
+            },
+            body: JSON.stringify({ turma_id: turmaId, entregas: entregas })
+        });
+
+        if (!res.ok) {
+            const errorData = await res.json();
+            throw new Error(errorData.error || 'Erro ao processar.');
+        }
+
+        // Única mensagem permitida
+        notificar('ENTREGA REGISTRADA', 'sucesso');
+        
+        // Atualiza a tabela para mostrar o estoque atualizado
+        renderizarMatrizEntregaUniforme(turmaId);
+
+    } catch (err) {
+        console.error(err);
+        // Exibe o erro apenas se algo realmente falhar no banco/rede
+        notificar(`ATENÇÃO! ${err.message}`, 'erro');
     }
 }
 

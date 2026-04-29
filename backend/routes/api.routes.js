@@ -9719,4 +9719,88 @@ router.get('/relatorios/escola/:localId/faltantes-material', verificarToken, asy
     }
 });
 
+// ROTA: DADOS DA GRADE DE MATERIAL (GET)
+router.get('/turma/:id/grade-material', verificarToken, async (req, res) => {
+    const { id: turmaId } = req.params;
+    const localId = req.user.local_id;
+
+    try {
+        const client = await db.pool.connect();
+        try {
+            const tRes = await client.query(
+                'SELECT id, nome, etapa_id FROM turmas WHERE id = $1 AND local_id = $2', 
+                [turmaId, localId]
+            );
+            const turmaInfo = tRes.rows[0];
+
+            const pRes = await client.query(
+                "SELECT id, nome FROM produtos WHERE id BETWEEN 1 AND 6 AND tipo = 'MATERIAL' ORDER BY id ASC"
+            );
+            
+            const aRes = await client.query(
+                "SELECT id, nome FROM alunos WHERE turma_id = $1 AND status = 'ATIVO' ORDER BY nome ASC",
+                [turmaId]
+            );
+            const alunoIds = aRes.rows.map(a => a.id);
+
+            const eRes = await client.query(
+                "SELECT aluno_id, produto_id FROM entregas_alunos WHERE aluno_id = ANY($1) AND produto_id BETWEEN 1 AND 6",
+                [alunoIds]
+            );
+
+            const entregasRealizadas = eRes.rows.reduce((acc, e) => {
+                if (!acc[e.aluno_id]) acc[e.aluno_id] = {};
+                acc[e.aluno_id][e.produto_id] = { status: 'entregue' };
+                return acc;
+            }, {});
+
+            const alunosFinal = aRes.rows.map(a => ({
+                ...a,
+                statusItens: entregasRealizadas[a.id] || {}
+            }));
+
+            res.json({ turmaInfo, produtos: pRes.rows, alunos: alunosFinal });
+        } finally {
+            client.release();
+        }
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao buscar grade de material." });
+    }
+});
+
+// ROTA: REGISTRAR ENTREGAS EM LOTE (POST)
+router.post('/entregas/lote-material', verificarToken, async (req, res) => {
+    const { entregas } = req.body;
+    const { id: usuarioId, local_id: localId } = req.user;
+
+    const client = await db.pool.connect();
+    try {
+        await client.query('BEGIN');
+        for (const item of entregas) {
+            // Baixa estoque (Sempre tamanho 'N/A')
+            const baixa = await client.query(
+                `UPDATE estoque_por_local SET quantidade = quantidade - 1 
+                 WHERE local_id = $1 AND produto_id = $2 AND tamanho = 'N/A' AND quantidade > 0`,
+                [localId, item.produtoId]
+            );
+
+            if (baixa.rowCount === 0) throw new Error(`Estoque esgotado para o Kit ID ${item.produtoId}`);
+
+            // Insere entrega
+            await client.query(
+                `INSERT INTO entregas_alunos (aluno_id, produto_id, tamanho, usuario_id, local_id)
+                 VALUES ($1, $2, 'N/A', $3, $4)`,
+                [item.alunoId, item.produtoId, usuarioId, localId]
+            );
+        }
+        await client.query('COMMIT');
+        res.status(201).json({ success: true });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
 module.exports = router;

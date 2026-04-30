@@ -9683,10 +9683,19 @@ async function telaEscolaConfirmarRecebimento() {
                 
                 ${remessas.map(r => {
                     const isPatrimonio = (r.tipo_pedido === 'INFRA_PATRIMONIO');
+                    
+                    // --- LÓGICA DE VALIDAÇÃO DO STATUS ---
+                    const podeReceber = r.status === 'EM_TRANSPORTE';
+                    const labelStatus = podeReceber ? '' : `<span style="color:#ff4d4d; font-size:0.75rem; display:block; margin-bottom:5px;">⚠️ Aguardando saída do depósito</span>`;
+                    // -------------------------------------
+
                     return `
-                    <div class="glass-panel" style="margin-bottom:20px; padding:20px; border-left: 6px solid ${isPatrimonio ? '#eab308' : '#00d4ff'};">
+                    <div class="glass-panel" style="margin-bottom:20px; padding:20px; border-left: 6px solid ${isPatrimonio ? '#eab308' : '#00d4ff'}; opacity: ${podeReceber ? '1' : '0.8'};">
                         <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <h3 style="color:white; margin:0;">Remessa #${r.remessa_id}</h3>
+                            <div>
+                                <h3 style="color:white; margin:0;">Remessa #${r.remessa_id}</h3>
+                                <small style="color:rgba(255,255,255,0.5)">Status atual: <b>${r.status}</b></small>
+                            </div>
                             <button onclick="visualizarItensRemessa(${r.remessa_id}, '${r.tipo_pedido}')" class="btn-detalhes">👁️ VISUALIZAR ITENS</button>
                         </div>
                         
@@ -9695,7 +9704,7 @@ async function telaEscolaConfirmarRecebimento() {
                         <hr style="border:0; border-top:1px solid rgba(255,255,255,0.1); margin:15px 0;">
 
                         ${isPatrimonio ? `
-                            <div class="setor-obrigatorio">
+                            <div class="setor-obrigatorio" style="${!podeReceber ? 'pointer-events:none; opacity:0.5' : ''}">
                                 <label style="color:#eab308; display:block; font-size:0.8rem; font-weight:bold; margin-bottom:8px;">📍 SETOR DE DESTINO (OBRIGATÓRIO):</label>
                                 <select id="setor-select-${r.remessa_id}" class="select-vidro" style="width:100%; border:1px solid #eab308;">
                                     <option value="">-- SELECIONE O SETOR --</option>
@@ -9704,14 +9713,24 @@ async function telaEscolaConfirmarRecebimento() {
                             </div>
                         ` : ''}
 
-                        <button onclick="efetivarRecebimento(${r.remessa_id}, ${r.pedido_id}, '${r.tipo_pedido}')" 
-                                class="btn-confirmar-recebimento" style="margin-top:15px; width:100%;">
-                            ✅ CONFIRMAR RECEBIMENTO
-                        </button>
+                        <div style="margin-top:15px;">
+                            ${!podeReceber ? labelStatus : ''}
+                            <button 
+                                onclick="efetivarRecebimento(${r.remessa_id}, ${r.pedido_id}, '${r.tipo_pedido}')" 
+                                class="btn-confirmar-recebimento" 
+                                ${!podeReceber ? 'disabled' : ''} 
+                                style="width:100%; 
+                                       ${!podeReceber ? 'background:#555 !important; cursor:not-allowed; border-color:#777 !important; color:#aaa !important;' : ''}">
+                                ${podeReceber ? '✅ CONFIRMAR RECEBIMENTO' : '🚫 AGUARDANDO TRANSPORTE'}
+                            </button>
+                        </div>
                     </div>`;
                 }).join('')}
             </div>`;
-    } catch (err) { container.innerHTML = "Erro ao carregar."; }
+    } catch (err) { 
+        console.error(err);
+        container.innerHTML = "<div style='color:white; padding:20px;'>❌ Erro ao carregar remessas.</div>"; 
+    }
 }
 
 async function visualizarItensRemessa(remessaId, tipoPedido) {

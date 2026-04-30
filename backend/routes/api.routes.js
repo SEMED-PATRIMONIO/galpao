@@ -9953,4 +9953,79 @@ router.get('/relatorios/pendencia-kit-professores', verificarToken, async (req, 
     }
 });
 
+// --- ROTA DE CONSULTA V2 ---
+router.get('/estoque/v2/consulta-exclusiva', async (req, res) => {
+    try {
+        const sql = `
+            SELECT 
+                p.id, p.nome, p.tipo,
+                COALESCE((SELECT SUM(quantidade) FROM estoque_por_local WHERE produto_id = p.id AND local_id = 37), 0) as quantidade_estoque,
+                COALESCE(
+                    (SELECT json_agg(json_build_object('tamanho', epl.tamanho, 'quantidade', epl.quantidade))
+                     FROM estoque_por_local epl
+                     WHERE epl.produto_id = p.id AND epl.local_id = 37 AND epl.tamanho IS NOT NULL), 
+                    '[]'::json
+                ) AS grade
+            FROM produtos p
+            WHERE p.local_id = 37 AND p.tipo != 'PATRIMONIO'
+            ORDER BY CASE WHEN p.tipo = 'MATERIAL' THEN 1 ELSE 2 END, p.nome ASC;`;
+
+        const { rows } = await db.query(sql);
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// --- ROTA DE ENTRADA V2 ---
+router.post('/estoque/v2/entrada-lote', async (req, res) => {
+    const { itens, usuario_id, observacoes } = req.body;
+    const client = await db.pool.connect();
+
+    try {
+        await client.query('BEGIN');
+
+        const totalGeral = itens.reduce((acc, i) => acc + i.qtd_total, 0);
+        const resHist = await client.query(
+            `INSERT INTO historico (usuario_id, acao, quantidade_total, observacoes, local_id, tipo) 
+             VALUES ($1, 'ENTRADA V2', $2, $3, 37, 'ENTRADA') RETURNING id`,
+            [usuario_id, totalGeral, observacoes]
+        );
+        const histId = resHist.rows[0].id;
+
+        for (const item of itens) {
+            // Se for material, cria um objeto de grade fake com 'N/A' para unificar o loop
+            const gradeParaProcessar = item.tipo === 'MATERIAL' ? { 'N/A': item.qtd_total } : item.grade;
+
+            for (const [tamanho, qtd] of Object.entries(gradeParaProcessar)) {
+                if (qtd <= 0) continue;
+
+                // 1. Atualiza Estoque (UPSERT)
+                await client.query(
+                    `INSERT INTO estoque_por_local (local_id, produto_id, tamanho, quantidade)
+                     VALUES (37, $1, $2, $3)
+                     ON CONFLICT (local_id, produto_id, tamanho) 
+                     DO UPDATE SET quantidade = estoque_por_local.quantidade + EXCLUDED.quantidade`,
+                    [item.produto_id, tamanho, qtd]
+                );
+
+                // 2. Detalha Histórico
+                await client.query(
+                    `INSERT INTO historico_detalhes (historico_id, produto_id, quantidade, tamanho, tipo_produto) 
+                     VALUES ($1, $2, $3, $4, $5)`,
+                    [histId, item.produto_id, qtd, tamanho, item.tipo]
+                );
+            }
+        }
+
+        await client.query('COMMIT');
+        res.json({ success: true });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ success: false, error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
 module.exports = router;

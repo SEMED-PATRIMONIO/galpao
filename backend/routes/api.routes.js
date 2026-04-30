@@ -9977,7 +9977,7 @@ router.post('/estoque/v2/entrada-lote', async (req, res) => {
 });
 
 // Rota: GET /escola/alunos-turma/:turma
-app.get('/escola/alunos-turma/:turma', verificarToken, async (req, res) => {
+route.get('/escola/alunos-turma/:turma', verificarToken, async (req, res) => {
     try {
         const { turma } = req.params;
         const unidade_id = req.usuario.unidade_id; // Pega a unidade do token

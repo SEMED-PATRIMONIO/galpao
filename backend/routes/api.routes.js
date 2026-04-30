@@ -1563,12 +1563,13 @@ router.post('/pedidos/estoque/finalizar-remessa', verificarToken, async (req, re
         for (const item of itens) {
             const { produto_id, quantidade_enviada } = item;
 
-            // 🟢 CORREÇÃO CRÍTICA AQUI:
-            // Sincronizando com a Entrada: Se for MATERIAL (sem tamanho), usamos 'N/A'
-            // Se o front enviar 'Único', vazio ou undefined, normalizamos para 'N/A'
-            const tamanho = (item.tamanho === undefined || item.tamanho === '' || item.tamanho === 'Único' || item.tamanho === '10')
-                ? 'N/A'
-                : item.tamanho;
+            const tamanho = (
+                item.tamanho === undefined || 
+                item.tamanho === null || 
+                item.tamanho === '' || 
+                item.tamanho === 'null' || 
+                item.tamanho === 'Único'
+            ) ? 'N/A' : item.tamanho;
 
             // Valida quantidade
             if (!quantidade_enviada || quantidade_enviada <= 0) {
@@ -10025,6 +10026,25 @@ router.post('/estoque/v2/entrada-lote', async (req, res) => {
         res.status(500).json({ success: false, error: err.message });
     } finally {
         client.release();
+    }
+});
+
+// Rota: GET /escola/alunos-turma/:turma
+app.get('/escola/alunos-turma/:turma', verificarToken, async (req, res) => {
+    try {
+        const { turma } = req.params;
+        const unidade_id = req.usuario.unidade_id; // Pega a unidade do token
+
+        const query = `
+            SELECT matricula, nome 
+            FROM alunos 
+            WHERE turma = $1 AND unidade_id = $2 
+            ORDER BY nome ASC
+        `;
+        const result = await pool.query(query, [turma, unidade_id]);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
     }
 });
 

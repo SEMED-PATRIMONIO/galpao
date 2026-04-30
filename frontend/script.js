@@ -367,7 +367,7 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="telaSolicitarServicoImpressora('recarga')"><i>🧪</i><span>SOLICITAR RECARGA</span></button>
             <button class="btn-grande btn-vidro" onclick="telaSolicitarServicoImpressora('manutencao')"><i>🛠️</i><span>SOLICITAR MANUTENÇÃO IMPRESSORA</span></button>
             <button class="btn-grande btn-vidro" onclick="telaSolicitarManutencaoPC('')"><i>💻</i><span>SOLICITAR MANUTENÇÃO INFORMÁTICA</span></button>
-            <button class="btn-grande btn-vidro" onclick="renderSubmenuCadastrosEscola()"><i>👩‍🎓</i><span>TURMAS / ALUNOS / PROFESSORES</span></button>
+            <button class="btn-grande btn-vidro" onclick="renderSubmenuCadastrosEscola()"><i>👩‍🎓</i><span>TURMAS E ALUNOS</span></button>
             <button class="btn-grande btn-vidro" onclick="abrirMenuPatrimonioEscola()"><i>🏛️</i><span>PATRIMÔNIO</span></button>
             <button class="btn-grande btn-vidro" onclick="renderSubmenuUniformesKits()"><i>👕</i><span>UNIFORMES & KITS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaEscolaConfirmarRecebimento()">
@@ -597,7 +597,6 @@ function renderSubmenuRelatoriosEscola() {
         <button class="btn-grande btn-vidro" onclick="telaRelatoriosGeral()"><i>📈</i><span>ENTREGAS DETALHADAS</span></button>
         <button class="btn-grande btn-vidro" onclick="telaRelatorioProfessores()"><i>👥</i><span>ENTREGAS DETALHADAS</span></button>
         <button class="btn-grande btn-vidro" onclick="telaRelatorioPendenciaKit6()"><i>🚨</i><span>PROFESSORES QUE FALTAM RECEBER O KIT 6</span></button>
-        <button class="btn-grande btn-vidro" onclick="telaEntregaTurma()"><i>📋</i><span>LISTA PARA ENTREGAR UNIFORME/KIT</span></button>
     `;
     abrirSubmenuVitrificado('RELATÓRIOS', botoes);
 }
@@ -6929,23 +6928,19 @@ async function salvarRemessa(pedidoId) {
         const qtd = parseInt(input.value) || 0;
         if (qtd > 0) {
             const tamanhoRaw = input.dataset.tam;
-            const produtoId = input.dataset.prodId;
-
-            // ✅ Tratamento único para o tamanho (sem duplicar variáveis)
-            let tamanho = (tamanhoRaw === 'null' || tamanhoRaw === '' || !tamanhoRaw || tamanhoRaw === 'N/A') 
+            const tamanho = (tamanhoRaw === 'null' || tamanhoRaw === '') 
                 ? null 
                 : tamanhoRaw;
 
-            // Geramos uma chave única para o Map
-            const chave = `${produtoId}_${tamanho ?? 'NULL'}`;
+            const chave = `${input.dataset.prodId}_${tamanho ?? 'NULL'}`;
 
             if (itensMap.has(chave)) {
                 // Soma se vier duplicado no DOM
                 itensMap.get(chave).quantidade_enviada += qtd;
             } else {
                 itensMap.set(chave, {
-                    produto_id: produtoId,
-                    tamanho: tamanho,
+                    produto_id: input.dataset.prodId,
+                    tamanho,
                     quantidade_enviada: qtd
                 });
             }
@@ -6961,8 +6956,8 @@ async function salvarRemessa(pedidoId) {
 
     if (!confirm("Confirmar o registro desta remessa de saída?")) return;
 
-    // ✅ Localiza e desabilita o botão para evitar duplo clique
-    const btnSalvar = document.querySelector('button[onclick*="salvarRemessa"]');
+    // ✅ Desabilita botão imediatamente para evitar duplo clique
+    const btnSalvar = document.querySelector('[onclick*="salvarRemessa"]');
     if (btnSalvar) {
         btnSalvar.disabled = true;
         btnSalvar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> PROCESSANDO...';
@@ -6977,7 +6972,7 @@ async function salvarRemessa(pedidoId) {
             },
             body: JSON.stringify({ 
                 pedidoId, 
-                itens: Array.from(itensMap.values())
+                itens: [...itensMap.values()]
             })
         });
 
@@ -6991,17 +6986,15 @@ async function salvarRemessa(pedidoId) {
             `✅ Remessa #${data.remessaId} registrada com sucesso!`, 
             "sucesso"
         );
-        
-        // Volta para a lista de pedidos pendentes
         telaEstoquePedidosPendentes();
 
     } catch (err) {
         notificar("Erro ao salvar remessa: " + err.message, "erro");
 
-        // ✅ Reabilita o botão apenas em caso de erro para permitir nova tentativa
+        // ✅ Reabilita o botão apenas em caso de erro
         if (btnSalvar) {
             btnSalvar.disabled = false;
-            btnSalvar.innerHTML = '🚀 FINALIZAR REMESSA (ATUALIZAR ESTOQUE)';
+            btnSalvar.innerHTML = '<i class="fas fa-check"></i> CONFIRMAR REMESSA';
         }
     }
 }
@@ -8992,8 +8985,8 @@ async function gerarRomaneio(remessaId) {
                     .qr-code-area p { font-size: 6pt; color: #666; margin-top: 5px; font-weight: bold; text-align: center; }
                     table { width: 100%; border-collapse: collapse; margin-top: 10px; }
                     th { background: #444; color: white; padding: 8px; font-size: 8.5pt; text-align: center; }
-                    .rodape-assinaturas { margin-top: 80px; display: flex; justify-content: space-between; gap: 40px; }
-                    .caixa-assinatura { width: 48%; border-top: 1px solid #000; text-align: center; padding-top: 8px; font-size: 8pt; }
+                    .rodape-assinaturas { margin-top: 80px; display: flex; justify-content: center; }
+                    .caixa-assinatura { width: 450px; border-top: 1px solid #000; text-align: center; padding-top: 8px; font-size: 8.5pt; }
                     @media print { body { background: none; } .pagina-a4 { box-shadow: none; margin: 0; width: 100%; } }
                 </style>
             </head>
@@ -9046,13 +9039,8 @@ async function gerarRomaneio(remessaId) {
 
                     <div class="rodape-assinaturas">
                         <div class="caixa-assinatura">
-                            <strong>RESPONSÁVEL PELA ENTREGA</strong><br>
-                            <span style="color: #444;">NOME LEGÍVEL E Nº MATRÍCULA</span>
-                        </div>
-
-                        <div class="caixa-assinatura">
                             <strong>ASSINATURA DO RECEBEDOR (UNIDADE ESCOLAR)</strong><br>
-                            <span style="color: #444;">NOME LEGÍVEL E Nº MATRÍCULA</span>
+                            <span style="color: #444;">NOME LEGÍVEL E MATRÍCULA OU RG</span>
                         </div>
                     </div>
                 </div>
@@ -9695,25 +9683,11 @@ async function telaEscolaConfirmarRecebimento() {
                 
                 ${remessas.map(r => {
                     const isPatrimonio = (r.tipo_pedido === 'INFRA_PATRIMONIO');
-                    
-                    // --- LÓGICA DE VALIDAÇÃO DO STATUS ---
-                    const statusRecebido = r.status || r.pedido_status; 
-                    const statusBruto = r.status || r.pedido_status || 'PENDENTE';
-                    const statusLimpo = String(statusBruto).trim().toUpperCase();
-                    const podeReceber = (statusLimpo === 'EM_TRANSPORTE');
-
-                    const labelStatus = podeReceber 
-                        ? `<span style="color:#00d4ff; font-size:0.75rem; display:block; margin-bottom:5px;">✅ Carga liberada para recebimento</span>` 
-                        : `<span style="color:#ff4d4d; font-size:0.75rem; display:block; margin-bottom:5px;">⚠️ Status: ${statusRecebido || 'PENDENTE'} (Aguarde a saída)</span>`;
-
                     return `
-                    <div class="glass-panel" style="margin-bottom:20px; padding:20px; border-left: 6px solid ${isPatrimonio ? '#eab308' : '#00d4ff'}; opacity: ${podeReceber ? '1' : '0.7'};">
+                    <div class="glass-panel" style="margin-bottom:20px; padding:20px; border-left: 6px solid ${isPatrimonio ? '#eab308' : '#00d4ff'};">
                         <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <div>
-                                <h3 style="color:white; margin:0;">Remessa #${r.remessa_id}</h3>
-                                <small style="color:rgba(255,255,255,0.5)">Pedido ref: #${r.pedido_id}</small>
-                            </div>
-                            <button onclick="visualizarItensRemessa(${r.remessa_id}, '${r.tipo_pedido}')" class="btn-detalhes">👁️ ITENS</button>
+                            <h3 style="color:white; margin:0;">Remessa #${r.remessa_id}</h3>
+                            <button onclick="visualizarItensRemessa(${r.remessa_id}, '${r.tipo_pedido}')" class="btn-detalhes">👁️ VISUALIZAR ITENS</button>
                         </div>
                         
                         <div id="lista-itens-${r.remessa_id}" style="display:none; margin-top:15px; padding:10px; background:rgba(0,0,0,0.3); border-radius:8px;"></div>
@@ -9721,7 +9695,7 @@ async function telaEscolaConfirmarRecebimento() {
                         <hr style="border:0; border-top:1px solid rgba(255,255,255,0.1); margin:15px 0;">
 
                         ${isPatrimonio ? `
-                            <div class="setor-obrigatorio" style="${!podeReceber ? 'pointer-events:none; opacity:0.5' : ''}">
+                            <div class="setor-obrigatorio">
                                 <label style="color:#eab308; display:block; font-size:0.8rem; font-weight:bold; margin-bottom:8px;">📍 SETOR DE DESTINO (OBRIGATÓRIO):</label>
                                 <select id="setor-select-${r.remessa_id}" class="select-vidro" style="width:100%; border:1px solid #eab308;">
                                     <option value="">-- SELECIONE O SETOR --</option>
@@ -9730,24 +9704,14 @@ async function telaEscolaConfirmarRecebimento() {
                             </div>
                         ` : ''}
 
-                        <div style="margin-top:15px;">
-                            ${labelStatus}
-                            <button 
-                                onclick="efetivarRecebimento(${r.remessa_id}, ${r.pedido_id}, '${r.tipo_pedido}')" 
-                                class="btn-confirmar-recebimento" 
-                                ${!podeReceber ? 'disabled' : ''} 
-                                style="width:100%; transition: all 0.3s;
-                                    ${!podeReceber ? 'background:#444 !important; cursor:not-allowed; opacity:0.5; filter:grayscale(1);' : 'background:#00d4ff; color:#001a2c; font-weight:bold;'}">
-                                ${podeReceber ? '✅ CONFIRMAR RECEBIMENTO' : 'BLOQUEADO'}
-                            </button>
-                        </div>
+                        <button onclick="efetivarRecebimento(${r.remessa_id}, ${r.pedido_id}, '${r.tipo_pedido}')" 
+                                class="btn-confirmar-recebimento" style="margin-top:15px; width:100%;">
+                            ✅ CONFIRMAR RECEBIMENTO
+                        </button>
                     </div>`;
                 }).join('')}
             </div>`;
-    } catch (err) { 
-        console.error(err);
-        container.innerHTML = "<div style='color:white; padding:20px;'>❌ Erro ao carregar remessas.</div>"; 
-    }
+    } catch (err) { container.innerHTML = "Erro ao carregar."; }
 }
 
 async function visualizarItensRemessa(remessaId, tipoPedido) {
@@ -23280,121 +23244,6 @@ function gerarPDFPendenciaKit6() {
     const win = window.open('', '_blank');
     win.document.write(htmlPDF);
     win.document.close();
-}
-
-async function telaEntregaTurma() {
-    const container = document.getElementById('app-content');
-    
-    // Interface de Seleção
-    container.innerHTML = `
-        <div class="glass-panel" style="padding:30px; max-width:500px; margin: 40px auto; text-align:center;">
-            <h2 style="color:white; margin-bottom:20px;">📋 GERAR LISTA DE ENTREGA</h2>
-            
-            <label style="color:white; display:block; margin-bottom:10px;">SELECIONE A TURMA:</label>
-            <select id="select-turma" class="select-vidro" style="width:100%; margin-bottom:20px;">
-                <option value="">-- SELECIONE --</option>
-                <option value="101">Turma 101</option>
-                <option value="201">Turma 201</option>
-                </select>
-
-            <label style="color:white; display:block; margin-bottom:10px;">O QUE ESTÁ SENDO ENTREGUE?</label>
-            <select id="select-tipo" class="select-vidro" style="width:100%; margin-bottom:20px;">
-                <option value="UNIFORME">UNIFORME</option>
-                <option value="KIT ESCOLAR">KIT ESCOLAR</option>
-            </select>
-
-            <button onclick="gerarDocumentoEntrega()" class="btn-confirmar-recebimento" style="width:100%;">
-                🖨️ GERAR DOCUMENTO PARA IMPRESSÃO
-            </button>
-        </div>
-    `;
-}
-
-async function gerarDocumentoEntrega() {
-    const turma = document.getElementById('select-turma').value;
-    const tipo = document.getElementById('select-tipo').value;
-
-    if (!turma) return alert("Selecione uma turma!");
-
-    try {
-        const res = await fetch(`${API_URL}/escola/alunos-turma/${turma}`, {
-            headers: { 'Authorization': `Bearer ${TOKEN}` }
-        });
-        const alunos = await res.json();
-
-        const htmlLista = alunos.map(aluno => `
-            <tr>
-                <td>${aluno.nome}</td>
-                <td style="text-align:center;">${aluno.matricula}</td>
-                <td style="text-align:center;">___/___/______</td>
-                <td></td>
-            </tr>
-        `).join('');
-
-        const htmlDoc = `
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="UTF-8">
-                <style>
-                    @page { size: A4 portrait; margin: 1cm; }
-                    body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
-                    .cabecalho { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #000; padding-bottom: 10px; margin-bottom: 15px; }
-                    .logo { height: 50px; }
-                    .cabecalho-textos { text-align: center; flex: 1; }
-                    .titulo-doc { text-align: center; font-size: 14pt; font-weight: bold; margin-top: 10px; }
-                    .subtitulo-turma { text-align: center; font-size: 12pt; font-weight: bold; margin-bottom: 15px; }
-                    table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
-                    th, td { border: 1px solid #333; padding: 4px 6px; font-size: 8pt; }
-                    th { background: #f0f0f0; }
-                    .col-assinatura { width: 250px; }
-                    .rodape { margin-top: 50px; display: flex; justify-content: flex-start; }
-                    .caixa-assinatura { width: 350px; border-top: 1px solid #000; text-align: center; padding-top: 5px; font-size: 9pt; }
-                </style>
-            </head>
-            <body>
-                <div class="cabecalho">
-                    <img src="assets/braque.png" class="logo">
-                    <div class="cabecalho-textos">
-                        <p style="margin:0; font-size:11pt; font-weight:bold;">PREFEITURA MUNICIPAL DE QUEIMADOS</p>
-                        <p style="margin:0; font-size:10pt;">SECRETARIA MUNICIPAL DE EDUCAÇÃO</p>
-                    </div>
-                    <img src="assets/logap.png" class="logo">
-                </div>
-
-                <div class="titulo-doc">ENTREGA DE ${tipo}</div>
-                <div class="subtitulo-turma">TURMA: ${turma}</div>
-
-                <table>
-                    <thead>
-                        <tr>
-                            <th style="text-align:left;">NOME DO ALUNO</th>
-                            <th style="width:80px;">MATRÍCULA</th>
-                            <th style="width:90px;">DATA</th>
-                            <th class="col-assinatura">ASSINATURA</th>
-                        </tr>
-                    </thead>
-                    <tbody>${htmlLista}</tbody>
-                </table>
-
-                <div class="rodape">
-                    <div class="caixa-assinatura">
-                        <strong>RESPONSÁVEL PELA ENTREGA</strong><br>
-                        <span style="color:#444;">NOME LEGÍVEL E Nº MATRÍCULA</span>
-                    </div>
-                </div>
-            </body>
-            </html>
-        `;
-
-        const win = window.open('', '_blank');
-        win.document.write(htmlDoc);
-        win.document.close();
-        // win.print(); // Opcional: abre a caixa de impressão automaticamente
-
-    } catch (err) {
-        alert("Erro ao gerar lista.");
-    }
 }
 
 window.telaVisualizarEstoque = telaVisualizarEstoque;

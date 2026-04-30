@@ -6929,21 +6929,23 @@ async function salvarRemessa(pedidoId) {
         const qtd = parseInt(input.value) || 0;
         if (qtd > 0) {
             const tamanhoRaw = input.dataset.tam;
-            let tamanho = (tamanhoRaw === 'null' || tamanhoRaw === '' || !tamanhoRaw) ? null : tamanhoRaw;
-            const tamanho = (tamanhoRaw === 'null' || tamanhoRaw === '') 
+            const produtoId = input.dataset.prodId;
+
+            // ✅ Tratamento único para o tamanho (sem duplicar variáveis)
+            let tamanho = (tamanhoRaw === 'null' || tamanhoRaw === '' || !tamanhoRaw || tamanhoRaw === 'N/A') 
                 ? null 
                 : tamanhoRaw;
-            if (tamanho === 'N/A') tamanho = null;
 
-            const chave = `${input.dataset.prodId}_${tamanho ?? 'SEM_TAM'}`;
+            // Geramos uma chave única para o Map
+            const chave = `${produtoId}_${tamanho ?? 'NULL'}`;
 
             if (itensMap.has(chave)) {
                 // Soma se vier duplicado no DOM
                 itensMap.get(chave).quantidade_enviada += qtd;
             } else {
                 itensMap.set(chave, {
-                    produto_id: input.dataset.prodId,
-                    tamanho,
+                    produto_id: produtoId,
+                    tamanho: tamanho,
                     quantidade_enviada: qtd
                 });
             }
@@ -6959,8 +6961,8 @@ async function salvarRemessa(pedidoId) {
 
     if (!confirm("Confirmar o registro desta remessa de saída?")) return;
 
-    // ✅ Desabilita botão imediatamente para evitar duplo clique
-    const btnSalvar = document.querySelector('[onclick*="salvarRemessa"]');
+    // ✅ Localiza e desabilita o botão para evitar duplo clique
+    const btnSalvar = document.querySelector('button[onclick*="salvarRemessa"]');
     if (btnSalvar) {
         btnSalvar.disabled = true;
         btnSalvar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> PROCESSANDO...';
@@ -6975,7 +6977,7 @@ async function salvarRemessa(pedidoId) {
             },
             body: JSON.stringify({ 
                 pedidoId, 
-                itens: [...itensMap.values()]
+                itens: Array.from(itensMap.values())
             })
         });
 
@@ -6989,15 +6991,17 @@ async function salvarRemessa(pedidoId) {
             `✅ Remessa #${data.remessaId} registrada com sucesso!`, 
             "sucesso"
         );
+        
+        // Volta para a lista de pedidos pendentes
         telaEstoquePedidosPendentes();
 
     } catch (err) {
         notificar("Erro ao salvar remessa: " + err.message, "erro");
 
-        // ✅ Reabilita o botão apenas em caso de erro
+        // ✅ Reabilita o botão apenas em caso de erro para permitir nova tentativa
         if (btnSalvar) {
             btnSalvar.disabled = false;
-            btnSalvar.innerHTML = '<i class="fas fa-check"></i> CONFIRMAR REMESSA';
+            btnSalvar.innerHTML = '🚀 FINALIZAR REMESSA (ATUALIZAR ESTOQUE)';
         }
     }
 }

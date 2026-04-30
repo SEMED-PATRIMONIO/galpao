@@ -17691,25 +17691,31 @@ async function finalizarEntradaEstoque() {
     }
 }
 
+/**
+ * UNIFICAÇÃO OPERACIONAL - ENTRADA DE ESTOQUE V2
+ * Resolve: Grades vazias, ordenação de tamanhos e múltiplos tipos de produto.
+ */
+
 async function abrirTelaEntrada() {
     const app = document.getElementById('app-content');
     if (!app) return;
 
+    // Layout Base
     app.innerHTML = `
         <div class="header-entrada animate__animated animate__fadeIn">
             <button class="btn-voltar-vidro" onclick="carregarDashboard()" style="margin-bottom: 20px;">
                 <i class="fas fa-arrow-left"></i> VOLTAR
             </button>
-            <h2 class="titulo-sessao" style="color: white; margin-bottom: 20px;">ENTRADA DE MERCADORIA</h2>
-            <p style="color: rgba(255,255,255,0.6); margin-bottom: 20px;">Selecione os itens e digite as quantidades para somar ao estoque.</p>
+            <h2 class="titulo-sessao" style="color: white; margin-bottom: 5px;">ENTRADA DE MERCADORIA (V2)</h2>
+            <p style="color: rgba(255,255,255,0.6); margin-bottom: 20px;">Insira as quantidades recebidas. Materiais são diretos, Uniformes expandem a grade.</p>
         </div>
         
         <div id="lista-entrada-produtos">
-            <p style="color: white; padding: 20px;">Carregando produtos...</p>
+            <p style="color: white; padding: 20px;">Consultando catálogo...</p>
         </div>
 
-        <div id="footer-acoes" style="position: sticky; bottom: 20px; display: flex; justify-content: flex-end; margin-top: 30px;">
-            <button class="btn-confirmar-entrada" onclick="processarEntradaEstoque()" 
+        <div id="footer-acoes" style="position: sticky; bottom: 20px; display: flex; justify-content: flex-end; margin-top: 30px; z-index: 100;">
+            <button class="btn-confirmar-entrada" onclick="processarEntradaEstoqueV2()" 
                 style="padding: 15px 40px; border-radius: 30px; border: none; background: #00d4ff; color: #001a2c; font-weight: bold; cursor: pointer; box-shadow: 0 10px 20px rgba(0,212,255,0.3);">
                 <i class="fas fa-check"></i> CONFIRMAR ENTRADA
             </button>
@@ -17717,90 +17723,77 @@ async function abrirTelaEntrada() {
     `;
 
     try {
-        const res = await fetch(`${API_URL}/estoque/consulta-exclusiva`, {
+        const res = await fetch(`${API_URL}/estoque/v2/consulta-exclusiva`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
-        const dadosBrutos = await res.json();
-        const produtos = dadosBrutos.filter(p => p.tipo !== 'PATRIMONIO');
+        const produtos = await res.json();
         
         const listaHtml = document.getElementById('lista-entrada-produtos');
         listaHtml.innerHTML = '';
 
-        const listaOrdenada = produtos.sort((a, b) => {
-            if (a.tipo === 'MATERIAL' && b.tipo !== 'MATERIAL') return -1;
-            if (a.tipo !== 'MATERIAL' && b.tipo === 'MATERIAL') return 1;
-            return a.nome.localeCompare(b.nome);
-        });
-
-        listaOrdenada.forEach(p => {
+        produtos.forEach(p => {
             const isUniforme = p.tipo === 'UNIFORMES';
             const isTenis = p.nome.toUpperCase().includes('TENIS');
             const corTag = p.tipo === 'MATERIAL' ? '#10b981' : '#00d4ff';
-            
-            // Lógica de ordenação da grade padronizada com Zeros
-            let gradeOrdenada = p.grade || [];
-            if (isUniforme && !isTenis && gradeOrdenada.length > 0) {
-                const ordemDefinida = ['02', '04', '06', '08', '10', '12', '14', '16', 'PP', 'P', 'M', 'G', 'GG', 'EGG'];
-                
-                gradeOrdenada = [...gradeOrdenada].sort((a, b) => {
-                    const tamA = String(a.tamanho).toUpperCase().padStart(2, '0');
-                    const tamB = String(b.tamanho).toUpperCase().padStart(2, '0');
 
-                    const idxA = ordemDefinida.indexOf(tamA);
-                    const idxB = ordemDefinida.indexOf(tamB);
-                    
-                    if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-                    if (idxA !== -1) return -1;
-                    if (idxB !== -1) return 1;
-                    return tamA.localeCompare(tamB);
-                });
+            // --- GERAÇÃO DA GRADE VIRTUAL (Caso o banco venha vazio pós-truncate) ---
+            let gradeParaExibir = [];
+            if (isUniforme) {
+                if (isTenis) {
+                    for (let i = 22; i <= 43; i++) gradeParaExibir.push({ tamanho: String(i), quantidade: 0 });
+                } else {
+                    const padrao = ['02', '04', '06', '08', '10', '12', '14', '16', 'PP', 'P', 'M', 'G', 'GG', 'EGG'];
+                    gradeParaExibir = padrao.map(t => ({ tamanho: t, quantidade: 0 }));
+                }
+
+                // Mescla com dados reais do banco se existirem
+                if (p.grade && p.grade.length > 0) {
+                    gradeParaExibir = gradeParaExibir.map(item => {
+                        const doBanco = p.grade.find(g => String(g.tamanho) === String(item.tamanho));
+                        return doBanco ? { ...item, quantidade: doBanco.quantidade } : item;
+                    });
+                }
             }
 
             listaHtml.innerHTML += `
-                <div class="card-entrada glass-panel animate__animated animate__fadeInUp" 
+                <div class="card-entrada-v2 glass-panel animate__animated animate__fadeInUp" 
                     style="background: rgba(255,255,255,0.05); margin-bottom: 12px; padding: 18px; border-radius: 15px; color: white; border: 1px solid rgba(255,255,255,0.1);">
                     
-                    <div style="display: flex; justify-content: space-between; align-items: center;" 
-                         ${isUniforme ? `onclick="toggleGrade(${p.id})"` : ''}>
-                        <div style="cursor: ${isUniforme ? 'pointer' : 'default'}">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div onclick="${isUniforme ? `toggleGradeV2(${p.id})` : ''}" style="cursor: ${isUniforme ? 'pointer' : 'default'}; flex: 1;">
                             <span style="font-size: 0.7rem; background: ${corTag}; padding: 3px 8px; border-radius: 5px; color: #001a2c; font-weight: bold;">
                                 ${p.tipo}
                             </span>
                             <p style="margin: 8px 0 0 0; font-weight: bold; font-size: 1.1rem;">${p.nome}</p>
-                            <small style="opacity: 0.5;">Estoque atual: ${p.quantidade_estoque}</small>
+                            <small style="opacity: 0.5;">Estoque Total: ${p.quantidade_estoque || 0}</small>
                         </div>
 
                         ${!isUniforme ? `
                             <div style="text-align: right;">
-                                <small style="display: block; font-size: 0.65rem; opacity: 0.6; margin-bottom: 5px;">QTD ENTRADA</small>
                                 <input type="number" class="input-entrada-qtd" data-id="${p.id}" data-tipo="MATERIAL"
-                                       style="width: 100px; background: rgba(0,0,0,0.3); border: 1px solid #10b981; color: white; padding: 8px; border-radius: 8px; text-align: center;"
-                                       placeholder="0" min="0">
+                                    style="width: 80px; background: rgba(0,0,0,0.3); border: 1px solid #10b981; color: white; padding: 10px; border-radius: 8px; text-align: center;"
+                                    placeholder="0" min="0">
                             </div>
                         ` : `
-                            <div style="color: #00d4ff; font-size: 0.8rem; cursor: pointer; text-align: right;">
-                                Clique para abrir grade <i class="fas fa-chevron-down"></i>
-                                <br><small style="opacity:0.6">Total atual: ${p.quantidade_estoque}</small>
+                            <div onclick="toggleGradeV2(${p.id})" style="color: #00d4ff; font-size: 0.8rem; cursor: pointer; text-align: right;">
+                                Grade <i class="fas fa-chevron-down" id="seta-${p.id}"></i>
                             </div>
                         `}
                     </div>
 
                     ${isUniforme ? `
-                        <div id="grade-${p.id}" class="grade-expansivel" style="display:none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);">
-                            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px;">
-                                ${gradeOrdenada.map(g => {
-                                    // Formatação do tamanho para exibir '02' e enviar '02'
-                                    const tamFormatado = String(g.tamanho).toUpperCase().padStart(2, '0');
-                                    return `
-                                    <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; text-align: center; border: 1px solid rgba(255,255,255,0.05);">
-                                        <small style="display: block; font-size: 0.6rem; color: #00d4ff; margin-bottom: 5px;">${tamFormatado}</small>
+                        <div id="grade-v2-${p.id}" style="display:none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);">
+                            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 8px;">
+                                ${gradeParaExibir.map(g => `
+                                    <div style="background: rgba(0,0,0,0.2); padding: 8px; border-radius: 8px; text-align: center;">
+                                        <small style="display: block; color: #00d4ff; font-weight: bold; margin-bottom: 4px;">${g.tamanho}</small>
                                         <input type="number" class="input-entrada-qtd" 
-                                                data-id="${p.id}" data-tipo="UNIFORMES" data-tamanho="${tamFormatado}"
-                                                style="width: 100%; background: transparent; border: none; border-bottom: 1px solid #00d4ff; color: white; text-align: center;"
-                                                placeholder="0" min="0">
-                                        <small style="display: block; font-size: 0.55rem; opacity: 0.4; margin-top: 4px;">Atual: ${g.quantidade}</small>
+                                            data-id="${p.id}" data-tipo="UNIFORMES" data-tamanho="${g.tamanho}"
+                                            style="width: 100%; background: transparent; border: none; border-bottom: 1px solid rgba(0,212,255,0.5); color: white; text-align: center; font-size: 1rem;"
+                                            placeholder="0" min="0">
+                                        <small style="display: block; font-size: 0.6rem; opacity: 0.4; margin-top: 4px;">Atu: ${g.quantidade}</small>
                                     </div>
-                                `;}).join('')}
+                                `).join('')}
                             </div>
                         </div>
                     ` : ''}
@@ -17808,8 +17801,58 @@ async function abrirTelaEntrada() {
             `;
         });
     } catch (err) {
-        console.error("Erro ao carregar tela de entrada:", err);
-        document.getElementById('lista-entrada-produtos').innerHTML = `<p style="color: #ff4d4d; padding: 20px;">❌ Erro ao carregar dados.</p>`;
+        notificar("Erro ao carregar catálogo.");
+    }
+}
+
+// Funções auxiliares de UI
+function toggleGradeV2(id) {
+    const el = document.getElementById(`grade-v2-${id}`);
+    const seta = document.getElementById(`seta-${id}`);
+    const isAberto = el.style.display === 'block';
+    el.style.display = isAberto ? 'none' : 'block';
+    seta.style.transform = isAberto ? 'rotate(0deg)' : 'rotate(180deg)';
+}
+
+async function processarEntradaEstoqueV2() {
+    const usuarioId = localStorage.getItem('usuario_id');
+    const inputs = document.querySelectorAll('.input-entrada-qtd');
+    const mapaItens = {};
+
+    inputs.forEach(input => {
+        const qtd = parseInt(input.value) || 0;
+        if (qtd <= 0) return;
+
+        const id = input.dataset.id;
+        const tipo = input.dataset.tipo;
+        const tamanho = input.dataset.tamanho || 'N/A';
+
+        if (!mapaItens[id]) {
+            mapaItens[id] = { produto_id: id, tipo: tipo, qtd_total: 0, grade: {} };
+        }
+
+        mapaItens[id].qtd_total += qtd;
+        if (tipo === 'UNIFORMES') {
+            mapaItens[id].grade[tamanho] = (mapaItens[id].grade[tamanho] || 0) + qtd;
+        }
+    });
+
+    const itens = Object.values(mapaItens);
+    if (itens.length === 0) return notificar("⚠️ Digite alguma quantidade.");
+
+    try {
+        const res = await fetch(`${API_URL}/estoque/v2/entrada-lote`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ itens, usuario_id: usuarioId, observacoes: "Entrada Operacional V2" })
+        });
+
+        if ((await res.json()).success) {
+            notificar("✅ Estoque Atualizado com Sucesso!");
+            abrirTelaEntrada(); // Recarrega para limpar campos e atualizar saldos
+        }
+    } catch (err) {
+        notificar("❌ Erro no processamento.");
     }
 }
 

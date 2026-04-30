@@ -9685,24 +9685,28 @@ async function telaEscolaConfirmarRecebimento() {
                     const isPatrimonio = (r.tipo_pedido === 'INFRA_PATRIMONIO');
                     
                     // --- LÓGICA DE VALIDAÇÃO DO STATUS ---
-                    const podeReceber = r.status === 'EM_TRANSPORTE';
-                    const labelStatus = podeReceber ? '' : `<span style="color:#ff4d4d; font-size:0.75rem; display:block; margin-bottom:5px;">⚠️ Aguardando saída do depósito</span>`;
-                    // -------------------------------------
+                    const statusRecebido = r.status || r.pedido_status; 
+
+                    const podeReceber = String(statusRecebido).trim().toUpperCase() === 'EM_TRANSPORTE';
+
+                    const labelStatus = podeReceber 
+                        ? `<span style="color:#00d4ff; font-size:0.75rem; display:block; margin-bottom:5px;">✅ Carga liberada para recebimento</span>` 
+                        : `<span style="color:#ff4d4d; font-size:0.75rem; display:block; margin-bottom:5px;">⚠️ Status: ${statusRecebido || 'PENDENTE'} (Aguarde a saída)</span>`;
 
                     return `
-                    <div class="glass-panel" style="margin-bottom:20px; padding:20px; border-left: 6px solid ${isPatrimonio ? '#eab308' : '#00d4ff'}; opacity: ${podeReceber ? '1' : '0.8'};">
+                    <div class="glass-panel" style="margin-bottom:20px; padding:20px; border-left: 6px solid ${isPatrimonio ? '#eab308' : '#00d4ff'}; opacity: ${podeReceber ? '1' : '0.7'};">
                         <div style="display:flex; justify-content:space-between; align-items:center;">
                             <div>
                                 <h3 style="color:white; margin:0;">Remessa #${r.remessa_id}</h3>
-                                <small style="color:rgba(255,255,255,0.5)">Status atual: <b>${r.status}</b></small>
+                                <small style="color:rgba(255,255,255,0.5)">Pedido ref: #${r.pedido_id}</small>
                             </div>
-                            <button onclick="visualizarItensRemessa(${r.remessa_id}, '${r.tipo_pedido}')" class="btn-detalhes">👁️ VISUALIZAR ITENS</button>
+                            <button onclick="visualizarItensRemessa(${r.remessa_id}, '${r.tipo_pedido}')" class="btn-detalhes">👁️ ITENS</button>
                         </div>
                         
                         <div id="lista-itens-${r.remessa_id}" style="display:none; margin-top:15px; padding:10px; background:rgba(0,0,0,0.3); border-radius:8px;"></div>
 
                         <hr style="border:0; border-top:1px solid rgba(255,255,255,0.1); margin:15px 0;">
-
+                        
                         ${isPatrimonio ? `
                             <div class="setor-obrigatorio" style="${!podeReceber ? 'pointer-events:none; opacity:0.5' : ''}">
                                 <label style="color:#eab308; display:block; font-size:0.8rem; font-weight:bold; margin-bottom:8px;">📍 SETOR DE DESTINO (OBRIGATÓRIO):</label>
@@ -9714,14 +9718,14 @@ async function telaEscolaConfirmarRecebimento() {
                         ` : ''}
 
                         <div style="margin-top:15px;">
-                            ${!podeReceber ? labelStatus : ''}
+                            ${labelStatus}
                             <button 
                                 onclick="efetivarRecebimento(${r.remessa_id}, ${r.pedido_id}, '${r.tipo_pedido}')" 
                                 class="btn-confirmar-recebimento" 
                                 ${!podeReceber ? 'disabled' : ''} 
-                                style="width:100%; 
-                                       ${!podeReceber ? 'background:#555 !important; cursor:not-allowed; border-color:#777 !important; color:#aaa !important;' : ''}">
-                                ${podeReceber ? '✅ CONFIRMAR RECEBIMENTO' : '🚫 AGUARDANDO TRANSPORTE'}
+                                style="width:100%; transition: all 0.3s;
+                                    ${!podeReceber ? 'background:#444 !important; cursor:not-allowed; opacity:0.5; filter:grayscale(1);' : 'background:#00d4ff; color:#001a2c; font-weight:bold;'}">
+                                ${podeReceber ? '✅ CONFIRMAR RECEBIMENTO' : 'BLOQUEADO'}
                             </button>
                         </div>
                     </div>`;

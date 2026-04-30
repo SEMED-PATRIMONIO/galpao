@@ -9686,8 +9686,9 @@ async function telaEscolaConfirmarRecebimento() {
                     
                     // --- LÓGICA DE VALIDAÇÃO DO STATUS ---
                     const statusRecebido = r.status || r.pedido_status; 
-
-                    const podeReceber = String(statusRecebido).trim().toUpperCase() === 'EM_TRANSPORTE';
+                    const statusBruto = r.status || r.pedido_status || 'PENDENTE';
+                    const statusLimpo = String(statusBruto).trim().toUpperCase();
+                    const podeReceber = (statusLimpo === 'EM_TRANSPORTE');
 
                     const labelStatus = podeReceber 
                         ? `<span style="color:#00d4ff; font-size:0.75rem; display:block; margin-bottom:5px;">✅ Carga liberada para recebimento</span>` 
@@ -9706,7 +9707,7 @@ async function telaEscolaConfirmarRecebimento() {
                         <div id="lista-itens-${r.remessa_id}" style="display:none; margin-top:15px; padding:10px; background:rgba(0,0,0,0.3); border-radius:8px;"></div>
 
                         <hr style="border:0; border-top:1px solid rgba(255,255,255,0.1); margin:15px 0;">
-                        
+
                         ${isPatrimonio ? `
                             <div class="setor-obrigatorio" style="${!podeReceber ? 'pointer-events:none; opacity:0.5' : ''}">
                                 <label style="color:#eab308; display:block; font-size:0.8rem; font-weight:bold; margin-bottom:8px;">📍 SETOR DE DESTINO (OBRIGATÓRIO):</label>

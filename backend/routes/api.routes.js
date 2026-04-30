@@ -1517,40 +1517,36 @@ router.get('/produtos/:id/grade', verificarToken, async (req, res) => {
     }
 });
 
+// ✅ Use ROUTER.post e não APP.post
 router.post('/pedidos/estoque/finalizar-remessa', verificarToken, async (req, res) => {
     const { pedidoId, itens } = req.body;
     const usuarioId = req.userId;
 
-    // 1. Validação de entrada
     if (!pedidoId || !Array.isArray(itens) || itens.length === 0) {
         return res.status(400).json({ 
             error: "Dados inválidos. pedidoId e itens são obrigatórios." 
         });
     }
 
-    // Nota: Use 'pool' ou 'db.pool' conforme a sua configuração de importação
-    const client = await pool.connect(); 
+    // ✅ Verifique se no topo do seu arquivo você usa 'db.pool' ou apenas 'pool'
+    // Se o erro for "db is not defined", mude para: const client = await pool.connect();
+    const client = await db.pool.connect(); 
 
     try {
         await client.query('BEGIN');
 
-        // 2. Trava o pedido para evitar concorrência
         const pedidoRes = await client.query(
             `SELECT status FROM pedidos WHERE id = $1 FOR UPDATE`,
             [pedidoId]
         );
 
-        if (pedidoRes.rows.length === 0) {
-            throw new Error(`Pedido #${pedidoId} não encontrado.`);
-        }
-
+        if (pedidoRes.rows.length === 0) throw new Error(`Pedido #${pedidoId} não encontrado.`);
         const statusAtual = pedidoRes.rows[0].status;
 
         if (statusAtual === 'COLETA_LIBERADA' || statusAtual === 'ENTREGUE') {
-            throw new Error(`Pedido #${pedidoId} já finalizado (Status: ${statusAtual}).`);
+            throw new Error(`Pedido #${pedidoId} já processado.`);
         }
 
-        // 3. Cria a Remessa
         const remessaRes = await client.query(
             `INSERT INTO pedido_remessas (pedido_id, status, data_criacao) 
              VALUES ($1, 'PRONTO', NOW()) RETURNING id`,
@@ -1558,12 +1554,10 @@ router.post('/pedidos/estoque/finalizar-remessa', verificarToken, async (req, re
         );
         const remessaId = remessaRes.rows[0].id;
 
-        // 4. Processa cada item
         for (const item of itens) {
             const { produto_id, quantidade_enviada } = item;
 
-            // ✅ NORMALIZAÇÃO DO TAMANHO (Sem bugar o tamanho "10")
-            // Só vira 'N/A' se o valor for nulo ou vazio de fato.
+            // ✅ NORMALIZAÇÃO SEM BUGAR TAMANHO 10
             const tamanho = (
                 item.tamanho === undefined || 
                 item.tamanho === null || 
@@ -1574,11 +1568,6 @@ router.post('/pedidos/estoque/finalizar-remessa', verificarToken, async (req, re
 
             if (!quantidade_enviada || quantidade_enviada <= 0) continue;
 
-            // Busca dados do produto para o erro ficar claro
-            const prodRes = await client.query(`SELECT nome FROM produtos WHERE id = $1`, [produto_id]);
-            const nomeProd = prodRes.rows[0]?.nome || "Produto Desconhecido";
-
-            // ✅ ATUALIZAÇÃO DO ESTOQUE (Local 37 - Almoxarifado Central)
             const updateRes = await client.query(
                 `UPDATE estoque_por_local
                  SET quantidade = quantidade - $1
@@ -1590,15 +1579,14 @@ router.post('/pedidos/estoque/finalizar-remessa', verificarToken, async (req, re
                        AND quantidade >= $1
                      LIMIT 1 FOR UPDATE
                  )
-                 RETURNING quantidade`,
+                 RETURNING id`,
                 [quantidade_enviada, produto_id, tamanho]
             );
 
             if (updateRes.rowCount === 0) {
-                throw new Error(`Estoque insuficiente: ${nomeProd} (Tam: ${tamanho}).`);
+                throw new Error(`Estoque insuficiente para o item ID ${produto_id} (Tam: ${tamanho}).`);
             }
 
-            // 5. Registra o item na remessa
             await client.query(
                 `INSERT INTO pedido_remessa_itens (remessa_id, produto_id, tamanho, quantidade_enviada) 
                  VALUES ($1, $2, $3, $4)`,
@@ -1606,7 +1594,6 @@ router.post('/pedidos/estoque/finalizar-remessa', verificarToken, async (req, re
             );
         }
 
-        // 6. Atualiza o status do pedido baseado no total enviado
         const checkRes = await client.query(`
             SELECT 
                 (SELECT SUM(quantidade) FROM itens_pedido WHERE pedido_id = $1) as total_pedido,
@@ -1616,33 +1603,28 @@ router.post('/pedidos/estoque/finalizar-remessa', verificarToken, async (req, re
                  WHERE pr.pedido_id = $1) as total_enviado
         `, [pedidoId]);
 
-        const { total_pedido, total_enviado } = checkRes.rows[0];
-        const novoStatus = (Number(total_enviado) >= Number(total_pedido)) ? 'COLETA_LIBERADA' : 'EM_SEPARACAO';
+        const totalPedido = Number(checkRes.rows[0].total_pedido);
+        const totalEnviado = Number(checkRes.rows[0].total_enviado);
+        const novoStatus = (totalEnviado >= totalPedido) ? 'COLETA_LIBERADA' : 'EM_SEPARACAO';
 
         await client.query(
             `UPDATE pedidos SET status = $1, data_saida = NOW() WHERE id = $2`,
             [novoStatus, pedidoId]
         );
 
-        // 7. Log de Status
         await client.query(
             `INSERT INTO log_status_pedidos (pedido_id, usuario_id, status_anterior, status_novo, observacao)
              VALUES ($1, $2, $3, $4, $5)`,
-            [pedidoId, usuarioId, statusAtual, novoStatus, `Remessa #${remessaId} processada.`]
+            [pedidoId, usuarioId, statusAtual, novoStatus, `Remessa #${remessaId} registrada.`]
         );
 
         await client.query('COMMIT');
-
-        res.status(201).json({
-            message: "Remessa registrada com sucesso!",
-            remessaId,
-            status: novoStatus
-        });
+        res.status(201).json({ message: "Sucesso", remessaId, status: novoStatus });
 
     } catch (err) {
         await client.query('ROLLBACK');
         console.error("ERRO_REMESSA:", err.message);
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: "Falha ao processar remessa: " + err.message });
     } finally {
         client.release();
     }

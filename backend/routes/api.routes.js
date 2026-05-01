@@ -6263,9 +6263,8 @@ router.post('/entrada', async (req, res) => {
 });
 
 // Sugestão de implementação (Node.js/Express)
-router.post('/estoque/entrada-lote', async (req, res) => {
+router.post('/estoque/entrada-lote', verificarToken, async (req, res) => {
     const { itens, usuario_id, observacoes } = req.body;
-    
     const client = await db.pool.connect(); 
 
     try {
@@ -6273,63 +6272,45 @@ router.post('/estoque/entrada-lote', async (req, res) => {
 
         const totalGeral = itens.reduce((acc, item) => acc + (parseInt(item.qtd_total) || 0), 0);
 
-        // 1. Registro no histórico MESTRE
+        // 1. Histórico Mestre
         const resMaster = await client.query(
-            `INSERT INTO historico (usuario_id, acao, quantidade_total, observacoes, local_id, tipo) 
-             VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+            `INSERT INTO historico (usuario_id, acao, quantidade_total, observacoes, local_id, tipo, data) 
+             VALUES ($1, $2, $3, $4, $5, $6, NOW()) RETURNING id`,
             [usuario_id, 'ENTRADA DE ESTOQUE', totalGeral, observacoes || '', 37, 'ENTRADA']
         );
         const historicoId = resMaster.rows[0].id;
 
+        // 2. Processamento dos Itens
         for (const item of itens) {
-            if (item.tipo === 'MATERIAL') {
-                // AJUSTE: Forçando 'N/A' para materiais sem grade
-                const tamanhoPadrao = 'N/A';
+            // Percorre a grade enviada (seja N/A ou tamanhos de uniforme)
+            for (const [tamanho, qtd] of Object.entries(item.grade)) {
+                if (qtd <= 0) continue;
 
+                // UPDATE/INSERT usando a grade padronizada
+                // Como você já criou as linhas com o SQL, o ON CONFLICT fará o UPDATE na linha correta.
                 await client.query(
                     `INSERT INTO estoque_por_local (local_id, produto_id, tamanho, quantidade)
-                    VALUES (37, $1, $2, $3)
-                    ON CONFLICT (local_id, produto_id, tamanho) 
-                    DO UPDATE SET quantidade = estoque_por_local.quantidade + EXCLUDED.quantidade;`,
-                    [item.produto_id, tamanhoPadrao, item.qtd_total]
+                     VALUES (37, $1, $2, $3)
+                     ON CONFLICT (local_id, produto_id, tamanho) 
+                     DO UPDATE SET quantidade = estoque_por_local.quantidade + EXCLUDED.quantidade;`,
+                    [item.produto_id, tamanho, qtd]
                 );
                 
+                // Detalhes do histórico
                 await client.query(
                     `INSERT INTO historico_detalhes (historico_id, produto_id, quantidade, tamanho, tipo_produto) 
-                     VALUES ($1, $2, $3, $4, 'MATERIAL')`,
-                    [historicoId, item.produto_id, item.qtd_total, tamanhoPadrao]
+                     VALUES ($1, $2, $3, $4, $5)`,
+                    [historicoId, item.produto_id, qtd, tamanho, item.tipo]
                 );
-
-            } else if (item.tipo === 'UNIFORMES') {
-                for (const [tamanho, qtd] of Object.entries(item.grade)) {
-                    if (qtd > 0) {
-                        // Para uniformes, usamos o tamanho da grade, mas se por acaso vier vazio, usamos 'N/A'
-                        const tamanhoUniforme = tamanho || 'N/A';
-
-                        await client.query(
-                            `INSERT INTO estoque_por_local (local_id, produto_id, tamanho, quantidade)
-                            VALUES (37, $1, $2, $3)
-                            ON CONFLICT (local_id, produto_id, tamanho) 
-                            DO UPDATE SET quantidade = estoque_por_local.quantidade + EXCLUDED.quantidade;`,
-                            [item.produto_id, tamanhoUniforme, qtd]
-                        );
-
-                        await client.query(
-                            `INSERT INTO historico_detalhes (historico_id, produto_id, quantidade, tamanho, tipo_produto) 
-                             VALUES ($1, $2, $3, $4, 'UNIFORMES')`,
-                            [historicoId, item.produto_id, qtd, tamanhoUniforme]
-                        );
-                    }
-                }
             }
         }
 
         await client.query('COMMIT');
-        res.status(200).json({ success: true, message: "Estoque atualizado com sucesso (Padronizado N/A)." });
+        res.status(200).json({ success: true, message: "Estoque atualizado!" });
 
     } catch (err) {
         await client.query('ROLLBACK');
-        console.error("ERRO NO BANCO (ENTRADA):", err.message);
+        console.error("ERRO_ENTRADA_LOTE:", err.message);
         res.status(500).json({ success: false, error: err.message });
     } finally {
         client.release();

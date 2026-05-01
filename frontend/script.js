@@ -576,7 +576,7 @@ function renderSubmenuCadastrosEscola() {
         <button class="btn-grande btn-vidro" onclick="telaEscolaGestaoTurmas()"><i>🏫</i><span>CADASTRO DE TURMAS</span></button>
         <button class="btn-grande btn-vidro" onclick="telaEscolaGestaoAlunos()"><i>👥</i><span>CADASTRO DE ALUNOS</span></button>
         <button class="btn-grande btn-vidro" onclick="telaGestaoProfessores()"><i>👥</i><span>CADASTRO DE PROFESSORES</span></button>
-        <button class="btn-grande btn-vidro" onclick="telaRelatorioPendenciaKit6()()"><i>👥</i><span>PROFESSORES QUE FALTAM RECEBER KIT 6</span></button>
+        
     `;
     abrirSubmenuVitrificado('CADASTROS', botoes);
 }
@@ -597,6 +597,7 @@ function renderSubmenuRelatoriosEscola() {
         <button class="btn-grande btn-vidro" onclick="gerarRelatorioStatusTurmasEmTelaCheia()"><i>📊</i><span>ENTREGAS POR TURMA</span></button>
         <button class="btn-grande btn-vidro" onclick="telaRelatoriosGeral()"><i>📈</i><span>ENTREGAS DETALHADAS</span></button>
         <button class="btn-grande btn-vidro" onclick="telaRelatorioProfessores()"><i>📈</i><span>LISTA DE PROFESSORES ATIVOS</span></button>
+        <button class="btn-grande btn-vidro" onclick="telaRelatorioPendenciaKit6()()"><i>👥</i><span>PROFESSORES QUE FALTAM RECEBER KIT 6</span></button>
     `;
     abrirSubmenuVitrificado('RELATÓRIOS', botoes);
 }

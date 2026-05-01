@@ -17695,23 +17695,48 @@ async function abrirTelaEntrada() {
     const app = document.getElementById('app-content');
     if (!app) return;
 
+    // Injetamos um estilo específico para esta tela para remover as setas do input number
+    // e garantir que o texto de 5 dígitos caiba perfeitamente.
     app.innerHTML = `
+        <style>
+            /* Remove as setinhas (spinners) do campo de número */
+            input.input-entrada-qtd::-webkit-outer-spin-button,
+            input.input-entrada-qtd::-webkit-inner-spin-button {
+                -webkit-appearance: none;
+                margin: 0;
+            }
+            input.input-entrada-qtd {
+                -moz-appearance: textfield; /* Firefox */
+                font-size: 0.85rem !important; /* Diminuído para caber 5 dígitos */
+                padding: 8px 4px !important;
+            }
+            .card-entrada {
+                transition: all 0.2s ease;
+            }
+            .card-entrada:hover {
+                border-color: rgba(0, 212, 255, 0.4) !important;
+                background: rgba(255,255,255,0.08) !important;
+            }
+        </style>
+
         <div class="header-entrada animate__animated animate__fadeIn">
             <button class="btn-voltar-vidro" onclick="carregarDashboard()" style="margin-bottom: 20px;">
                 <i class="fas fa-arrow-left"></i> VOLTAR
             </button>
-            <h2 class="titulo-sessao" style="color: white; margin-bottom: 20px;">ENTRADA DE MERCADORIA</h2>
-            <p style="color: rgba(255,255,255,0.6); margin-bottom: 20px;">Selecione os itens e digite as quantidades para somar ao estoque.</p>
+            <h2 class="titulo-sessao" style="color: white; margin-bottom: 10px;">ENTRADA DE MERCADORIA</h2>
+            <p style="color: rgba(255,255,255,0.6); margin-bottom: 20px; font-size: 0.9rem;">
+                Informe as quantidades para somar ao estoque atual do Almoxarifado Central.
+            </p>
         </div>
         
-        <div id="lista-entrada-produtos">
+        <div id="lista-entrada-produtos" style="padding-bottom: 80px;">
             <p style="color: white; padding: 20px;">Carregando produtos...</p>
         </div>
 
-        <div id="footer-acoes" style="position: sticky; bottom: 20px; display: flex; justify-content: flex-end; margin-top: 30px;">
+        <div id="footer-acoes" style="position: fixed; bottom: 20px; right: 20px; z-index: 100;">
             <button class="btn-confirmar-entrada" onclick="processarEntradaEstoque()" 
-                style="padding: 15px 40px; border-radius: 30px; border: none; background: #00d4ff; color: #001a2c; font-weight: bold; cursor: pointer; box-shadow: 0 10px 20px rgba(0,212,255,0.3);">
-                <i class="fas fa-check"></i> CONFIRMAR ENTRADA
+                style="padding: 15px 40px; border-radius: 30px; border: none; background: #00d4ff; color: #001a2c; font-weight: bold; cursor: pointer; box-shadow: 0 10px 30px rgba(0,212,255,0.4); display: flex; align-items: center; gap: 10px;">
+                <i class="fas fa-check-circle" style="font-size: 1.2rem;"></i> CONFIRMAR ENTRADA
             </button>
         </div>
     `;
@@ -17720,13 +17745,13 @@ async function abrirTelaEntrada() {
         const res = await fetch(`${API_URL}/estoque/consulta-exclusiva`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
-        const dadosBrutos = await res.json();
-        const produtos = dadosBrutos.filter(p => p.tipo !== 'PATRIMONIO');
+        const produtos = await res.json();
         
         const listaHtml = document.getElementById('lista-entrada-produtos');
         listaHtml.innerHTML = '';
 
-        const listaOrdenada = produtos.sort((a, b) => {
+        // Ordenação: Materiais primeiro, depois Uniformes, ambos alfabéticos
+        const listaOrdenada = produtos.filter(p => p.tipo !== 'PATRIMONIO').sort((a, b) => {
             if (a.tipo === 'MATERIAL' && b.tipo !== 'MATERIAL') return -1;
             if (a.tipo !== 'MATERIAL' && b.tipo === 'MATERIAL') return 1;
             return a.nome.localeCompare(b.nome);
@@ -17735,8 +17760,6 @@ async function abrirTelaEntrada() {
         listaOrdenada.forEach(p => {
             const isUniforme = p.tipo === 'UNIFORMES';
             const corTag = p.tipo === 'MATERIAL' ? '#10b981' : '#00d4ff';
-            
-            // Usamos a grade vinda do banco sem aplicar padStart
             let gradeExibicao = p.grade || [];
 
             listaHtml.innerHTML += `
@@ -17746,39 +17769,39 @@ async function abrirTelaEntrada() {
                     <div style="display: flex; justify-content: space-between; align-items: center;" 
                          ${isUniforme ? `onclick="toggleGrade(${p.id})"` : ''}>
                         <div style="cursor: ${isUniforme ? 'pointer' : 'default'}">
-                            <span style="font-size: 0.7rem; background: ${corTag}; padding: 3px 8px; border-radius: 5px; color: #001a2c; font-weight: bold;">
+                            <span style="font-size: 0.65rem; background: ${corTag}; padding: 2px 8px; border-radius: 4px; color: #001a2c; font-weight: bold; text-transform: uppercase;">
                                 ${p.tipo}
                             </span>
-                            <p style="margin: 8px 0 0 0; font-weight: bold; font-size: 1.1rem;">${p.nome}</p>
-                            <small style="opacity: 0.5;">Estoque atual: ${p.quantidade_estoque}</small>
+                            <p style="margin: 8px 0 2px 0; font-weight: bold; font-size: 1.05rem; letter-spacing: 0.5px;">${p.nome}</p>
+                            <small style="opacity: 0.5;">Estoque total atual: ${p.quantidade_estoque}</small>
                         </div>
 
                         ${!isUniforme ? `
                             <div style="text-align: right;">
-                                <small style="display: block; font-size: 0.65rem; opacity: 0.6; margin-bottom: 5px;">QTD ENTRADA</small>
+                                <small style="display: block; font-size: 0.6rem; opacity: 0.6; margin-bottom: 4px; font-weight: bold;">ENTRADA</small>
                                 <input type="number" class="input-entrada-qtd" data-id="${p.id}" data-tipo="MATERIAL" data-tamanho="N/A"
-                                       style="width: 100px; background: rgba(0,0,0,0.3); border: 1px solid #10b981; color: white; padding: 8px; border-radius: 8px; text-align: center;"
+                                       style="width: 80px; background: rgba(0,0,0,0.4); border: 1px solid ${corTag}; color: white; border-radius: 8px; text-align: center; outline: none;"
                                        placeholder="0" min="0">
                             </div>
                         ` : `
-                            <div style="color: #00d4ff; font-size: 0.8rem; cursor: pointer; text-align: right;">
-                                Clique para abrir grade <i class="fas fa-chevron-down"></i>
-                                <br><small style="opacity:0.6">Total atual: ${p.quantidade_estoque}</small>
+                            <div style="color: #00d4ff; font-size: 0.75rem; cursor: pointer; text-align: right; background: rgba(0,212,255,0.1); padding: 5px 12px; border-radius: 20px;">
+                                <i class="fas fa-th" style="margin-right: 5px;"></i> GRADE 
+                                <i class="fas fa-chevron-down" style="margin-left: 5px; font-size: 0.7rem;"></i>
                             </div>
                         `}
                     </div>
 
                     ${isUniforme ? `
                         <div id="grade-${p.id}" class="grade-expansivel" style="display:none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);">
-                            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px;">
+                            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(75px, 1fr)); gap: 12px;">
                                 ${gradeExibicao.map(g => `
-                                    <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; text-align: center; border: 1px solid rgba(255,255,255,0.05);">
-                                        <small style="display: block; font-size: 0.6rem; color: #00d4ff; margin-bottom: 5px;">${g.tamanho}</small>
+                                    <div style="background: rgba(0,0,0,0.2); padding: 8px; border-radius: 10px; text-align: center; border: 1px solid rgba(255,255,255,0.05);">
+                                        <small style="display: block; font-size: 0.65rem; color: #00d4ff; margin-bottom: 6px; font-weight: bold;">${g.tamanho}</small>
                                         <input type="number" class="input-entrada-qtd" 
                                                 data-id="${p.id}" data-tipo="UNIFORMES" data-tamanho="${g.tamanho}"
-                                                style="width: 100%; background: transparent; border: none; border-bottom: 1px solid #00d4ff; color: white; text-align: center;"
+                                                style="width: 100%; background: rgba(255,255,255,0.05); border: none; border-bottom: 1px solid rgba(0,212,255,0.5); color: #fff; text-align: center; outline: none;"
                                                 placeholder="0" min="0">
-                                        <small style="display: block; font-size: 0.55rem; opacity: 0.4; margin-top: 4px;">Atual: ${g.quantidade}</small>
+                                        <small style="display: block; font-size: 0.55rem; opacity: 0.4; margin-top: 6px;">Atual: ${g.quantidade}</small>
                                     </div>
                                 `).join('')}
                             </div>

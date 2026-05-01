@@ -18061,16 +18061,14 @@ async function carregarConsultaEstoque() {
             const isUniforme = p.tipo === 'UNIFORMES';
             const isTenis = p.nome.toUpperCase().includes('TENIS');
             
-            // Lógica de ordenação da grade padronizada
             let gradeOrdenada = p.grade || [];
             if (isUniforme && !isTenis && gradeOrdenada.length > 0) {
-                // Grade atualizada com Zeros
                 const ordemDefinida = ['02', '04', '06', '08', '10', '12', '14', '16', 'PP', 'P', 'M', 'G', 'GG', 'EGG'];
                 
                 gradeOrdenada = [...gradeOrdenada].sort((a, b) => {
-                    // Normaliza para comparação (garante o zero à esquerda se for número de 1 dígito)
-                    const tamA = a.tamanho.toString().toUpperCase().padStart(2, '0');
-                    const tamB = b.tamanho.toString().toUpperCase().padStart(2, '0');
+                    // CORREÇÃO: Pegamos o valor puro, pois o banco já está padronizado
+                    const tamA = a.tamanho.toString().toUpperCase();
+                    const tamB = b.tamanho.toString().toUpperCase();
 
                     const idxA = ordemDefinida.indexOf(tamA);
                     const idxB = ordemDefinida.indexOf(tamB);
@@ -18084,7 +18082,7 @@ async function carregarConsultaEstoque() {
 
             return `
                 <div class="card-consulta glass-panel" 
-                     onclick="gerenciarCliquesProduto(event, ${p.id}, '${p.nome}', ${isUniforme})"
+                     onclick="toggleGrade(${p.id})"
                      style="margin-bottom: 10px; padding: 12px; border-radius: 10px; border: 1px solid ${nivelBaixo ? '#ff4d4d' : 'rgba(255,255,255,0.1)'};">
                     <div style="display: flex; justify-content: space-between; align-items: center; pointer-events: none;">
                         <div>
@@ -18099,8 +18097,8 @@ async function carregarConsultaEstoque() {
                         <div id="grade-${p.id}" class="grade-expansivel" style="display:none; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1);">
                             <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(45px, 1fr)); gap: 8px;">
                                 ${gradeOrdenada.map(g => {
-                                    // Formatação visual do tamanho para garantir o '02', '04', etc.
-                                    const tamanhoVisual = g.tamanho.toString().toUpperCase().padStart(2, '0');
+                                    // CORREÇÃO: Apenas exibe o que vem do banco (P, M, G ou 02, 04)
+                                    const tamanhoVisual = g.tamanho.toString().toUpperCase();
                                     return `
                                     <div style="background: rgba(255,255,255,0.1); padding: 4px; border-radius: 5px; text-align: center;">
                                         <small style="display: block; font-size: 0.55rem; color: #00d4ff;">${tamanhoVisual}</small>
@@ -18130,7 +18128,9 @@ async function carregarConsultaEstoque() {
             const filtrados = todosProdutos.filter(p => p.nome.toLowerCase().includes(termo));
             renderizarLista(filtrados);
         });
-    } catch (err) { console.error("Erro:", err); }
+    } catch (err) { 
+        console.error("Erro:", err); 
+    }
 }
 
 async function abrirModalHistorico(produtoId, nomeProduto) {

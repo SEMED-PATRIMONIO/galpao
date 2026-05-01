@@ -3101,7 +3101,8 @@ async function processarEntradaEstoque() {
 
         const id = input.dataset.id;
         const tipo = input.dataset.tipo;
-        const tamanho = input.dataset.tamanho;
+        // Pega o tamanho exatamente como está no atributo data-tamanho
+        const tamanho = input.dataset.tamanho || 'N/A';
 
         if (!mapaItens[id]) {
             mapaItens[id] = {
@@ -3113,17 +3114,23 @@ async function processarEntradaEstoque() {
         }
 
         mapaItens[id].qtd_total += qtd;
-        if (tipo === 'UNIFORMES' && tamanho) {
+        
+        // Agrupa por tamanho dentro do objeto do produto
+        if (tipo === 'UNIFORMES') {
             mapaItens[id].grade[tamanho] = (mapaItens[id].grade[tamanho] || 0) + qtd;
+        } else {
+            // Para materiais, usamos N/A como chave na grade interna também para consistência
+            mapaItens[id].grade['N/A'] = (mapaItens[id].grade['N/A'] || 0) + qtd;
         }
     });
 
     const itensParaEnviar = Object.values(mapaItens);
 
     if (itensParaEnviar.length === 0) {
-        notificar("⚠️ Informe uma quantidade.");
-        return;
+        return notificar("⚠️ Informe a quantidade de pelo menos um item.", "aviso");
     }
+
+    if (!confirm("Confirmar a entrada destes itens no Almoxarifado Central?")) return;
 
     try {
         const res = await fetch(`${API_URL}/estoque/entrada-lote`, {
@@ -3135,19 +3142,19 @@ async function processarEntradaEstoque() {
             body: JSON.stringify({ 
                 itens: itensParaEnviar,
                 usuario_id: usuarioId,
-                observacoes: "Entrada via painel operacional" 
+                observacoes: "Entrada via painel operacional (Grade Padronizada)" 
             })
         });
 
         const resultado = await res.json();
-        if (resultado.success) {
-            notificar("✅ Estoque atualizado!");
+        if (res.ok && resultado.success) {
+            notificar("✅ Estoque atualizado com sucesso!", "sucesso");
             carregarDashboard();
         } else {
-            throw new Error(resultado.error);
+            throw new Error(resultado.error || "Erro ao processar entrada.");
         }
     } catch (err) {
-        notificar("❌ Erro: " + err.message);
+        notificar("❌ " + err.message, "erro");
     }
 }
 
@@ -17727,27 +17734,10 @@ async function abrirTelaEntrada() {
 
         listaOrdenada.forEach(p => {
             const isUniforme = p.tipo === 'UNIFORMES';
-            const isTenis = p.nome.toUpperCase().includes('TENIS');
             const corTag = p.tipo === 'MATERIAL' ? '#10b981' : '#00d4ff';
             
-            // Lógica de ordenação da grade padronizada com Zeros
-            let gradeOrdenada = p.grade || [];
-            if (isUniforme && !isTenis && gradeOrdenada.length > 0) {
-                const ordemDefinida = ['02', '04', '06', '08', '10', '12', '14', '16', 'PP', 'P', 'M', 'G', 'GG', 'EGG'];
-                
-                gradeOrdenada = [...gradeOrdenada].sort((a, b) => {
-                    const tamA = String(a.tamanho).toUpperCase().padStart(2, '0');
-                    const tamB = String(b.tamanho).toUpperCase().padStart(2, '0');
-
-                    const idxA = ordemDefinida.indexOf(tamA);
-                    const idxB = ordemDefinida.indexOf(tamB);
-                    
-                    if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-                    if (idxA !== -1) return -1;
-                    if (idxB !== -1) return 1;
-                    return tamA.localeCompare(tamB);
-                });
-            }
+            // Usamos a grade vinda do banco sem aplicar padStart
+            let gradeExibicao = p.grade || [];
 
             listaHtml.innerHTML += `
                 <div class="card-entrada glass-panel animate__animated animate__fadeInUp" 
@@ -17766,7 +17756,7 @@ async function abrirTelaEntrada() {
                         ${!isUniforme ? `
                             <div style="text-align: right;">
                                 <small style="display: block; font-size: 0.65rem; opacity: 0.6; margin-bottom: 5px;">QTD ENTRADA</small>
-                                <input type="number" class="input-entrada-qtd" data-id="${p.id}" data-tipo="MATERIAL"
+                                <input type="number" class="input-entrada-qtd" data-id="${p.id}" data-tipo="MATERIAL" data-tamanho="N/A"
                                        style="width: 100px; background: rgba(0,0,0,0.3); border: 1px solid #10b981; color: white; padding: 8px; border-radius: 8px; text-align: center;"
                                        placeholder="0" min="0">
                             </div>
@@ -17781,19 +17771,16 @@ async function abrirTelaEntrada() {
                     ${isUniforme ? `
                         <div id="grade-${p.id}" class="grade-expansivel" style="display:none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);">
                             <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px;">
-                                ${gradeOrdenada.map(g => {
-                                    // Formatação do tamanho para exibir '02' e enviar '02'
-                                    const tamFormatado = String(g.tamanho).toUpperCase().padStart(2, '0');
-                                    return `
+                                ${gradeExibicao.map(g => `
                                     <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; text-align: center; border: 1px solid rgba(255,255,255,0.05);">
-                                        <small style="display: block; font-size: 0.6rem; color: #00d4ff; margin-bottom: 5px;">${tamFormatado}</small>
+                                        <small style="display: block; font-size: 0.6rem; color: #00d4ff; margin-bottom: 5px;">${g.tamanho}</small>
                                         <input type="number" class="input-entrada-qtd" 
-                                                data-id="${p.id}" data-tipo="UNIFORMES" data-tamanho="${tamFormatado}"
+                                                data-id="${p.id}" data-tipo="UNIFORMES" data-tamanho="${g.tamanho}"
                                                 style="width: 100%; background: transparent; border: none; border-bottom: 1px solid #00d4ff; color: white; text-align: center;"
                                                 placeholder="0" min="0">
                                         <small style="display: block; font-size: 0.55rem; opacity: 0.4; margin-top: 4px;">Atual: ${g.quantidade}</small>
                                     </div>
-                                `;}).join('')}
+                                `).join('')}
                             </div>
                         </div>
                     ` : ''}
@@ -17802,7 +17789,7 @@ async function abrirTelaEntrada() {
         });
     } catch (err) {
         console.error("Erro ao carregar tela de entrada:", err);
-        document.getElementById('lista-entrada-produtos').innerHTML = `<p style="color: #ff4d4d; padding: 20px;">❌ Erro ao carregar dados.</p>`;
+        notificar("Erro ao carregar dados.", "erro");
     }
 }
 

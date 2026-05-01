@@ -9696,4 +9696,160 @@ router.post('/escola/registrar-entrega-material-lote', verificarToken, async (re
     }
 });
 
+// --- 1. LISTAGEM (Incluindo matrícula) ---
+router.get('/professores', verificarToken, async (req, res) => {
+    try {
+        const query = `
+            SELECT p.id, p.nome, p.matric, p.status,
+            EXISTS(SELECT 1 FROM entregas_professores ep WHERE ep.professor_id = p.id AND ep.produto_id = 6) as ja_recebeu
+            FROM professores p 
+            ORDER BY p.nome ASC
+        `;
+        const result = await db.pool.query(query);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao buscar professores." });
+    }
+});
+
+// --- 2. CADASTRAR (Trava na Matrícula) ---
+router.post('/professores', verificarToken, async (req, res) => {
+    const { nome, matric } = req.body;
+    const localId = req.user.local_id;
+
+    try {
+        // Verifica se a matrícula já existe
+        const checkMatric = await db.pool.query('SELECT id FROM professores WHERE matric = $1', [matric]);
+        if (checkMatric.rows.length > 0) {
+            return res.status(400).json({ error: `A matrícula ${matric} já pertence a outro professor.` });
+        }
+
+        await db.pool.query(
+            'INSERT INTO professores (nome, matric, local_id, status) VALUES ($1, $2, $3, $4)',
+            [nome, matric, localId, 'ATIVO']
+        );
+        res.status(201).json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// --- 3. EDITAR (Trava na Matrícula de terceiros) ---
+router.put('/professores/:id', verificarToken, async (req, res) => {
+    const { id } = req.params;
+    const { nome, matric } = req.body;
+
+    try {
+        // Verifica se a nova matrícula já existe em outro ID
+        const checkMatric = await db.pool.query('SELECT id FROM professores WHERE matric = $1 AND id <> $2', [matric, id]);
+        if (checkMatric.rows.length > 0) {
+            return res.status(400).json({ error: "Esta matrícula já está em uso por outro cadastro." });
+        }
+
+        await db.pool.query(
+            'UPDATE professores SET nome = $1, matric = $2 WHERE id = $3',
+            [nome, matric, id]
+        );
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// --- 4. ALTERNAR STATUS ---
+router.patch('/professores/:id/status', verificarToken, async (req, res) => {
+    const { id } = req.params;
+    const { status } = req.body;
+    try {
+        await db.pool.query('UPDATE professores SET status = $1 WHERE id = $2', [status, id]);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao atualizar status." });
+    }
+});
+
+// --- 5. ENTREGA DO KIT 6 ---
+router.post('/entregas/professor', verificarToken, async (req, res) => {
+    const { professorId } = req.body;
+    const { id: usuarioId, local_id: localId } = req.user;
+
+    const client = await db.pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // Verifica se já recebeu
+        const check = await client.query(
+            "SELECT id FROM entregas_professores WHERE professor_id = $1 AND produto_id = 6",
+            [professorId]
+        );
+        if (check.rows.length > 0) throw new Error("Professor já recebeu este kit.");
+
+        // Baixa estoque (Local do usuário logado)
+        const estoque = await client.query(
+            `UPDATE estoque_por_local SET quantidade = quantidade - 1 
+             WHERE local_id = $1 AND produto_id = 6 AND tamanho = 'N/A' AND quantidade > 0`,
+            [localId]
+        );
+
+        if (estoque.rowCount === 0) throw new Error("Estoque esgotado para KIT PROFESSOR nesta unidade.");
+
+        // Registra entrega
+        await client.query(
+            `INSERT INTO entregas_professores (professor_id, produto_id, usuario_id, local_id)
+             VALUES ($1, 6, $2, $3)`,
+            [professorId, usuarioId, localId]
+        );
+
+        await client.query('COMMIT');
+        res.status(201).json({ success: true });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
+// --- ROTA DE RELATÓRIO: PROFESSORES ATIVOS ---
+router.get('/relatorios/professores-ativos', verificarToken, async (req, res) => {
+    try {
+        const query = `
+            SELECT matric, nome
+            FROM professores
+            WHERE status = 'ATIVO'
+            ORDER BY nome ASC
+        `;
+        
+        const result = await db.pool.query(query);
+        res.json(result.rows);
+    } catch (err) {
+        console.error("Erro no relatório de professores:", err);
+        res.status(500).json({ error: "Erro ao gerar listagem de professores ativos." });
+    }
+});
+
+// --- ROTA: PROFESSORES ATIVOS QUE NÃO RECEBERAM O KIT 6 ---
+router.get('/relatorios/pendencia-kit-professores', verificarToken, async (req, res) => {
+    try {
+        const query = `
+            SELECT p.id, p.nome, p.matric 
+            FROM professores p
+            WHERE p.status = 'ATIVO'
+              AND NOT EXISTS (
+                  SELECT 1 
+                  FROM entregas_professores ep 
+                  WHERE ep.professor_id = p.id 
+                    AND ep.produto_id = 6
+              )
+            ORDER BY p.nome ASC
+        `;
+        
+        const result = await db.pool.query(query);
+        res.json(result.rows);
+    } catch (err) {
+        console.error("Erro no relatório de pendências:", err);
+        res.status(500).json({ error: "Erro ao gerar lista de pendências." });
+    }
+});
+
 module.exports = router;

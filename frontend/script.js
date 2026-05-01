@@ -424,7 +424,6 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="telaSolicitarServicoImpressora('recarga')"><i>🧪</i><span>SOLICITAR RECARGA</span></button>
             <button class="btn-grande btn-vidro" onclick="telaSolicitarManutencaoPC('')"><i>💻</i><span>MANUTENÇÃO INFORMÁTICA</span></button>
             <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()"><i>🗝️</i><span>ALTERAR SENHA</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaGestaoProfessores()"><i>👥</i><span>CADASTRO DE PROFESSORES</span></button>
         `;
     }
     // --- PERFIL: DTI ---
@@ -473,7 +472,7 @@ async function carregarDashboard() {
                 ${contagemSolicitacoes > 0 ? `<div class="badge-alerta-entrega">${contagemSolicitacoes}</div>` : ''}
                 <i>📝</i><span>PEDIDOS</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="telaGestaoProfessores()"><i>👥</i><span>CADASTRO DE PROFESSORES</span></button>
+
             <button class="btn-grande btn-vidro" onclick="carregarConsultaEstoque()"><i>🔎</i><span>CONSULTA ESTOQUE</span></button>
             <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('RELATÓRIOS', getBotoesSubmenu('admin', 'RELATÓRIOS'))"><i>📊</i><span>RELATÓRIOS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()"><i>🗝️</i><span>ALTERAR SENHA</span></button>
@@ -575,7 +574,6 @@ function renderSubmenuCadastrosEscola() {
     const botoes = `
         <button class="btn-grande btn-vidro" onclick="telaEscolaGestaoTurmas()"><i>🏫</i><span>CADASTRO DE TURMAS</span></button>
         <button class="btn-grande btn-vidro" onclick="telaEscolaGestaoAlunos()"><i>👥</i><span>CADASTRO DE ALUNOS</span></button>
-        <button class="btn-grande btn-vidro" onclick="telaGestaoProfessores()"><i>👥</i><span>CADASTRO DE PROFESSORES</span></button>
     `;
     abrirSubmenuVitrificado('CADASTROS', botoes);
 }
@@ -595,8 +593,6 @@ function renderSubmenuRelatoriosEscola() {
     const botoes = `
         <button class="btn-grande btn-vidro" onclick="gerarRelatorioStatusTurmasEmTelaCheia()"><i>📊</i><span>ENTREGAS POR TURMA</span></button>
         <button class="btn-grande btn-vidro" onclick="telaRelatoriosGeral()"><i>📈</i><span>ENTREGAS DETALHADAS</span></button>
-        <button class="btn-grande btn-vidro" onclick="telaRelatorioProfessores()"><i>👥</i><span>ENTREGAS DETALHADAS</span></button>
-        <button class="btn-grande btn-vidro" onclick="telaRelatorioPendenciaKit6()"><i>🚨</i><span>PROFESSORES QUE FALTAM RECEBER O KIT 6</span></button>
     `;
     abrirSubmenuVitrificado('RELATÓRIOS', botoes);
 }
@@ -628,8 +624,6 @@ function getBotoesSubmenu(perfil, titulo, contagem = 0, contagemProntos = 0) {
             <button class="btn-grande btn-vidro" onclick="telaRelatoriosFaltantes()"><i>👕</i><span>ALUNOS QUE FALTAM RECEBER UNIFORME/KIT</span></button>            
             <button class="btn-grande btn-vidro" onclick="telaProgressoGeralEscolas()"><i>📐</i><span>ENTREGA DE UNIFORMES E KITS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaRelatorioConsolidado()"><i>🚨</i><span>LISTAGEM RECEBIDO/FALTA RECEBER</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaRelatorioProfessores()"><i>👥</i><span>ENTREGAS DETALHADAS</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaRelatorioPendenciaKit6()"><i>🚨</i><span>PROFESSORES QUE FALTAM RECEBER O KIT 6</span></button>
         `;
     }
 
@@ -652,8 +646,6 @@ function getBotoesSubmenu(perfil, titulo, contagem = 0, contagemProntos = 0) {
             <button class="btn-grande btn-vidro" onclick="telaRelatoriosFaltantes()"><i>👕</i><span>ALUNOS QUE FALTAM RECEBER UNIFORME/KIT</span></button>            
             <button class="btn-grande btn-vidro" onclick="telaProgressoGeralEscolas()"><i>📐</i><span>ENTREGA DE UNIFORMES E KITS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaRelatorioConsolidado()"><i>🚨</i><span>LISTAGEM RECEBIDO/FALTA RECEBER</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaRelatorioProfessores()"><i>👥</i><span>ENTREGAS DETALHADAS</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaRelatorioPendenciaKit6()"><i>🚨</i><span>PROFESSORES QUE FALTAM RECEBER O KIT 6</span></button>
         `;
     }
     return '';
@@ -6920,43 +6912,43 @@ async function abrirTelaConferenciaItens(pedidoId) {
 
 async function salvarRemessa(pedidoId) {
     const inputs = document.querySelectorAll('.qtd-envio');
-
-    // ✅ Map para evitar duplicatas (mesmo produto/tamanho aparecendo 2x no DOM)
     const itensMap = new Map();
 
+    // 1. Coleta e agrupa os itens da tela
     inputs.forEach(input => {
         const qtd = parseInt(input.value) || 0;
         if (qtd > 0) {
-            const tamanhoRaw = input.dataset.tam;
-            const tamanho = (tamanhoRaw === 'null' || tamanhoRaw === '') 
-                ? null 
-                : tamanhoRaw;
-
-            const chave = `${input.dataset.prodId}_${tamanho ?? 'NULL'}`;
+            // Pegamos o tamanho do dataset (definido na montagem da tabela)
+            const tamRaw = input.dataset.tam || input.dataset.tamanho;
+            
+            // Padronização: o que não for uniforme (Material) deve ser 'N/A'
+            const tamanho = (!tamRaw || tamRaw === 'null' || tamRaw === '' || tamRaw === 'Único') 
+                ? 'N/A' 
+                : tamRaw;
+            
+            const prodId = input.dataset.prodId;
+            const chave = `${prodId}_${tamanho}`;
 
             if (itensMap.has(chave)) {
-                // Soma se vier duplicado no DOM
                 itensMap.get(chave).quantidade_enviada += qtd;
             } else {
                 itensMap.set(chave, {
-                    produto_id: input.dataset.prodId,
-                    tamanho,
+                    produto_id: prodId,
+                    tamanho: tamanho,
                     quantidade_enviada: qtd
                 });
             }
         }
     });
 
+    // 2. Validações antes de enviar
     if (itensMap.size === 0) {
-        return notificar(
-            "Informe a quantidade de pelo menos um item para a remessa.", 
-            "aviso"
-        );
+        return notificar("Informe a quantidade de pelo menos um item para a remessa.", "aviso");
     }
 
-    if (!confirm("Confirmar o registro desta remessa de saída?")) return;
+    if (!confirm("Confirmar o registro desta remessa de saída? O estoque será baixado imediatamente.")) return;
 
-    // ✅ Desabilita botão imediatamente para evitar duplo clique
+    // 3. UI: Desabilita botão para evitar duplicidade
     const btnSalvar = document.querySelector('[onclick*="salvarRemessa"]');
     if (btnSalvar) {
         btnSalvar.disabled = true;
@@ -6972,26 +6964,27 @@ async function salvarRemessa(pedidoId) {
             },
             body: JSON.stringify({ 
                 pedidoId, 
-                itens: [...itensMap.values()]
+                itens: Array.from(itensMap.values())
             })
         });
 
         const data = await res.json();
 
         if (!res.ok) {
-            throw new Error(data.error || "Erro desconhecido no servidor.");
+            throw new Error(data.error || "Erro ao processar remessa no servidor.");
         }
 
-        notificar(
-            `✅ Remessa #${data.remessaId} registrada com sucesso!`, 
-            "sucesso"
-        );
-        telaEstoquePedidosPendentes();
+        notificar(`✅ Remessa #${data.remessaId} registrada com sucesso!`, "sucesso");
+        
+        // Recarrega a tela de pedidos pendentes
+        if (typeof telaEstoquePedidosPendentes === 'function') {
+            telaEstoquePedidosPendentes();
+        }
 
     } catch (err) {
         notificar("Erro ao salvar remessa: " + err.message, "erro");
-
-        // ✅ Reabilita o botão apenas em caso de erro
+        
+        // Reabilita o botão se der erro para o usuário tentar corrigir
         if (btnSalvar) {
             btnSalvar.disabled = false;
             btnSalvar.innerHTML = '<i class="fas fa-check"></i> CONFIRMAR REMESSA';
@@ -17691,31 +17684,25 @@ async function finalizarEntradaEstoque() {
     }
 }
 
-/**
- * UNIFICAÇÃO OPERACIONAL - ENTRADA DE ESTOQUE V2
- * Resolve: Grades vazias, ordenação de tamanhos e múltiplos tipos de produto.
- */
-
 async function abrirTelaEntrada() {
     const app = document.getElementById('app-content');
     if (!app) return;
 
-    // Layout Base
     app.innerHTML = `
         <div class="header-entrada animate__animated animate__fadeIn">
             <button class="btn-voltar-vidro" onclick="carregarDashboard()" style="margin-bottom: 20px;">
                 <i class="fas fa-arrow-left"></i> VOLTAR
             </button>
-            <h2 class="titulo-sessao" style="color: white; margin-bottom: 5px;">ENTRADA DE MERCADORIA (V2)</h2>
-            <p style="color: rgba(255,255,255,0.6); margin-bottom: 20px;">Insira as quantidades recebidas. Materiais são diretos, Uniformes expandem a grade.</p>
+            <h2 class="titulo-sessao" style="color: white; margin-bottom: 20px;">ENTRADA DE MERCADORIA</h2>
+            <p style="color: rgba(255,255,255,0.6); margin-bottom: 20px;">Selecione os itens e digite as quantidades para somar ao estoque.</p>
         </div>
         
         <div id="lista-entrada-produtos">
-            <p style="color: white; padding: 20px;">Consultando catálogo...</p>
+            <p style="color: white; padding: 20px;">Carregando produtos...</p>
         </div>
 
-        <div id="footer-acoes" style="position: sticky; bottom: 20px; display: flex; justify-content: flex-end; margin-top: 30px; z-index: 100;">
-            <button class="btn-confirmar-entrada" onclick="processarEntradaEstoqueV2()" 
+        <div id="footer-acoes" style="position: sticky; bottom: 20px; display: flex; justify-content: flex-end; margin-top: 30px;">
+            <button class="btn-confirmar-entrada" onclick="processarEntradaEstoque()" 
                 style="padding: 15px 40px; border-radius: 30px; border: none; background: #00d4ff; color: #001a2c; font-weight: bold; cursor: pointer; box-shadow: 0 10px 20px rgba(0,212,255,0.3);">
                 <i class="fas fa-check"></i> CONFIRMAR ENTRADA
             </button>
@@ -17723,77 +17710,90 @@ async function abrirTelaEntrada() {
     `;
 
     try {
-        const res = await fetch(`${API_URL}/estoque/v2/consulta-exclusiva`, {
+        const res = await fetch(`${API_URL}/estoque/consulta-exclusiva`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
-        const produtos = await res.json();
+        const dadosBrutos = await res.json();
+        const produtos = dadosBrutos.filter(p => p.tipo !== 'PATRIMONIO');
         
         const listaHtml = document.getElementById('lista-entrada-produtos');
         listaHtml.innerHTML = '';
 
-        produtos.forEach(p => {
+        const listaOrdenada = produtos.sort((a, b) => {
+            if (a.tipo === 'MATERIAL' && b.tipo !== 'MATERIAL') return -1;
+            if (a.tipo !== 'MATERIAL' && b.tipo === 'MATERIAL') return 1;
+            return a.nome.localeCompare(b.nome);
+        });
+
+        listaOrdenada.forEach(p => {
             const isUniforme = p.tipo === 'UNIFORMES';
             const isTenis = p.nome.toUpperCase().includes('TENIS');
             const corTag = p.tipo === 'MATERIAL' ? '#10b981' : '#00d4ff';
+            
+            // Lógica de ordenação da grade padronizada com Zeros
+            let gradeOrdenada = p.grade || [];
+            if (isUniforme && !isTenis && gradeOrdenada.length > 0) {
+                const ordemDefinida = ['02', '04', '06', '08', '10', '12', '14', '16', 'PP', 'P', 'M', 'G', 'GG', 'EGG'];
+                
+                gradeOrdenada = [...gradeOrdenada].sort((a, b) => {
+                    const tamA = String(a.tamanho).toUpperCase().padStart(2, '0');
+                    const tamB = String(b.tamanho).toUpperCase().padStart(2, '0');
 
-            // --- GERAÇÃO DA GRADE VIRTUAL (Caso o banco venha vazio pós-truncate) ---
-            let gradeParaExibir = [];
-            if (isUniforme) {
-                if (isTenis) {
-                    for (let i = 22; i <= 43; i++) gradeParaExibir.push({ tamanho: String(i), quantidade: 0 });
-                } else {
-                    const padrao = ['02', '04', '06', '08', '10', '12', '14', '16', 'PP', 'P', 'M', 'G', 'GG', 'EGG'];
-                    gradeParaExibir = padrao.map(t => ({ tamanho: t, quantidade: 0 }));
-                }
-
-                // Mescla com dados reais do banco se existirem
-                if (p.grade && p.grade.length > 0) {
-                    gradeParaExibir = gradeParaExibir.map(item => {
-                        const doBanco = p.grade.find(g => String(g.tamanho) === String(item.tamanho));
-                        return doBanco ? { ...item, quantidade: doBanco.quantidade } : item;
-                    });
-                }
+                    const idxA = ordemDefinida.indexOf(tamA);
+                    const idxB = ordemDefinida.indexOf(tamB);
+                    
+                    if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+                    if (idxA !== -1) return -1;
+                    if (idxB !== -1) return 1;
+                    return tamA.localeCompare(tamB);
+                });
             }
 
             listaHtml.innerHTML += `
-                <div class="card-entrada-v2 glass-panel animate__animated animate__fadeInUp" 
+                <div class="card-entrada glass-panel animate__animated animate__fadeInUp" 
                     style="background: rgba(255,255,255,0.05); margin-bottom: 12px; padding: 18px; border-radius: 15px; color: white; border: 1px solid rgba(255,255,255,0.1);">
                     
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div onclick="${isUniforme ? `toggleGradeV2(${p.id})` : ''}" style="cursor: ${isUniforme ? 'pointer' : 'default'}; flex: 1;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;" 
+                         ${isUniforme ? `onclick="toggleGrade(${p.id})"` : ''}>
+                        <div style="cursor: ${isUniforme ? 'pointer' : 'default'}">
                             <span style="font-size: 0.7rem; background: ${corTag}; padding: 3px 8px; border-radius: 5px; color: #001a2c; font-weight: bold;">
                                 ${p.tipo}
                             </span>
                             <p style="margin: 8px 0 0 0; font-weight: bold; font-size: 1.1rem;">${p.nome}</p>
-                            <small style="opacity: 0.5;">Estoque Total: ${p.quantidade_estoque || 0}</small>
+                            <small style="opacity: 0.5;">Estoque atual: ${p.quantidade_estoque}</small>
                         </div>
 
                         ${!isUniforme ? `
                             <div style="text-align: right;">
+                                <small style="display: block; font-size: 0.65rem; opacity: 0.6; margin-bottom: 5px;">QTD ENTRADA</small>
                                 <input type="number" class="input-entrada-qtd" data-id="${p.id}" data-tipo="MATERIAL"
-                                    style="width: 80px; background: rgba(0,0,0,0.3); border: 1px solid #10b981; color: white; padding: 10px; border-radius: 8px; text-align: center;"
-                                    placeholder="0" min="0">
+                                       style="width: 100px; background: rgba(0,0,0,0.3); border: 1px solid #10b981; color: white; padding: 8px; border-radius: 8px; text-align: center;"
+                                       placeholder="0" min="0">
                             </div>
                         ` : `
-                            <div onclick="toggleGradeV2(${p.id})" style="color: #00d4ff; font-size: 0.8rem; cursor: pointer; text-align: right;">
-                                Grade <i class="fas fa-chevron-down" id="seta-${p.id}"></i>
+                            <div style="color: #00d4ff; font-size: 0.8rem; cursor: pointer; text-align: right;">
+                                Clique para abrir grade <i class="fas fa-chevron-down"></i>
+                                <br><small style="opacity:0.6">Total atual: ${p.quantidade_estoque}</small>
                             </div>
                         `}
                     </div>
 
                     ${isUniforme ? `
-                        <div id="grade-v2-${p.id}" style="display:none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);">
-                            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 8px;">
-                                ${gradeParaExibir.map(g => `
-                                    <div style="background: rgba(0,0,0,0.2); padding: 8px; border-radius: 8px; text-align: center;">
-                                        <small style="display: block; color: #00d4ff; font-weight: bold; margin-bottom: 4px;">${g.tamanho}</small>
+                        <div id="grade-${p.id}" class="grade-expansivel" style="display:none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);">
+                            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px;">
+                                ${gradeOrdenada.map(g => {
+                                    // Formatação do tamanho para exibir '02' e enviar '02'
+                                    const tamFormatado = String(g.tamanho).toUpperCase().padStart(2, '0');
+                                    return `
+                                    <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; text-align: center; border: 1px solid rgba(255,255,255,0.05);">
+                                        <small style="display: block; font-size: 0.6rem; color: #00d4ff; margin-bottom: 5px;">${tamFormatado}</small>
                                         <input type="number" class="input-entrada-qtd" 
-                                            data-id="${p.id}" data-tipo="UNIFORMES" data-tamanho="${g.tamanho}"
-                                            style="width: 100%; background: transparent; border: none; border-bottom: 1px solid rgba(0,212,255,0.5); color: white; text-align: center; font-size: 1rem;"
-                                            placeholder="0" min="0">
-                                        <small style="display: block; font-size: 0.6rem; opacity: 0.4; margin-top: 4px;">Atu: ${g.quantidade}</small>
+                                                data-id="${p.id}" data-tipo="UNIFORMES" data-tamanho="${tamFormatado}"
+                                                style="width: 100%; background: transparent; border: none; border-bottom: 1px solid #00d4ff; color: white; text-align: center;"
+                                                placeholder="0" min="0">
+                                        <small style="display: block; font-size: 0.55rem; opacity: 0.4; margin-top: 4px;">Atual: ${g.quantidade}</small>
                                     </div>
-                                `).join('')}
+                                `;}).join('')}
                             </div>
                         </div>
                     ` : ''}
@@ -17801,58 +17801,8 @@ async function abrirTelaEntrada() {
             `;
         });
     } catch (err) {
-        notificar("Erro ao carregar catálogo.");
-    }
-}
-
-// Funções auxiliares de UI
-function toggleGradeV2(id) {
-    const el = document.getElementById(`grade-v2-${id}`);
-    const seta = document.getElementById(`seta-${id}`);
-    const isAberto = el.style.display === 'block';
-    el.style.display = isAberto ? 'none' : 'block';
-    seta.style.transform = isAberto ? 'rotate(0deg)' : 'rotate(180deg)';
-}
-
-async function processarEntradaEstoqueV2() {
-    const usuarioId = localStorage.getItem('usuario_id');
-    const inputs = document.querySelectorAll('.input-entrada-qtd');
-    const mapaItens = {};
-
-    inputs.forEach(input => {
-        const qtd = parseInt(input.value) || 0;
-        if (qtd <= 0) return;
-
-        const id = input.dataset.id;
-        const tipo = input.dataset.tipo;
-        const tamanho = input.dataset.tamanho || 'N/A';
-
-        if (!mapaItens[id]) {
-            mapaItens[id] = { produto_id: id, tipo: tipo, qtd_total: 0, grade: {} };
-        }
-
-        mapaItens[id].qtd_total += qtd;
-        if (tipo === 'UNIFORMES') {
-            mapaItens[id].grade[tamanho] = (mapaItens[id].grade[tamanho] || 0) + qtd;
-        }
-    });
-
-    const itens = Object.values(mapaItens);
-    if (itens.length === 0) return notificar("⚠️ Digite alguma quantidade.");
-
-    try {
-        const res = await fetch(`${API_URL}/estoque/v2/entrada-lote`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
-            body: JSON.stringify({ itens, usuario_id: usuarioId, observacoes: "Entrada Operacional V2" })
-        });
-
-        if ((await res.json()).success) {
-            notificar("✅ Estoque Atualizado com Sucesso!");
-            abrirTelaEntrada(); // Recarrega para limpar campos e atualizar saldos
-        }
-    } catch (err) {
-        notificar("❌ Erro no processamento.");
+        console.error("Erro ao carregar tela de entrada:", err);
+        document.getElementById('lista-entrada-produtos').innerHTML = `<p style="color: #ff4d4d; padding: 20px;">❌ Erro ao carregar dados.</p>`;
     }
 }
 
@@ -18369,7 +18319,7 @@ async function abrirTelaSaidaPedido() {
             <div class="glass-panel" style="padding: 20px; margin-bottom: 20px; border-radius: 15px;">
                 <label style="color: #00d4ff; font-weight: bold; display: block; margin-bottom: 10px;">📍 SELECIONE O LOCAL DESTINO:</label>
                 <select id="select-local-destino" style="width: 100%; padding: 12px; background: rgba(0,0,0,0.4); color: white; border: 1px solid #00d4ff; border-radius: 8px;">
-                    <option value="">Carregando locais...</option>
+                    <option value="">-- SELECIONE A UNIDADE --</option>
                 </select>
             </div>
         </div>
@@ -18390,7 +18340,6 @@ async function abrirTelaSaidaPedido() {
         const resLocais = await fetch(`${API_URL}/locais`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
         const locais = await resLocais.json();
         const selectDestino = document.getElementById('select-local-destino');
-        
         selectDestino.innerHTML = '<option value="">-- SELECIONE A UNIDADE --</option>' + 
             locais.filter(l => l.id !== 37 && l.id !== 50)
                   .map(l => `<option value="${l.id}">${l.nome}</option>`).join('');
@@ -18400,21 +18349,17 @@ async function abrirTelaSaidaPedido() {
         const listaHtml = document.getElementById('lista-saida-produtos');
         listaHtml.innerHTML = '';
 
-        // Padronização da Grade (A Ordem que você mandou)
         const ordemDesejada = ['02', '04', '06', '08', '10', '12', '14', '16', 'PP', 'P', 'M', 'G', 'GG', 'EGG'];
 
         produtos.forEach(p => {
             const isUniforme = p.tipo === 'UNIFORMES';
             const isTenis = p.nome.toUpperCase().includes('TENIS');
-            
             let gradeFinal = p.grade || [];
 
             if (isUniforme && !isTenis && gradeFinal.length > 0) {
                 gradeFinal = [...gradeFinal].sort((a, b) => {
-                    // Função interna para normalizar o que vem do banco para o seu padrão
                     const formatar = (t) => {
                         let s = String(t).toUpperCase().trim();
-                        // Se for número de 1 a 9, vira 01, 02... Se for P, M, etc, mantém.
                         return (s.length === 1 && !isNaN(s)) ? s.padStart(2, '0') : s;
                     };
                     return ordemDesejada.indexOf(formatar(a.tamanho)) - ordemDesejada.indexOf(formatar(b.tamanho));
@@ -18422,63 +18367,48 @@ async function abrirTelaSaidaPedido() {
             }
 
             listaHtml.innerHTML += `
-                <div class="card-saida glass-panel" id="card-saida-${p.id}" 
-                     style="background: rgba(255,255,255,0.05); margin-bottom: 12px; padding: 18px; border-radius: 15px; color: white; border: 1px solid rgba(255,255,255,0.1);">
-                    
+                <div class="card-saida glass-panel" style="background: rgba(255,255,255,0.05); margin-bottom: 12px; padding: 18px; border-radius: 15px; color: white; border: 1px solid rgba(255,255,255,0.1);">
                     <div style="display: flex; justify-content: space-between; align-items: center;" 
                          ${isUniforme ? `onclick="toggleGradeSaida(${p.id})"` : ''}>
                         <div style="cursor: ${isUniforme ? 'pointer' : 'default'}">
-                            <span style="font-size: 0.7rem; background: #00d4ff; padding: 3px 8px; border-radius: 5px; color: #001a2c; font-weight: bold;">
-                                ${p.tipo}
-                            </span>
+                            <span style="font-size: 0.7rem; background: #00d4ff; padding: 3px 8px; border-radius: 5px; color: #001a2c; font-weight: bold;">${p.tipo}</span>
                             <p style="margin: 8px 0 0 0; font-weight: bold; font-size: 1.1rem;">${p.nome}</p>
                             <small style="color: #aaa;">Estoque: <strong style="color: #00d4ff;">${p.quantidade_estoque}</strong></small>
                         </div>
-
                         ${!isUniforme ? `
                             <div style="text-align: right;">
-                                <small style="display: block; font-size: 0.50rem; opacity: 0.6; margin-bottom: 5px;">QTD SAÍDA</small>
                                 <input type="number" class="input-saida-qtd" data-id="${p.id}" data-tipo="MATERIAL" data-max="${p.quantidade_estoque}"
                                        onchange="validarEstoqueMax(this)"
-                                       style="width: 80px; background: rgba(0,0,0,0.3); border: 1px solid #ff4d4d; color: white; padding: 8px; border-radius: 8px; text-align: center;"
-                                       placeholder="0" min="0">
+                                       style="width: 80px; background: rgba(0,0,0,0.3); border: 1px solid #ff4d4d; color: white; padding: 8px; border-radius: 8px; text-align: center;" placeholder="0">
                             </div>
                         ` : `
-                            <div style="text-align: right; cursor: pointer;">
+                            <div style="text-align: right;">
                                 <span id="total-uniforme-${p.id}" style="font-size: 1.2rem; font-weight: bold; color: #ff4d4d; display: block;">0</span>
                                 <small style="color: #00d4ff;">Grade 👕 <i class="fas fa-chevron-down"></i></small>
                             </div>
                         `}
                     </div>
-
                     ${isUniforme ? `
-                        <div id="grade-saida-${p.id}" class="grade-expansivel" style="display:none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);">
+                        <div id="grade-saida-${p.id}" style="display:none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);">
                             <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px;">
                                 ${gradeFinal.map(g => {
-                                    // Formatação visual idêntica ao que você pediu
-                                    const s = String(g.tamanho).toUpperCase().trim();
-                                    const visual = (s.length === 1 && !isNaN(s)) ? s.padStart(2, '0') : s;
-                                    
+                                    const visual = (String(g.tamanho).length === 1 && !isNaN(g.tamanho)) ? String(g.tamanho).padStart(2, '0') : g.tamanho;
                                     return `
                                     <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; text-align: center;">
                                         <small style="display: block; font-size: 0.50rem; color: #00d4ff;">${visual}</small>
-                                        <small style="display: block; font-size: 0.50rem; color: #777;">Saldo: ${g.quantidade}</small>
                                         <input type="number" class="input-saida-qtd" 
                                                data-id="${p.id}" data-tipo="UNIFORMES" data-tamanho="${visual}" data-max="${g.quantidade}"
                                                oninput="atualizarTotalGradeSaida(${p.id})" onchange="validarEstoqueMax(this)"
-                                               style="width: 100%; background: transparent; border: none; border-bottom: 1px solid #ff4d4d; color: white; text-align: center;"
-                                               placeholder="0" min="0">
-                                    </div>
-                                `;}).join('')}
+                                               style="width: 100%; background: transparent; border: none; border-bottom: 1px solid #ff4d4d; color: white; text-align: center;" placeholder="0">
+                                    </div>`;
+                                }).join('')}
                             </div>
                         </div>
                     ` : ''}
                 </div>
             `;
         });
-    } catch (err) {
-        console.error("Erro:", err);
-    }
+    } catch (err) { console.error(err); }
 }
 
 // Funções Auxiliares de UI
@@ -20491,265 +20421,295 @@ async function exportarFluxoPDF(dados) {
 
 async function telaEntregaUniformes() {
     const app = document.getElementById('app-content');
-    app.innerHTML = '<div style="color:white; padding:20px;">Carregando turmas...</div>';
+    app.innerHTML = `<div class="loading-spinner"></div>`;
 
     try {
         const res = await fetch(`${API_URL}/escola/turmas-local`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
+
+        if (!res.ok) {
+            const errData = await res.json();
+            throw new Error(errData.error || 'Falha ao carregar turmas.');
+        }
+
         const turmas = await res.json();
 
         app.innerHTML = `
-            <div style="padding: 20px; font-family: sans-serif;">
-                <button onclick="carregarDashboard()" style="cursor:pointer; padding: 5px 15px; margin-bottom: 20px;">← VOLTAR</button>
-                <h2 style="color: white; margin-bottom: 10px;">ENTREGA DE UNIFORMES</h2>
-                <div style="background: #fff; padding: 20px; border-radius: 4px; max-width: 400px; border: 1px solid #ccc;">
-                    <label style="display: block; font-weight: bold; margin-bottom: 10px; color: #333;">SELECIONE A TURMA:</label>
-                    <select id="select-turma-unif" style="width: 100%; padding: 10px; font-size: 16px;">
+            <div class="header-animado animate__animated animate__fadeIn">
+                <button class="btn-voltar-vidro" onclick="carregarDashboard()" style="margin-bottom: 20px;">
+                    <i class="fas fa-arrow-left"></i> VOLTAR
+                </button>
+                <h2 class="titulo-sessao" style="color: white;">ENTREGA DE UNIFORMES</h2>
+                <p style="color: rgba(255,255,255,0.7); max-width: 600px; margin: 10px auto 30px auto; text-align: center;">
+                    Selecione uma turma para iniciar o processo de registro de entrega dos uniformes aos alunos.
+                </p>
+            </div>
+            
+            <div class="animate__animated animate__fadeInUp" style="max-width: 500px; margin: 0 auto;">
+                <div class="glass-panel" style="padding: 30px;">
+                    <label for="select-turma" style="display: block; color: #00d4ff; font-weight: bold; margin-bottom: 10px;">
+                        SELECIONE A TURMA
+                    </label>
+                    <select id="select-turma" class="select-vidro" style="width: 100%; font-size: 1.2rem;">
                         <option value="">-- Escolha uma turma --</option>
                         ${turmas.map(t => `<option value="${t.id}">${t.nome}</option>`).join('')}
                     </select>
-                    <button onclick="validaAberturaGrade()" style="width: 100%; margin-top: 20px; padding: 12px; background: #0078d4; color: white; border: none; font-weight: bold; cursor: pointer;">
-                        ABRIR GRADE DE LANÇAMENTO
+                    
+                    <button id="btn-iniciar-entrega" class="btn-confirmar-entrada" 
+                            style="width: 100%; margin-top: 25px; background: #00d4ff; color: #001a2c; display: none;"
+                            onclick="carregarGradeDeEntrega()">
+                        <i class="fas fa-arrow-right"></i> PROSSEGUIR PARA A ENTREGA
                     </button>
                 </div>
             </div>
         `;
+
+        const selectTurma = document.getElementById('select-turma');
+        const btnIniciar = document.getElementById('btn-iniciar-entrega');
+
+        selectTurma.addEventListener('change', () => {
+            if (selectTurma.value) {
+                btnIniciar.style.display = 'block';
+                btnIniciar.classList.add('animate__animated', 'animate__pulse');
+            } else {
+                btnIniciar.style.display = 'none';
+            }
+        });
+
     } catch (err) {
+        console.error("Erro na tela de entrega de uniformes:", err);
+        app.innerHTML = `<p style="color: #ff4d4d; padding: 20px;">❌ ${err.message}</p>`;
         notificar(`Erro: ${err.message}`, 'erro');
     }
 }
 
-function validaAberturaGrade() {
-    const sel = document.getElementById('select-turma-unif');
-    if (!sel.value) return;
-    renderizarMatrizEntregaUniforme(sel.value, sel.options[sel.selectedIndex].text);
+function carregarGradeDeEntrega() {
+    const selectTurma = document.getElementById('select-turma');
+    const turmaId = selectTurma.value;
+    const turmaNome = selectTurma.options[selectTurma.selectedIndex].text;
+    if (!turmaId) {
+        notificar('Por favor, selecione uma turma.', 'aviso');
+        return;
+    }
+    renderizarMatrizEntrega(turmaId, turmaNome);
 }
 
-function prepararGradeUniforme() {
-    const sel = document.getElementById('select-turma-unif');
-    if (!sel.value) return;
-    renderizarMatrizEntregaUniforme(sel.value, sel.options[sel.selectedIndex].text);
-}
-
-function iniciarPlanilhaUniforme() {
-    const sel = document.getElementById('select-turma-uniforme');
-    if (!sel.value) return notificar('Selecione uma turma', 'aviso');
-    renderizarMatrizEntregaUniforme(sel.value, sel.options[sel.selectedIndex].text);
-}
-
-async function renderizarMatrizEntregaUniforme(turmaId, turmaNome) {
+async function renderizarMatrizEntrega(turmaId, turmaNome) {
     const app = document.getElementById('app-content');
-    app.innerHTML = '<div style="color:white; padding:20px;">Gerando planilha...</div>';
+    app.innerHTML = `<div class="loading-spinner"></div>`;
 
     try {
         const res = await fetch(`${API_URL}/turma/${turmaId}/grade-entrega`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
+        if (!res.ok) throw new Error((await res.json()).error || 'Falha ao carregar dados.');
         const data = await res.json();
+
+        if (!data.alunos || data.alunos.length === 0) {
+            app.innerHTML = `
+                <div class="glass-panel" style="text-align:center; padding: 40px; margin: 20px;">
+                    <h2>A turma "${turmaNome}" não possui alunos cadastrados.</h2>
+                    <button class="btn-voltar-vidro" onclick="telaEntregaUniformes()">Voltar</button>
+                </div>`;
+            return;
+        }
+
+        const opcoesPorProduto = {};
+        data.produtos.forEach(produto => {
+            const estoque = data.estoqueEscola[produto.id] || [];
+            opcoesPorProduto[produto.id] = estoque
+                .map(e => `<option value="${e.tamanho}">${e.tamanho} (${e.qtd})</option>`)
+                .join('');
+        });
 
         app.innerHTML = `
             <style>
-                .wrapper-unif { background: #fff; height: 100vh; display: flex; flex-direction: column; font-family: 'Segoe UI', Tahoma, sans-serif; }
-                .header-unif { padding: 10px; background: #f3f3f3; border-bottom: 1px solid #ccc; display: flex; justify-content: space-between; }
-                .tabela-unif-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; }
-                
-                .tab-unif { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 11px; }
-                .tab-unif th, .tab-unif td { border: 1px solid #bdc3c7; padding: 3px; text-align: center; color: #000; }
-                .tab-unif thead th { background: #ebedef; position: sticky; top: 0; z-index: 5; height: 40px; }
-                
-                .col-aluno { width: 200px; text-align: left !important; padding-left: 8px !important; background: #f9f9f9; font-weight: bold; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-                
-                /* Select Corporativo: Alto Contraste */
-                .sel-unif { 
-                    width: 100%; background: #ffffff !important; color: #000000 !important; 
-                    border: 1px solid #7f8c8d; font-size: 10px; height: 24px; cursor: pointer;
+                .tabela-entrega-wrapper {
+                    max-height: 65vh;
+                    overflow-y: auto;
+                    overflow-x: hidden;
+                    border-radius: 8px;
+                    background: rgba(0, 26, 44, 0.6);
+                    margin-bottom: 15px;
+                    border: 1px solid rgba(255,255,255,0.1);
                 }
-                .entregue-check { color: #27ae60; font-weight: bold; }
-                .btn-save { background: #217346; color: white; border: none; padding: 12px 30px; font-weight: bold; cursor: pointer; }
+
+                .tabela-entrega {
+                    width: 100%;
+                    border-collapse: collapse;
+                    table-layout: fixed; /* Trava o layout */
+                }
+
+                /* Coluna do Aluno: 20% do total */
+                .col-aluno {
+                    width: 20%;
+                    min-width: 20%;
+                    max-width: 20%;
+                    text-align: left !important;
+                    padding-left: 10px !important;
+                    font-size: 0.7rem;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+
+                /* Colunas de Uniformes (9 colunas): Cada uma recebe exatamente 1/9 dos 80% restantes */
+                .col-uniforme {
+                    width: calc(80% / ${data.produtos.length});
+                    min-width: calc(80% / ${data.produtos.length});
+                    max-width: calc(80% / ${data.produtos.length});
+                    padding: 5px 2px !important;
+                }
+
+                .tabela-entrega thead th {
+                    position: sticky;
+                    top: 0;
+                    z-index: 10;
+                    background: #001a2c;
+                    font-size: 0.55rem; /* Fonte levemente menor para garantir que caiba */
+                    color: #00d4ff;
+                    height: 45px;
+                    border-bottom: 2px solid #00d4ff;
+                    word-wrap: break-word; /* Força quebra de linha em nomes longos como CALCA MAS */
+                }
+
+                .tabela-entrega .linha-todos th, 
+                .tabela-entrega .linha-todos td {
+                    position: sticky;
+                    top: 45px;
+                    z-index: 9;
+                    background: #002a44;
+                    border-bottom: 1px solid rgba(255,255,255,0.2);
+                }
+
+                .tabela-entrega td {
+                    text-align: center;
+                    border: 1px solid rgba(255,255,255,0.05);
+                    height: 38px;
+                }
+
+                .select-tamanho-entrega, .select-todos {
+                    width: 90%; /* Reduzido de 98% para 90% para dar respiro */
+                    margin: 0 auto; /* Centraliza perfeitamente na célula */
+                    display: block; /* Garante que o alinhamento funcione */
+                    font-size: 0.65rem;
+                    padding: 2px;
+                    background: rgba(0,0,0,0.5);
+                    color: white;
+                    border: 1px solid rgba(0,212,255,0.3);
+                    border-radius: 3px;
+                }
+
+                .tabela-entrega th:last-child, 
+                .tabela-entrega td:last-child {
+                    padding-right: 15px !important;
+                }
+
+                .titulo-turma-central {
+                    width: 100%;
+                    text-align: center;
+                    color: #00d4ff;
+                    font-size: 1.6rem;
+                    font-weight: 800;
+                    text-transform: uppercase;
+                    margin-bottom: 20px;
+                    letter-spacing: 2px;
+                    text-shadow: 0 0 15px rgba(0, 212, 255, 0.4);
+                }
+                
+                .celula-entregue { font-size: 0.6rem; color: #00ff88; line-height: 1; }
+                .celula-nao-aplica { color: rgba(255,255,255,0.1); font-size: 0.7rem; }
+                
+                #footer-acoes-entrega {
+                    display: flex;
+                    gap: 10px;
+                    justify-content: center;
+                    padding: 10px;
+                }
             </style>
 
-            <div class="wrapper-unif">
-                <div class="header-unif">
-                    <span style="color:#333; font-weight:bold;">TURMA: ${turmaNome}</span>
-                    <button onclick="telaEntregaUniformes()">TROCAR TURMA</button>
-                </div>
-                
-                <div class="tabela-unif-scroll">
-                    <table class="tab-unif">
-                        <thead>
-                            <tr>
-                                <th class="col-aluno">ALUNO</th>
-                                ${data.produtos.map(p => {
-                                    const label = p.nome.split(' ').join('<br>');
-                                    return `<th>${label}</th>`;
+            <div class="header-animado animate__animated animate__fadeIn">
+                <button class="btn-voltar-vidro" onclick="telaEntregaUniformes()" style="padding: 4px 12px; font-size: 0.8rem;">
+                    <i class="fas fa-arrow-left"></i> TROCAR TURMA
+                </button>
+                <h1 class="titulo-turma-central">
+                    <i class="fas fa-users"></i> TURMA: ${turmaNome}
+                </h1>
+            </div>
+
+            <div class="tabela-entrega-wrapper animate__animated animate__fadeInUp">
+                <table class="tabela-entrega">
+                    <thead>
+                        <tr>
+                            <th class="col-aluno">ALUNO</th>
+                            ${data.produtos.map(p => `
+                                <th class="col-uniforme">
+                                    ${p.nome.toUpperCase()}
+                                </th>`).join('')}
+                        </tr>
+
+                        <tr class="linha-todos">
+                            <th class="col-aluno" style="color: #00d4ff;">TODOS</th>
+                            ${data.produtos.map(produto => `
+                                <td class="col-uniforme" data-produto-id="${produto.id}">
+                                    <select class="select-todos" data-produto-id="${produto.id}">
+                                        <option value="">--</option>
+                                        ${opcoesPorProduto[produto.id]}
+                                    </select>
+                                </td>
+                            `).join('')}
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        ${data.alunos.map(aluno => `
+                            <tr id="aluno-row-${aluno.id}">
+                                <td class="col-aluno" title="${aluno.nome}">${aluno.nome}</td>
+                                ${data.produtos.map(produto => {
+                                    const status = aluno.statusItens?.[produto.id];
+                                    if (!status) return `<td class="col-uniforme celula-nao-aplica">—</td>`;
+
+                                    if (status.status === 'entregue') {
+                                        return `
+                                            <td class="col-uniforme celula-entregue">
+                                                <i class="fas fa-check"></i> ${status.tamanho}
+                                            </td>`;
+                                    }
+
+                                    return `
+                                        <td class="col-uniforme">
+                                            <select class="select-tamanho-entrega"
+                                                    data-aluno-id="${aluno.id}"
+                                                    data-produto-id="${produto.id}"
+                                                    data-origem="manual">
+                                                <option value="">--</option>
+                                                ${opcoesPorProduto[produto.id]}
+                                            </select>
+                                        </td>`;
                                 }).join('')}
                             </tr>
-                        </thead>
-                        <tbody>
-                            ${data.alunos.map(aluno => `
-                                <tr>
-                                    <td class="col-aluno">${aluno.nome.toUpperCase()}</td>
-                                    ${data.produtos.map(prod => {
-                                        const status = aluno.statusItens?.[prod.id];
-                                        if (status?.status === 'entregue') {
-                                            return `<td class="entregue-check">✓ ${status.tamanho}</td>`;
-                                        }
-                                        const grade = data.estoqueEscola[prod.id] || [];
-                                        return `
-                                            <td>
-                                                <select class="sel-unif grade-input" data-aluno-id="${aluno.id}" data-produto-id="${prod.id}">
-                                                    <option value="">--</option>
-                                                    ${grade.map(g => `<option value="${g.tamanho}">${g.tamanho} (${g.qtd})</option>`).join('')}
-                                                </select>
-                                            </td>`;
-                                    }).join('')}
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                </div>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
 
-                <div style="padding: 15px; text-align: right; background: #f3f3f3; border-top: 1px solid #ccc;">
-                    <button class="btn-save" onclick="processarEnvioUniformeLote(${turmaId}, '${turmaNome}')">
-                        CONFIRMAR ENTREGA
-                    </button>
-                </div>
+            <div id="footer-acoes-entrega">
+                <button class="btn-imprimir-comprovante" onclick="gerarComprovanteTurma(${turmaId})" 
+                        style="background: #3b82f6; color: white; padding: 12px 20px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer;">
+                    COMPROVANTE
+                </button>
+                <button class="btn-confirmar-entrega" onclick="confirmarEntregasTurma(${turmaId})" 
+                        style="background: #00ff88; color: #001a2c; padding: 12px 30px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer;">
+                    CONFIRMAR SELECIONADAS
+                </button>
             </div>
         `;
-    } catch (err) {
-        notificar(`Erro: ${err.message}`, 'erro');
-    }
-}
 
-async function processarEnvioUniformeLote(turmaId, turmaNome) {
-    const selects = document.querySelectorAll('.grade-input');
-    const entregas = [];
-
-    selects.forEach(s => {
-        if (s.value) {
-            entregas.push({
-                alunoId: s.dataset.alunoId,
-                produtoId: s.dataset.produtoId,
-                tamanho: s.value
-            });
-        }
-    });
-
-    if (entregas.length === 0) return;
-
-    try {
-        const res = await fetch(`${API_URL}/entregas/lote`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${TOKEN}`
-            },
-            body: JSON.stringify({ entregas: entregas })
-        });
-
-        const resultado = await res.json();
-
-        if (!res.ok) {
-            throw new Error(resultado.error || 'Erro no processamento');
-        }
-
-        // Única mensagem permitida após o sucesso
-        notificar('ENTREGA REGISTRADA', 'sucesso');
-        
-        // Recarrega a planilha para atualizar os checks e o estoque
-        renderizarMatrizEntregaUniforme(turmaId, turmaNome);
+        configurarAcoesEmMassa();
 
     } catch (err) {
-        console.error("Erro no envio:", err);
-        notificar(`Erro: ${err.message}`, 'erro');
-    }
-}
-
-async function confirmarEntregaUniformesLote(turmaId, turmaNome) {
-    const selects = document.querySelectorAll('.input-entrega');
-    const entregas = [];
-
-    selects.forEach(s => {
-        if (s.value) {
-            entregas.push({
-                alunoId: s.dataset.alunoId,
-                produtoId: s.dataset.produtoId,
-                tamanho: s.value
-            });
-        }
-    });
-
-    if (entregas.length === 0) return;
-
-    // Processamento imediato sem perguntas (conforme solicitado pela Diretoria)
-    try {
-        const res = await fetch(`${API_URL}/entregas/lote`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${TOKEN}`
-            },
-            body: JSON.stringify({ entregas })
-        });
-
-        if (!res.ok) {
-            const erro = await res.json();
-            throw new Error(erro.error || 'Erro no servidor');
-        }
-
-        // Única mensagem permitida após o sucesso
-        notificar('ENTREGA REGISTRADA', 'sucesso');
-        
-        // Recarrega a planilha para atualizar o status e o estoque na tela
-        renderizarMatrizEntregaUniforme(turmaId, turmaNome);
-
-    } catch (err) {
-        console.error("Erro no processamento:", err);
-        notificar(`ERRO: ${err.message}`, 'erro');
-    }
-}
-
-async function processarEnvioUniforme(turmaId, turmaNome) {
-    const selects = document.querySelectorAll('.grade-input');
-    const entregas = [];
-
-    selects.forEach(s => {
-        if (s.value) {
-            entregas.push({
-                alunoId: s.dataset.alunoId,
-                produtoId: s.dataset.produtoId,
-                tamanho: s.value
-            });
-        }
-    });
-
-    if (entregas.length === 0) return;
-
-    // REMOVIDO: confirm()
-    // REMOVIDO: Mensagens de Remessa
-
-    try {
-        // Envia para sua rota que já funciona
-        const res = await fetch(`${API_URL}/entregas/lote`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${TOKEN}`
-            },
-            body: JSON.stringify({ entregas: entregas })
-        });
-
-        if (!res.ok) throw new Error('Falha no registro.');
-
-        // A única mensagem permitida:
-        notificar('ENTREGA REGISTRADA', 'sucesso');
-        
-        // Recarrega a planilha para atualizar o estoque na tela
-        renderizarMatrizEntregaUniforme(turmaId, turmaNome);
-
-    } catch (err) {
-        console.error(err);
+        console.error("Erro ao renderizar matriz de entrega:", err);
         notificar(`Erro: ${err.message}`, 'erro');
     }
 }
@@ -21449,49 +21409,18 @@ async function gerarRelatorioStatusTurmas() {
     }
 }
 
-async function telaEntregaMaterial() {
-    const app = document.getElementById('app-content');
-    app.innerHTML = '<div style="color:white; padding:20px;">Carregando turmas...</div>';
-
-    try {
-        const res = await fetch(`${API_URL}/escola/turmas-local`, {
-            headers: { 'Authorization': `Bearer ${TOKEN}` }
-        });
-        const turmas = await res.json();
-
-        app.innerHTML = `
-            <div style="padding: 20px; font-family: sans-serif;">
-                <button onclick="carregarDashboard()" style="cursor:pointer; padding: 5px 15px; margin-bottom: 20px;">← VOLTAR</button>
-                <h2 style="color: white; margin-bottom: 15px;">DISTRIBUIÇÃO DE KITS DE MATERIAL</h2>
-                
-                <div style="background: #fff; padding: 25px; border-radius: 4px; max-width: 450px; border: 1px solid #ccc;">
-                    <label style="display: block; font-weight: bold; margin-bottom: 8px; color: #333;">TURMA ATENDIDA:</label>
-                    <select id="select-turma-mat" style="width: 100%; padding: 12px; font-size: 16px; margin-bottom: 20px; border: 1px solid #999;">
-                        <option value="">-- Selecione a Turma --</option>
-                        ${turmas.map(t => `<option value="${t.id}">${t.nome}</option>`).join('')}
-                    </select>
-                    
-                    <button onclick="abrirGradeMaterial()" style="width: 100%; padding: 15px; background: #e67e22; color: white; border: none; font-weight: bold; cursor: pointer;">
-                        GERAR PLANILHA DE MATERIAL
-                    </button>
-                </div>
-            </div>
-        `;
-    } catch (err) {
-        notificar(`Erro: ${err.message}`, 'erro');
-    }
-}
-
-function abrirGradeMaterial() {
-    const sel = document.getElementById('select-turma-mat');
-    if (!sel.value) return;
-    renderizarMatrizEntregaMaterial(sel.value, sel.options[sel.selectedIndex].text);
-}
-
-function validaAberturaMaterial() {
-    const sel = document.getElementById('select-turma-mat');
-    if (!sel.value) return;
-    renderizarMatrizEntregaMaterial(sel.value, sel.options[sel.selectedIndex].text);
+function telaEntregaMaterial() {
+    telaEntregaUniformes();
+    
+    setTimeout(() => {
+        const titulo = document.querySelector('.titulo-sessao');
+        const desc = document.querySelector('p[style*="color: rgba(255,255,255,0.7)"]');
+        if(titulo) titulo.innerText = 'ENTREGA DE MATERIAL ESCOLAR';
+        if(desc) desc.innerText = 'Selecione uma turma para registrar a entrega dos kits de material.';
+        
+        const btn = document.getElementById('btn-iniciar-entrega');
+        if(btn) btn.setAttribute('onclick', 'carregarGradeDeEntregaMaterial()');
+    }, 100);
 }
 
 function carregarGradeDeEntregaMaterial() {
@@ -21503,158 +21432,233 @@ function carregarGradeDeEntregaMaterial() {
     renderizarMatrizEntregaMaterial(turmaId);
 }
 
-async function renderizarMatrizEntregaMaterial(turmaId, turmaNome) {
+async function renderizarMatrizEntregaMaterial(turmaId) {
     const app = document.getElementById('app-content');
-    app.innerHTML = '<div style="color:white; padding:20px;">Validando etapa de ensino...</div>';
+    app.innerHTML = `<div class="loading-spinner"></div>`;
 
     try {
-        const res = await fetch(`${API_URL}/turma/${turmaId}/grade-material`, {
+        const res = await fetch(`${API_URL}/turma/${turmaId}/grade-entrega-material`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
         const data = await res.json();
+        
+        if (!res.ok) throw new Error(data.error || 'Falha ao carregar dados da turma.');
 
-        const etapa = data.turmaInfo.etapa_id;
-        let idPermitido = 0;
+        const turmaNome = data.turmaInfo.nome;
 
-        // Regra de Negócio solicitada
-        if (etapa === 1 || etapa === 2) idPermitido = 1;
-        else if (etapa === 3 || etapa === 4) idPermitido = 2;
-        else if (etapa >= 5 && etapa <= 9) idPermitido = 3;
-        else if (etapa >= 10 && etapa <= 13) idPermitido = 4;
-        else if (etapa >= 14 && etapa <= 22) idPermitido = 5;
+        if (!data.produtos || data.produtos.length === 0) {
+            app.innerHTML = `
+                <div class="glass-panel" style="text-align:center; padding: 40px; margin: 20px;">
+                    <h2>Nenhum Kit de Material Escolar Encontrado</h2>
+                    <button class="btn-voltar-vidro" onclick="telaEntregaMaterial()">Voltar</button>
+                </div>`;
+            return;
+        }
 
         app.innerHTML = `
             <style>
-                .wrapper-mat { background: #fff; height: 100vh; display: flex; flex-direction: column; font-family: Arial; }
-                .top-mat { padding: 10px; background: #eee; border-bottom: 1px solid #999; display: flex; justify-content: space-between; }
-                .tab-mat { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 11px; }
-                .tab-mat th, .tab-mat td { border: 1px solid #ccc; padding: 4px; text-align: center; color: #000; height: 35px; }
-                .tab-mat thead th { background: #dcdde1; position: sticky; top: 0; z-index: 2; }
-                .col-aluno { width: 250px; text-align: left !important; padding-left: 10px !important; background: #f9f9f9; font-weight: bold; }
-                .col-bloqueada { background: #f2f2f2; color: #aaa !important; }
-                .col-liberada { background: #fff; }
-                .check-mat { transform: scale(1.6); cursor: pointer; }
+                .tabela-material-wrapper {
+                    max-height: 65vh;
+                    overflow-y: auto;
+                    overflow-x: hidden;
+                    border-radius: 8px;
+                    background: rgba(0, 26, 44, 0.6);
+                    margin-bottom: 15px;
+                    border: 1px solid rgba(255,255,255,0.1);
+                }
+
+                .tabela-entrega {
+                    width: 100%;
+                    border-collapse: collapse;
+                    table-layout: fixed;
+                }
+
+                .col-aluno {
+                    width: 25%;
+                    min-width: 200px;
+                    text-align: left !important;
+                    padding-left: 15px !important;
+                    font-size: 0.75rem;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    color: white;
+                }
+
+                .col-prod-mat {
+                    width: calc(75% / ${data.produtos.length});
+                    min-width: 80px;
+                }
+
+                .tabela-entrega thead th {
+                    position: sticky;
+                    top: 0;
+                    z-index: 10;
+                    background: #001a2c;
+                    font-size: 0.60rem;
+                    color: #00d4ff;
+                    height: 50px;
+                    border-bottom: 2px solid #00d4ff;
+                    word-wrap: break-word;
+                    padding: 5px;
+                }
+
+                .tabela-entrega .linha-todos th, 
+                .tabela-entrega .linha-todos td {
+                    position: sticky;
+                    top: 50px;
+                    z-index: 9;
+                    background: #002a44;
+                    border-bottom: 1px solid rgba(255,255,255,0.2);
+                }
+
+                .tabela-entrega td {
+                    text-align: center;
+                    border: 1px solid rgba(255,255,255,0.05);
+                    height: 45px;
+                    vertical-align: middle;
+                }
+
+                .celula-radio {
+                    position: relative;
+                }
+
+                .celula-radio input[type="radio"] {
+                    cursor: pointer;
+                    transform: scale(1.2);
+                    margin: 0;
+                }
+
+                .titulo-turma-central {
+                    width: 100%;
+                    text-align: center;
+                    color: #00d4ff;
+                    font-size: 1.6rem;
+                    font-weight: 800;
+                    text-transform: uppercase;
+                    margin-bottom: 20px;
+                    letter-spacing: 2px;
+                    text-shadow: 0 0 15px rgba(0, 212, 255, 0.4);
+                }
+
+                .celula-entregue { 
+                    font-size: 0.65rem; 
+                    color: #00ff88; 
+                    font-weight: bold;
+                    line-height: 1.2;
+                }
+
+                .celula-bloqueada { 
+                    background: rgba(0,0,0,0.2); 
+                    opacity: 0.3; 
+                }
+                
+                #footer-material {
+                    display: flex;
+                    gap: 15px;
+                    justify-content: center;
+                    padding: 15px;
+                }
+
+                .checkbox-todos {
+                    transform: scale(1.1);
+                    cursor: pointer;
+                }
             </style>
 
-            <div class="wrapper-mat">
-                <div class="top-mat">
-                    <strong>MATERIAL: ${turmaNome} | ETAPA ID: ${etapa}</strong>
-                    <button onclick="telaEntregaMaterial()">VOLTAR</button>
-                </div>
-                
-                <div style="flex:1; overflow:auto;">
-                    <table class="tab-mat">
-                        <thead>
-                            <tr>
-                                <th class="col-aluno">NOME DO ALUNO</th>
-                                ${data.produtos.map(p => `
-                                    <th class="${p.id === idPermitido ? 'col-liberada' : 'col-bloqueada'}">
-                                        ${p.nome.replace('KIT ', 'KIT<br>')}<br>
-                                        ${p.id === idPermitido ? 
-                                            `<input type="checkbox" onclick="toggleTudoMat(this.checked)"> <small>TODOS</small>` : ''}
-                                    </th>
-                                `).join('')}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${data.alunos.map(aluno => `
-                                <tr>
-                                    <td class="col-aluno">${aluno.nome.toUpperCase()}</td>
-                                    ${data.produtos.map(prod => {
-                                        const jaRecebeu = aluno.statusItens[prod.id]?.status === 'entregue';
-                                        
-                                        if (jaRecebeu) return `<td class="col-bloqueada" style="color:green !important;">✓ OK</td>`;
-                                        
-                                        if (prod.id === idPermitido) {
-                                            return `<td class="col-liberada">
-                                                <input type="checkbox" class="check-mat mat-check" 
-                                                       data-aluno-id="${aluno.id}" data-produto-id="${prod.id}">
-                                            </td>`;
-                                        }
-                                        return `<td class="col-bloqueada">-</td>`;
-                                    }).join('')}
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                </div>
+            <div class="header-animado animate__animated animate__fadeIn">
+                <button class="btn-voltar-vidro" onclick="telaEntregaMaterial()" style="padding: 6px 15px; font-size: 0.8rem;">
+                    <i class="fas fa-arrow-left"></i> TROCAR TURMA
+                </button>
+                <h1 class="titulo-turma-central">
+                    <i class="fas fa-box-open"></i> TURMA: ${turmaNome}
+                </h1>
+            </div>
 
-                <div style="padding: 15px; text-align: right; background: #eee;">
-                    <button onclick="salvarEntregasMaterialLote(${turmaId}, '${turmaNome}')" 
-                            style="background: #217346; color: white; padding: 12px 40px; border: none; font-weight: bold; cursor: pointer;">
-                        CONFIRMAR ENTREGA
-                    </button>
-                </div>
+            <div class="tabela-material-wrapper animate__animated animate__fadeInUp">
+                <table class="tabela-entrega">
+                    <thead>
+                        <tr>
+                            <th class="col-aluno">ALUNO</th>
+                            ${data.produtos.map(p => `
+                                <th class="col-prod-mat">
+                                    ${p.nome.toUpperCase()}<br>
+                                    <small style="opacity:0.8; color: #fff;">
+                                        Disp: ${data.estoqueEscola[p.id] || 0}
+                                    </small>
+                                </th>`).join('')}
+                        </tr>
+                        <tr class="linha-todos">
+                            <th class="col-aluno" style="color: #00d4ff;">SELECIONAR TODOS</th>
+                            ${data.produtos.map(produto => `
+                                <td class="col-prod-mat">
+                                    <input type="checkbox" class="checkbox-todos" 
+                                           data-produto-id="${produto.id}" 
+                                           id="todos-${produto.id}">
+                                </td>
+                            `).join('')}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${data.alunos.map(aluno => {
+                            const jaEntregue = aluno.status === 'entregue';
+                            const dataFormatada = (jaEntregue && aluno.entregaInfo && aluno.entregaInfo.data_entrega)
+                                ? new Date(aluno.entregaInfo.data_entrega).toLocaleDateString('pt-BR') 
+                                : '';
+
+                            return `
+                                <tr id="aluno-row-${aluno.id}">
+                                    <td class="col-aluno" title="${aluno.nome}">${aluno.nome}</td>
+                                    ${data.produtos.map(produto => {
+                                        if (jaEntregue && aluno.entregaInfo && aluno.entregaInfo.produto_id === produto.id) {
+                                            return `
+                                                <td class="col-prod-mat celula-entregue">
+                                                    <i class="fas fa-check-circle"></i><br>
+                                                    ${dataFormatada}
+                                                </td>`;
+                                        } 
+                                        
+                                        if (jaEntregue) {
+                                            return `<td class="col-prod-mat celula-bloqueada"></td>`;
+                                        }
+
+                                        return `
+                                            <td class="col-prod-mat celula-radio">
+                                                <input type="radio" 
+                                                       name="radio_aluno_${aluno.id}" 
+                                                       class="radio-aluno" 
+                                                       data-aluno-id="${aluno.id}" 
+                                                       data-produto-id="${produto.id}" 
+                                                       data-tipo="MATERIAL"
+                                                       data-tamanho="N/A"
+                                                       data-entrega-id="${(aluno.entregaInfo && aluno.entregaInfo.id) ? aluno.entregaInfo.id : ''}"
+                                                       id="al${aluno.id}-pr${produto.id}">
+                                                <label for="al${aluno.id}-pr${produto.id}"></label>
+                                            </td>`;
+                                    }).join('')}
+                                </tr>`;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
+
+            <div id="footer-material">
+                <button class="btn-imprimir-comprovante" onclick="gerarComprovanteTurmaMaterial(${turmaId})" 
+                        style="background: #3b82f6; color: white; padding: 12px 20px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-print"></i> COMPROVANTE
+                </button>
+                <button class="btn-confirmar-entrega" onclick="confirmarEntregasMaterial(${turmaId})" 
+                        style="background: #00ff88; color: #001a2c; padding: 12px 30px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-check"></i> CONFIRMAR ENTREGAS
+                </button>
             </div>
         `;
+        
+        configurarAcoesEmMassaMaterial(data.produtos, data.estoqueEscola);
+
     } catch (err) {
+        console.error("Erro ao renderizar matriz de material:", err.message);
         notificar(`Erro: ${err.message}`, 'erro');
-    }
-}
-
-function toggleTudoMat(status) {
-    document.querySelectorAll('.mat-check').forEach(c => c.checked = status);
-}
-
-async function salvarEntregasMaterialLote(turmaId, turmaNome) {
-    const selecionados = document.querySelectorAll('.mat-check:checked');
-    const entregas = Array.from(selecionados).map(i => ({
-        alunoId: i.dataset.alunoId,
-        produtoId: i.dataset.produtoId,
-        tamanho: 'N/A'
-    }));
-
-    if (entregas.length === 0) return;
-
-    try {
-        const res = await fetch(`${API_URL}/entregas/lote-material`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
-            body: JSON.stringify({ entregas })
-        });
-
-        if (!res.ok) throw new Error('Falha ao processar material.');
-
-        notificar('MATERIAIS REGISTRADOS', 'sucesso');
-        renderizarMatrizEntregaMaterial(turmaId, turmaNome);
-    } catch (err) {
-        notificar(err.message, 'erro');
-    }
-}
-
-function toggleTodosMaterial(valor) {
-    const checks = document.querySelectorAll('.mat-checkbox-input');
-    checks.forEach(c => c.checked = valor);
-}
-
-function selecionarTodosMaterial(status) {
-    const inputs = document.querySelectorAll('.input-mat');
-    inputs.forEach(i => i.checked = status);
-}
-
-async function processarEnvioMaterialLote(turmaId, turmaNome) {
-    const selecionados = document.querySelectorAll('.mat-checkbox-input:checked');
-    const entregas = Array.from(selecionados).map(i => ({
-        alunoId: i.dataset.alunoId,
-        produtoId: i.dataset.produtoId,
-        tamanho: 'N/A' 
-    }));
-
-    if (entregas.length === 0) return;
-
-    try {
-        const res = await fetch(`${API_URL}/entregas/lote-material`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
-            body: JSON.stringify({ entregas })
-        });
-
-        if (!res.ok) throw new Error('Falha no registro do material.');
-
-        notificar('MATERIAIS REGISTRADOS COM SUCESSO', 'sucesso');
-        renderizarMatrizEntregaMaterial(turmaId, turmaNome);
-    } catch (err) {
-        notificar(err.message, 'erro');
     }
 }
 
@@ -21668,34 +21672,46 @@ function configurarAcoesEmMassaMaterial(produtos, estoque) {
         chk.addEventListener('change', (e) => {
             const produtoId = e.target.dataset.produtoId;
             const marcar = e.target.checked;
+            
+            // Pega APENAS os rádios do produto (coluna) que o usuário clicou
+            const radiosDestaColuna = document.querySelectorAll(`.radio-aluno[data-produto-id="${produtoId}"]`);
 
             if (marcar) {
-                // Verificar estoque
+                // Verificar estoque real
                 const estoqueDisponivel = estoque[produtoId] || 0;
-                const alunosPendentes = new Set(
-                    Array.from(document.querySelectorAll('.radio-aluno'))
-                        .map(r => r.dataset.alunoId)
-                );
-                
-                if (alunosPendentes.size > estoqueDisponivel) {
-                    alert(`Atenção: Há ${alunosPendentes.size} alunos pendentes, mas só existem ${estoqueDisponivel} unidades em estoque.`);
-                }
+                let selecionadosComSucesso = 0;
 
-                // Desmarcar os outros checkboxes "Todos" (só 1 coluna por vez)
+                // Desmarcar os outros checkboxes "Todos" (só 1 coluna ativa por vez)
                 document.querySelectorAll('.checkbox-todos').forEach(outro => {
                     if (outro !== e.target) outro.checked = false;
                 });
 
-                // Marcar todos os radios desta coluna
-                document.querySelectorAll(`.radio-aluno[data-produto-id="${produtoId}"]`).forEach(r => {
-                    r.checked = true;
+                // Marcar os rádios RESPEITANDO O LIMITE DO ESTOQUE
+                radiosDestaColuna.forEach(r => {
+                    if (selecionadosComSucesso < estoqueDisponivel) {
+                        r.checked = true;
+                        r.dataset.wasChecked = 'true'; // Mantém o toggle sincronizado
+                        selecionadosComSucesso++;
+                    } else {
+                        r.checked = false;
+                        r.dataset.wasChecked = 'false';
+                    }
                 });
 
+                // Dá o feedback correto se faltou produto
+                if (radiosDestaColuna.length > estoqueDisponivel) {
+                    if (typeof notificar === 'function') {
+                        notificar(`Atenção: Apenas ${estoqueDisponivel} itens marcados (limite do estoque).`, 'aviso');
+                    } else {
+                        alert(`Atenção: Apenas ${estoqueDisponivel} itens marcados (limite do estoque).`);
+                    }
+                }
+
             } else {
-                // DESMARCAR: limpa todos os radios de TODAS as colunas
-                // (porque ao marcar "Todos" já tinha desmarcado os de outras colunas)
-                document.querySelectorAll('.radio-aluno').forEach(r => {
+                // DESMARCAR: limpa APENAS os radios desta coluna específica!
+                radiosDestaColuna.forEach(r => {
                     r.checked = false;
+                    r.dataset.wasChecked = 'false';
                 });
             }
         });
@@ -21703,32 +21719,35 @@ function configurarAcoesEmMassaMaterial(produtos, estoque) {
 
     // --- 2. Clique individual no radio do aluno ---
     // Permite desmarcar um radio clicando nele de novo
-    // e atualiza o estado do checkbox "Todos"
     document.querySelectorAll('.radio-aluno').forEach(radio => {
-        // Guardamos o estado anterior para permitir toggle
         radio.addEventListener('click', (e) => {
             const aluno = e.target;
             const alunoId = aluno.dataset.alunoId;
-            const produtoId = aluno.dataset.produtoId;
 
             // Se já estava marcado no mesmo, desmarcar (toggle)
             if (aluno.dataset.wasChecked === 'true') {
                 aluno.checked = false;
                 aluno.dataset.wasChecked = 'false';
             } else {
-                // Marcar este e atualizar o flag de todos do mesmo grupo
+                // Desmarca os outros da mesma linha (mesmo aluno) e marca este
                 document.querySelectorAll(`input[name="radio_aluno_${alunoId}"]`).forEach(r => {
                     r.dataset.wasChecked = 'false';
                 });
                 aluno.dataset.wasChecked = 'true';
             }
 
-            // Atualizar estado dos checkboxes "Todos"
-            atualizarEstadoCheckboxTodos();
+            // CORREÇÃO DO ERRO DA FUNÇÃO FANTASMA:
+            // Se o usuário desmarcar um aluno manualmente, o checkbox "Todos" lá em cima 
+            // tem que ser desmarcado para não confundir visualmente.
+            const produtoId = aluno.dataset.produtoId;
+            const checkTodos = document.getElementById(`todos-${produtoId}`);
+            if (checkTodos && !aluno.checked) {
+                checkTodos.checked = false;
+            }
         });
     });
 
-    // Inicializa o flag wasChecked em todos os radios
+    // Inicializa o flag wasChecked em todos os radios logo que a tela carrega
     document.querySelectorAll('.radio-aluno').forEach(r => {
         r.dataset.wasChecked = r.checked ? 'true' : 'false';
     });
@@ -21762,44 +21781,45 @@ async function gerarComprovanteTurmaMaterial(turmaId) {
 // CONFIRMAR ENTREGAS (sem alteração na lógica)
 // ============================================================
 async function confirmarEntregasMaterial(turmaId) {
-    const radiosMarcados = document.querySelectorAll('.radio-aluno:checked');
+    const selecionados = document.querySelectorAll('.radio-aluno:checked');
     
-    // Agora enviamos 'N/A' explicitamente para materiais
-    const entregasParaEnviar = Array.from(radiosMarcados).map(radio => ({
-        alunoId: radio.dataset.alunoId,
-        produtoId: radio.dataset.produtoId,
-        tamanho: 'N/A' 
+    if (selecionados.length === 0) {
+        notificar('Por favor, selecione ao menos uma entrega.', 'aviso');
+        return;
+    }
+
+    // Pega os dados dos rádios (sem tamanho, pois a rota saberá que é material)
+    const entregas = Array.from(selecionados).map(input => ({
+        aluno_id: input.dataset.alunoId,
+        produto_id: input.dataset.produtoId
     }));
 
-    if (entregasParaEnviar.length === 0) {
-        return notificar('Nenhum kit de material foi marcado para entrega.', 'aviso');
-    }
-    
-    // REMOVIDO: confirm() desnecessário a pedido do usuário
-
-    const btn = document.querySelector('.btn-confirmar-entrega');
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> PROCESSANDO...';
-
     try {
-        const res = await fetch(`${API_URL}/entregas/lote`, {
+        // CHAMA A ROTA EXCLUSIVA DE MATERIAL
+        const res = await fetch(`${API_URL}/escola/registrar-entrega-material-lote`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
-            body: JSON.stringify({ entregas: entregasParaEnviar })
+            headers: { 
+                'Authorization': `Bearer ${TOKEN}`,
+                'Content-Type': 'application/json' 
+            },
+            body: JSON.stringify({ turma_id: turmaId, entregas: entregas })
         });
-        
-        const resultado = await res.json();
-        if (!res.ok) throw new Error(resultado.error || 'Falha no servidor.');
 
-        notificar(resultado.message, 'sucesso');
+        const resultado = await res.json();
+
+        if (!res.ok) {
+            throw new Error(resultado.error || 'Falha ao processar baixa no estoque.');
+        }
+
+        // Sucesso garantido e sem patch individual para dar erro de innerText
+        notificar(`SUCESSO! ${entregas.length} entrega(s) de material confirmadas.`, 'sucesso');
+        
+        // Recarrega a tela
         renderizarMatrizEntregaMaterial(turmaId);
 
     } catch (err) {
-        // Se o erro for de estoque, a mensagem virá limpa do backend
-        notificar(`${err.message}`, 'erro');
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-check"></i> CONFIRMAR ENTREGAS MARCADAS';
+        console.error("Erro na entrega de material:", err);
+        notificar(`ERRO: ${err.message}`, 'erro');
     }
 }
 
@@ -22724,526 +22744,6 @@ async function gerarPdfFaltantes(localId, tipo) {
         console.error("Erro ao gerar PDF:", err);
         notificar(`Erro: ${err.message}`, "erro");
     }
-}
-
-// --- 1. TELA PRINCIPAL DE PROFESSORES ---
-async function telaGestaoProfessores() {
-    const app = document.getElementById('app-content');
-    app.innerHTML = '<div style="color:white; padding:20px;">Buscando docentes...</div>';
-
-    try {
-        const res = await fetch(`${API_URL}/professores`, {
-            headers: { 'Authorization': `Bearer ${TOKEN}` }
-        });
-        const professores = await res.json();
-
-        app.innerHTML = `
-            <style>
-                .prof-wrapper { background: #fff; height: 100vh; display: flex; flex-direction: column; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-                .prof-header { padding: 15px 20px; background: #2c3e50; color: white; display: flex; justify-content: space-between; align-items: center; }
-                .prof-content { flex: 1; overflow: auto; padding: 10px; }
-                .prof-table { width: 100%; border-collapse: collapse; background: white; color: #333; }
-                .prof-table th, .prof-table td { border: 1px solid #ddd; padding: 12px; text-align: left; }
-                .prof-table thead th { background: #f8f9fa; position: sticky; top: 0; z-index: 10; color: #333; }
-                .btn-add { background: #27ae60; color: white; border: none; padding: 10px 20px; font-weight: bold; cursor: pointer; border-radius: 4px; }
-                .btn-kit { background: #e67e22; color: white; border: none; padding: 6px 12px; cursor: pointer; font-weight: bold; border-radius: 4px; }
-                .btn-kit:disabled { background: #bdc3c7; cursor: not-allowed; }
-                .btn-edit { background: #3498db; color: white; border: none; padding: 6px 12px; cursor: pointer; border-radius: 4px; margin-right: 5px; }
-                .btn-status { background: #95a5a6; color: white; border: none; padding: 6px 12px; cursor: pointer; border-radius: 4px; }
-                .status-ativo { color: #27ae60; font-weight: bold; }
-                .status-inativo { color: #e74c3c; font-weight: bold; }
-            </style>
-
-            <div class="prof-wrapper">
-                <div class="prof-header">
-                    <div style="display: flex; align-items: center;">
-                        <button onclick="carregarDashboard()" style="background:none; border:1px solid #fff; color:white; padding:5px 10px; cursor:pointer; margin-right:15px;">← VOLTAR</button>
-                        <h2 style="margin:0;">GESTÃO DE PROFESSORES</h2>
-                    </div>
-                    <button class="btn-add" onclick="modalProfessor()">+ NOVO PROFESSOR</button>
-                </div>
-
-                <div class="prof-content">
-                    <table class="prof-table">
-                        <thead>
-                            <tr>
-                                <th>NOME DO PROFESSOR</th>
-                                <th style="width: 100px; text-align:center;">STATUS</th>
-                                <th style="width: 180px; text-align:center;">ENTREGA (KIT 6)</th>
-                                <th style="width: 200px; text-align:center;">AÇÕES</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${professores.map(p => `
-                                <tr>
-                                    <td style="font-weight: 500;">${p.nome.toUpperCase()}</td>
-                                    <td style="text-align:center;" class="${p.status === 'ATIVO' ? 'status-ativo' : 'status-inativo'}">
-                                        ${p.status}
-                                    </td>
-                                    <td style="text-align:center;">
-                                        ${p.ja_recebeu ? 
-                                            '<span style="color:#27ae60; font-weight:bold;">✓ ENTREGUE</span>' : 
-                                            `<button class="btn-kit" ${p.status !== 'ATIVO' ? 'disabled' : ''} 
-                                                onclick="entregarKitProfessor(${p.id}, '${p.nome}')">ENTREGAR KIT</button>`
-                                        }
-                                    </td>
-                                    <td style="text-align:center;">
-                                        <button class="btn-edit" onclick="modalProfessor(${JSON.stringify(p).replace(/"/g, '&quot;')})">EDITAR</button>
-                                        <button class="btn-status" onclick="alternarStatusProfessor(${p.id}, '${p.status}')">
-                                            ${p.status === 'ATIVO' ? 'INATIVAR' : 'REATIVAR'}
-                                        </button>
-                                    </td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        `;
-    } catch (err) {
-        notificar('Erro ao carregar lista de professores', 'erro');
-    }
-}
-
-// --- 2. MODAL CADASTRO/EDIÇÃO (SEM CPF E LOCAL_ID) ---
-function modalProfessor(dados = null) {
-    const titulo = dados ? 'EDITAR DOCENTE' : 'NOVO DOCENTE';
-    const nomeValor = dados ? dados.nome : '';
-
-    Swal.fire({
-        title: titulo,
-        html: `
-            <div style="text-align:left;">
-                <label style="font-weight:bold; color:#333;">Nome Completo:</label>
-                <input type="text" id="swal-prof-nome" class="swal2-input" value="${nomeValor}" placeholder="Nome sem abreviações">
-            </div>
-        `,
-        showCancelButton: true,
-        confirmButtonText: 'SALVAR',
-        cancelButtonText: 'CANCELAR',
-        preConfirm: () => {
-            const nome = document.getElementById('swal-prof-nome').value.trim();
-            if (!nome) return Swal.showValidationMessage('O nome é obrigatório');
-            return { nome };
-        }
-    }).then(async (result) => {
-        if (result.isConfirmed) {
-            try {
-                const metodo = dados ? 'PUT' : 'POST';
-                const url = dados ? `${API_URL}/professores/${dados.id}` : `${API_URL}/professores`;
-                
-                const res = await fetch(url, {
-                    method: metodo,
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
-                    body: JSON.stringify(result.value)
-                });
-
-                if (!res.ok) {
-                    const erro = await res.json();
-                    throw new Error(erro.error || 'Erro ao processar');
-                }
-
-                notificar('Professor salvo com sucesso!', 'sucesso');
-                telaGestaoProfessores();
-            } catch (err) {
-                notificar(err.message, 'erro');
-            }
-        }
-    });
-}
-
-// --- 3. LOGICA DE ENTREGA KIT 6 ---
-async function entregarKitProfessor(id, nome) {
-    const confirmacao = await Swal.fire({
-        title: 'Confirmar Entrega?',
-        text: `Deseja registrar a entrega do KIT 6 para: ${nome}?`,
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonColor: '#e67e22',
-        confirmButtonText: 'SIM, ENTREGAR',
-        cancelButtonText: 'NÃO'
-    });
-
-    if (confirmacao.isConfirmed) {
-        try {
-            const res = await fetch(`${API_URL}/entregas/professor`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
-                body: JSON.stringify({ professorId: id })
-            });
-
-            if (!res.ok) {
-                const erro = await res.json();
-                throw new Error(erro.error || 'Erro na entrega');
-            }
-
-            notificar('KIT PROFESSOR ENTREGUE!', 'sucesso');
-            telaGestaoProfessores();
-        } catch (err) {
-            Swal.fire('Erro', err.message, 'error');
-        }
-    }
-}
-
-// --- 4. ALTERNAR STATUS ---
-async function alternarStatusProfessor(id, statusAtual) {
-    const novoStatus = statusAtual === 'ATIVO' ? 'INATIVO' : 'ATIVO';
-    try {
-        const res = await fetch(`${API_URL}/professores/${id}/status`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
-            body: JSON.stringify({ status: novoStatus })
-        });
-        
-        if (!res.ok) throw new Error('Erro ao mudar status');
-        telaGestaoProfessores();
-    } catch (err) {
-        notificar(err.message, 'erro');
-    }
-}
-
-// --- 1. EXIBIÇÃO EM TELA ---
-async function telaRelatorioProfessores() {
-    const app = document.getElementById('app-content');
-    app.innerHTML = '<div style="color:white; padding:20px;">Carregando lista de professores ativos...</div>';
-
-    try {
-        const res = await fetch(`${API_URL}/relatorios/professores-ativos`, {
-            headers: { 'Authorization': `Bearer ${TOKEN}` }
-        });
-        
-        if (!res.ok) throw new Error('Erro ao buscar dados.');
-        const professores = await res.json();
-
-        // Guardamos os dados globalmente de forma temporária para o PDF acessar fácil
-        window.professoresParaPDF = professores;
-
-        app.innerHTML = `
-            <style>
-                .rel-wrapper { background: #fff; height: 100vh; display: flex; flex-direction: column; font-family: Arial, sans-serif; }
-                .rel-header { padding: 15px 20px; background: #2c3e50; color: white; display: flex; justify-content: space-between; align-items: center; }
-                .rel-content { flex: 1; overflow: auto; padding: 20px; }
-                .btn-pdf { background: #c0392b; color: white; border: none; padding: 10px 20px; font-weight: bold; cursor: pointer; border-radius: 4px; display: flex; align-items: center; gap: 8px; }
-                .btn-pdf:hover { background: #e74c3c; }
-                .rel-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-                .rel-table th, .rel-table td { border: 1px solid #ccc; padding: 10px; text-align: left; }
-                .rel-table th { background: #f4f4f4; color: #333; position: sticky; top: 0; }
-            </style>
-
-            <div class="rel-wrapper">
-                <div class="rel-header">
-                    <div style="display: flex; align-items: center;">
-                        <button onclick="carregarDashboard()" style="background:none; border:1px solid #fff; color:white; padding:5px 10px; cursor:pointer; margin-right:15px;">← VOLTAR</button>
-                        <h2 style="margin:0; font-size: 1.2rem;">PROFESSORES ATIVOS</h2>
-                    </div>
-                    <button class="btn-pdf" onclick="gerarPDFProfessores()">
-                        <i class="fas fa-file-pdf"></i> SALVAR EM PDF
-                    </button>
-                </div>
-
-                <div class="rel-content">
-                    <p style="color: #666; font-size: 14px; margin-bottom: 10px;">Total de registros: <b>${professores.length}</b></p>
-                    <table class="rel-table">
-                        <thead>
-                            <tr>
-                                <th style="width: 150px;">MATRÍCULA</th>
-                                <th>NOME DO DOCENTE</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${professores.map(p => `
-                                <tr>
-                                    <td style="font-family: monospace; font-weight: bold; color: #555;">${p.matric}</td>
-                                    <td>${p.nome}</td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        `;
-    } catch (err) {
-        notificar(err.message, 'erro');
-    }
-}
-
-// --- 2. GERAÇÃO DO PDF (LAYOUT ESPECÍFICO) ---
-function gerarPDFProfessores() {
-    const professores = window.professoresParaPDF || [];
-    if (professores.length === 0) {
-        notificar('Não há dados para gerar o PDF.', 'aviso');
-        return;
-    }
-
-    // Cria a estrutura HTML que será impressa/salva em PDF
-    const htmlPDF = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Listagem de Professores Ativos</title>
-            <style>
-                /* Configurações obrigatórias para a folha A4 com 1cm de margem */
-                @page { size: A4; margin: 1cm; }
-                
-                body { 
-                    font-family: Arial, sans-serif; 
-                    margin: 0; 
-                    padding: 0; 
-                    color: #000;
-                }
-                
-                /* Layout do Cabeçalho: Imagem + Textos na mesma altura */
-                .header-pdf { 
-                    display: flex; 
-                    align-items: center; 
-                    margin-bottom: 20px; 
-                }
-                
-                .header-pdf img { 
-                    height: 45px; /* Altura exata da imagem */
-                    margin-right: 15px; 
-                }
-                
-                .header-text { 
-                    display: flex; 
-                    flex-direction: column; 
-                    justify-content: space-between; 
-                    height: 45px; /* Força os textos a ocuparem a mesma altura da imagem */
-                }
-                
-                .header-text span { 
-                    font-size: 12px; 
-                    font-weight: bold; 
-                }
-                
-                /* Título centralizado e em negrito */
-                .title-pdf { 
-                    text-align: center; 
-                    font-weight: bold; 
-                    font-size: 16px; 
-                    margin-bottom: 20px; 
-                    margin-top: 10px;
-                }
-                
-                /* Tabela listrada para PDF */
-                table { 
-                    width: 100%; 
-                    border-collapse: collapse; 
-                    font-size: 12px; 
-                }
-                
-                th, td { 
-                    border: 1px solid #000; 
-                    padding: 6px 8px; 
-                    text-align: left; 
-                }
-                
-                th { background-color: #eee; font-weight: bold; }
-                
-                /* Impede que linhas quebrem de uma página para outra no meio do texto */
-                tr { page-break-inside: avoid; }
-            </style>
-        </head>
-        <body>
-            <div class="header-pdf">
-                <img src="braque.png" alt="Brasão Queimados">
-                <div class="header-text">
-                    <span>PREFEITURA MUNICIPAL DE QUEIMADOS</span>
-                    <span>SECRETARIA MUNICIPAL DE EDUCAÇÃO</span>
-                </div>
-            </div>
-
-            <div class="title-pdf">LISTAGEM DOS PROFESSORES ATIVOS</div>
-
-            <table>
-                <thead>
-                    <tr>
-                        <th style="width: 120px;">MATRÍCULA</th>
-                        <th>NOME DO PROFESSOR</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${professores.map(p => `
-                        <tr>
-                            <td>${p.matric || '---'}</td>
-                            <td>${p.nome.toUpperCase()}</td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>
-            
-            <script>
-                // Dispara a janela de impressão assim que o conteúdo carrega
-                window.onload = () => {
-                    window.print();
-                    // Opcional: fecha a janela após a impressão (alguns navegadores bloqueiam se não for comentado)
-                    setTimeout(() => { window.close(); }, 500); 
-                }
-            </script>
-        </body>
-        </html>
-    `;
-
-    // Abre uma nova janela invisível/pop-up para renderizar e imprimir o PDF
-    const printWindow = window.open('', '_blank', 'width=800,height=600');
-    if (!printWindow) {
-        alert('O navegador bloqueou a abertura do PDF. Permita os pop-ups para este site.');
-        return;
-    }
-    
-    printWindow.document.open();
-    printWindow.document.write(htmlPDF);
-    printWindow.document.close();
-}
-
-// --- 1. EXIBIÇÃO DA LISTA DE PENDÊNCIAS ---
-async function telaRelatorioPendenciaKit6() {
-    const app = document.getElementById('app-content');
-    app.innerHTML = '<div style="color:white; padding:20px;">Localizando pendências de entrega...</div>';
-
-    try {
-        const res = await fetch(`${API_URL}/relatorios/pendencia-kit-professores`, {
-            headers: { 'Authorization': `Bearer ${TOKEN}` }
-        });
-        
-        if (!res.ok) throw new Error('Erro ao buscar pendências.');
-        const pendentes = await res.json();
-
-        // Armazena para o PDF
-        window.professoresPendentesPDF = pendentes;
-
-        app.innerHTML = `
-            <style>
-                .pend-wrapper { background: #fff; height: 100vh; display: flex; flex-direction: column; font-family: sans-serif; }
-                .pend-header { padding: 15px 20px; background: #c0392b; color: white; display: flex; justify-content: space-between; align-items: center; }
-                .pend-content { flex: 1; overflow: auto; padding: 20px; }
-                .btn-pdf-pend { background: #27ae60; color: white; border: none; padding: 10px 20px; font-weight: bold; cursor: pointer; border-radius: 4px; display: flex; align-items: center; gap: 8px; }
-                .tab-pend { width: 100%; border-collapse: collapse; margin-top: 15px; background: #fff; }
-                .tab-pend th, .tab-pend td { border: 1px solid #ddd; padding: 12px; text-align: left; }
-                .tab-pend th { background: #f2f2f2; position: sticky; top: 0; }
-            </style>
-
-            <div class="pend-wrapper">
-                <div class="pend-header">
-                    <div style="display: flex; align-items: center;">
-                        <button onclick="carregarDashboard()" style="background:none; border:1px solid #fff; color:white; padding:5px 10px; cursor:pointer; margin-right:15px;">← VOLTAR</button>
-                        <h2 style="margin:0; font-size: 1.1rem;">PROFESSORES SEM KIT (PENDENTES)</h2>
-                    </div>
-                    <button class="btn-pdf-pend" onclick="gerarPDFPendenciaKit6()">
-                        <i class="fas fa-file-pdf"></i> GERAR LISTA DE ENTREGA
-                    </button>
-                </div>
-
-                <div class="pend-content">
-                    <div style="background: #fff3cd; color: #856404; padding: 10px; border-radius: 4px; margin-bottom: 20px; border: 1px solid #ffeeba;">
-                        Atenção: Esta lista exibe apenas professores <b>ATIVOS</b> que não possuem registro de recebimento do Kit ID 6.
-                    </div>
-                    <p>Total pendente: <b>${pendentes.length}</b></p>
-                    <table class="tab-pend">
-                        <thead>
-                            <tr>
-                                <th style="width: 150px;">MATRÍCULA</th>
-                                <th>NOME DO PROFESSOR</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${pendentes.map(p => `
-                                <tr>
-                                    <td style="font-family: monospace; font-weight: bold;">${p.matric}</td>
-                                    <td>${p.nome.toUpperCase()}</td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        `;
-    } catch (err) {
-        notificar(err.message, 'erro');
-    }
-}
-
-// --- 2. GERAÇÃO DO PDF DE PENDÊNCIA ---
-function gerarPDFPendenciaKit6() {
-    const lista = window.professoresPendentesPDF || [];
-    if (lista.length === 0) {
-        notificar('Não há pendências para listar.', 'aviso');
-        return;
-    }
-
-    const htmlPDF = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Pendência de Entrega - Kit Professor</title>
-            <style>
-                @page { size: A4; margin: 1cm; }
-                body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
-                
-                .header-pdf { display: flex; align-items: center; margin-bottom: 20px; }
-                .header-pdf img { height: 45px; margin-right: 15px; }
-                .header-text { display: flex; flex-direction: column; justify-content: space-between; height: 45px; }
-                .header-text span { font-size: 12px; font-weight: bold; }
-                
-                .title-pdf { 
-                    text-align: center; 
-                    font-weight: bold; 
-                    font-size: 14px; 
-                    margin-bottom: 20px; 
-                    text-decoration: underline;
-                }
-                
-                table { width: 100%; border-collapse: collapse; font-size: 11px; }
-                th, td { border: 1px solid #000; padding: 8px; text-align: left; }
-                th { background-color: #eee; }
-                
-                .assinatura { margin-top: 50px; text-align: center; font-size: 10px; }
-            </style>
-        </head>
-        <body>
-            <div class="header-pdf">
-                <img src="braque.png" alt="Logo">
-                <div class="header-text">
-                    <span>PREFEITURA MUNICIPAL DE QUEIMADOS</span>
-                    <span>SECRETARIA MUNICIPAL DE EDUCAÇÃO</span>
-                </div>
-            </div>
-
-            <div class="title-pdf">RELATÓRIO DE PROFESSORES PENDENTES DE RETIRADA (KIT ID 6)</div>
-
-            <table>
-                <thead>
-                    <tr>
-                        <th style="width: 100px;">MATRÍCULA</th>
-                        <th>NOME DO DOCENTE</th>
-                        <th style="width: 200px;">ASSINATURA DE RECEBIMENTO</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${lista.map(p => `
-                        <tr>
-                            <td>${p.matric}</td>
-                            <td>${p.nome.toUpperCase()}</td>
-                            <td></td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>
-
-            <div class="assinatura">
-                <p>Relatório gerado em: ${new Date().toLocaleString('pt-BR')}</p>
-            </div>
-            
-            <script>
-                window.onload = () => { window.print(); setTimeout(() => { window.close(); }, 500); }
-            </script>
-        </body>
-        </html>
-    `;
-
-    const win = window.open('', '_blank');
-    win.document.write(htmlPDF);
-    win.document.close();
 }
 
 window.telaVisualizarEstoque = telaVisualizarEstoque;

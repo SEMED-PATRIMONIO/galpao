@@ -597,8 +597,8 @@ function renderSubmenuUniformesKits() {
 function renderSubmenuRelatoriosEscola() {
     const botoes = `
         <button class="btn-grande btn-vidro" onclick="gerarRelatorioStatusTurmasEmTelaCheia()"><i>📊</i><span>ENTREGAS POR TURMA</span></button>
-        <button class="btn-grande btn-vidro" onclick="gerarComprovanteTurma()"><i>📝</i><span>LISTAGEM PARA ASSINATURA NA ENTREGA DE UNIFORMES</span></button>
-        <button class="btn-grande btn-vidro" onclick="gerarComprovanteTurmaMaterial()"><i>📝</i><span>LISTAGEM PARA ASSINATURA NA ENTREGA DE KITS</span></button>
+        <button class="btn-grande btn-vidro" onclick="abrirSelecaoComprovante()"><i>📝</i><span>LISTAGEM PARA ASSINATURA NA ENTREGA DE UNIFORMES</span></button>
+        <button class="btn-grande btn-vidro" onclick="abrirSelecaoComprovanteMaterial()"><i>📝</i><span>LISTAGEM PARA ASSINATURA NA ENTREGA DE KITS</span></button>
         <button class="btn-grande btn-vidro" onclick="telaRelatoriosGeral()"><i>📈</i><span>ENTREGAS DETALHADAS</span></button>
         <button class="btn-grande btn-vidro" onclick="telaRelatorioProfessores()"><i>📈</i><span>LISTA DE PROFESSORES ATIVOS</span></button>
         <button class="btn-grande btn-vidro" onclick="telaRelatorioPendenciaKit6()()"><i>👥</i><span>PROFESSORES QUE FALTAM RECEBER KIT 6</span></button>
@@ -20989,788 +20989,220 @@ function sincronizarSelectTodos(produtoId) {
 }
 
 async function gerarComprovanteTurma(turmaId) {
-    notificar('Gerando comprovante...', 'info');
+    notificar('Preparando documento...', 'info');
 
     try {
-        const res = await fetch(`${API_URL}/turma/${turmaId}/comprovante`, {
+        // Mudamos para a rota que busca dados da turma e alunos (ajuste se sua rota for diferente)
+        const res = await fetch(`${API_URL}/escola/material/grade/${turmaId}`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
         const data = await res.json();
 
-        if (!res.ok) {
-            throw new Error(data.error || 'Não foi possível gerar o comprovante.');
+        // VALIDAÇÃO CRUCIAL: evita o erro "Cannot read properties of undefined"
+        if (!data || !data.alunos || !Array.isArray(data.alunos)) {
+            throw new Error('A lista de alunos está vazia ou o servidor não respondeu corretamente.');
         }
 
-        // ── 1. Monta as linhas da tabela de alunos ──────────────────────────
-        const linhasAlunos = data.alunos.map(aluno => `
+        // 1. Monta as linhas com as 3 COLUNAS solicitadas
+        const linhasAlunos = data.alunos.map((aluno, index) => `
             <tr>
-                <td style="
-                    width: 36%;
-                    border: 1px solid #999;
-                    padding: 5px 6px;
-                    font-size: 8pt;
-                    word-break: break-word;
-                ">${aluno.nome}</td>
-                <td style="
-                    width: 15%;
-                    border: 1px solid #999;
-                    padding: 5px 6px;
-                    font-size: 9pt;
-                    text-align: center;
-                ">${aluno.matricula}</td>
-                <td style="
-                    width: 22%;
-                    border: 1px solid #999;
-                    padding: 5px 6px;
-                    font-size: 9pt;
-                    text-align: center;
-                    color: #aaa;
-                    letter-spacing: 1px;
-                    white-space: nowrap;
-                ">___/ ___/ ____</td>
-                <td style="
-                    width: 27%;
-                    border: 1px solid #999;
-                    padding: 5px 6px;
-                "></td>
+                <td style="width: 40%; border: 1px solid #333; padding: 8px; font-size: 10pt; text-align: left;">
+                    ${index + 1}. ${aluno.nome.toUpperCase()}
+                </td>
+                <td style="width: 20%; border: 1px solid #333; padding: 8px; font-size: 10pt; text-align: center; color: #ccc;">
+                    ____/____/____
+                </td>
+                <td style="width: 40%; border: 1px solid #333; padding: 8px;"></td>
             </tr>
         `).join('');
 
-        // ── 2. Monta o HTML completo do documento A4 ─────────────────────────
+        // 2. HTML do Documento (A4 Retrato)
         const htmlDocumento = `
             <!DOCTYPE html>
-            <html lang="pt-BR">
+            <html>
             <head>
                 <meta charset="UTF-8">
-                <title>Lista de Entrega de Uniformes - ${data.turmaNome}</title>
                 <style>
-                    * { margin: 0; padding: 0; box-sizing: border-box; }
-
-                    body {
-                        font-family: Arial, sans-serif;
-                        background: #fff;
-                        color: #222;
-                    }
-
-                    /* Página A4 com margens de 1cm */
-                    .pagina-a4 {
-                        width: 210mm;
-                        min-height: 297mm;
-                        padding: 1cm;
-                        margin: 0 auto;
-                        background: #fff;
-                    }
-
-                    /* Cabeçalho: logo + textos lado a lado */
-                    .cabecalho {
-                        display: flex;
-                        align-items: center;
-                        justify-content: space-between; /* Alinha os logos nas extremidades */
-                        margin-bottom: 18px;
-                        padding-bottom: 10px;
-                        border-bottom: 1px solid #eee; /* Opcional: linha sutil para separar o topo */
-                    }
-                    .cabecalho img {
-                        height: 60px; /* Aumentei um pouco para melhor legibilidade */
-                        width: auto;
-                        object-fit: contain;
-                    }
-                    .cabecalho-textos {
-                        display: flex;
-                        flex-direction: column;
-                        justify-content: center;
-                        text-align: center; /* Centraliza o bloco de texto entre as imagens */
-                        flex-grow: 1;
-                    }
-                    .cabecalho-textos p {
-                        margin: 0;
-                        line-height: 1.2;
-                    }
-                    .cabecalho-textos p:nth-child(1) {
-                        font-size: 11pt;
-                        font-weight: bold;
-                    }
-                    .cabecalho-textos p:nth-child(2) {
-                        font-size: 10pt;
-                        font-weight: bold;
-                    }
-                    .cabecalho-textos p:nth-child(3) {
-                        font-size: 10pt;
-                        font-weight: bold;
-                        margin-top: 2px;
-                        text-transform: uppercase; /* Nome da escola em destaque */
-                    }
-
-                    /* Título centralizado */
-                    .titulo-documento {
-                        text-align: center;
-                        font-size: 11pt;
-                        font-weight: bold;
-                        margin-bottom: 14px;
-                        letter-spacing: 0.3px;
-                    }
-
-                    /* Tabela de alunos */
-                    .tabela-lista {
-                        width: 100%;
-                        border-collapse: collapse;
-                        margin-bottom: 28px;
-                    }
-                    .tabela-lista thead tr {
-                        background-color: #e8e8e8;
-                    }
-                    .tabela-lista thead th {
-                        border: 1px solid #999;
-                        padding: 6px;
-                        font-size: 9pt;
-                        font-weight: bold;
-                        text-align: center;
-                    }
-                    .tabela-lista thead th:first-child {
-                        width: 42%;
-                        text-align: left;
-                    }
-                    .tabela-lista thead th:nth-child(2) {
-                        width: 15%;
-                    }
-                    .tabela-lista thead th:nth-child(3) {
-                        width: 18%;
-                    }
-                    .tabela-lista thead th:nth-child(4) {
-                        width: 25%;
-                    }
-
-                    /* Área de assinatura do responsável */
-                    .area-responsavel {
-                        display: flex;
-                        flex-direction: column;
-                        align-items: flex-end;
-                        gap: 10px;
-                        margin-top: 10px;
-                    }
-                    .linha-responsavel {
-                        display: flex;
-                        flex-direction: column;
-                        align-items: center;
-                        width: 220px;
-                    }
-                    .linha-responsavel .underline {
-                        width: 100%;
-                        border-bottom: 1px solid #333;
-                        height: 22px;
-                    }
-                    .linha-responsavel span {
-                        font-size: 8pt;
-                        margin-top: 3px;
-                        color: #444;
-                        text-align: center;
-                    }
-
-                    /* Regras de impressão */
-                    @media print {
-                        html, body {
-                            width: 210mm;
-                            height: 297mm;
-                            margin: 0;
-                        }
-                        .pagina-a4 {
-                            margin: 0;
-                            box-shadow: none;
-                            border: none;
-                        }
-                    }
+                    @page { size: A4 portrait; margin: 1cm; }
+                    body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
+                    .cabecalho { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; border-bottom: 2px solid #000; padding-bottom: 5px; }
+                    .cabecalho img { height: 60px; }
+                    .textos-topo { text-align: center; flex-grow: 1; }
+                    .textos-topo p { margin: 0; font-weight: bold; font-size: 11pt; }
+                    
+                    .titulo { text-align: center; font-size: 12pt; font-weight: bold; margin: 15px 0; text-transform: uppercase; }
+                    
+                    table { width: 100%; border-collapse: collapse; }
+                    th { background: #f0f0f0; border: 1px solid #333; padding: 8px; font-size: 10pt; }
                 </style>
             </head>
             <body>
-                <div class="pagina-a4">
-
-                    <!-- CABEÇALHO -->
-                    <div class="cabecalho">
-                        <img src="braque.png" alt="Brasão"> 
-                        
-                        <div class="cabecalho-textos">
-                            <p>PREFEITURA MUNICIPAL DE QUEIMADOS</p>
-                            <p>SECRETARIA MUNICIPAL DE EDUCAÇÃO</p>
-                            <p>${data.nomeOficial || data.localNome || 'NOME DA UNIDADE ESCOLAR'}</p>
-                        </div>
-
-                        <img src="logap.png" alt="Logo Educação">
+                <div class="cabecalho">
+                    <img src="braque.png">
+                    <div class="textos-topo">
+                        <p>PREFEITURA MUNICIPAL DE QUEIMADOS</p>
+                        <p>SECRETARIA MUNICIPAL DE EDUCAÇÃO</p>
+                        <p>${data.turma.local_nome || 'UNIDADE ESCOLAR'}</p>
                     </div>
+                    <img src="logap.png">
+                </div>
 
-                    <!-- TÍTULO -->
-                    <div class="titulo-documento">
-                        LISTA DE ENTREGA DE UNIFORMES DA TURMA ${data.turmaNome.toUpperCase()}
-                    </div>
+                <div class="titulo">LISTA DE RECEBIMENTO DO UNIFORME - TURMA: ${data.turma.nome}</div>
 
-                    <!-- TABELA DE ALUNOS -->
-                    <table class="tabela-lista">
-                        <thead>
-                            <tr>
-                                <th>NOME</th>
-                                <th>MATRÍCULA</th>
-                                <th>DATA RECEBIMENTO</th>
-                                <th>ASSINATURA</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${linhasAlunos}
-                        </tbody>
-                    </table>
-
-                    <!-- ASSINATURA DO RESPONSÁVEL -->
-                    <div class="area-responsavel">
-                        <div class="linha-responsavel">
-                            <div class="underline"></div>
-                            <span>Assinatura do Responsável pela Entrega</span>
-                        </div>
-                        <div class="linha-responsavel">
-                            <div class="underline"></div>
-                            <span>Matrícula do Responsável</span>
-                        </div>
-                    </div>
-
+                <table>
+                    <thead>
+                        <tr>
+                            <th>NOME DO ALUNO</th>
+                            <th>DATA</th>
+                            <th>ASSINATURA</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${linhasAlunos}
+                    </tbody>
+                </table>
+                
+                <div style="margin-top: 30px; display: flex; justify-content: flex-end;">
+                   <div style="text-align:center; width: 250px;">
+                      <div style="border-top: 1px solid #000; margin-top: 40px;"></div>
+                      <p style="font-size: 9pt;">Responsável pela Entrega</p>
+                   </div>
                 </div>
             </body>
             </html>
         `;
 
-        // ── 3. Converte o HTML em Blob PDF via iframe oculto ─────────────────
-        // Cria um Blob com o HTML e gera uma URL temporária
+        // 3. Exibição no Modal (Iframe)
         const blob = new Blob([htmlDocumento], { type: 'text/html; charset=utf-8' });
         const blobUrl = URL.createObjectURL(blob);
 
-        // ── 4. Remove modal anterior se existir ──────────────────────────────
-        const modalAnterior = document.getElementById('modal-comprovante-uniforme');
-        if (modalAnterior) modalAnterior.remove();
+        // Limpa modal anterior se houver
+        if (document.getElementById('modal-print')) document.getElementById('modal-print').remove();
 
-        // ── 5. Cria o Modal ──────────────────────────────────────────────────
         const modal = document.createElement('div');
-        modal.id = 'modal-comprovante-uniforme';
-        modal.style.cssText = `
-            position: fixed;
-            top: 0; left: 0;
-            width: 100vw; height: 100vh;
-            background: rgba(0,0,0,0.75);
-            z-index: 99999;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: flex-start;
-            padding-top: 20px;
-        `;
-
+        modal.id = 'modal-print';
+        modal.style.cssText = "position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.8);z-index:99999;display:flex;flex-direction:column;align-items:center;padding:20px;";
         modal.innerHTML = `
-            <!-- Barra de ações do modal -->
-            <div style="
-                display: flex;
-                gap: 12px;
-                margin-bottom: 14px;
-                align-items: center;
-            ">
-                <span style="color:#fff; font-size:13pt; font-weight:bold; margin-right:10px;">
-                    Comprovante — ${data.turmaNome}
-                </span>
-
-                <!-- Botão Salvar -->
-                <a
-                    id="btn-salvar-comprovante"
-                    href="${blobUrl}"
-                    download="Lista_Entrega_${data.turmaNome.replace(/\s+/g,'_')}.html"
-                    style="
-                        background: #1976d2;
-                        color: #fff;
-                        border: none;
-                        padding: 9px 20px;
-                        border-radius: 6px;
-                        font-size: 10pt;
-                        font-weight: bold;
-                        cursor: pointer;
-                        text-decoration: none;
-                        display: inline-flex;
-                        align-items: center;
-                        gap: 6px;
-                    "
-                ">
-                    <i class="fas fa-download"></i> SALVAR
-                </a>
-
-                <!-- Botão Imprimir -->
-                <button
-                    id="btn-imprimir-comprovante"
-                    style="
-                        background: #388e3c;
-                        color: #fff;
-                        border: none;
-                        padding: 9px 20px;
-                        border-radius: 6px;
-                        font-size: 10pt;
-                        font-weight: bold;
-                        cursor: pointer;
-                        display: inline-flex;
-                        align-items: center;
-                        gap: 6px;
-                    "
-                >
-                    <i class="fas fa-print"></i> IMPRIMIR
-                </button>
-
-                <!-- Botão Fechar -->
-                <button
-                    id="btn-fechar-comprovante"
-                    style="
-                        background: #c62828;
-                        color: #fff;
-                        border: none;
-                        padding: 9px 20px;
-                        border-radius: 6px;
-                        font-size: 10pt;
-                        font-weight: bold;
-                        cursor: pointer;
-                        display: inline-flex;
-                        align-items: center;
-                        gap: 6px;
-                    "
-                >
-                    <i class="fas fa-times"></i> FECHAR
-                </button>
+            <div style="margin-bottom:10px; display:flex; gap:10px;">
+                <button onclick="document.getElementById('ifr-print').contentWindow.print()" style="padding:10px 20px; background:#28a745; color:#fff; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">IMPRIMIR AGORA</button>
+                <button onclick="this.parentElement.parentElement.remove()" style="padding:10px 20px; background:#c62828; color:#fff; border:none; border-radius:4px; cursor:pointer;">FECHAR</button>
             </div>
-
-            <!-- Iframe que exibe o documento -->
-            <iframe
-                id="iframe-comprovante"
-                src="${blobUrl}"
-                style="
-                    width: 220mm;
-                    height: 80vh;
-                    border: none;
-                    border-radius: 4px;
-                    background: #fff;
-                    box-shadow: 0 4px 32px rgba(0,0,0,0.5);
-                "
-            ></iframe>
+            <iframe id="ifr-print" src="${blobUrl}" style="width:210mm; height:90%; background:#fff; border:none; border-radius:4px;"></iframe>
         `;
-
         document.body.appendChild(modal);
 
-        // ── 6. Eventos dos botões ────────────────────────────────────────────
-
-        // Imprimir: aciona o print dentro do iframe
-        document.getElementById('btn-imprimir-comprovante').addEventListener('click', () => {
-            const iframe = document.getElementById('iframe-comprovante');
-            iframe.contentWindow.focus();
-            iframe.contentWindow.print();
-        });
-
-        // Fechar: remove o modal e libera a URL do blob
-        document.getElementById('btn-fechar-comprovante').addEventListener('click', () => {
-            URL.revokeObjectURL(blobUrl);
-            modal.remove();
-        });
-
-        // Fechar também ao clicar no fundo escuro (fora do conteúdo)
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) {
-                URL.revokeObjectURL(blobUrl);
-                modal.remove();
-            }
-        });
-
     } catch (err) {
-        console.error("Erro ao gerar comprovante:", err);
-        notificar(`Erro: ${err.message}`, 'erro');
+        console.error(err);
+        alert("Erro: " + err.message);
     }
 }
 
 async function gerarComprovanteTurmaMaterial(turmaId) {
-    notificar('Gerando comprovante...', 'info');
+    notificar('Preparando documento...', 'info');
 
     try {
-        const res = await fetch(`${API_URL}/turma/${turmaId}/comprovante`, {
+        // Mudamos para a rota que busca dados da turma e alunos (ajuste se sua rota for diferente)
+        const res = await fetch(`${API_URL}/escola/material/grade/${turmaId}`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
         const data = await res.json();
 
-        if (!res.ok) {
-            throw new Error(data.error || 'Não foi possível gerar o comprovante.');
+        // VALIDAÇÃO CRUCIAL: evita o erro "Cannot read properties of undefined"
+        if (!data || !data.alunos || !Array.isArray(data.alunos)) {
+            throw new Error('A lista de alunos está vazia ou o servidor não respondeu corretamente.');
         }
 
-        // ── 1. Monta as linhas da tabela de alunos ──────────────────────────
-        const linhasAlunos = data.alunos.map(aluno => `
+        // 1. Monta as linhas com as 3 COLUNAS solicitadas
+        const linhasAlunos = data.alunos.map((aluno, index) => `
             <tr>
-                <td style="
-                    width: 36%;
-                    border: 1px solid #999;
-                    padding: 5px 6px;
-                    font-size: 8pt;
-                    word-break: break-word;
-                ">${aluno.nome}</td>
-                <td style="
-                    width: 15%;
-                    border: 1px solid #999;
-                    padding: 5px 6px;
-                    font-size: 9pt;
-                    text-align: center;
-                ">${aluno.matricula}</td>
-                <td style="
-                    width: 22%;
-                    border: 1px solid #999;
-                    padding: 5px 6px;
-                    font-size: 9pt;
-                    text-align: center;
-                    color: #aaa;
-                    letter-spacing: 1px;
-                    white-space: nowrap;
-                ">___/ ___/ ____</td>
-                <td style="
-                    width: 27%;
-                    border: 1px solid #999;
-                    padding: 5px 6px;
-                "></td>
+                <td style="width: 40%; border: 1px solid #333; padding: 8px; font-size: 10pt; text-align: left;">
+                    ${index + 1}. ${aluno.nome.toUpperCase()}
+                </td>
+                <td style="width: 20%; border: 1px solid #333; padding: 8px; font-size: 10pt; text-align: center; color: #ccc;">
+                    ____/____/____
+                </td>
+                <td style="width: 40%; border: 1px solid #333; padding: 8px;"></td>
             </tr>
         `).join('');
 
-        // ── 2. Monta o HTML completo do documento A4 ─────────────────────────
+        // 2. HTML do Documento (A4 Retrato)
         const htmlDocumento = `
             <!DOCTYPE html>
-            <html lang="pt-BR">
+            <html>
             <head>
                 <meta charset="UTF-8">
-                <title>Lista de Entrega de Kits - ${data.turmaNome}</title>
                 <style>
-                    * { margin: 0; padding: 0; box-sizing: border-box; }
-
-                    body {
-                        font-family: Arial, sans-serif;
-                        background: #fff;
-                        color: #222;
-                    }
-
-                    /* Página A4 com margens de 1cm */
-                    .pagina-a4 {
-                        width: 210mm;
-                        min-height: 297mm;
-                        padding: 1cm;
-                        margin: 0 auto;
-                        background: #fff;
-                    }
-
-                    /* Cabeçalho: logo + textos lado a lado */
-                    .cabecalho {
-                        display: flex;
-                        align-items: center;
-                        justify-content: space-between; /* Alinha os logos nas extremidades */
-                        margin-bottom: 18px;
-                        padding-bottom: 10px;
-                        border-bottom: 1px solid #eee; /* Opcional: linha sutil para separar o topo */
-                    }
-                    .cabecalho img {
-                        height: 60px; /* Aumentei um pouco para melhor legibilidade */
-                        width: auto;
-                        object-fit: contain;
-                    }
-                    .cabecalho-textos {
-                        display: flex;
-                        flex-direction: column;
-                        justify-content: center;
-                        text-align: center; /* Centraliza o bloco de texto entre as imagens */
-                        flex-grow: 1;
-                    }
-                    .cabecalho-textos p {
-                        margin: 0;
-                        line-height: 1.2;
-                    }
-                    .cabecalho-textos p:nth-child(1) {
-                        font-size: 11pt;
-                        font-weight: bold;
-                    }
-                    .cabecalho-textos p:nth-child(2) {
-                        font-size: 10pt;
-                        font-weight: bold;
-                    }
-                    .cabecalho-textos p:nth-child(3) {
-                        font-size: 10pt;
-                        font-weight: bold;
-                        margin-top: 2px;
-                        text-transform: uppercase; /* Nome da escola em destaque */
-                    }
-
-                    /* Título centralizado */
-                    .titulo-documento {
-                        text-align: center;
-                        font-size: 11pt;
-                        font-weight: bold;
-                        margin-bottom: 14px;
-                        letter-spacing: 0.3px;
-                    }
-
-                    /* Tabela de alunos */
-                    .tabela-lista {
-                        width: 100%;
-                        border-collapse: collapse;
-                        margin-bottom: 28px;
-                    }
-                    .tabela-lista thead tr {
-                        background-color: #e8e8e8;
-                    }
-                    .tabela-lista thead th {
-                        border: 1px solid #999;
-                        padding: 6px;
-                        font-size: 9pt;
-                        font-weight: bold;
-                        text-align: center;
-                    }
-                    .tabela-lista thead th:first-child {
-                        width: 42%;
-                        text-align: left;
-                    }
-                    .tabela-lista thead th:nth-child(2) {
-                        width: 15%;
-                    }
-                    .tabela-lista thead th:nth-child(3) {
-                        width: 18%;
-                    }
-                    .tabela-lista thead th:nth-child(4) {
-                        width: 25%;
-                    }
-
-                    /* Área de assinatura do responsável */
-                    .area-responsavel {
-                        display: flex;
-                        flex-direction: column;
-                        align-items: flex-end;
-                        gap: 10px;
-                        margin-top: 10px;
-                    }
-                    .linha-responsavel {
-                        display: flex;
-                        flex-direction: column;
-                        align-items: center;
-                        width: 220px;
-                    }
-                    .linha-responsavel .underline {
-                        width: 100%;
-                        border-bottom: 1px solid #333;
-                        height: 22px;
-                    }
-                    .linha-responsavel span {
-                        font-size: 8pt;
-                        margin-top: 3px;
-                        color: #444;
-                        text-align: center;
-                    }
-
-                    /* Regras de impressão */
-                    @media print {
-                        html, body {
-                            width: 210mm;
-                            height: 297mm;
-                            margin: 0;
-                        }
-                        .pagina-a4 {
-                            margin: 0;
-                            box-shadow: none;
-                            border: none;
-                        }
-                    }
+                    @page { size: A4 portrait; margin: 1cm; }
+                    body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
+                    .cabecalho { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; border-bottom: 2px solid #000; padding-bottom: 5px; }
+                    .cabecalho img { height: 60px; }
+                    .textos-topo { text-align: center; flex-grow: 1; }
+                    .textos-topo p { margin: 0; font-weight: bold; font-size: 11pt; }
+                    
+                    .titulo { text-align: center; font-size: 12pt; font-weight: bold; margin: 15px 0; text-transform: uppercase; }
+                    
+                    table { width: 100%; border-collapse: collapse; }
+                    th { background: #f0f0f0; border: 1px solid #333; padding: 8px; font-size: 10pt; }
                 </style>
             </head>
             <body>
-                <div class="pagina-a4">
-
-                    <!-- CABEÇALHO -->
-                    <div class="cabecalho">
-                        <img src="braque.png" alt="Brasão"> 
-                        
-                        <div class="cabecalho-textos">
-                            <p>PREFEITURA MUNICIPAL DE QUEIMADOS</p>
-                            <p>SECRETARIA MUNICIPAL DE EDUCAÇÃO</p>
-                            <p>${data.nomeOficial || data.localNome || 'NOME DA UNIDADE ESCOLAR'}</p>
-                        </div>
-
-                        <img src="logap.png" alt="Logo Educação">
+                <div class="cabecalho">
+                    <img src="braque.png">
+                    <div class="textos-topo">
+                        <p>PREFEITURA MUNICIPAL DE QUEIMADOS</p>
+                        <p>SECRETARIA MUNICIPAL DE EDUCAÇÃO</p>
+                        <p>${data.turma.local_nome || 'UNIDADE ESCOLAR'}</p>
                     </div>
+                    <img src="logap.png">
+                </div>
 
-                    <!-- TÍTULO -->
-                    <div class="titulo-documento">
-                        LISTA DE ENTREGA DE KITS ESCOLARES DA TURMA ${data.turmaNome.toUpperCase()}
-                    </div>
+                <div class="titulo">LISTA DE RECEBIMENTO DO KIT ESCOLAR - TURMA: ${data.turma.nome}</div>
 
-                    <!-- TABELA DE ALUNOS -->
-                    <table class="tabela-lista">
-                        <thead>
-                            <tr>
-                                <th>NOME</th>
-                                <th>MATRÍCULA</th>
-                                <th>DATA RECEBIMENTO</th>
-                                <th>ASSINATURA</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${linhasAlunos}
-                        </tbody>
-                    </table>
-
-                    <!-- ASSINATURA DO RESPONSÁVEL -->
-                    <div class="area-responsavel">
-                        <div class="linha-responsavel">
-                            <div class="underline"></div>
-                            <span>Assinatura do Responsável pela Entrega</span>
-                        </div>
-                        <div class="linha-responsavel">
-                            <div class="underline"></div>
-                            <span>Matrícula do Responsável</span>
-                        </div>
-                    </div>
-
+                <table>
+                    <thead>
+                        <tr>
+                            <th>NOME DO ALUNO</th>
+                            <th>DATA</th>
+                            <th>ASSINATURA</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${linhasAlunos}
+                    </tbody>
+                </table>
+                
+                <div style="margin-top: 30px; display: flex; justify-content: flex-end;">
+                   <div style="text-align:center; width: 250px;">
+                      <div style="border-top: 1px solid #000; margin-top: 40px;"></div>
+                      <p style="font-size: 9pt;">Responsável pela Entrega</p>
+                   </div>
                 </div>
             </body>
             </html>
         `;
 
-        // ── 3. Converte o HTML em Blob PDF via iframe oculto ─────────────────
-        // Cria um Blob com o HTML e gera uma URL temporária
+        // 3. Exibição no Modal (Iframe)
         const blob = new Blob([htmlDocumento], { type: 'text/html; charset=utf-8' });
         const blobUrl = URL.createObjectURL(blob);
 
-        // ── 4. Remove modal anterior se existir ──────────────────────────────
-        const modalAnterior = document.getElementById('modal-comprovante-uniforme');
-        if (modalAnterior) modalAnterior.remove();
+        // Limpa modal anterior se houver
+        if (document.getElementById('modal-print')) document.getElementById('modal-print').remove();
 
-        // ── 5. Cria o Modal ──────────────────────────────────────────────────
         const modal = document.createElement('div');
-        modal.id = 'modal-comprovante-uniforme';
-        modal.style.cssText = `
-            position: fixed;
-            top: 0; left: 0;
-            width: 100vw; height: 100vh;
-            background: rgba(0,0,0,0.75);
-            z-index: 99999;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: flex-start;
-            padding-top: 20px;
-        `;
-
+        modal.id = 'modal-print';
+        modal.style.cssText = "position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.8);z-index:99999;display:flex;flex-direction:column;align-items:center;padding:20px;";
         modal.innerHTML = `
-            <!-- Barra de ações do modal -->
-            <div style="
-                display: flex;
-                gap: 12px;
-                margin-bottom: 14px;
-                align-items: center;
-            ">
-                <span style="color:#fff; font-size:13pt; font-weight:bold; margin-right:10px;">
-                    Comprovante — ${data.turmaNome}
-                </span>
-
-                <!-- Botão Salvar -->
-                <a
-                    id="btn-salvar-comprovante"
-                    href="${blobUrl}"
-                    download="Lista_Entrega_${data.turmaNome.replace(/\s+/g,'_')}.html"
-                    style="
-                        background: #1976d2;
-                        color: #fff;
-                        border: none;
-                        padding: 9px 20px;
-                        border-radius: 6px;
-                        font-size: 10pt;
-                        font-weight: bold;
-                        cursor: pointer;
-                        text-decoration: none;
-                        display: inline-flex;
-                        align-items: center;
-                        gap: 6px;
-                    "
-                ">
-                    <i class="fas fa-download"></i> SALVAR
-                </a>
-
-                <!-- Botão Imprimir -->
-                <button
-                    id="btn-imprimir-comprovante"
-                    style="
-                        background: #388e3c;
-                        color: #fff;
-                        border: none;
-                        padding: 9px 20px;
-                        border-radius: 6px;
-                        font-size: 10pt;
-                        font-weight: bold;
-                        cursor: pointer;
-                        display: inline-flex;
-                        align-items: center;
-                        gap: 6px;
-                    "
-                >
-                    <i class="fas fa-print"></i> IMPRIMIR
-                </button>
-
-                <!-- Botão Fechar -->
-                <button
-                    id="btn-fechar-comprovante"
-                    style="
-                        background: #c62828;
-                        color: #fff;
-                        border: none;
-                        padding: 9px 20px;
-                        border-radius: 6px;
-                        font-size: 10pt;
-                        font-weight: bold;
-                        cursor: pointer;
-                        display: inline-flex;
-                        align-items: center;
-                        gap: 6px;
-                    "
-                >
-                    <i class="fas fa-times"></i> FECHAR
-                </button>
+            <div style="margin-bottom:10px; display:flex; gap:10px;">
+                <button onclick="document.getElementById('ifr-print').contentWindow.print()" style="padding:10px 20px; background:#28a745; color:#fff; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">IMPRIMIR AGORA</button>
+                <button onclick="this.parentElement.parentElement.remove()" style="padding:10px 20px; background:#c62828; color:#fff; border:none; border-radius:4px; cursor:pointer;">FECHAR</button>
             </div>
-
-            <!-- Iframe que exibe o documento -->
-            <iframe
-                id="iframe-comprovante"
-                src="${blobUrl}"
-                style="
-                    width: 220mm;
-                    height: 80vh;
-                    border: none;
-                    border-radius: 4px;
-                    background: #fff;
-                    box-shadow: 0 4px 32px rgba(0,0,0,0.5);
-                "
-            ></iframe>
+            <iframe id="ifr-print" src="${blobUrl}" style="width:210mm; height:90%; background:#fff; border:none; border-radius:4px;"></iframe>
         `;
-
         document.body.appendChild(modal);
 
-        // ── 6. Eventos dos botões ────────────────────────────────────────────
-
-        // Imprimir: aciona o print dentro do iframe
-        document.getElementById('btn-imprimir-comprovante').addEventListener('click', () => {
-            const iframe = document.getElementById('iframe-comprovante');
-            iframe.contentWindow.focus();
-            iframe.contentWindow.print();
-        });
-
-        // Fechar: remove o modal e libera a URL do blob
-        document.getElementById('btn-fechar-comprovante').addEventListener('click', () => {
-            URL.revokeObjectURL(blobUrl);
-            modal.remove();
-        });
-
-        // Fechar também ao clicar no fundo escuro (fora do conteúdo)
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) {
-                URL.revokeObjectURL(blobUrl);
-                modal.remove();
-            }
-        });
-
     } catch (err) {
-        console.error("Erro ao gerar comprovante:", err);
-        notificar(`Erro: ${err.message}`, 'erro');
+        console.error(err);
+        alert("Erro: " + err.message);
     }
 }
 
@@ -21978,8 +21410,6 @@ async function gerarRelatorioStatusTurmas() {
 }
 
 // Variável global independente para o estoque de materiais na tela
-let estoqueVirtualMat = {}; 
-
 async function telaEntregaMaterial() {
     const app = document.getElementById('app-content');
     
@@ -22010,6 +21440,9 @@ async function telaEntregaMaterial() {
 
         <div class="container-material">
             <div class="header-material">
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
+                    <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                </div>
                 <div style="display:flex; align-items:center; gap:20px;">
                     <h2 style="margin:0; font-size: 18px;">Entrega de Kit Material</h2>
                     <select id="sel-turma-mat" style="padding:6px; width:250px;" onchange="carregarGradeMaterial(this.value)">
@@ -22017,7 +21450,6 @@ async function telaEntregaMaterial() {
                     </select>
                 </div>
                 <div id="acoes-material" style="display:none; gap:10px;">
-                    <button class="btn-mat btn-pdf-mat" onclick="gerarPDFMaterial()">IMPRIMIR / PDF</button>
                     <button class="btn-mat btn-save-mat" onclick="salvarMaterialLote()">SALVAR ENTREGAS</button>
                     <button class="btn-mat" onclick="carregarDashboard()">FECHAR</button>
                 </div>
@@ -24063,6 +23495,9 @@ async function telaEntregaUniformes() {
 
         <div class="container-entrega">
             <div class="barra-superior">
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
+                    <button onclick="carregarDashboard()" class="btn-voltar-vidro">⬅️ VOLTAR</button>
+                </div>
                 <div style="display:flex; align-items:center; gap:20px;">
                     <h2 style="margin:0;">Entrega de Uniformes</h2>
                     <select id="filtro-turma" style="padding:8px; width:300px;" onchange="carregarGradeInteligente(this.value)">
@@ -24414,6 +23849,80 @@ async function confirmarEntregasLote() {
             carregarGradeParaPlanilha(document.getElementById('select-turma-v3').value);
         }
     }
+}
+
+async function abrirSelecaoComprovante() {
+    // Busca as turmas do local para preencher o select
+    const res = await fetch(`${API_URL}/escola/turmas-local`, { 
+        headers: { 'Authorization': `Bearer ${TOKEN}` } 
+    });
+    const turmas = await res.json();
+
+    // Cria um modal simples de seleção
+    const selModal = document.createElement('div');
+    selModal.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:100000;";
+    selModal.innerHTML = `
+        <div style="background:#fff;padding:25px;border-radius:8px;width:400px;box-shadow:0 10px 25px rgba(0,0,0,0.2);">
+            <h3 style="margin-top:0;">Imprimir Listagem de Turma</h3>
+            <p style="font-size:14px;color:#666;">Selecione a turma para gerar a folha de assinaturas:</p>
+            <select id="sel-turma-print" style="width:100%;padding:10px;margin-bottom:20px;border:1px solid #ccc;border-radius:4px;">
+                <option value="">-- Selecione uma Turma --</option>
+                ${turmas.map(t => `<option value="${t.id}">${t.nome}</option>`).join('')}
+            </select>
+            <div style="display:flex;justify-content:flex-end;gap:10px;">
+                <button onclick="this.parentElement.parentElement.parentElement.remove()" style="padding:10px 15px;border:none;background:#eee;cursor:pointer;border-radius:4px;">Cancelar</button>
+                <button id="btn-confirmar-print" style="padding:10px 15px;border:none;background:#007bff;color:#fff;cursor:pointer;border-radius:4px;font-weight:bold;">Gerar PDF</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(selModal);
+
+    document.getElementById('btn-confirmar-print').onclick = () => {
+        const id = document.getElementById('sel-turma-print').value;
+        if(id) {
+            selModal.remove();
+            gerarComprovanteTurma(id);
+        } else {
+            alert("Selecione uma turma primeiro.");
+        }
+    };
+}
+
+async function abrirSelecaoComprovanteMaterial() {
+    // Busca as turmas do local para preencher o select
+    const res = await fetch(`${API_URL}/escola/turmas-local`, { 
+        headers: { 'Authorization': `Bearer ${TOKEN}` } 
+    });
+    const turmas = await res.json();
+
+    // Cria um modal simples de seleção
+    const selModal = document.createElement('div');
+    selModal.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:100000;";
+    selModal.innerHTML = `
+        <div style="background:#fff;padding:25px;border-radius:8px;width:400px;box-shadow:0 10px 25px rgba(0,0,0,0.2);">
+            <h3 style="margin-top:0;">Imprimir Listagem de Turma</h3>
+            <p style="font-size:14px;color:#666;">Selecione a turma para gerar a folha de assinaturas:</p>
+            <select id="sel-turma-print" style="width:100%;padding:10px;margin-bottom:20px;border:1px solid #ccc;border-radius:4px;">
+                <option value="">-- Selecione uma Turma --</option>
+                ${turmas.map(t => `<option value="${t.id}">${t.nome}</option>`).join('')}
+            </select>
+            <div style="display:flex;justify-content:flex-end;gap:10px;">
+                <button onclick="this.parentElement.parentElement.parentElement.remove()" style="padding:10px 15px;border:none;background:#eee;cursor:pointer;border-radius:4px;">Cancelar</button>
+                <button id="btn-confirmar-print" style="padding:10px 15px;border:none;background:#007bff;color:#fff;cursor:pointer;border-radius:4px;font-weight:bold;">Gerar PDF</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(selModal);
+
+    document.getElementById('btn-confirmar-print').onclick = () => {
+        const id = document.getElementById('sel-turma-print').value;
+        if(id) {
+            selModal.remove();
+            gerarComprovanteTurmaMaterial(id);
+        } else {
+            alert("Selecione uma turma primeiro.");
+        }
+    };
 }
 
 window.telaVisualizarEstoque = telaVisualizarEstoque;

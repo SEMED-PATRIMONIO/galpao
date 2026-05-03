@@ -8303,43 +8303,45 @@ router.get('/escola/turmas-local', verificarToken, async (req, res) => {
 // POST para Salvar em Lote (Com trava de ID 9/13 vs 10/14)
 router.post('/entregas/lote', verificarToken, async (req, res) => {
     const { entregas } = req.body;
-    const { id: usuarioId, local_id: localId } = req.user;
+    const usuarioId = req.user.id;
+    const localId = req.user.local_id;
 
-    const client = await db.connect();
+    if (!entregas || !Array.isArray(entregas)) {
+        return res.status(400).json({ error: "Dados de entrega inválidos." });
+    }
+
+    const client = await db.pool.connect();
     try {
         await client.query('BEGIN');
 
         for (const item of entregas) {
-            // Validação de segurança no servidor para evitar conflitos de kit
-            const pId = parseInt(item.produtoId);
-            const aId = parseInt(item.alunoId);
-            
-            // Trava: Se pedir 9 ou 13, checa se já tem 10 ou 14
-            if ([9, 13].includes(pId)) {
-                const conflito = await client.query(
-                    "SELECT id FROM entregas_alunos WHERE aluno_id = $1 AND produto_id IN (10, 14)", [aId]);
-                if (conflito.rowCount > 0) throw new Error(`Conflito de kit para o aluno ${aId}`);
+            const alunoId = parseInt(item.alunoId);
+            const produtoId = parseInt(item.produtoId);
+            const tamanho = item.tamanho;
+
+            // 1. Baixa no estoque com trava de quantidade
+            const baixaRes = await client.query(`
+                UPDATE estoque_por_local 
+                SET quantidade = quantidade - 1 
+                WHERE local_id = $1 AND produto_id = $2 AND tamanho = $3 AND quantidade > 0
+            `, [localId, produtoId, tamanho]);
+
+            if (baixaRes.rowCount === 0) {
+                throw new Error(`Estoque insuficiente para o produto ID ${produtoId} (${tamanho})`);
             }
 
-            // Baixa Estoque
-            const baixa = await client.query(
-                "UPDATE estoque_por_local SET quantidade = quantidade - 1 WHERE local_id = $1 AND produto_id = $2 AND tamanho = $3 AND quantidade > 0",
-                [localId, pId, item.tamanho]
-            );
-
-            if (baixa.rowCount === 0) throw new Error(`Sem estoque para produto ${pId} tamanho ${item.tamanho}`);
-
-            // Registra Entrega
-            await client.query(
-                "INSERT INTO entregas_alunos (aluno_id, produto_id, tamanho, usuario_id, local_id) VALUES ($1, $2, $3, $4, $5)",
-                [aId, pId, item.tamanho, usuarioId, localId]
-            );
+            // 2. Registro da entrega
+            await client.query(`
+                INSERT INTO entregas_alunos (aluno_id, produto_id, tamanho, usuario_id, local_id)
+                VALUES ($1, $2, $3, $4, $5)
+            `, [alunoId, produtoId, tamanho, usuarioId, localId]);
         }
 
         await client.query('COMMIT');
         res.json({ success: true });
     } catch (err) {
         await client.query('ROLLBACK');
+        console.error("Erro no lote:", err.message);
         res.status(500).json({ error: err.message });
     } finally {
         client.release();

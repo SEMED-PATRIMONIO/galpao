@@ -21981,67 +21981,72 @@ async function telaEntregaMaterial() {
     
     app.innerHTML = `
         <style>
-            .secao-material { width: 100%; min-height: 100vh; background: #fff; color: #333; display: flex; flex-direction: column; font-family: sans-serif; }
-            .topo-material { display: flex; align-items: center; justify-content: space-between; padding: 15px 25px; border-bottom: 2px solid #eee; background: #fdfdfd; }
+            .container-material { width: 100%; min-height: 100vh; background: #fff; color: #333; display: flex; flex-direction: column; }
+            .header-material { display: flex; align-items: center; justify-content: space-between; padding: 10px 20px; background: #f8f9fa; border-bottom: 2px solid #dee2e6; }
             
-            .tabela-material { border-collapse: collapse; margin: 0; background: #fff; }
-            .tabela-material th, .tabela-material td { border: 1px solid #ddd; padding: 5px; text-align: center; }
+            .tabela-mat { border-collapse: collapse; background: #fff; margin: 10px; }
+            .tabela-mat th, .tabela-mat td { border: 1px solid #ccc; padding: 4px; text-align: center; }
             
-            /* Colunas com larguras idênticas para os produtos */
-            .col-prod-mat { width: 60px; min-width: 60px; background: #fafafa; }
-            .col-aluno-mat { position: sticky; left: 0; background: #fff !important; z-index: 10; width: 280px; text-align: left !important; padding-left: 15px !important; border-right: 2px solid #ddd !important; }
+            /* Colunas Estritas */
+            .col-aluno-mat { width: 320px; text-align: left !important; padding-left: 10px !important; background: #fff; position: sticky; left: 0; z-index: 5; border-right: 2px solid #bbb !important; }
+            .col-prod-mat { width: 65px; background: #f9f9f9; }
             
-            .header-mat-vert { height: 90px; vertical-align: bottom; padding-bottom: 8px; }
-            .txt-mat-vert { writing-mode: vertical-rl; transform: rotate(180deg); font-weight: bold; font-size: 11px; color: #555; margin: 0 auto; }
+            .head-vertical { height: 70px; vertical-align: bottom; padding-bottom: 5px; }
+            .txt-vertical-mat { writing-mode: vertical-rl; transform: rotate(180deg); font-weight: bold; font-size: 11px; margin: 0 auto; color: #444; }
             
-            /* Estados dos Inputs */
-            .check-mat { width: 18px; height: 18px; cursor: pointer; }
-            .col-desativada { background: #f2f2f2 !important; opacity: 0.4; }
-            .col-ativa { background: #fff !important; border: 2px solid #007bff !important; }
+            /* Classes de Ativação */
+            .col-bloqueada { background: #eee !important; color: #999; }
+            .col-permitida { background: #fff !important; border-left: 2px solid #28a745; border-right: 2px solid #28a745; }
             
-            .btn-mat { padding: 10px 20px; border-radius: 4px; border: none; cursor: pointer; font-weight: bold; font-size: 13px; transition: 0.2s; }
-            .btn-salvar-mat { background: #28a745; color: #fff; }
-            .btn-pdf-mat { background: #17a2b8; color: #fff; margin-right: 10px; }
-            .btn-fechar-mat { background: #6c757d; color: #fff; }
+            .btn-mat { padding: 8px 15px; border-radius: 4px; border: 1px solid #ccc; cursor: pointer; font-weight: bold; }
+            .btn-save-mat { background: #28a745; color: #fff; border: none; }
+            .btn-pdf-mat { background: #17a2b8; color: #fff; border: none; }
         </style>
 
-        <div class="secao-material">
-            <div class="topo-material">
+        <div class="container-material">
+            <div class="header-material">
                 <div style="display:flex; align-items:center; gap:20px;">
-                    <h2 style="margin:0; font-size: 1.4rem;">Entrega de Materiais Pedagógicos</h2>
-                    <select id="sel-turma-material" style="padding:8px; width:280px;" onchange="carregarGradeMaterial(this.value)">
+                    <h2 style="margin:0; font-size: 18px;">Entrega de Kit Material</h2>
+                    <select id="sel-turma-mat" style="padding:6px; width:250px;" onchange="carregarGradeMaterial(this.value)">
                         <option value="">-- Selecione a Turma --</option>
                     </select>
                 </div>
-                <div>
-                    <button class="btn-mat btn-pdf-mat" onclick="funcaoQueGeraPDF()" id="btn-pdf-grade" style="display:none;">IMPRIMIR LISTA</button>
-                    <button class="btn-mat btn-salvar-mat" onclick="salvarMateriaisLote()" id="btn-salvar-grade" style="display:none;">SALVAR ENTREGAS</button>
-                    <button class="btn-mat btn-fechar-mat" onclick="carregarDashboard()" style="margin-left:10px;">FECHAR</button>
+                <div id="acoes-material" style="display:none; gap:10px;">
+                    <button class="btn-mat btn-pdf-mat" onclick="gerarPDFMaterial()">IMPRIMIR / PDF</button>
+                    <button class="btn-mat btn-save-mat" onclick="salvarMaterialLote()">SALVAR ENTREGAS</button>
+                    <button class="btn-mat" onclick="carregarDashboard()">VOLTAR</button>
+                </div>
+                <div id="btn-so-voltar">
+                     <button class="btn-mat" onclick="carregarDashboard()">FECHAR</button>
                 </div>
             </div>
-            <div id="container-grade-material" style="flex:1; overflow:auto;">
-                <p style="padding:40px; text-align:center; color:#999;">Escolha uma turma para validar o material permitido pela etapa.</p>
+            <div id="grade-material-render" style="flex:1; overflow:auto;">
+                <p style="text-align:center; padding-top:50px; color:#666;">Aguardando seleção de turma para validar etapa de ensino...</p>
             </div>
         </div>
     `;
 
-    // Carregar turmas
+    // Carregar Turmas
     const res = await fetch(`${API_URL}/escola/turmas-local`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
     const turmas = await res.json();
-    const sel = document.getElementById('sel-turma-material');
+    const sel = document.getElementById('sel-turma-mat');
     turmas.forEach(t => sel.innerHTML += `<option value="${t.id}">${t.nome}</option>`);
 }
 
 async function carregarGradeMaterial(turmaId) {
     if (!turmaId) return;
-    const container = document.getElementById('container-grade-material');
-    container.innerHTML = '<div style="padding:20px;">Verificando etapa e estoque...</div>';
+    const render = document.getElementById('grade-material-render');
+    render.innerHTML = '<div style="padding:20px;">Processando regras de negócio...</div>';
 
     try {
-        const res = await fetch(`${API_URL}/escola/material/grade/${turmaId}`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+        const res = await fetch(`${API_URL}/escola/material/grade/${turmaId}`, { 
+            headers: { 'Authorization': `Bearer ${TOKEN}` } 
+        });
+        
         const data = await res.json();
+        if (!data.turma) throw new Error(data.error || "Falha na resposta do servidor");
 
-        // Lógica de Permissão por Etapa
+        // Lógica Etapa_ID -> Produto_ID
         const etapa = parseInt(data.turma.etapa_id);
         let idPermitido = 0;
         if (etapa === 1 || etapa === 2) idPermitido = 1;
@@ -22050,51 +22055,73 @@ async function carregarGradeMaterial(turmaId) {
         else if (etapa >= 10 && etapa <= 13) idPermitido = 4;
         else if (etapa >= 14 && etapa <= 22) idPermitido = 5;
 
-        let html = `<table class="tabela-material">
+        let html = `<table class="tabela-mat">
             <thead>
                 <tr>
                     <th class="col-aluno-mat">ALUNO</th>`;
         
         data.produtos.forEach(p => {
-            const nomeCurto = p.nome.substring(0, 5).toUpperCase();
-            html += `<th class="col-prod-mat header-mat-vert ${p.id === idPermitido ? 'col-ativa' : 'col-desativada'}">
-                <div class="txt-mat-vert">${nomeCurto}</div>
+            const ehOk = p.id === idPermitido;
+            html += `<th class="col-prod-mat head-vertical ${ehOk ? 'col-permitida' : 'col-bloqueada'}">
+                <div class="txt-vertical-mat">${p.nome.substring(0, 5).toUpperCase()}</div>
             </th>`;
         });
-
         html += `</tr></thead><tbody>`;
 
         data.alunos.forEach(aluno => {
             html += `<tr><td class="col-aluno-mat">${aluno.nome}</td>`;
             data.produtos.forEach(p => {
-                const jaEntregue = aluno.entregas[p.id];
-                const ehPermitido = p.id === idPermitido;
-                
-                if (jaEntregue) {
-                    html += `<td class="${ehPermitido ? '' : 'col-desativada'}" style="color:#28a745; font-size:10px; font-weight:bold;">RECEBIDO</td>`;
-                } else if (ehPermitido) {
-                    const stockItem = data.estoque.find(e => e.produto_id === p.id);
-                    const qtd = stockItem ? stockItem.quantidade : 0;
-                    
-                    html += `<td>
-                        <input type="checkbox" class="check-mat input-mat-entrega" 
+                const entregue = aluno.entregas[p.id];
+                const ehAtivo = p.id === idPermitido;
+
+                if (entregue) {
+                    html += `<td class="${ehAtivo ? 'col-permitida' : 'col-bloqueada'}" style="color:green; font-weight:bold; font-size:9px;">OK</td>`;
+                } else if (ehAtivo) {
+                    const est = data.estoque.find(e => e.produto_id === p.id);
+                    const tem = est ? est.quantidade : 0;
+                    html += `<td class="col-permitida">
+                        <input type="checkbox" class="input-material" 
                                data-aluno="${aluno.id}" data-produto="${p.id}" 
-                               ${qtd <= 0 ? 'disabled' : ''} title="Estoque: ${qtd}">
+                               ${tem <= 0 ? 'disabled' : ''} style="width:18px;height:18px;">
                     </td>`;
                 } else {
-                    html += `<td class="col-desativada">---</td>`;
+                    html += `<td class="col-bloqueada">---</td>`;
                 }
             });
             html += `</tr>`;
         });
 
         html += `</tbody></table>`;
-        container.innerHTML = html;
-        document.getElementById('btn-salvar-grade').style.display = 'inline-block';
-        document.getElementById('btn-pdf-grade').style.display = 'inline-block';
+        render.innerHTML = html;
+        document.getElementById('acoes-material').style.display = 'flex';
+        document.getElementById('btn-so-voltar').style.display = 'none';
 
     } catch (err) {
-        container.innerHTML = `<div style="padding:20px; color:red;">Erro: ${err.message}</div>`;
+        render.innerHTML = `<div style="color:red; padding:20px;">Erro: ${err.message}</div>`;
+    }
+}
+
+async function salvarMaterialLote() {
+    const selecionados = document.querySelectorAll('.input-material:checked');
+    const entregas = Array.from(selecionados).map(i => ({
+        alunoId: i.dataset.aluno,
+        produtoId: i.dataset.produto
+    }));
+
+    if (entregas.length === 0) return;
+
+    try {
+        const res = await fetch(`${API_URL}/escola/material/salvar-lote`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ entregas })
+        });
+        if (res.ok) {
+            notificar("Entregas de material realizadas!", "sucesso");
+            carregarGradeMaterial(document.getElementById('sel-turma-mat').value);
+        }
+    } catch (err) {
+        alert("Erro na conexão.");
     }
 }
 

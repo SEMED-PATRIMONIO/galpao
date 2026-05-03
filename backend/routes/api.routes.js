@@ -8298,73 +8298,92 @@ router.get('/escola/turmas-local', verificarToken, async (req, res) => {
     }
 });
 
-// Rota para buscar a grade (com correção de performance e segurança)
 router.get('/turma/:id/grade-entrega', verificarToken, async (req, res) => {
     const { id: turmaId } = req.params;
     const localId = req.user.local_id;
 
+    if (!localId) return res.status(403).json({ error: "Usuário sem local." });
+
+    // RESTAURADO: Usando db.pool.connect() exatamente como você faz
+    const client = await db.pool.connect(); 
     try {
-        // Correção: Se db já for o pool, use db.connect() diretamente
-        const client = await db.connect(); 
-        try {
-            // 1. Dados da Turma
-            const turmaRes = await client.query('SELECT nome FROM turmas WHERE id = $1 AND local_id = $2', [turmaId, localId]);
-            if (turmaRes.rows.length === 0) return res.status(404).json({ error: "Turma não encontrada." });
+        // 1. Sua busca original de Turma
+        const turmaRes = await client.query(
+            'SELECT id, nome FROM turmas WHERE id = $1 AND local_id = $2',
+            [turmaId, localId]
+        );
+        if (turmaRes.rows.length === 0) return res.status(404).json({ error: "Turma não encontrada." });
+        const turmaInfo = turmaRes.rows[0];
 
-            // 2. Produtos de Uniforme (IDs específicos para garantir a ordem da planilha)
-            const produtosRes = await client.query(`
-                SELECT id, nome FROM produtos 
-                WHERE tipo = 'UNIFORMES' 
-                ORDER BY id ASC -- Ou a ordem que preferir para a planilha
-            `);
-            const produtos = produtosRes.rows;
+        // 2. Sua busca original de Produtos (Ordem Fixa para a Planilha)
+        const produtosRes = await client.query(`
+            SELECT id, nome FROM produtos 
+            WHERE tipo = 'UNIFORMES' 
+            ORDER BY id ASC
+        `);
+        const produtos = produtosRes.rows;
 
-            // 3. Alunos Ativos
-            const alunosRes = await client.query(
-                "SELECT id, nome FROM alunos WHERE turma_id = $1 AND status = 'ATIVO' ORDER BY nome ASC",
-                [turmaId]
-            );
-            const alunos = alunosRes.rows;
-            const alunoIds = alunos.map(a => a.id);
+        // 3. Sua busca original de Alunos Ativos
+        const alunosRes = await client.query(
+            "SELECT id, nome FROM alunos WHERE turma_id = $1 AND status = 'ATIVO' ORDER BY nome ASC",
+            [turmaId]
+        );
+        const alunos = alunosRes.rows;
+        const alunoIds = alunos.map(a => a.id);
 
-            // 4. Estoque do Local
-            const estoqueRes = await client.query(
-                "SELECT produto_id, tamanho, quantidade FROM estoque_por_local WHERE local_id = $1 AND quantidade > 0",
-                [localId]
-            );
+        // 4. Sua busca original de Estoque
+        const estoqueRes = await client.query(`
+            SELECT produto_id, tamanho, quantidade FROM estoque_por_local 
+            WHERE local_id = $1 AND quantidade > 0 AND produto_id IN (SELECT id FROM produtos WHERE tipo = 'UNIFORMES')
+        `, [localId]);
 
-            // 5. Entregas Realizadas
-            const entregasRes = await client.query(`
-                SELECT aluno_id, produto_id, tamanho, data_entrega 
-                FROM entregas_alunos WHERE aluno_id = ANY($1)`, [alunoIds]);
+        const estoqueEscola = estoqueRes.rows.reduce((acc, item) => {
+            if (!acc[item.produto_id]) acc[item.produto_id] = [];
+            acc[item.produto_id].push({ tamanho: item.tamanho, qtd: item.quantidade });
+            return acc;
+        }, {});
 
-            // Organização dos dados para o front
-            const estoqueEscola = {};
-            estoqueRes.rows.forEach(item => {
-                if (!estoqueEscola[item.produto_id]) estoqueEscola[item.produto_id] = [];
-                estoqueEscola[item.produto_id].push({ tamanho: item.tamanho, qtd: item.quantidade });
-            });
+        // 5. Sua busca original de Entregas
+        const entregasRes = await client.query(`
+            SELECT ea.aluno_id, ea.produto_id, ea.tamanho, ea.data_entrega
+            FROM entregas_alunos ea
+            JOIN produtos p ON p.id = ea.produto_id
+            WHERE ea.aluno_id = ANY($1) AND p.tipo = 'UNIFORMES'
+        `, [alunoIds]);
 
-            const entregasRealizadas = {};
-            entregasRes.rows.forEach(e => {
-                if (!entregasRealizadas[e.aluno_id]) entregasRealizadas[e.aluno_id] = {};
-                entregasRealizadas[e.aluno_id][e.produto_id] = { tamanho: e.tamanho, data: e.data_entrega };
-            });
+        const entregasRealizadas = entregasRes.rows.reduce((acc, entrega) => {
+            if (!acc[entrega.aluno_id]) acc[entrega.aluno_id] = {};
+            acc[entrega.aluno_id][entrega.produto_id] = {
+                tamanho: entrega.tamanho,
+                data: entrega.data_entrega
+            };
+            return acc;
+        }, {});
 
-            res.json({
-                turmaNome: turmaRes.rows[0].nome,
-                produtos,
-                estoqueEscola,
-                alunos: alunos.map(a => ({
-                    ...a,
-                    statusItens: entregasRealizadas[a.id] || {}
-                }))
-            });
-        } finally {
-            client.release();
-        }
-    } catch (err) {
-        res.status(500).json({ error: err.message });
+        // 6. Montando o seu AlunosComStatus original
+        const alunosComStatus = alunos.map(aluno => {
+            const entregasDoAluno = entregasRealizadas[aluno.id] || {};
+            const statusItens = {};
+            for (const produto of produtos) {
+                if (entregasDoAluno[produto.id]) {
+                    statusItens[produto.id] = { status: 'entregue', ...entregasDoAluno[produto.id] };
+                } else {
+                    statusItens[produto.id] = { status: 'pendente' };
+                }
+            }
+            return { ...aluno, statusItens };
+        });
+
+        // Retornando exatamente o formato que o seu Front anterior esperava
+        res.json({
+            turmaInfo,
+            produtos,
+            estoqueEscola,
+            alunos: alunosComStatus
+        });
+
+    } finally {
+        client.release(); // Importante para não travar o pool
     }
 });
 

@@ -9762,53 +9762,57 @@ router.get('/turma/:id/grade-entrega', verificarToken, async (req, res) => {
     }
 });
 
-// 1. Rota para buscar a grade de materiais específica por etapa
+// ROTA 1: Buscar Grade de Material por Turma
 router.get('/escola/material/grade/:turmaId', verificarToken, async (req, res) => {
     const { turmaId } = req.params;
     const localId = req.user.local_id;
 
     const client = await db.pool.connect();
     try {
-        // Busca a turma e o etapa_id
+        // 1. Busca Turma e sua Etapa
         const turmaRes = await client.query(
             'SELECT id, nome, etapa_id FROM turmas WHERE id = $1 AND local_id = $2',
             [turmaId, localId]
         );
-        if (turmaRes.rows.length === 0) return res.status(404).json({ error: "Turma não encontrada." });
+
+        if (turmaRes.rows.length === 0) {
+            return res.status(404).json({ error: "Turma não encontrada ou não pertence ao seu local." });
+        }
         const turma = turmaRes.rows[0];
 
-        // Busca especificamente os 5 produtos de Material (IDs 1, 2, 3, 4, 5)
+        // 2. Busca os 5 Materiais específicos (IDs 1 a 5)
         const produtosRes = await client.query(
-            'SELECT id, nome FROM produtos WHERE id ANY($1::int[]) ORDER BY id ASC',
+            'SELECT id, nome FROM produtos WHERE id = ANY($1) ORDER BY id ASC',
             [[1, 2, 3, 4, 5]]
         );
 
-        // Busca alunos ativos
+        // 3. Busca Alunos Ativos da Turma
         const alunosRes = await client.query(
             "SELECT id, nome FROM alunos WHERE turma_id = $1 AND status = 'ATIVO' ORDER BY nome ASC",
             [turmaId]
         );
         const alunoIds = alunosRes.rows.map(a => a.id);
 
-        // Busca estoque desses materiais no local (Tamanho sempre 'N/A')
+        // 4. Busca Estoque (Tamanho 'N/A' para materiais)
         const estoqueRes = await client.query(
-            "SELECT produto_id, quantidade FROM estoque_por_local WHERE local_id = $1 AND produto_id ANY($2::int[]) AND tamanho = 'N/A'",
+            "SELECT produto_id, quantidade FROM estoque_por_local WHERE local_id = $1 AND produto_id = ANY($2) AND tamanho = 'N/A'",
             [localId, [1, 2, 3, 4, 5]]
         );
 
-        // Busca entregas já realizadas de material para estes alunos
-        const entregasRes = await client.query(`
-            SELECT ea.aluno_id, ea.produto_id, ea.data_entrega
-            FROM entregas_alunos ea
-            JOIN produtos p ON p.id = ea.produto_id
-            WHERE ea.aluno_id = ANY($1) AND p.tipo = 'MATERIAL'
-        `, [alunoIds]);
+        // 5. Busca Entregas já realizadas
+        let entregasMap = {};
+        if (alunoIds.length > 0) {
+            const entregasRes = await client.query(`
+                SELECT aluno_id, produto_id 
+                FROM entregas_alunos 
+                WHERE aluno_id = ANY($1) AND produto_id = ANY($2)
+            `, [alunoIds, [1, 2, 3, 4, 5]]);
 
-        const entregasMap = entregasRes.rows.reduce((acc, e) => {
-            if (!acc[e.aluno_id]) acc[e.aluno_id] = {};
-            acc[e.aluno_id][e.produto_id] = e.data_entrega;
-            return acc;
-        }, {});
+            entregasRes.rows.forEach(e => {
+                if (!entregasMap[e.aluno_id]) entregasMap[e.aluno_id] = {};
+                entregasMap[e.aluno_id][e.produto_id] = true;
+            });
+        }
 
         res.json({
             turma,
@@ -9819,7 +9823,42 @@ router.get('/escola/material/grade/:turmaId', verificarToken, async (req, res) =
                 entregas: entregasMap[a.id] || {}
             }))
         });
+
     } catch (err) {
+        console.error("Erro na rota de material:", err.message);
+        res.status(500).json({ error: "Falha ao carregar grade de material." });
+    } finally {
+        client.release();
+    }
+});
+
+// ROTA 2: Salvar Lote de Material
+router.post('/escola/material/salvar-lote', verificarToken, async (req, res) => {
+    const { entregas } = req.body;
+    const { id: usuarioId, local_id: localId } = req.user;
+
+    const client = await db.pool.connect();
+    try {
+        await client.query('BEGIN');
+        for (const item of entregas) {
+            // Baixa estoque
+            const resEstoque = await client.query(
+                "UPDATE estoque_por_local SET quantidade = quantidade - 1 WHERE local_id = $1 AND produto_id = $2 AND tamanho = 'N/A' AND quantidade > 0",
+                [localId, item.produtoId]
+            );
+
+            if (resEstoque.rowCount === 0) throw new Error("Estoque insuficiente.");
+
+            // Registra entrega
+            await client.query(
+                "INSERT INTO entregas_alunos (aluno_id, produto_id, tamanho, usuario_id, local_id) VALUES ($1, $2, 'N/A', $3, $4)",
+                [item.alunoId, item.produtoId, usuarioId, localId]
+            );
+        }
+        await client.query('COMMIT');
+        res.json({ success: true });
+    } catch (err) {
+        await client.query('ROLLBACK');
         res.status(500).json({ error: err.message });
     } finally {
         client.release();

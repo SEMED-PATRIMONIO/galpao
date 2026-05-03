@@ -23713,63 +23713,85 @@ async function gerarComprovanteTurma(turmaId) {
             throw new Error(data.error || 'Erro ao obter dados da turma.');
         }
 
-        // PEGA O NOME DO LOCAL: Ajustado para a estrutura da sua tabela 'locais'
-        // Se o backend não enviar 'local_nome', tentamos extrair do objeto turma
-        const nomeUnidade = data.turma.local_nome_oficial || data.turma.local_nome || "UNIDADE ESCOLAR";
+        // Busca o nome oficial do local conforme a estrutura da tabela 'locais'
+        const nomeEscola = data.turma.local_nome_oficial || data.turma.local_nome || "UNIDADE ESCOLAR";
         const nomeTurma = data.turma.nome || "---";
 
-        // GERA AS LINHAS (Compactas para caber 35 alunos + assinatura)
+        // Gera as linhas com padding reduzido para garantir que caiba em uma página
         const linhasAlunos = data.alunos.map((aluno, index) => `
             <tr>
-                <td style="border: 1px solid #999; padding: 4px 8px; font-size: 9pt; text-align: left;">
+                <td style="border: 1px solid #999; padding: 3px 8px; font-size: 9pt; text-align: left;">
                     ${String(index + 1).padStart(2, '0')}. ${aluno.nome.toUpperCase()}
                 </td>
-                <td style="border: 1px solid #999; padding: 4px; font-size: 8pt; text-align: center; color: #ccc;">
+                <td style="border: 1px solid #999; padding: 3px; font-size: 8pt; text-align: center; color: #ddd;">
                     ____/____/____
                 </td>
-                <td style="border: 1px solid #999; padding: 4px;"></td>
+                <td style="border: 1px solid #999; padding: 3px;"></td>
             </tr>
         `).join('');
 
-        // HTML USANDO A SUA ESTRUTURA DO ROMANEIO (Copia fiel do CSS e Logos)
         const htmlDocumento = `
             <!DOCTYPE html>
             <html lang="pt-BR">
             <head>
                 <meta charset="UTF-8">
                 <style>
+                    /* Remove cabeçalhos e rodapés automáticos do navegador (data, URL, etc) */
+                    @page { 
+                        size: A4 portrait; 
+                        margin: 1cm !important; 
+                    }
                     * { margin: 0; padding: 0; box-sizing: border-box; font-family: Arial, sans-serif; }
-                    body { background: #f5f5f5; }
-                    /* MARGENS RESPEITADAS: 1.5cm conforme seu padrão funcional */
-                    .pagina-a4 { width: 210mm; min-height: 297mm; padding: 1.5cm; margin: 0 auto; background: white; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-                    .cabecalho { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #333; padding-bottom: 8px; margin-bottom: 20px; }
+                    
+                    body { background: #fff; padding: 0; }
+
+                    .cabecalho { 
+                        display: flex; 
+                        align-items: center; 
+                        justify-content: space-between; 
+                        border-bottom: 1px solid #000; 
+                        padding-bottom: 5px; 
+                        margin-bottom: 10px; 
+                    }
                     .logo-esquerda { height: 45px; width: auto; }
                     .logo-direita { height: 40px; width: auto; }
                     .cabecalho-textos { text-align: center; flex: 1; }
-                    .txt-prefeitura { font-size: 10pt; margin-bottom: 2px; font-weight: bold; }
+                    .txt-prefeitura { font-size: 10pt; font-weight: bold; }
                     .txt-secretaria { font-size: 9pt; }
-                    .txt-unidade { font-size: 9pt; font-weight: bold; margin-top: 2px; text-transform: uppercase; }
+                    .txt-unidade { font-size: 9pt; font-weight: bold; text-transform: uppercase; margin-top: 2px; }
                     
-                    .titulo-doc { text-align: center; font-size: 11pt; font-weight: bold; margin-bottom: 15px; background: #f2f2f2; padding: 8px; border: 1px solid #ccc; text-transform: uppercase; }
+                    /* Título mais estreito para economizar espaço */
+                    .titulo-doc { 
+                        text-align: center; 
+                        font-size: 10.5pt; 
+                        font-weight: bold; 
+                        margin-bottom: 8px; 
+                        background: #f2f2f2; 
+                        padding: 5px; 
+                        border: 1px solid #ccc; 
+                        text-transform: uppercase; 
+                    }
                     
-                    table { width: 100%; border-collapse: collapse; margin-top: 5px; }
-                    th { background: #444; color: white; padding: 6px; font-size: 8.5pt; text-align: center; border: 1px solid #333; }
+                    table { width: 100%; border-collapse: collapse; }
+                    th { background: #444; color: white; padding: 5px; font-size: 8.5pt; text-align: center; border: 1px solid #000; }
                     
                     .rodape-assinaturas { 
-                        margin-top: 30px; 
+                        margin-top: 20px; 
                         display: flex; 
-                        justify-content: flex-end; /* Alinha à direita conforme solicitado */
+                        justify-content: flex-end; 
                     }
                     .caixa-assinatura { 
                         width: 280px; 
                         border-top: 1px solid #000; 
                         text-align: center; 
-                        padding-top: 5px; 
+                        padding-top: 4px; 
                         font-size: 8pt; 
                     }
-                    @media print { 
-                        body { background: none; } 
-                        .pagina-a4 { box-shadow: none; margin: 0; width: 100%; padding: 1cm; } 
+                    
+                    /* Garante que o conteúdo de impressão não tenha sombras ou fundos de modal */
+                    @media print {
+                        body { background: none; }
+                        .pagina-a4 { width: 100%; padding: 0; box-shadow: none; }
                     }
                 </style>
             </head>
@@ -23780,7 +23802,7 @@ async function gerarComprovanteTurma(turmaId) {
                         <div class="cabecalho-textos">
                             <p class="txt-prefeitura">PREFEITURA MUNICIPAL DE QUEIMADOS</p>
                             <p class="txt-secretaria">SECRETARIA MUNICIPAL DE EDUCAÇÃO</p>
-                            <p class="txt-unidade">${nomeUnidade}</p>
+                            <p class="txt-unidade">${nomeEscola}</p>
                         </div>
                         <img src="assets/logap.png" class="logo-direita">
                     </div>
@@ -23792,7 +23814,7 @@ async function gerarComprovanteTurma(turmaId) {
                             <tr>
                                 <th style="text-align: left; padding-left: 10px;">NOME DO ALUNO</th>
                                 <th style="width: 100px;">DATA</th>
-                                <th style="width: 200px;">ASSINATURA</th>
+                                <th style="width: 220px;">ASSINATURA</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -23811,9 +23833,8 @@ async function gerarComprovanteTurma(turmaId) {
             </html>
         `;
 
-        // CHAMA O SEU MODAL PADRÃO (Que você já usa no romaneio)
         if (typeof abrirModalComprovante === 'function') {
-            abrirModalComprovante(htmlDocumento, `Lista_Turma_${turmaId}`);
+            abrirModalComprovante(htmlDocumento, `Lista_${nomeTurma}`);
         } else {
             const win = window.open('', '_blank');
             win.document.write(htmlDocumento);
@@ -23837,63 +23858,85 @@ async function gerarComprovanteTurmaMaterial(turmaId) {
             throw new Error(data.error || 'Erro ao obter dados da turma.');
         }
 
-        // PEGA O NOME DO LOCAL: Ajustado para a estrutura da sua tabela 'locais'
-        // Se o backend não enviar 'local_nome', tentamos extrair do objeto turma
-        const nomeUnidade = data.turma.local_nome_oficial || data.turma.local_nome || "UNIDADE ESCOLAR";
+        // Busca o nome oficial do local conforme a estrutura da tabela 'locais'
+        const nomeEscola = data.turma.local_nome_oficial || data.turma.local_nome || "UNIDADE ESCOLAR";
         const nomeTurma = data.turma.nome || "---";
 
-        // GERA AS LINHAS (Compactas para caber 35 alunos + assinatura)
+        // Gera as linhas com padding reduzido para garantir que caiba em uma página
         const linhasAlunos = data.alunos.map((aluno, index) => `
             <tr>
-                <td style="border: 1px solid #999; padding: 4px 8px; font-size: 9pt; text-align: left;">
+                <td style="border: 1px solid #999; padding: 3px 8px; font-size: 9pt; text-align: left;">
                     ${String(index + 1).padStart(2, '0')}. ${aluno.nome.toUpperCase()}
                 </td>
-                <td style="border: 1px solid #999; padding: 4px; font-size: 8pt; text-align: center; color: #ccc;">
+                <td style="border: 1px solid #999; padding: 3px; font-size: 8pt; text-align: center; color: #ddd;">
                     ____/____/____
                 </td>
-                <td style="border: 1px solid #999; padding: 4px;"></td>
+                <td style="border: 1px solid #999; padding: 3px;"></td>
             </tr>
         `).join('');
 
-        // HTML USANDO A SUA ESTRUTURA DO ROMANEIO (Copia fiel do CSS e Logos)
         const htmlDocumento = `
             <!DOCTYPE html>
             <html lang="pt-BR">
             <head>
                 <meta charset="UTF-8">
                 <style>
+                    /* Remove cabeçalhos e rodapés automáticos do navegador (data, URL, etc) */
+                    @page { 
+                        size: A4 portrait; 
+                        margin: 1cm !important; 
+                    }
                     * { margin: 0; padding: 0; box-sizing: border-box; font-family: Arial, sans-serif; }
-                    body { background: #f5f5f5; }
-                    /* MARGENS RESPEITADAS: 1.5cm conforme seu padrão funcional */
-                    .pagina-a4 { width: 210mm; min-height: 297mm; padding: 1.5cm; margin: 0 auto; background: white; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-                    .cabecalho { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #333; padding-bottom: 8px; margin-bottom: 20px; }
+                    
+                    body { background: #fff; padding: 0; }
+
+                    .cabecalho { 
+                        display: flex; 
+                        align-items: center; 
+                        justify-content: space-between; 
+                        border-bottom: 1px solid #000; 
+                        padding-bottom: 5px; 
+                        margin-bottom: 10px; 
+                    }
                     .logo-esquerda { height: 45px; width: auto; }
                     .logo-direita { height: 40px; width: auto; }
                     .cabecalho-textos { text-align: center; flex: 1; }
-                    .txt-prefeitura { font-size: 10pt; margin-bottom: 2px; font-weight: bold; }
+                    .txt-prefeitura { font-size: 10pt; font-weight: bold; }
                     .txt-secretaria { font-size: 9pt; }
-                    .txt-unidade { font-size: 9pt; font-weight: bold; margin-top: 2px; text-transform: uppercase; }
+                    .txt-unidade { font-size: 9pt; font-weight: bold; text-transform: uppercase; margin-top: 2px; }
                     
-                    .titulo-doc { text-align: center; font-size: 11pt; font-weight: bold; margin-bottom: 15px; background: #f2f2f2; padding: 8px; border: 1px solid #ccc; text-transform: uppercase; }
+                    /* Título mais estreito para economizar espaço */
+                    .titulo-doc { 
+                        text-align: center; 
+                        font-size: 10.5pt; 
+                        font-weight: bold; 
+                        margin-bottom: 8px; 
+                        background: #f2f2f2; 
+                        padding: 5px; 
+                        border: 1px solid #ccc; 
+                        text-transform: uppercase; 
+                    }
                     
-                    table { width: 100%; border-collapse: collapse; margin-top: 5px; }
-                    th { background: #444; color: white; padding: 6px; font-size: 8.5pt; text-align: center; border: 1px solid #333; }
+                    table { width: 100%; border-collapse: collapse; }
+                    th { background: #444; color: white; padding: 5px; font-size: 8.5pt; text-align: center; border: 1px solid #000; }
                     
                     .rodape-assinaturas { 
-                        margin-top: 30px; 
+                        margin-top: 20px; 
                         display: flex; 
-                        justify-content: flex-end; /* Alinha à direita conforme solicitado */
+                        justify-content: flex-end; 
                     }
                     .caixa-assinatura { 
                         width: 280px; 
                         border-top: 1px solid #000; 
                         text-align: center; 
-                        padding-top: 5px; 
+                        padding-top: 4px; 
                         font-size: 8pt; 
                     }
-                    @media print { 
-                        body { background: none; } 
-                        .pagina-a4 { box-shadow: none; margin: 0; width: 100%; padding: 1cm; } 
+                    
+                    /* Garante que o conteúdo de impressão não tenha sombras ou fundos de modal */
+                    @media print {
+                        body { background: none; }
+                        .pagina-a4 { width: 100%; padding: 0; box-shadow: none; }
                     }
                 </style>
             </head>
@@ -23904,7 +23947,7 @@ async function gerarComprovanteTurmaMaterial(turmaId) {
                         <div class="cabecalho-textos">
                             <p class="txt-prefeitura">PREFEITURA MUNICIPAL DE QUEIMADOS</p>
                             <p class="txt-secretaria">SECRETARIA MUNICIPAL DE EDUCAÇÃO</p>
-                            <p class="txt-unidade">${nomeUnidade}</p>
+                            <p class="txt-unidade">${nomeEscola}</p>
                         </div>
                         <img src="assets/logap.png" class="logo-direita">
                     </div>
@@ -23916,7 +23959,7 @@ async function gerarComprovanteTurmaMaterial(turmaId) {
                             <tr>
                                 <th style="text-align: left; padding-left: 10px;">NOME DO ALUNO</th>
                                 <th style="width: 100px;">DATA</th>
-                                <th style="width: 200px;">ASSINATURA</th>
+                                <th style="width: 220px;">ASSINATURA</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -23935,9 +23978,8 @@ async function gerarComprovanteTurmaMaterial(turmaId) {
             </html>
         `;
 
-        // CHAMA O SEU MODAL PADRÃO (Que você já usa no romaneio)
         if (typeof abrirModalComprovante === 'function') {
-            abrirModalComprovante(htmlDocumento, `Lista_Turma_${turmaId}`);
+            abrirModalComprovante(htmlDocumento, `Lista_${nomeTurma}`);
         } else {
             const win = window.open('', '_blank');
             win.document.write(htmlDocumento);

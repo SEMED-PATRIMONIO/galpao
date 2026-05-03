@@ -583,6 +583,7 @@ function renderSubmenuCadastrosEscola() {
 
 function renderSubmenuUniformesKits() {
     let estoqueVirtual = {};
+    let estoqueVirtualMat = {};
     const botoes = `
         <button class="btn-grande btn-vidro" onclick="telaEscolaConsultaEstoque()"><i>📦</i><span>MEU ESTOQUE</span></button>
         <button class="btn-grande btn-vidro" onclick="telaSolicitarUniforme()"><i>📝</i><span>SOLICITAR</span></button>
@@ -21976,31 +21977,35 @@ async function gerarRelatorioStatusTurmas() {
     }
 }
 
+// Variável global independente para o estoque de materiais na tela
+let estoqueVirtualMat = {}; 
+
 async function telaEntregaMaterial() {
     const app = document.getElementById('app-content');
     
     app.innerHTML = `
         <style>
-            .container-material { width: 100%; min-height: 100vh; background: #fff; color: #333; display: flex; flex-direction: column; }
-            .header-material { display: flex; align-items: center; justify-content: space-between; padding: 10px 20px; background: #f8f9fa; border-bottom: 2px solid #dee2e6; }
+            .container-material { width: 100%; min-height: 100vh; background: #fff; color: #000; display: flex; flex-direction: column; font-family: sans-serif; }
+            .header-material { display: flex; align-items: center; justify-content: space-between; padding: 10px 20px; background: #f8f9fa; border-bottom: 2px solid #dee2e6; position: sticky; top: 0; z-index: 100; }
             
-            .tabela-mat { border-collapse: collapse; background: #fff; margin: 10px; }
-            .tabela-mat th, .tabela-mat td { border: 1px solid #ccc; padding: 4px; text-align: center; }
+            .tabela-mat { border-collapse: collapse; background: #fff; margin: 10px; table-layout: fixed; width: auto; }
+            .tabela-mat th, .tabela-mat td { border: 1px solid #ccc; padding: 4px; text-align: center; overflow: hidden; }
             
-            /* Colunas Estritas */
             .col-aluno-mat { width: 320px; text-align: left !important; padding-left: 10px !important; background: #fff; position: sticky; left: 0; z-index: 5; border-right: 2px solid #bbb !important; }
-            .col-prod-mat { width: 65px; background: #f9f9f9; }
+            .col-prod-mat { width: 65px; } /* Larguras exatamente iguais */
             
-            .head-vertical { height: 70px; vertical-align: bottom; padding-bottom: 5px; }
-            .txt-vertical-mat { writing-mode: vertical-rl; transform: rotate(180deg); font-weight: bold; font-size: 11px; margin: 0 auto; color: #444; }
+            .head-vertical { height: 70px; vertical-align: bottom; padding-bottom: 5px; background: #f1f1f1; }
+            .txt-vertical-mat { writing-mode: vertical-rl; transform: rotate(180deg); font-weight: bold; font-size: 11px; margin: 0 auto; color: #333; }
             
-            /* Classes de Ativação */
-            .col-bloqueada { background: #eee !important; color: #999; }
-            .col-permitida { background: #fff !important; border-left: 2px solid #28a745; border-right: 2px solid #28a745; }
+            .col-bloqueada { background: #f2f2f2 !important; color: #ccc; }
+            .col-permitida { background: #fff; }
             
-            .btn-mat { padding: 8px 15px; border-radius: 4px; border: 1px solid #ccc; cursor: pointer; font-weight: bold; }
+            .btn-mat { padding: 8px 15px; border-radius: 4px; border: 1px solid #ccc; cursor: pointer; font-weight: bold; font-size: 13px; }
             .btn-save-mat { background: #28a745; color: #fff; border: none; }
             .btn-pdf-mat { background: #17a2b8; color: #fff; border: none; }
+            
+            /* Destaque para o contador de estoque no cabeçalho */
+            .badge-estoque { display: block; font-size: 9px; color: #007bff; margin-top: 2px; }
         </style>
 
         <div class="container-material">
@@ -22014,19 +22019,15 @@ async function telaEntregaMaterial() {
                 <div id="acoes-material" style="display:none; gap:10px;">
                     <button class="btn-mat btn-pdf-mat" onclick="gerarPDFMaterial()">IMPRIMIR / PDF</button>
                     <button class="btn-mat btn-save-mat" onclick="salvarMaterialLote()">SALVAR ENTREGAS</button>
-                    <button class="btn-mat" onclick="carregarDashboard()">VOLTAR</button>
-                </div>
-                <div id="btn-so-voltar">
-                     <button class="btn-mat" onclick="carregarDashboard()">FECHAR</button>
+                    <button class="btn-mat" onclick="carregarDashboard()">FECHAR</button>
                 </div>
             </div>
             <div id="grade-material-render" style="flex:1; overflow:auto;">
-                <p style="text-align:center; padding-top:50px; color:#666;">Aguardando seleção de turma para validar etapa de ensino...</p>
+                <p style="text-align:center; padding-top:50px; color:#999;">Selecione uma turma para carregar a grade de materiais.</p>
             </div>
         </div>
     `;
 
-    // Carregar Turmas
     const res = await fetch(`${API_URL}/escola/turmas-local`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
     const turmas = await res.json();
     const sel = document.getElementById('sel-turma-mat');
@@ -22036,17 +22037,20 @@ async function telaEntregaMaterial() {
 async function carregarGradeMaterial(turmaId) {
     if (!turmaId) return;
     const render = document.getElementById('grade-material-render');
-    render.innerHTML = '<div style="padding:20px;">Processando regras de negócio...</div>';
+    render.innerHTML = '<div style="padding:20px;">Sincronizando estoque e etapa...</div>';
 
     try {
-        const res = await fetch(`${API_URL}/escola/material/grade/${turmaId}`, { 
-            headers: { 'Authorization': `Bearer ${TOKEN}` } 
-        });
-        
+        const res = await fetch(`${API_URL}/escola/material/grade/${turmaId}`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
         const data = await res.json();
-        if (!data.turma) throw new Error(data.error || "Falha na resposta do servidor");
 
-        // Lógica Etapa_ID -> Produto_ID
+        // 1. Inicializa estoque virtual para controle em tempo real
+        estoqueVirtualMat = {};
+        data.produtos.forEach(p => {
+            const est = data.estoque.find(e => e.produto_id === p.id);
+            estoqueVirtualMat[p.id] = est ? est.quantidade : 0;
+        });
+
+        // 2. Lógica Etapa_ID -> Produto_ID
         const etapa = parseInt(data.turma.etapa_id);
         let idPermitido = 0;
         if (etapa === 1 || etapa === 2) idPermitido = 1;
@@ -22064,6 +22068,7 @@ async function carregarGradeMaterial(turmaId) {
             const ehOk = p.id === idPermitido;
             html += `<th class="col-prod-mat head-vertical ${ehOk ? 'col-permitida' : 'col-bloqueada'}">
                 <div class="txt-vertical-mat">${p.nome.substring(0, 5).toUpperCase()}</div>
+                <span class="badge-estoque" id="view-est-${p.id}">Qtd: ${estoqueVirtualMat[p.id]}</span>
             </th>`;
         });
         html += `</tr></thead><tbody>`;
@@ -22075,14 +22080,13 @@ async function carregarGradeMaterial(turmaId) {
                 const ehAtivo = p.id === idPermitido;
 
                 if (entregue) {
-                    html += `<td class="${ehAtivo ? 'col-permitida' : 'col-bloqueada'}" style="color:green; font-weight:bold; font-size:9px;">OK</td>`;
+                    html += `<td class="${ehAtivo ? 'col-permitida' : 'col-bloqueada'}" style="color:#28a745; font-weight:bold; font-size:10px;">OK</td>`;
                 } else if (ehAtivo) {
-                    const est = data.estoque.find(e => e.produto_id === p.id);
-                    const tem = est ? est.quantidade : 0;
                     html += `<td class="col-permitida">
                         <input type="checkbox" class="input-material" 
                                data-aluno="${aluno.id}" data-produto="${p.id}" 
-                               ${tem <= 0 ? 'disabled' : ''} style="width:18px;height:18px;">
+                               onchange="validarCliqueEstoque(this)"
+                               style="width:20px; height:20px; cursor:pointer;">
                     </td>`;
                 } else {
                     html += `<td class="col-bloqueada">---</td>`;
@@ -22094,21 +22098,41 @@ async function carregarGradeMaterial(turmaId) {
         html += `</tbody></table>`;
         render.innerHTML = html;
         document.getElementById('acoes-material').style.display = 'flex';
-        document.getElementById('btn-so-voltar').style.display = 'none';
 
     } catch (err) {
-        render.innerHTML = `<div style="color:red; padding:20px;">Erro: ${err.message}</div>`;
+        render.innerHTML = `<div style="padding:20px; color:red;">Erro: ${err.message}</div>`;
     }
+}
+
+// INTELIGÊNCIA: Valida o estoque conforme o usuário clica
+function validarCliqueEstoque(chk) {
+    const pId = chk.dataset.produto;
+    const badge = document.getElementById(`view-est-${pId}`);
+
+    if (chk.checked) {
+        if (estoqueVirtualMat[pId] > 0) {
+            estoqueVirtualMat[pId]--; // Reserva um item do estoque virtual
+        } else {
+            alert("Atenção: Estoque físico insuficiente para este material!");
+            chk.checked = false; // Desmarca automaticamente
+        }
+    } else {
+        estoqueVirtualMat[pId]++; // Devolve ao estoque virtual
+    }
+
+    // Atualiza o contador visual no topo da coluna
+    badge.innerText = `Qtd: ${estoqueVirtualMat[pId]}`;
+    badge.style.color = estoqueVirtualMat[pId] <= 0 ? "red" : "#007bff";
 }
 
 async function salvarMaterialLote() {
     const selecionados = document.querySelectorAll('.input-material:checked');
+    if (selecionados.length === 0) return;
+
     const entregas = Array.from(selecionados).map(i => ({
         alunoId: i.dataset.aluno,
         produtoId: i.dataset.produto
     }));
-
-    if (entregas.length === 0) return;
 
     try {
         const res = await fetch(`${API_URL}/escola/material/salvar-lote`, {
@@ -22116,12 +22140,16 @@ async function salvarMaterialLote() {
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
             body: JSON.stringify({ entregas })
         });
+        
         if (res.ok) {
-            notificar("Entregas de material realizadas!", "sucesso");
+            notificar("Entregas de material registradas com sucesso!", "sucesso");
             carregarGradeMaterial(document.getElementById('sel-turma-mat').value);
+        } else {
+            const erro = await res.json();
+            alert("Erro: " + erro.error);
         }
     } catch (err) {
-        alert("Erro na conexão.");
+        alert("Erro na conexão com o servidor.");
     }
 }
 

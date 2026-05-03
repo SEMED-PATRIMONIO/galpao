@@ -582,6 +582,7 @@ function renderSubmenuCadastrosEscola() {
 }
 
 function renderSubmenuUniformesKits() {
+    let estoqueVirtual = {};
     const botoes = `
         <button class="btn-grande btn-vidro" onclick="telaEscolaConsultaEstoque()"><i>📦</i><span>MEU ESTOQUE</span></button>
         <button class="btn-grande btn-vidro" onclick="telaSolicitarUniforme()"><i>📝</i><span>SOLICITAR</span></button>
@@ -23446,145 +23447,194 @@ async function telaEntregaUniformes() {
     
     app.innerHTML = `
         <style>
-            .container-entrega {
-                width: 100%;
-                min-height: 100vh;
-                background-color: #ffffff;
-                color: #000000;
-                display: flex;
-                flex-direction: column;
-                font-family: Arial, sans-serif;
+            .container-entrega { width: 100%; min-height: 100vh; background: #fff; color: #000; display: flex; flex-direction: column; }
+            .barra-superior { display: flex; align-items: center; justify-content: space-between; padding: 10px 20px; background: #f8f9fa; border-bottom: 2px solid #dee2e6; position: sticky; top: 0; z-index: 100; }
+            
+            /* Tabela com Layout Fixo para Colunas Iguais */
+            .tabela-uniforme { 
+                width: 100%; 
+                table-layout: fixed; /* Força colunas iguais */
+                border-collapse: collapse; 
             }
-            .barra-superior {
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                padding: 10px 20px;
-                background-color: #f8f9fa;
-                border-bottom: 2px solid #dee2e6;
+            .tabela-uniforme th, .tabela-uniforme td { 
+                border: 1px solid #dee2e6; 
+                text-align: center; 
+                overflow: hidden;
             }
-            .controles-grupo {
-                display: flex;
-                align-items: center;
-                gap: 15px;
-            }
-            .titulo-pagina {
-                font-size: 20px;
-                font-weight: bold;
-                margin: 0;
-                color: #333;
-            }
-            .planilha-container {
-                flex: 1;
-                overflow: auto;
-                padding: 0;
-            }
-            /* Tabela Profissional */
-            .tabela-uniforme {
-                width: 100%;
-                border-collapse: collapse;
-                background-color: #fff;
-            }
-            .tabela-uniforme th {
-                position: sticky;
-                top: 0;
-                background-color: #e9ecef;
-                color: #000;
-                border: 1px solid #dee2e6;
-                padding: 8px;
-                font-size: 11px;
-                z-index: 10;
-            }
-            .header-vertical {
-                height: 120px;
-                vertical-align: bottom;
-                padding-bottom: 10px;
-            }
-            .texto-vertical {
-                writing-mode: vertical-rl;
-                transform: rotate(180deg);
-                text-align: left;
-                margin: 0 auto;
-                font-weight: bold;
-            }
-            .tabela-uniforme td {
-                border: 1px solid #dee2e6;
-                padding: 4px;
-                text-align: center;
-                font-size: 12px;
-            }
-            .col-nome-aluno {
-                position: sticky;
-                left: 0;
-                background-color: #f8f9fa !important;
-                z-index: 11;
-                text-align: left !important;
-                min-width: 250px;
-                padding-left: 10px !important;
-                border-right: 2px solid #dee2e6 !important;
-            }
-            /* Inputs e Botões */
-            .select-tamanho {
-                width: 100%;
-                padding: 2px;
-                border: 1px solid #ccc;
-                border-radius: 2px;
-                font-size: 11px;
-            }
-            .btn-padrao {
-                padding: 8px 16px;
-                border: 1px solid #ccc;
-                border-radius: 4px;
-                cursor: pointer;
-                font-weight: bold;
-            }
-            .btn-salvar { background-color: #28a745; color: white; border: none; }
-            .btn-voltar { background-color: #6c757d; color: white; border: none; }
-            .status-entregue { color: #28a745; font-weight: bold; font-size: 10px; }
+            
+            /* Largura das Colunas */
+            .col-nome-aluno { width: 300px !important; text-align: left !important; padding-left: 10px !important; background: #f8f9fa; position: sticky; left: 0; z-index: 11; border-right: 2px solid #dee2e6 !important; }
+            .col-produto { width: 70px; } /* Todas as colunas de produtos terão exatamente 70px */
+
+            .header-vertical { height: 140px; vertical-align: bottom; padding-bottom: 10px; background: #e9ecef; }
+            .texto-vertical { writing-mode: vertical-rl; transform: rotate(180deg); font-weight: bold; font-size: 11px; margin: 0 auto; }
+            
+            .select-tamanho { width: 95%; font-size: 11px; border: 1px solid #ccc; cursor: pointer; }
+            .select-tamanho:focus { border-color: #007bff; outline: none; }
+            .select-tamanho.esgotado { border: 2px solid #dc3545; background: #fff5f5; }
+            
+            .btn-salvar { background: #28a745; color: #fff; border: none; padding: 10px 25px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+            .btn-salvar:hover { background: #218838; }
+            .status-ok { color: #28a745; font-weight: bold; font-size: 10px; }
         </style>
 
         <div class="container-entrega">
             <div class="barra-superior">
-                <div class="controles-grupo">
-                    <h2 class="titulo-pagina">Entrega de Uniformes</h2>
-                    <select id="filtro-turma" class="select-tamanho" style="width: 250px; font-size: 14px;" onchange="carregarGradeTabela(this.value)">
+                <div style="display:flex; align-items:center; gap:20px;">
+                    <h2 style="margin:0;">Entrega de Uniformes</h2>
+                    <select id="filtro-turma" style="padding:8px; width:300px;" onchange="carregarGradeInteligente(this.value)">
                         <option value="">-- Selecione a Turma --</option>
                     </select>
                 </div>
-                
-                <div class="controles-grupo">
-                    <div id="container-btns-acao" style="display: none; gap: 10px;">
-                        <button class="btn-padrao btn-salvar" onclick="processarEntregasLote()">
-                            SALVAR ENTREGAS
-                        </button>
-                    </div>
-                    <button class="btn-padrao btn-voltar" onclick="carregarDashboard()">
-                        VOLTAR
-                    </button>
+                <div id="controles-lote" style="display:none; gap:10px;">
+                    <button class="btn-salvar" onclick="salvarEntregasSemPerguntas()">SALVAR ENTREGAS</button>
+                    <button onclick="carregarDashboard()" style="padding:10px; cursor:pointer;">FECHAR</button>
                 </div>
             </div>
-
-            <div id="wrapper-tabela" class="planilha-container">
-                <div style="text-align: center; margin-top: 100px; color: #666;">
-                    <h3>Selecione uma turma para carregar a planilha de controle.</h3>
-                </div>
-            </div>
+            <div id="wrapper-tabela" style="flex:1; overflow:auto;"></div>
         </div>
     `;
 
-    // Carregar Turmas
+    // Carregar lista de turmas
+    const res = await fetch(`${API_URL}/escola/turmas-local`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+    const turmas = await res.json();
+    const sel = document.getElementById('filtro-turma');
+    turmas.forEach(t => sel.innerHTML += `<option value="${t.id}">${t.nome}</option>`);
+}
+
+async function carregarGradeInteligente(turmaId) {
+    if (!turmaId) return;
+    const wrapper = document.getElementById('wrapper-tabela');
+    wrapper.innerHTML = '<div style="padding:20px;">Processando estoque e alunos...</div>';
+
     try {
-        const res = await fetch(`${API_URL}/escola/turmas-local`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
-        const turmas = await res.json();
-        const select = document.getElementById('filtro-turma');
-        turmas.forEach(t => {
-            const opt = document.createElement('option');
-            opt.value = t.id;
-            opt.textContent = t.nome;
-            select.appendChild(opt);
+        const res = await fetch(`${API_URL}/turma/${turmaId}/grade-entrega`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+        const data = await res.json();
+
+        // Inicializar Estoque Virtual
+        estoqueVirtual = {};
+        for (let pId in data.estoqueEscola) {
+            estoqueVirtual[pId] = {};
+            data.estoqueEscola[pId].forEach(est => {
+                estoqueVirtual[pId][est.tamanho] = est.qtd;
+            });
+        }
+
+        let html = `<table class="tabela-uniforme"><thead><tr><th class="col-nome-aluno">ALUNO</th>`;
+        data.produtos.forEach(p => {
+            html += `<th class="col-produto header-vertical"><div class="texto-vertical">${p.nome.toUpperCase()}</div></th>`;
         });
+        html += `</tr></thead><tbody>`;
+
+        // Linha de Replicação (Apenas se houver estoque)
+        html += `<tr style="background:#f1f3f5;"><td class="col-nome-aluno"><b>MARCAR TODA COLUNA</b></td>`;
+        data.produtos.forEach(p => {
+            html += `<td><select class="select-tamanho" onchange="replicarColunaInteligente(${p.id}, this.value)">
+                <option value="">--</option>
+                ${Object.keys(estoqueVirtual[p.id] || {}).map(tam => `<option value="${tam}">${tam} (${estoqueVirtual[p.id][tam]})</option>`).join('')}
+            </select></td>`;
+        });
+        html += `</tr>`;
+
+        // Linhas dos Alunos
+        data.alunos.forEach(aluno => {
+            html += `<tr><td class="col-nome-aluno">${aluno.nome}</td>`;
+            data.produtos.forEach(p => {
+                const entregue = aluno.statusItens[p.id];
+                if (entregue.status === 'entregue') {
+                    html += `<td><span class="status-ok">ENTREGUE<br>${entregue.tamanho}</span></td>`;
+                } else {
+                    html += `<td>
+                        <select class="select-tamanho input-entrega" 
+                                data-aluno="${aluno.id}" 
+                                data-produto="${p.id}" 
+                                onchange="validarTrocaEstoque(this)">
+                            <option value="">--</option>
+                            ${Object.keys(estoqueVirtual[p.id] || {}).map(tam => `<option value="${tam}">${tam}</option>`).join('')}
+                        </select>
+                    </td>`;
+                }
+            });
+            html += `</tr>`;
+        });
+
+        html += `</tbody></table>`;
+        wrapper.innerHTML = html;
+        document.getElementById('controles-lote').style.display = 'flex';
     } catch (err) {
-        console.error("Erro ao carregar turmas");
+        wrapper.innerHTML = `<div style="color:red; padding:20px;">Erro: ${err.message}</div>`;
+    }
+}
+
+function replicarColunaInteligente(pId, tamanho) {
+    if (!tamanho) return;
+    const selects = document.querySelectorAll(`.input-entrega[data-produto="${pId}"]`);
+    
+    selects.forEach(sel => {
+        if (!sel.value && estoqueVirtual[pId][tamanho] > 0) {
+            sel.value = tamanho;
+            validarTrocaEstoque(sel);
+        }
+    });
+}
+
+async function salvarEntregasSemPerguntas() {
+    const entregas = [];
+    document.querySelectorAll('.input-entrega').forEach(sel => {
+        if (sel.value) {
+            entregas.push({
+                alunoId: sel.dataset.aluno,
+                produtoId: sel.dataset.produto,
+                tamanho: sel.value
+            });
+        }
+    });
+
+    if (entregas.length === 0) return;
+
+    // Removemos o confirm() para ser fluido
+    try {
+        const res = await fetch(`${API_URL}/entregas/lote`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ entregas })
+        });
+        
+        const resultado = await res.json();
+        if (res.ok) {
+            // Notificação silenciosa ou simples
+            notificar("Entregas salvas com sucesso!", "sucesso");
+            carregarGradeInteligente(document.getElementById('filtro-turma').value);
+        } else {
+            alert("Erro ao salvar: " + resultado.error);
+        }
+    } catch (err) {
+        alert("Erro na conexão com o servidor. Verifique o console.");
+    }
+}
+
+function validarTrocaEstoque(selectElement) {
+    const pId = selectElement.dataset.produto;
+    const tamanho = selectElement.value;
+    const valorAnterior = selectElement.dataset.ultimoValor || "";
+
+    // Devolver estoque do valor que estava antes
+    if (valorAnterior) estoqueVirtual[pId][valorAnterior]++;
+
+    if (tamanho) {
+        // Verificar se tem estoque
+        if (estoqueVirtual[pId][tamanho] > 0) {
+            estoqueVirtual[pId][tamanho]--;
+            selectElement.dataset.ultimoValor = tamanho;
+            selectElement.classList.remove('esgotado');
+        } else {
+            alert(`Estoque esgotado para o tamanho ${tamanho}!`);
+            selectElement.value = "";
+            selectElement.dataset.ultimoValor = "";
+            if (valorAnterior) estoqueVirtual[pId][valorAnterior]--; // Reverte a devolução
+        }
+    } else {
+        selectElement.dataset.ultimoValor = "";
     }
 }
 

@@ -20989,70 +20989,133 @@ function sincronizarSelectTodos(produtoId) {
 }
 
 async function gerarComprovanteTurma(turmaId) {
-    notificar('Preparando documento...', 'info');
+    notificar('Gerando listagem oficial...', 'info');
 
     try {
-        // Mudamos para a rota que busca dados da turma e alunos (ajuste se sua rota for diferente)
+        // Busca os dados (ajuste a URL conforme sua API de grade)
         const res = await fetch(`${API_URL}/escola/material/grade/${turmaId}`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
         const data = await res.json();
 
-        // VALIDAÇÃO CRUCIAL: evita o erro "Cannot read properties of undefined"
-        if (!data || !data.alunos || !Array.isArray(data.alunos)) {
-            throw new Error('A lista de alunos está vazia ou o servidor não respondeu corretamente.');
+        if (!res.ok || !data.alunos) {
+            throw new Error(data.error || 'Erro ao obter dados da turma.');
         }
 
-        // 1. Monta as linhas com as 3 COLUNAS solicitadas
+        // 1. Mapeamento dos dados do Local (Escola)
+        // Tentamos buscar o nome_oficial, se não existir, usamos o nome comum
+        const nomeEscola = data.turma.local_nome_oficial || data.turma.local_nome || "UNIDADE ESCOLAR";
+
+        // 2. Montagem das Linhas (3 Colunas: Nome, Data, Assinatura)
         const linhasAlunos = data.alunos.map((aluno, index) => `
             <tr>
-                <td style="width: 40%; border: 1px solid #333; padding: 8px; font-size: 10pt; text-align: left;">
-                    ${index + 1}. ${aluno.nome.toUpperCase()}
+                <td style="width: 45%; border: 1px solid #000; padding: 6px 8px; font-size: 10pt;">
+                    ${String(index + 1).padStart(2, '0')}. ${aluno.nome.toUpperCase()}
                 </td>
-                <td style="width: 20%; border: 1px solid #333; padding: 8px; font-size: 10pt; text-align: center; color: #ccc;">
+                <td style="width: 15%; border: 1px solid #000; padding: 6px 8px; text-align: center; color: #bbb; font-size: 10pt;">
                     ____/____/____
                 </td>
-                <td style="width: 40%; border: 1px solid #333; padding: 8px;"></td>
+                <td style="width: 40%; border: 1px solid #000; padding: 6px 8px;"></td>
             </tr>
         `).join('');
 
-        // 2. HTML do Documento (A4 Retrato)
+        // 3. HTML com layout idêntico ao Romaneio Profissional
         const htmlDocumento = `
             <!DOCTYPE html>
-            <html>
+            <html lang="pt-BR">
             <head>
                 <meta charset="UTF-8">
                 <style>
-                    @page { size: A4 portrait; margin: 1cm; }
-                    body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
-                    .cabecalho { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; border-bottom: 2px solid #000; padding-bottom: 5px; }
-                    .cabecalho img { height: 60px; }
-                    .textos-topo { text-align: center; flex-grow: 1; }
-                    .textos-topo p { margin: 0; font-weight: bold; font-size: 11pt; }
-                    
-                    .titulo { text-align: center; font-size: 12pt; font-weight: bold; margin: 15px 0; text-transform: uppercase; }
-                    
-                    table { width: 100%; border-collapse: collapse; }
-                    th { background: #f0f0f0; border: 1px solid #333; padding: 8px; font-size: 10pt; }
+                    /* Configuração de Margens e Tamanho */
+                    @page { 
+                        size: A4 portrait; 
+                        margin: 1cm; 
+                    }
+                    body { 
+                        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+                        margin: 0; padding: 0; background: #fff; color: #000; 
+                    }
+
+                    /* Cabeçalho Profissional (Inspirado no Romaneio) */
+                    header {
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        margin-bottom: 20px;
+                        padding-bottom: 10px;
+                    }
+                    .header-escola {
+                        display: flex;
+                        align-items: center;
+                        gap: 15px;
+                    }
+                    .header-escola img { height: 65px; width: auto; }
+                    .header-textos { text-align: left; }
+                    .header-textos p { margin: 0; font-weight: bold; line-height: 1.3; }
+                    .p-prefeitura { font-size: 11pt; }
+                    .p-secretaria { font-size: 10pt; }
+                    .p-unidade { font-size: 10pt; color: #333; margin-top: 2px !important; }
+
+                    .logo-right { height: 55px; }
+
+                    /* Título em destaque */
+                    .box-titulo {
+                        background: #f4f4f4;
+                        border: 1px solid #ddd;
+                        padding: 10px;
+                        text-align: center;
+                        margin-bottom: 20px;
+                        font-weight: bold;
+                        font-size: 12pt;
+                        text-transform: uppercase;
+                        letter-spacing: 1px;
+                    }
+
+                    /* Tabela */
+                    table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
+                    thead th { 
+                        background: #eeeeee; 
+                        border: 1px solid #000; 
+                        padding: 8px; 
+                        font-size: 9pt; 
+                        text-transform: uppercase;
+                    }
+
+                    /* Rodapé de Assinatura */
+                    .assinatura-area {
+                        margin-top: 40px;
+                        display: flex;
+                        justify-content: flex-end;
+                    }
+                    .campo-assinatura {
+                        width: 300px;
+                        text-align: center;
+                    }
+                    .linha-superior { border-top: 1px solid #000; margin-bottom: 5px; }
+                    .campo-assinatura span { font-size: 9pt; color: #444; }
                 </style>
             </head>
             <body>
-                <div class="cabecalho">
-                    <img src="braque.png">
-                    <div class="textos-topo">
-                        <p>PREFEITURA MUNICIPAL DE QUEIMADOS</p>
-                        <p>SECRETARIA MUNICIPAL DE EDUCAÇÃO</p>
-                        <p>${data.turma.local_nome || 'UNIDADE ESCOLAR'}</p>
+                <header>
+                    <div class="header-escola">
+                        <img src="braque.png" alt="Brasão">
+                        <div class="header-textos">
+                            <p class="p-prefeitura">PREFEITURA MUNICIPAL DE QUEIMADOS</p>
+                            <p class="p-secretaria">SECRETARIA MUNICIPAL DE EDUCAÇÃO</p>
+                            <p class="p-unidade">${nomeEscola}</p>
+                        </div>
                     </div>
-                    <img src="logap.png">
-                </div>
+                    <img src="logap.png" class="logo-right" alt="Logo Educação">
+                </header>
 
-                <div class="titulo">LISTA DE RECEBIMENTO DO UNIFORME - TURMA: ${data.turma.nome}</div>
+                <div class="box-titulo">
+                    LISTA DE RECEBIMENTO DO UNIFORME - TURMA: ${data.turma.nome}
+                </div>
 
                 <table>
                     <thead>
                         <tr>
-                            <th>NOME DO ALUNO</th>
+                            <th style="text-align: left;">NOME DO ALUNO</th>
                             <th>DATA</th>
                             <th>ASSINATURA</th>
                         </tr>
@@ -21061,107 +21124,171 @@ async function gerarComprovanteTurma(turmaId) {
                         ${linhasAlunos}
                     </tbody>
                 </table>
-                
-                <div style="margin-top: 30px; display: flex; justify-content: flex-end;">
-                   <div style="text-align:center; width: 250px;">
-                      <div style="border-top: 1px solid #000; margin-top: 40px;"></div>
-                      <p style="font-size: 9pt;">Responsável pela Entrega</p>
-                   </div>
+
+                <div class="assinatura-area">
+                    <div class="campo-assinatura">
+                        <div class="linha-superior"></div>
+                        <span>Responsável pela Entrega</span>
+                    </div>
                 </div>
             </body>
             </html>
         `;
 
-        // 3. Exibição no Modal (Iframe)
+        // 4. Exibição em Modal Iframe (mesmo processo de antes)
         const blob = new Blob([htmlDocumento], { type: 'text/html; charset=utf-8' });
         const blobUrl = URL.createObjectURL(blob);
 
-        // Limpa modal anterior se houver
-        if (document.getElementById('modal-print')) document.getElementById('modal-print').remove();
+        if (document.getElementById('modal-comprovante')) document.getElementById('modal-comprovante').remove();
 
         const modal = document.createElement('div');
-        modal.id = 'modal-print';
-        modal.style.cssText = "position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.8);z-index:99999;display:flex;flex-direction:column;align-items:center;padding:20px;";
+        modal.id = 'modal-comprovante';
+        modal.style.cssText = "position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.85);z-index:100000;display:flex;flex-direction:column;align-items:center;padding:20px;";
         modal.innerHTML = `
-            <div style="margin-bottom:10px; display:flex; gap:10px;">
-                <button onclick="document.getElementById('ifr-print').contentWindow.print()" style="padding:10px 20px; background:#28a745; color:#fff; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">IMPRIMIR AGORA</button>
-                <button onclick="this.parentElement.parentElement.remove()" style="padding:10px 20px; background:#c62828; color:#fff; border:none; border-radius:4px; cursor:pointer;">FECHAR</button>
+            <div style="margin-bottom:15px; display:flex; gap:10px;">
+                <button onclick="document.getElementById('ifr-print').contentWindow.print()" style="padding:12px 25px; background:#28a745; color:#fff; border:none; border-radius:5px; cursor:pointer; font-weight:bold; font-size:11pt; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
+                   <i class="fas fa-print"></i> IMPRIMIR LISTAGEM
+                </button>
+                <button onclick="this.parentElement.parentElement.remove()" style="padding:12px 25px; background:#dc3545; color:#fff; border:none; border-radius:5px; cursor:pointer; font-weight:bold;">FECHAR</button>
             </div>
-            <iframe id="ifr-print" src="${blobUrl}" style="width:210mm; height:90%; background:#fff; border:none; border-radius:4px;"></iframe>
+            <iframe id="ifr-print" src="${blobUrl}" style="width:210mm; height:90%; background:#fff; border:none; border-radius:8px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);"></iframe>
         `;
         document.body.appendChild(modal);
 
     } catch (err) {
         console.error(err);
-        alert("Erro: " + err.message);
+        notificar(`Erro: ${err.message}`, 'erro');
     }
 }
 
 async function gerarComprovanteTurmaMaterial(turmaId) {
-    notificar('Preparando documento...', 'info');
+    notificar('Gerando listagem oficial...', 'info');
 
     try {
-        // Mudamos para a rota que busca dados da turma e alunos (ajuste se sua rota for diferente)
+        // Busca os dados (ajuste a URL conforme sua API de grade)
         const res = await fetch(`${API_URL}/escola/material/grade/${turmaId}`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
         const data = await res.json();
 
-        // VALIDAÇÃO CRUCIAL: evita o erro "Cannot read properties of undefined"
-        if (!data || !data.alunos || !Array.isArray(data.alunos)) {
-            throw new Error('A lista de alunos está vazia ou o servidor não respondeu corretamente.');
+        if (!res.ok || !data.alunos) {
+            throw new Error(data.error || 'Erro ao obter dados da turma.');
         }
 
-        // 1. Monta as linhas com as 3 COLUNAS solicitadas
+        // 1. Mapeamento dos dados do Local (Escola)
+        // Tentamos buscar o nome_oficial, se não existir, usamos o nome comum
+        const nomeEscola = data.turma.local_nome_oficial || data.turma.local_nome || "UNIDADE ESCOLAR";
+
+        // 2. Montagem das Linhas (3 Colunas: Nome, Data, Assinatura)
         const linhasAlunos = data.alunos.map((aluno, index) => `
             <tr>
-                <td style="width: 40%; border: 1px solid #333; padding: 8px; font-size: 10pt; text-align: left;">
-                    ${index + 1}. ${aluno.nome.toUpperCase()}
+                <td style="width: 45%; border: 1px solid #000; padding: 6px 8px; font-size: 10pt;">
+                    ${String(index + 1).padStart(2, '0')}. ${aluno.nome.toUpperCase()}
                 </td>
-                <td style="width: 20%; border: 1px solid #333; padding: 8px; font-size: 10pt; text-align: center; color: #ccc;">
+                <td style="width: 15%; border: 1px solid #000; padding: 6px 8px; text-align: center; color: #bbb; font-size: 10pt;">
                     ____/____/____
                 </td>
-                <td style="width: 40%; border: 1px solid #333; padding: 8px;"></td>
+                <td style="width: 40%; border: 1px solid #000; padding: 6px 8px;"></td>
             </tr>
         `).join('');
 
-        // 2. HTML do Documento (A4 Retrato)
+        // 3. HTML com layout idêntico ao Romaneio Profissional
         const htmlDocumento = `
             <!DOCTYPE html>
-            <html>
+            <html lang="pt-BR">
             <head>
                 <meta charset="UTF-8">
                 <style>
-                    @page { size: A4 portrait; margin: 1cm; }
-                    body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
-                    .cabecalho { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; border-bottom: 2px solid #000; padding-bottom: 5px; }
-                    .cabecalho img { height: 60px; }
-                    .textos-topo { text-align: center; flex-grow: 1; }
-                    .textos-topo p { margin: 0; font-weight: bold; font-size: 11pt; }
-                    
-                    .titulo { text-align: center; font-size: 12pt; font-weight: bold; margin: 15px 0; text-transform: uppercase; }
-                    
-                    table { width: 100%; border-collapse: collapse; }
-                    th { background: #f0f0f0; border: 1px solid #333; padding: 8px; font-size: 10pt; }
+                    /* Configuração de Margens e Tamanho */
+                    @page { 
+                        size: A4 portrait; 
+                        margin: 1cm; 
+                    }
+                    body { 
+                        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+                        margin: 0; padding: 0; background: #fff; color: #000; 
+                    }
+
+                    /* Cabeçalho Profissional (Inspirado no Romaneio) */
+                    header {
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        margin-bottom: 20px;
+                        padding-bottom: 10px;
+                    }
+                    .header-escola {
+                        display: flex;
+                        align-items: center;
+                        gap: 15px;
+                    }
+                    .header-escola img { height: 65px; width: auto; }
+                    .header-textos { text-align: left; }
+                    .header-textos p { margin: 0; font-weight: bold; line-height: 1.3; }
+                    .p-prefeitura { font-size: 11pt; }
+                    .p-secretaria { font-size: 10pt; }
+                    .p-unidade { font-size: 10pt; color: #333; margin-top: 2px !important; }
+
+                    .logo-right { height: 55px; }
+
+                    /* Título em destaque */
+                    .box-titulo {
+                        background: #f4f4f4;
+                        border: 1px solid #ddd;
+                        padding: 10px;
+                        text-align: center;
+                        margin-bottom: 20px;
+                        font-weight: bold;
+                        font-size: 12pt;
+                        text-transform: uppercase;
+                        letter-spacing: 1px;
+                    }
+
+                    /* Tabela */
+                    table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
+                    thead th { 
+                        background: #eeeeee; 
+                        border: 1px solid #000; 
+                        padding: 8px; 
+                        font-size: 9pt; 
+                        text-transform: uppercase;
+                    }
+
+                    /* Rodapé de Assinatura */
+                    .assinatura-area {
+                        margin-top: 40px;
+                        display: flex;
+                        justify-content: flex-end;
+                    }
+                    .campo-assinatura {
+                        width: 300px;
+                        text-align: center;
+                    }
+                    .linha-superior { border-top: 1px solid #000; margin-bottom: 5px; }
+                    .campo-assinatura span { font-size: 9pt; color: #444; }
                 </style>
             </head>
             <body>
-                <div class="cabecalho">
-                    <img src="braque.png">
-                    <div class="textos-topo">
-                        <p>PREFEITURA MUNICIPAL DE QUEIMADOS</p>
-                        <p>SECRETARIA MUNICIPAL DE EDUCAÇÃO</p>
-                        <p>${data.turma.local_nome || 'UNIDADE ESCOLAR'}</p>
+                <header>
+                    <div class="header-escola">
+                        <img src="braque.png" alt="Brasão">
+                        <div class="header-textos">
+                            <p class="p-prefeitura">PREFEITURA MUNICIPAL DE QUEIMADOS</p>
+                            <p class="p-secretaria">SECRETARIA MUNICIPAL DE EDUCAÇÃO</p>
+                            <p class="p-unidade">${nomeEscola}</p>
+                        </div>
                     </div>
-                    <img src="logap.png">
-                </div>
+                    <img src="logap.png" class="logo-right" alt="Logo Educação">
+                </header>
 
-                <div class="titulo">LISTA DE RECEBIMENTO DO KIT ESCOLAR - TURMA: ${data.turma.nome}</div>
+                <div class="box-titulo">
+                    LISTA DE RECEBIMENTO DO KIT ESCOLAR - TURMA: ${data.turma.nome}
+                </div>
 
                 <table>
                     <thead>
                         <tr>
-                            <th>NOME DO ALUNO</th>
+                            <th style="text-align: left;">NOME DO ALUNO</th>
                             <th>DATA</th>
                             <th>ASSINATURA</th>
                         </tr>
@@ -21170,39 +21297,40 @@ async function gerarComprovanteTurmaMaterial(turmaId) {
                         ${linhasAlunos}
                     </tbody>
                 </table>
-                
-                <div style="margin-top: 30px; display: flex; justify-content: flex-end;">
-                   <div style="text-align:center; width: 250px;">
-                      <div style="border-top: 1px solid #000; margin-top: 40px;"></div>
-                      <p style="font-size: 9pt;">Responsável pela Entrega</p>
-                   </div>
+
+                <div class="assinatura-area">
+                    <div class="campo-assinatura">
+                        <div class="linha-superior"></div>
+                        <span>Responsável pela Entrega</span>
+                    </div>
                 </div>
             </body>
             </html>
         `;
 
-        // 3. Exibição no Modal (Iframe)
+        // 4. Exibição em Modal Iframe (mesmo processo de antes)
         const blob = new Blob([htmlDocumento], { type: 'text/html; charset=utf-8' });
         const blobUrl = URL.createObjectURL(blob);
 
-        // Limpa modal anterior se houver
-        if (document.getElementById('modal-print')) document.getElementById('modal-print').remove();
+        if (document.getElementById('modal-comprovante')) document.getElementById('modal-comprovante').remove();
 
         const modal = document.createElement('div');
-        modal.id = 'modal-print';
-        modal.style.cssText = "position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.8);z-index:99999;display:flex;flex-direction:column;align-items:center;padding:20px;";
+        modal.id = 'modal-comprovante';
+        modal.style.cssText = "position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.85);z-index:100000;display:flex;flex-direction:column;align-items:center;padding:20px;";
         modal.innerHTML = `
-            <div style="margin-bottom:10px; display:flex; gap:10px;">
-                <button onclick="document.getElementById('ifr-print').contentWindow.print()" style="padding:10px 20px; background:#28a745; color:#fff; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">IMPRIMIR AGORA</button>
-                <button onclick="this.parentElement.parentElement.remove()" style="padding:10px 20px; background:#c62828; color:#fff; border:none; border-radius:4px; cursor:pointer;">FECHAR</button>
+            <div style="margin-bottom:15px; display:flex; gap:10px;">
+                <button onclick="document.getElementById('ifr-print').contentWindow.print()" style="padding:12px 25px; background:#28a745; color:#fff; border:none; border-radius:5px; cursor:pointer; font-weight:bold; font-size:11pt; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
+                   <i class="fas fa-print"></i> IMPRIMIR LISTAGEM
+                </button>
+                <button onclick="this.parentElement.parentElement.remove()" style="padding:12px 25px; background:#dc3545; color:#fff; border:none; border-radius:5px; cursor:pointer; font-weight:bold;">FECHAR</button>
             </div>
-            <iframe id="ifr-print" src="${blobUrl}" style="width:210mm; height:90%; background:#fff; border:none; border-radius:4px;"></iframe>
+            <iframe id="ifr-print" src="${blobUrl}" style="width:210mm; height:90%; background:#fff; border:none; border-radius:8px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);"></iframe>
         `;
         document.body.appendChild(modal);
 
     } catch (err) {
         console.error(err);
-        alert("Erro: " + err.message);
+        notificar(`Erro: ${err.message}`, 'erro');
     }
 }
 

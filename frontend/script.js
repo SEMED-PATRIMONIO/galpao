@@ -23446,105 +23446,137 @@ async function telaEntregaUniformes() {
     
     app.innerHTML = `
         <style>
-            .area-planilha { 
-                width: 100%; 
-                height: 100vh; 
-                display: flex; 
-                flex-direction: column; 
-                padding: 10px; 
-                box-sizing: border-box;
-                background: #000c14; /* Fundo levemente mais escuro para destaque */
+            .container-entrega {
+                width: 100%;
+                min-height: 100vh;
+                background-color: #ffffff;
+                color: #000000;
+                display: flex;
+                flex-direction: column;
+                font-family: Arial, sans-serif;
             }
-            .header-controles { 
-                display: flex; 
-                align-items: center; 
-                justify-content: space-between; 
-                background: #001a2c;
-                padding: 15px 20px;
-                border-radius: 8px 8px 0 0;
-                border-bottom: 2px solid #00d4ff;
-                box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-            }
-            .planilha-wrapper { 
-                flex: 1; 
-                overflow: auto; 
-                background: #001a2c;
-                border: 1px solid rgba(255,255,255,0.1);
-            }
-            .btn-fechar-tela {
-                background: #ff4d4d;
-                color: white;
-                border: none;
-                padding: 8px 15px;
-                border-radius: 5px;
-                font-weight: bold;
-                cursor: pointer;
+            .barra-superior {
                 display: flex;
                 align-items: center;
-                gap: 8px;
-                transition: 0.2s;
+                justify-content: space-between;
+                padding: 10px 20px;
+                background-color: #f8f9fa;
+                border-bottom: 2px solid #dee2e6;
             }
-            .btn-fechar-tela:hover { background: #ff0000; transform: scale(1.05); }
-
-            /* Estilos da Tabela Excel */
-            table.excel-ui { width: 100%; border-collapse: collapse; font-size: 11px; }
-            table.excel-ui th { 
-                position: sticky; top: 0; 
-                background: #003355; color: #00d4ff; 
-                z-index: 10; height: 110px; 
-                border: 1px solid #111;
+            .controles-grupo {
+                display: flex;
+                align-items: center;
+                gap: 15px;
             }
-            .txt-vertical { 
-                writing-mode: vertical-rl; transform: rotate(180deg); 
-                white-space: nowrap; font-size: 10px; padding: 5px;
+            .titulo-pagina {
+                font-size: 20px;
+                font-weight: bold;
+                margin: 0;
+                color: #333;
             }
-            table.excel-ui td { border: 1px solid #222; padding: 2px; text-align: center; color: white; }
-            .col-nome { position: sticky; left: 0; background: #001a2c !important; z-index: 11; text-align: left !important; min-width: 200px; padding-left: 10px !important; }
-            .sel-grade { background: #000; color: #00ff88; border: 1px solid #444; width: 100%; font-size: 11px; padding: 3px; }
+            .planilha-container {
+                flex: 1;
+                overflow: auto;
+                padding: 0;
+            }
+            /* Tabela Profissional */
+            .tabela-uniforme {
+                width: 100%;
+                border-collapse: collapse;
+                background-color: #fff;
+            }
+            .tabela-uniforme th {
+                position: sticky;
+                top: 0;
+                background-color: #e9ecef;
+                color: #000;
+                border: 1px solid #dee2e6;
+                padding: 8px;
+                font-size: 11px;
+                z-index: 10;
+            }
+            .header-vertical {
+                height: 120px;
+                vertical-align: bottom;
+                padding-bottom: 10px;
+            }
+            .texto-vertical {
+                writing-mode: vertical-rl;
+                transform: rotate(180deg);
+                text-align: left;
+                margin: 0 auto;
+                font-weight: bold;
+            }
+            .tabela-uniforme td {
+                border: 1px solid #dee2e6;
+                padding: 4px;
+                text-align: center;
+                font-size: 12px;
+            }
+            .col-nome-aluno {
+                position: sticky;
+                left: 0;
+                background-color: #f8f9fa !important;
+                z-index: 11;
+                text-align: left !important;
+                min-width: 250px;
+                padding-left: 10px !important;
+                border-right: 2px solid #dee2e6 !important;
+            }
+            /* Inputs e Botões */
+            .select-tamanho {
+                width: 100%;
+                padding: 2px;
+                border: 1px solid #ccc;
+                border-radius: 2px;
+                font-size: 11px;
+            }
+            .btn-padrao {
+                padding: 8px 16px;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                cursor: pointer;
+                font-weight: bold;
+            }
+            .btn-salvar { background-color: #28a745; color: white; border: none; }
+            .btn-voltar { background-color: #6c757d; color: white; border: none; }
+            .status-entregue { color: #28a745; font-weight: bold; font-size: 10px; }
         </style>
 
-        <div class="area-planilha">
-            <div class="header-controles">
-                <div style="display:flex; align-items:center; gap:20px;">
-                    <img src="URL_DO_SEU_LOGO" height="45">
-                    <div>
-                        <h2 style="color:white; margin:0; font-size: 18px;">ENTREGA DE UNIFORMES</h2>
-                        <div style="display:flex; align-items:center; gap:10px; margin-top:5px;">
-                            <span style="color:#00d4ff; font-size:12px;">TURMA:</span>
-                            <select id="select-turma-v3" class="sel-grade" style="width:250px;" onchange="carregarGradeParaPlanilha(this.value)">
-                                <option value="">-- Selecione para abrir a grade --</option>
-                            </select>
-                        </div>
-                    </div>
+        <div class="container-entrega">
+            <div class="barra-superior">
+                <div class="controles-grupo">
+                    <h2 class="titulo-pagina">Entrega de Uniformes</h2>
+                    <select id="filtro-turma" class="select-tamanho" style="width: 250px; font-size: 14px;" onchange="carregarGradeTabela(this.value)">
+                        <option value="">-- Selecione a Turma --</option>
+                    </select>
                 </div>
-
-                <div style="display:flex; gap:12px; align-items:center;">
-                    <div id="btns-confirmar-container" style="display:none;">
-                        <button class="btn-confirmar-entrada" style="background:#00ff88; color:#001a2c; padding: 8px 20px;" onclick="confirmarEntregasLote()">
-                            <i class="fas fa-save"></i> SALVAR ENTREGAS
+                
+                <div class="controles-grupo">
+                    <div id="container-btns-acao" style="display: none; gap: 10px;">
+                        <button class="btn-padrao btn-salvar" onclick="processarEntregasLote()">
+                            SALVAR ENTREGAS
                         </button>
                     </div>
-
-                    <button class="btn-fechar-tela" onclick="carregarDashboard()">
-                        <i class="fas fa-times"></i> FECHAR
+                    <button class="btn-padrao btn-voltar" onclick="carregarDashboard()">
+                        VOLTAR
                     </button>
                 </div>
             </div>
 
-            <div id="grade-dinamica" class="planilha-wrapper">
-                <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; opacity:0.4;">
-                    <i class="fas fa-table" style="font-size: 50px; color:#00d4ff; margin-bottom:15px;"></i>
-                    <p style="font-size:16px; color:white;">Aguardando seleção de turma...</p>
+            <div id="wrapper-tabela" class="planilha-container">
+                <div style="text-align: center; margin-top: 100px; color: #666;">
+                    <h3>Selecione uma turma para carregar a planilha de controle.</h3>
                 </div>
             </div>
         </div>
     `;
 
-    // Carregamento das turmas (usando sua lógica original)
+    // Carregar Turmas
     try {
         const res = await fetch(`${API_URL}/escola/turmas-local`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
         const turmas = await res.json();
-        const select = document.getElementById('select-turma-v3');
+        const select = document.getElementById('filtro-turma');
         turmas.forEach(t => {
             const opt = document.createElement('option');
             opt.value = t.id;
@@ -23552,7 +23584,116 @@ async function telaEntregaUniformes() {
             select.appendChild(opt);
         });
     } catch (err) {
-        console.error("Erro ao carregar turmas:", err);
+        console.error("Erro ao carregar turmas");
+    }
+}
+
+async function carregarGradeTabela(turmaId) {
+    if (!turmaId) return;
+    const container = document.getElementById('wrapper-tabela');
+    const botoes = document.getElementById('container-btns-acao');
+    container.innerHTML = '<div style="padding:20px;">Carregando dados da turma...</div>';
+
+    try {
+        const res = await fetch(`${API_URL}/turma/${turmaId}/grade-entrega`, { 
+            headers: { 'Authorization': `Bearer ${TOKEN}` } 
+        });
+        const data = await res.json();
+
+        let html = `<table class="tabela-uniforme">
+            <thead>
+                <tr>
+                    <th class="col-nome-aluno">NOME DO ALUNO</th>`;
+        
+        data.produtos.forEach(p => {
+            html += `<th class="header-vertical"><div class="texto-vertical">${p.nome.toUpperCase()}</div></th>`;
+        });
+
+        html += `</tr>
+                <tr style="background-color: #f1f3f5;">
+                    <td class="col-nome-aluno" style="color: #0056b3; font-weight: bold;">MARCAR TODOS DA COLUNA</td>`;
+        
+        data.produtos.forEach(p => {
+            const estoque = data.estoqueEscola[p.id] || [];
+            html += `<td>
+                <select class="select-tamanho" onchange="replicarTamanhoColuna(${p.id}, this.value)">
+                    <option value="">--</option>
+                    ${estoque.map(e => `<option value="${e.tamanho}">${e.tamanho} (${e.qtd})</option>`).join('')}
+                </select>
+            </td>`;
+        });
+
+        html += `</tr></thead><tbody>`;
+
+        data.alunos.forEach(aluno => {
+            html += `<tr><td class="col-nome-aluno">${aluno.nome}</td>`;
+            data.produtos.forEach(p => {
+                const status = aluno.statusItens[p.id];
+                if (status.status === 'entregue') {
+                    html += `<td><span class="status-entregue">ENTREGUE<br>(${status.tamanho})</span></td>`;
+                } else {
+                    const estoque = data.estoqueEscola[p.id] || [];
+                    html += `<td>
+                        <select class="select-tamanho input-registro" data-aluno-id="${aluno.id}" data-produto-id="${p.id}">
+                            <option value="">--</option>
+                            ${estoque.map(e => `<option value="${e.tamanho}">${e.tamanho}</option>`).join('')}
+                        </select>
+                    </td>`;
+                }
+            });
+            html += `</tr>`;
+        });
+
+        html += `</tbody></table>`;
+        container.innerHTML = html;
+        botoes.style.display = 'flex'; // CORREÇÃO: agora o ID bate com o HTML
+
+    } catch (err) {
+        container.innerHTML = `<div style="color:red; padding:20px;">Erro ao carregar grade: ${err.message}</div>`;
+    }
+}
+
+function replicarTamanhoColuna(produtoId, tamanho) {
+    if (!tamanho) return;
+    const selects = document.querySelectorAll(`.input-registro[data-produto-id="${produtoId}"]`);
+    selects.forEach(s => s.value = tamanho);
+}
+
+async function processarEntregasLote() {
+    const registros = [];
+    document.querySelectorAll('.input-registro').forEach(sel => {
+        if (sel.value) {
+            registros.push({
+                alunoId: sel.dataset.alunoId,
+                produtoId: sel.dataset.produtoId,
+                tamanho: sel.value
+            });
+        }
+    });
+
+    if (registros.length === 0) {
+        alert("Nenhuma entrega selecionada.");
+        return;
+    }
+
+    if (confirm(`Deseja confirmar a entrega de ${registros.length} itens?`)) {
+        try {
+            const res = await fetch(`${API_URL}/entregas/lote`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+                body: JSON.stringify({ entregas: registros })
+            });
+            
+            if (res.ok) {
+                alert("Entregas registradas com sucesso!");
+                carregarGradeTabela(document.getElementById('filtro-turma').value);
+            } else {
+                const erro = await res.json();
+                alert("Erro: " + erro.error);
+            }
+        } catch (err) {
+            alert("Erro na conexão com o servidor.");
+        }
     }
 }
 

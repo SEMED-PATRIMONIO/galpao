@@ -9762,4 +9762,100 @@ router.get('/turma/:id/grade-entrega', verificarToken, async (req, res) => {
     }
 });
 
+// 1. Rota para buscar a grade de materiais específica por etapa
+router.get('/escola/material/grade/:turmaId', verificarToken, async (req, res) => {
+    const { turmaId } = req.params;
+    const localId = req.user.local_id;
+
+    const client = await db.pool.connect();
+    try {
+        // Busca a turma e o etapa_id
+        const turmaRes = await client.query(
+            'SELECT id, nome, etapa_id FROM turmas WHERE id = $1 AND local_id = $2',
+            [turmaId, localId]
+        );
+        if (turmaRes.rows.length === 0) return res.status(404).json({ error: "Turma não encontrada." });
+        const turma = turmaRes.rows[0];
+
+        // Busca especificamente os 5 produtos de Material (IDs 1, 2, 3, 4, 5)
+        const produtosRes = await client.query(
+            'SELECT id, nome FROM produtos WHERE id ANY($1::int[]) ORDER BY id ASC',
+            [[1, 2, 3, 4, 5]]
+        );
+
+        // Busca alunos ativos
+        const alunosRes = await client.query(
+            "SELECT id, nome FROM alunos WHERE turma_id = $1 AND status = 'ATIVO' ORDER BY nome ASC",
+            [turmaId]
+        );
+        const alunoIds = alunosRes.rows.map(a => a.id);
+
+        // Busca estoque desses materiais no local (Tamanho sempre 'N/A')
+        const estoqueRes = await client.query(
+            "SELECT produto_id, quantidade FROM estoque_por_local WHERE local_id = $1 AND produto_id ANY($2::int[]) AND tamanho = 'N/A'",
+            [localId, [1, 2, 3, 4, 5]]
+        );
+
+        // Busca entregas já realizadas de material para estes alunos
+        const entregasRes = await client.query(`
+            SELECT ea.aluno_id, ea.produto_id, ea.data_entrega
+            FROM entregas_alunos ea
+            JOIN produtos p ON p.id = ea.produto_id
+            WHERE ea.aluno_id = ANY($1) AND p.tipo = 'MATERIAL'
+        `, [alunoIds]);
+
+        const entregasMap = entregasRes.rows.reduce((acc, e) => {
+            if (!acc[e.aluno_id]) acc[e.aluno_id] = {};
+            acc[e.aluno_id][e.produto_id] = e.data_entrega;
+            return acc;
+        }, {});
+
+        res.json({
+            turma,
+            produtos: produtosRes.rows,
+            estoque: estoqueRes.rows,
+            alunos: alunosRes.rows.map(a => ({
+                ...a,
+                entregas: entregasMap[a.id] || {}
+            }))
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
+// 2. Rota de salvamento em lote para MATERIAL
+router.post('/escola/material/entregas/lote', verificarToken, async (req, res) => {
+    const { entregas } = req.body; // Array de {alunoId, produtoId}
+    const { id: usuarioId, local_id: localId } = req.user;
+
+    const client = await db.pool.connect();
+    try {
+        await client.query('BEGIN');
+        for (const item of entregas) {
+            // Baixa no estoque (Material usa tamanho 'N/A')
+            const baixa = await client.query(
+                "UPDATE estoque_por_local SET quantidade = quantidade - 1 WHERE local_id = $1 AND produto_id = $2 AND tamanho = 'N/A' AND quantidade > 0",
+                [localId, item.produtoId]
+            );
+
+            if (baixa.rowCount === 0) throw new Error(`Estoque esgotado para o produto ID ${item.produtoId}`);
+
+            await client.query(
+                "INSERT INTO entregas_alunos (aluno_id, produto_id, tamanho, usuario_id, local_id) VALUES ($1, $2, 'N/A', $3, $4)",
+                [item.alunoId, item.produtoId, usuarioId, localId]
+            );
+        }
+        await client.query('COMMIT');
+        res.json({ success: true });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
 module.exports = router;

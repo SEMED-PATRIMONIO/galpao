@@ -20527,66 +20527,199 @@ async function exportarFluxoPDF(dados) {
 
 async function telaEntregaUniformes() {
     const app = document.getElementById('app-content');
-    app.innerHTML = `<div class="loading-spinner"></div>`;
-
-    try {
-        const res = await fetch(`${API_URL}/escola/turmas-local`, {
-            headers: { 'Authorization': `Bearer ${TOKEN}` }
-        });
-
-        if (!res.ok) {
-            const errData = await res.json();
-            throw new Error(errData.error || 'Falha ao carregar turmas.');
-        }
-
-        const turmas = await res.json();
-
-        app.innerHTML = `
-            <div class="header-animado animate__animated animate__fadeIn">
-                <button class="btn-voltar-vidro" onclick="carregarDashboard()" style="margin-bottom: 20px;">
-                    <i class="fas fa-arrow-left"></i> VOLTAR
-                </button>
-                <h2 class="titulo-sessao" style="color: white;">ENTREGA DE UNIFORMES</h2>
-                <p style="color: rgba(255,255,255,0.7); max-width: 600px; margin: 10px auto 30px auto; text-align: center;">
-                    Selecione uma turma para iniciar o processo de registro de entrega dos uniformes aos alunos.
-                </p>
-            </div>
+    
+    // Layout Inicial: Topo Fixo com Logo e Controles
+    app.innerHTML = `
+        <style>
+            .excel-container { height: 85vh; display: flex; flex-direction: column; background: #001a2c; color: white; padding: 10px; border-radius: 8px; }
+            .excel-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 5px; }
+            .excel-table-wrapper { flex-grow: 1; overflow: auto; border: 1px solid #444; position: relative; }
             
-            <div class="animate__animated animate__fadeInUp" style="max-width: 500px; margin: 0 auto;">
-                <div class="glass-panel" style="padding: 30px;">
-                    <label for="select-turma" style="display: block; color: #00d4ff; font-weight: bold; margin-bottom: 10px;">
-                        SELECIONE A TURMA
-                    </label>
-                    <select id="select-turma" class="select-vidro" style="width: 100%; font-size: 1.2rem;">
-                        <option value="">-- Escolha uma turma --</option>
-                        ${turmas.map(t => `<option value="${t.id}">${t.nome}</option>`).join('')}
-                    </select>
-                    
-                    <button id="btn-iniciar-entrega" class="btn-confirmar-entrada" 
-                            style="width: 100%; margin-top: 25px; background: #00d4ff; color: #001a2c; display: none;"
-                            onclick="carregarGradeDeEntrega()">
-                        <i class="fas fa-arrow-right"></i> PROSSEGUIR PARA A ENTREGA
-                    </button>
+            table.excel-table { border-collapse: collapse; width: 100%; font-size: 11px; }
+            table.excel-table th, table.excel-table td { border: 1px solid #333; padding: 4px; text-align: center; }
+            
+            /* Cabeçalho Fixo */
+            table.excel-table thead th { position: sticky; top: 0; background: #003355; z-index: 10; height: 100px; }
+            
+            /* Título Vertical para caber as 10 colunas */
+            .vertical-text { 
+                writing-mode: vertical-rl; 
+                transform: rotate(180deg); 
+                white-space: nowrap; 
+                font-weight: bold; 
+                text-transform: uppercase;
+                letter-spacing: 1px;
+                color: #00d4ff;
+            }
+
+            .col-aluno { position: sticky; left: 0; background: #001a2c !important; z-index: 11; text-align: left !important; width: 200px; min-width: 200px; font-weight: bold; border-right: 2px solid #00d4ff !important; }
+            .row-entregue { background: rgba(0, 255, 136, 0.05); }
+            .btn-excel { padding: 8px 15px; border-radius: 4px; border: none; cursor: pointer; font-weight: bold; font-size: 12px; }
+            
+            /* Selects estilo planilha */
+            .sel-planilha { background: #000; color: #fff; border: 1px solid #00d4ff; font-size: 10px; width: 100%; border-radius: 2px; cursor: pointer; }
+            .sel-planilha:disabled { border: none; background: transparent; color: #00ff88; opacity: 1; -webkit-appearance: none; }
+            .conflito-kit { opacity: 0.2; pointer-events: none; background: #300 !important; }
+        </style>
+
+        <div class="excel-container">
+            <div class="excel-header">
+                <div style="display: flex; align-items: center; gap: 20px;">
+                    <img src="URL_DO_SEU_LOGO" height="50">
+                    <div>
+                        <h2 style="margin:0; color:#00d4ff;">ENTREGA DE UNIFORMES</h2>
+                        <select id="select-turma-planilha" class="sel-planilha" style="font-size: 14px; padding: 5px; margin-top: 5px;" onchange="carregarGradeExcel(this.value)">
+                            <option value="">-- SELECIONE A TURMA --</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="controles-topo" style="display: none; gap: 10px;">
+                    <button class="btn-excel" style="background: #3b82f6;" onclick="gerarComprovante()">IMPRIMIR</button>
+                    <button class="btn-excel" style="background: #00ff88; color: #001a2c;" onclick="salvarEntregasLote()">CONFIRMAR ENTREGAS</button>
+                    <button class="btn-excel" style="background: #ff4d4d;" onclick="carregarDashboard()">VOLTAR</button>
                 </div>
             </div>
-        `;
+            
+            <div id="planilha-wrapper" class="excel-table-wrapper">
+                <div style="padding: 40px; text-align: center; color: #666;">Selecione uma turma para carregar a planilha de entregas.</div>
+            </div>
+        </div>
+    `;
 
-        const selectTurma = document.getElementById('select-turma');
-        const btnIniciar = document.getElementById('btn-iniciar-entrega');
+    // Carregar lista de turmas
+    const res = await fetch(`${API_URL}/escola/turmas-local`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+    const turmas = await res.json();
+    const select = document.getElementById('select-turma-planilha');
+    turmas.forEach(t => select.innerHTML += `<option value="${t.id}">${t.nome}</option>`);
+}
 
-        selectTurma.addEventListener('change', () => {
-            if (selectTurma.value) {
-                btnIniciar.style.display = 'block';
-                btnIniciar.classList.add('animate__animated', 'animate__pulse');
-            } else {
-                btnIniciar.style.display = 'none';
-            }
-        });
+async function carregarGradeExcel(turmaId) {
+    if (!turmaId) return;
+    const wrapper = document.getElementById('planilha-wrapper');
+    const controles = document.getElementById('controles-topo');
+    wrapper.innerHTML = `<div class="loading-spinner"></div>`;
 
+    try {
+        const res = await fetch(`${API_URL}/turma/${turmaId}/grade-entrega`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+        const data = await res.json();
+
+        let html = `
+            <table class="excel-table">
+                <thead>
+                    <tr>
+                        <th class="col-aluno">NOME DO ALUNO</th>
+                        ${data.produtos.map(p => `
+                            <th><div class="vertical-text">${p.nome.replace(' ', '<br>')}</div></th>
+                        `).join('')}
+                    </tr>
+                    <tr style="background: #002233;">
+                        <th class="col-aluno" style="color: #00ff88">REPLICAR TAMANHO (TODOS)</th>
+                        ${data.produtos.map(p => `
+                            <td>
+                                <select class="sel-planilha" onchange="replicarTamanho(${p.id}, this.value)">
+                                    <option value="">--</option>
+                                    ${(data.estoqueEscola[p.id] || []).map(e => `<option value="${e.tamanho}">${e.tamanho} (${e.qtd})</option>`).join('')}
+                                </select>
+                            </td>
+                        `).join('')}
+                    </tr>
+                </thead>
+                <tbody>
+                    ${data.alunos.map(aluno => `
+                        <tr>
+                            <td class="col-aluno">${aluno.nome}</td>
+                            ${data.produtos.map(p => {
+                                const jaEntregue = aluno.statusItens[p.id];
+                                if (jaEntregue) {
+                                    return `<td class="row-entregue" style="color:#00ff88; font-weight:bold;">${jaEntregue.tamanho}</td>`;
+                                }
+                                return `
+                                    <td>
+                                        <select class="sel-planilha select-entrega" 
+                                            data-aluno-id="${aluno.id}" 
+                                            data-produto-id="${p.id}"
+                                            onchange="aplicarRegraExclusao(${aluno.id}, ${p.id}, this.value)">
+                                            <option value="">--</option>
+                                            ${(data.estoqueEscola[p.id] || []).map(e => `<option value="${e.tamanho}">${e.tamanho}</option>`).join('')}
+                                        </select>
+                                    </td>
+                                `;
+                            }).join('')}
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>`;
+        
+        wrapper.innerHTML = html;
+        controles.style.display = 'flex';
     } catch (err) {
-        console.error("Erro na tela de entrega de uniformes:", err);
-        app.innerHTML = `<p style="color: #ff4d4d; padding: 20px;">❌ ${err.message}</p>`;
-        notificar(`Erro: ${err.message}`, 'erro');
+        notificar("Erro ao carregar grade", "erro");
+    }
+}
+
+// Lógica de Trava: Short Saia (9) vs Short (10) e Calça Fem (13) vs Masc (14)
+function aplicarRegraExclusao(alunoId, produtoId, valor) {
+    if (!valor) return;
+    
+    const row = document.querySelector(`.select-entrega[data-aluno-id="${alunoId}"]`).closest('tr');
+    
+    // Se selecionou Short Saia (9) ou Calça Fem (13), bloqueia Short (10) e Calça Masc (14)
+    if ([9, 13].includes(produtoId)) {
+        const pIdsBloquear = [10, 14];
+        pIdsBloquear.forEach(id => {
+            const sel = row.querySelector(`.select-entrega[data-produto-id="${id}"]`);
+            if (sel) { sel.value = ""; sel.classList.add('conflito-kit'); }
+        });
+    }
+    // E vice-versa
+    if ([10, 14].includes(produtoId)) {
+        const pIdsBloquear = [9, 13];
+        pIdsBloquear.forEach(id => {
+            const sel = row.querySelector(`.select-entrega[data-produto-id="${id}"]`);
+            if (sel) { sel.value = ""; sel.classList.add('conflito-kit'); }
+        });
+    }
+}
+
+function replicarTamanho(produtoId, tamanho) {
+    if (!tamanho) return;
+    document.querySelectorAll(`.select-entrega[data-produto-id="${produtoId}"]`).forEach(sel => {
+        if (!sel.classList.contains('conflito-kit')) {
+            sel.value = tamanho;
+        }
+    });
+}
+
+async function salvarEntregasLote() {
+    const selects = document.querySelectorAll('.select-entrega');
+    const entregas = [];
+
+    selects.forEach(s => {
+        if (s.value && !s.disabled) {
+            entregas.push({
+                alunoId: s.dataset.alunoId,
+                produtoId: s.dataset.produtoId,
+                tamanho: s.value
+            });
+        }
+    });
+
+    if (entregas.length === 0) return notificar("Nada selecionado", "aviso");
+
+    if (confirm(`Confirmar ${entregas.length} itens?`)) {
+        try {
+            const res = await fetch(`${API_URL}/entregas/lote`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+                body: JSON.stringify({ entregas })
+            });
+            if (res.ok) {
+                notificar("Salvo com sucesso!", "sucesso");
+                carregarGradeExcel(document.getElementById('select-turma-planilha').value);
+            }
+        } catch (err) {
+            notificar(err.message, "erro");
+        }
     }
 }
 

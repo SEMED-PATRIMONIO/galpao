@@ -9897,78 +9897,67 @@ router.post('/escola/material/entregas/lote', verificarToken, async (req, res) =
     }
 });
 
-// --- ROTAS DE PROFESSORES V3 (BACKEND) ---
-// 1. LISTAR TODOS OS PROFESSORES (AGORA GLOBAL)
+// LISTAR PROFESSORES (Global)
 router.get('/v3/professores', verificarToken, async (req, res) => {
     try {
-        // Removemos o "AND p.local_id = $1" para que todos vejam todos os professores
         const { rows } = await db.query(`
-            SELECT p.id, p.nome, p.matric, p.status, 
-                   (SELECT data_entrega FROM entregas_professores 
-                    WHERE professor_id = p.id AND produto_id = 6 LIMIT 1) as data_entrega
-            FROM professores p 
-            WHERE p.status = 'ATIVO'
-            ORDER BY p.nome ASC
+            SELECT id, nome, matric, status, data_entrega_kit6, local_entrega_kit6
+            FROM professores 
+            WHERE status = 'ATIVO'
+            ORDER BY nome ASC
         `);
-        
         res.json(rows);
     } catch (err) {
-        res.status(500).json({ error: "Erro ao buscar lista global de professores." });
+        console.error(err);
+        res.status(500).json({ error: "Erro ao listar professores" });
     }
 });
 
-// 2. CADASTRAR PROFESSOR (SEM VÍNCULO DE LOCAL)
+// CADASTRAR PROFESSOR
 router.post('/v3/professores', verificarToken, async (req, res) => {
     const { nome, matric } = req.body;
-
     try {
-        // Não inserimos mais o local_id aqui
         await db.query(
             "INSERT INTO professores (nome, matric, status) VALUES ($1, $2, 'ATIVO')",
-            [nome.toUpperCase(), matric || null]
+            [nome.toUpperCase(), matric]
         );
         res.sendStatus(201);
     } catch (err) {
-        if (err.code === '23505') {
-            return res.status(400).json({ error: "Este professor já está cadastrado no sistema (Matrícula duplicada)." });
-        }
-        res.status(500).json({ error: "Erro ao cadastrar professor." });
+        if (err.code === '23505') return res.status(400).json({ error: "Matrícula já cadastrada." });
+        res.status(500).json({ error: "Erro ao salvar professor." });
     }
 });
 
-// 3. REGISTRAR ENTREGA (MANTÉM LOCAL_ID PARA BAIXA NO ESTOQUE)
+// REGISTRAR ENTREGA DO KIT 6 (Direto na tabela professores)
 router.post('/v3/professores/entrega-kit', verificarToken, async (req, res) => {
     const { professor_id } = req.body;
-    const localId = req.user.local_id; // Local de quem está entregando agora
-    const usuarioId = req.user.id;
+    const localId = req.user.local_id; // Local de quem está logado entregando
 
     try {
         await db.query('BEGIN');
 
-        // 1. Verifica se já recebeu em QUALQUER lugar
-        const jaRecebeu = await db.query(
-            "SELECT id FROM entregas_professores WHERE professor_id = $1 AND produto_id = 6",
-            [professor_id]
-        );
+        // 1. Atualiza o professor com a data e o local da entrega
+        const result = await db.query(`
+            UPDATE professores 
+            SET data_entrega_kit6 = CURRENT_TIMESTAMP, 
+                local_entrega_kit6 = $1 
+            WHERE id = $2 AND data_entrega_kit6 IS NULL
+            RETURNING id
+        `, [localId, professor_id]);
 
-        if (jaRecebeu.rows.length > 0) {
-            throw new Error("Este professor já recebeu o kit em outra unidade.");
+        if (result.rowCount === 0) {
+            throw new Error("Este professor já recebeu o kit ou não foi encontrado.");
         }
 
-        // 2. Registra a entrega na unidade atual
-        await db.query(
-            "INSERT INTO entregas_professores (professor_id, produto_id, usuario_id, local_id) VALUES ($1, 6, $2, $3)",
-            [professor_id, usuarioId, localId]
-        );
-
-        // 3. Baixa no estoque da unidade atual
-        await db.query(
-            "UPDATE estoque_por_local SET quantidade = quantidade - 1 WHERE local_id = $1 AND produto_id = 6",
-            [localId]
-        );
+        // 2. Baixa no estoque da unidade que está entregando
+        await db.query(`
+            UPDATE estoque_por_local 
+            SET quantidade = quantidade - 1 
+            WHERE local_id = $1 AND produto_id = 6
+        `, [localId]);
 
         await db.query('COMMIT');
-        res.sendStatus(201);
+        res.sendStatus(200);
     } catch (err) {
         await db.query('ROLLBACK');
         res.status(400).json({ error: err.message });

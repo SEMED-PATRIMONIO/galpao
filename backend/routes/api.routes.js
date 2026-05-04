@@ -9984,4 +9984,56 @@ router.patch('/v3/professores/:id/status', verificarToken, async (req, res) => {
     }
 });
 
+// LISTAR LOCAIS (v3)
+router.get('/v3/locais', verificarToken, async (req, res) => {
+    try {
+        const { rows } = await db.query("SELECT * FROM locais ORDER BY nome ASC");
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao buscar locais." });
+    }
+});
+
+// CADASTRAR LOCAL
+router.post('/v3/locais', verificarToken, async (req, res) => {
+    const { nome, nome_oficial } = req.body;
+    try {
+        await db.query(
+            "INSERT INTO locais (nome, nome_oficial, status) VALUES ($1, $2, 'ATIVO')",
+            [nome.toUpperCase().trim(), nome_oficial?.toUpperCase().trim()]
+        );
+        res.status(201).json({ message: "Local cadastrado com sucesso!" });
+    } catch (err) {
+        if (err.code === '23505') return res.status(400).json({ error: "Este nome de unidade já existe." });
+        res.status(500).json({ error: "Erro ao salvar local." });
+    }
+});
+
+// EDITAR LOCAL (NOME OFICIAL)
+router.put('/v3/locais/:id', verificarToken, async (req, res) => {
+    const { id } = req.params;
+    const { nome_oficial, nome } = req.body;
+    try {
+        await db.query(
+            "UPDATE locais SET nome = $1, nome_oficial = $2 WHERE id = $3",
+            [nome.toUpperCase().trim(), nome_oficial.toUpperCase().trim(), id]
+        );
+        res.json({ message: "Local atualizado!" });
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao atualizar local." });
+    }
+});
+
+// ALTERAR STATUS (INATIVAR/REATIVAR)
+router.patch('/v3/locais/:id/status', verificarToken, async (req, res) => {
+    const { id } = req.params;
+    const { status } = req.body; // 'ATIVO' ou 'INATIVO'
+    try {
+        await db.query("UPDATE locais SET status = $1 WHERE id = $2", [status, id]);
+        res.json({ message: `Local ${status === 'ATIVO' ? 'Reativado' : 'Inativado'}!` });
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao alterar status." });
+    }
+});
+
 module.exports = router;

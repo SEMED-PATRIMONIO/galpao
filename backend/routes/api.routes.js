@@ -9926,17 +9926,25 @@ router.get('/v3/professores/inativos', verificarToken, async (req, res) => {
     }
 });
 
-// 3. Criar/Incluir Professor
 router.post('/v3/professores', verificarToken, async (req, res) => {
     const { nome, matric } = req.body;
+    
+    if (!nome) {
+        return res.status(400).json({ error: "Nome é obrigatório." });
+    }
+
     try {
+        // Usando 'db' conforme seu padrão de alunos
         await db.query(
             "INSERT INTO professores (nome, matric, status) VALUES ($1, $2, 'ATIVO')",
-            [nome.toUpperCase(), matric]
+            [nome.toUpperCase(), matric || null]
         );
+        
+        console.log(`Professor ${nome} inserido com sucesso.`);
         res.sendStatus(201);
     } catch (err) {
-        res.status(400).json({ error: "Erro ao cadastrar: Matrícula duplicada ou dados inválidos." });
+        console.error("Erro ao inserir no banco:", err.message);
+        res.status(500).json({ error: "Erro ao salvar no banco de dados. Verifique se a tabela 'professores' existe." });
     }
 });
 

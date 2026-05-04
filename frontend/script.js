@@ -365,9 +365,9 @@ async function carregarDashboard() {
 
         html += `
             <button class="btn-grande btn-vidro" onclick="telaSolicitarServicoImpressora('recarga')"><i>🧪</i><span>SOLICITAR RECARGA</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaSolicitarServicoImpressora('manutencao')"><i>🛠️</i><span>SOLICITAR MANUTENÇÃO IMPRESSORA</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaSolicitarManutencaoPC('')"><i>💻</i><span>SOLICITAR MANUTENÇÃO INFORMÁTICA</span></button>
-            <button class="btn-grande btn-vidro" onclick="renderSubmenuCadastrosEscola()"><i>👩‍🎓</i><span>TURMAS E ALUNOS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaSolicitarServicoImpressora('manutencao')"><i>🛠️</i><span>SOLICITAR MANUTENÇÃO<br>IMPRESSORA</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaSolicitarManutencaoPC('')"><i>💻</i><span>SOLICITAR MANUTENÇÃO<br>INFORMÁTICA</span></button>
+            <button class="btn-grande btn-vidro" onclick="renderSubmenuCadastrosEscola()"><i>👩‍🎓</i><span>TURMAS / ALUNOS<br>PROFESSORES</span></button>
             <button class="btn-grande btn-vidro" onclick="abrirMenuPatrimonioEscola()"><i>🏛️</i><span>PATRIMÔNIO</span></button>
             <button class="btn-grande btn-vidro" onclick="renderSubmenuUniformesKits()"><i>👕</i><span>UNIFORMES & KITS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaEscolaConfirmarRecebimento()">
@@ -382,13 +382,14 @@ async function carregarDashboard() {
     else if (perfil === 'super') {
         html += `
             <button class="btn-grande btn-vidro" onclick="telaGerenciarUsuarios()"><i>🪪</i><span>GERENCIAR USUÁRIOS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaGestaoProfessores()"><i>👩‍🎓</i><span>PROFESSORES</span></button>
             <button class="btn-grande btn-vidro" onclick="telaHistoricoRemessas()"><i>🏷️</i><span>ROMANEIOS</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()"><i>🌎</i><span>PAINEL GERAL DE PEDIDOS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()"><i>🌎</i><span>PAINEL GERAL<br>DE PEDIDOS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaHistoricoGeral()"><i>🔍</i><span>HISTÓRICO MOVIMENTAÇÃO</span></button>
             <button class="btn-grande btn-vidro" onclick="telaRelatorioLogStatus()"><i>🕵️</i><span>HISTÓRICO PEDIDOS</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaRelatoriosFaltantes()"><i>👕</i><span>ALUNOS QUE FALTAM RECEBER UNIFORME/KIT</span></button>            
-            <button class="btn-grande btn-vidro" onclick="telaProgressoGeralEscolas()"><i>📐</i><span>ENTREGA DE UNIFORMES E KITS</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaRelatorioConsolidado()"><i>🚨</i><span>LISTAGEM RECEBIDO/FALTA RECEBER</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatoriosFaltantes()"><i>👕</i><span>ALUNOS QUE FALTAM<br>RECEBER UNIFORME/KIT</span></button>            
+            <button class="btn-grande btn-vidro" onclick="telaProgressoGeralEscolas()"><i>📐</i><span>ENTREGA DE UNIFORMES<br>E KITS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioConsolidado()"><i>🚨</i><span>LISTAGEM RECEBIDOS E<br>QUE FALTAM RECEBER</span></button>
             <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()"><i>🗝️</i><span>ALTERAR SENHA</span></button>
         `; 
     }
@@ -423,6 +424,7 @@ async function carregarDashboard() {
         html += `
             <button class="btn-grande btn-vidro" onclick="telaSolicitarServicoImpressora('recarga')"><i>🧪</i><span>SOLICITAR RECARGA</span></button>
             <button class="btn-grande btn-vidro" onclick="telaSolicitarManutencaoPC('')"><i>💻</i><span>MANUTENÇÃO INFORMÁTICA</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaGestaoProfessores()"><i>👩‍🎓</i><span>CADASTRO DE PROFESSORES</span></button>
             <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()"><i>🗝️</i><span>ALTERAR SENHA</span></button>
         `;
     }
@@ -474,7 +476,7 @@ async function carregarDashboard() {
             </button>
 
             <button class="btn-grande btn-vidro" onclick="carregarConsultaEstoque()"><i>🔎</i><span>CONSULTA ESTOQUE</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaGestaoProfessores()"><i>👥</i><span>CADASTRO DE PROFESSORES</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaGestaoProfessores()"><i>👩‍🎓</i><span>PROFESSORES</span></button>
             <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('RELATÓRIOS', getBotoesSubmenu('admin', 'RELATÓRIOS'))"><i>📊</i><span>RELATÓRIOS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()"><i>🗝️</i><span>ALTERAR SENHA</span></button>
         `;
@@ -551,7 +553,7 @@ async function carregarDashboard() {
             <button class="btn-grande btn-vidro" onclick="carregarConsultaEstoque()">
                 <i>🔎</i><span>CONSULTA ESTOQUE</span>
             </button>
-            <button class="btn-grande btn-vidro" onclick="telaGestaoProfessores()"><i>👥</i><span>CADASTRO DE PROFESSORES</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaGestaoProfessores()"><i>👩‍🎓</i><span>PROFESSORES</span></button>
             <button class="btn-grande btn-vidro" onclick="abrirSubmenuVitrificado('RELATÓRIOS', getBotoesSubmenu('estoque', 'RELATÓRIOS'))">
                 <i>📊</i><span>RELATÓRIOS</span>
             </button>
@@ -565,7 +567,6 @@ async function carregarDashboard() {
     container.innerHTML = html;
 
 }
-
 
 // ====================================================================================
 // ================= FUNÇÕES DE SUPORTE E SUBMENUS (COLE ABAIXO DO DASHBOARD) ================
@@ -9075,7 +9076,7 @@ async function gerarRomaneio(remessaId) {
                         </div>
 
                         <div class="caixa-assinatura">
-                            <strong>ASSINATURA DO RECEBEDOR (UNIDADE ESCOLAR)</strong><br>
+                            <strong>ASSINATURA DO RECEBEDOR</strong><br>
                             <span style="color: #444;">NOME LEGÍVEL E Nº MATRÍCULA</span>
                         </div>
                     </div>
@@ -22710,184 +22711,133 @@ async function gerarPdfFaltantes(localId, tipo) {
     }
 }
 
-// --- 1. TELA PRINCIPAL (LISTAGEM COM MATRÍCULA) ---
 async function telaGestaoProfessores() {
-    const app = document.getElementById('app-content');
-    app.innerHTML = '<div style="color:white; padding:20px;">Sincronizando docentes...</div>';
+    const container = document.getElementById('render-area');
+    container.innerHTML = `
+        <div style="display: flex; height: 100%; gap: 20px; padding: 10px;">
+            <div style="width: 200px; display: flex; flex-direction: column; gap: 10px;">
+                <button class="btn-acao" onclick="modalProfessor('incluir')">NOVO PROFESSOR</button>
+                <button class="btn-acao" onclick="listarProfessoresInativos()">REATIVAR</button>
+            </div>
 
-    try {
-        const res = await fetch(`${API_URL}/professores`, {
-            headers: { 'Authorization': `Bearer ${TOKEN}` }
-        });
-        const professores = await res.json();
-
-        app.innerHTML = `
-            <style>
-                .prof-wrapper { background: #fff; height: 100vh; display: flex; flex-direction: column; font-family: sans-serif; }
-                .prof-header { padding: 15px 20px; background: #2c3e50; color: white; display: flex; justify-content: space-between; align-items: center; }
-                .prof-content { flex: 1; overflow: auto; padding: 10px; }
-                .prof-table { width: 100%; border-collapse: collapse; background: white; color: #333; }
-                .prof-table th, .prof-table td { border: 1px solid #ddd; padding: 10px; text-align: left; }
-                .prof-table thead th { background: #f8f9fa; position: sticky; top: 0; z-index: 10; font-size: 12px; }
-                .btn-add { background: #27ae60; color: white; border: none; padding: 10px 20px; font-weight: bold; cursor: pointer; border-radius: 4px; }
-                .btn-kit { background: #e67e22; color: white; border: none; padding: 6px 12px; cursor: pointer; font-weight: bold; border-radius: 4px; font-size: 11px; }
-                .status-ativo { color: #27ae60; font-weight: bold; }
-                .status-inativo { color: #e74c3c; font-weight: bold; }
-            </style>
-
-            <div class="prof-wrapper">
-                <div class="prof-header">
-                    <div style="display: flex; align-items: center;">
-                        <button onclick="carregarDashboard()" style="background:none; border:1px solid #fff; color:white; padding:5px 10px; cursor:pointer; margin-right:15px;">← VOLTAR</button>
-                        <h2 style="margin:0; font-size: 1.2rem;">GESTÃO DE PROFESSORES</h2>
+            <div style="flex: 1; display: flex; flex-direction: column; background: #1a1a1a; border-radius: 8px; overflow: hidden;">
+                <div style="padding: 15px; border-bottom: 1px solid #333; text-align: center;">
+                    <input type="text" id="filtro-prof" placeholder="Localizar professor..." 
+                           oninput="filtrarListaProfessores(this.value)"
+                           style="width: 80%; padding: 10px; border-radius: 20px; border: none; outline: none;">
+                </div>
+                <div id="lista-prof-container" style="flex: 1; overflow-y: auto; padding: 10px;">
                     </div>
-                    <button class="btn-add" onclick="modalProfessor()">+ NOVO PROFESSOR</button>
-                </div>
-
-                <div class="prof-content">
-                    <table class="prof-table">
-                        <thead>
-                            <tr>
-                                <th style="width: 120px;">MATRÍCULA</th>
-                                <th>NOME DO DOCENTE</th>
-                                <th style="width: 100px; text-align:center;">STATUS</th>
-                                <th style="width: 150px; text-align:center;">ENTREGA KIT 6</th>
-                                <th style="width: 180px; text-align:center;">AÇÕES</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${professores.map(p => `
-                                <tr>
-                                    <td style="font-family: monospace; font-weight: bold; color: #555;">${p.matric || '---'}</td>
-                                    <td>${p.nome.toUpperCase()}</td>
-                                    <td style="text-align:center;" class="${p.status === 'ATIVO' ? 'status-ativo' : 'status-inativo'}">
-                                        ${p.status}
-                                    </td>
-                                    <td style="text-align:center;">
-                                        ${p.ja_recebeu ? 
-                                            '<span style="color:#27ae60; font-weight:bold; font-size:11px;">✓ ENTREGUE</span>' : 
-                                            `<button class="btn-kit" ${p.status !== 'ATIVO' ? 'disabled' : ''} 
-                                                onclick="entregarKitProfessor(${p.id}, '${p.nome}')">ENTREGAR KIT</button>`
-                                        }
-                                    </td>
-                                    <td style="text-align:center;">
-                                        <button onclick="modalProfessor(${JSON.stringify(p).replace(/"/g, '&quot;')})" style="padding:5px 8px; cursor:pointer;">EDITAR</button>
-                                        <button onclick="alternarStatusProfessor(${p.id}, '${p.status}')" style="padding:5px 8px; cursor:pointer;">
-                                            ${p.status === 'ATIVO' ? 'INATIVAR' : 'REATIVAR'}
-                                        </button>
-                                    </td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                </div>
             </div>
-        `;
-    } catch (err) {
-        notificar('Erro ao carregar professores', 'erro');
-    }
+        </div>
+
+        <div id="confirmacao-entrega" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); 
+             background:#2c3e50; padding:25px; border:2px solid #3498db; border-radius:10px; z-index:9999; text-align:center; box-shadow: 0 0 20px #000;">
+            <h3 id="txt-confirmacao" style="color:white; margin-bottom:20px;">Confirma entrega do Kit 6?</h3>
+            <div style="display:flex; gap:15px; justify-content:center;">
+                <button id="btn-confirma-sim" style="background:#27ae60; color:white; border:none; padding:10px 30px; cursor:pointer; font-weight:bold;">SIM</button>
+                <button id="btn-confirma-nao" style="background:#c0392b; color:white; border:none; padding:10px 30px; cursor:pointer; font-weight:bold;">NÃO</button>
+            </div>
+        </div>
+    `;
+    renderizarListaProfessores();
 }
 
-// --- 2. MODAL COM NOME E MATRÍCULA ---
-function modalProfessor(dados = null) {
-    const titulo = dados ? 'EDITAR PROFESSOR' : 'NOVO PROFESSOR';
-    
-    Swal.fire({
-        title: titulo,
-        html: `
-            <div style="text-align:left;">
-                <label style="font-weight:bold; display:block; margin-bottom:5px;">Matrícula (Obrigatório e Único):</label>
-                <input type="text" id="swal-matric" class="swal2-input" value="${dados ? dados.matric : ''}" placeholder="Ex: 123456">
-                
-                <label style="font-weight:bold; display:block; margin-top:15px; margin-bottom:5px;">Nome Completo:</label>
-                <input type="text" id="swal-nome" class="swal2-input" value="${dados ? dados.nome : ''}" placeholder="Nome do professor">
-            </div>
-        `,
-        showCancelButton: true,
-        confirmButtonText: 'SALVAR',
-        preConfirm: () => {
-            const matric = document.getElementById('swal-matric').value.trim();
-            const nome = document.getElementById('swal-nome').value.trim();
-            
-            if (!matric) return Swal.showValidationMessage('A matrícula é obrigatória');
-            if (!nome) return Swal.showValidationMessage('O nome é obrigatório');
-            
-            return { matric, nome };
-        }
-    }).then(async (result) => {
-        if (result.isConfirmed) {
-            try {
-                const metodo = dados ? 'PUT' : 'POST';
-                const url = dados ? `${API_URL}/professores/${dados.id}` : `${API_URL}/professores`;
-                
-                const res = await fetch(url, {
-                    method: metodo,
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
-                    body: JSON.stringify(result.value)
-                });
+async function renderizarListaProfessores() {
+    const response = await fetch(`${API_URL}/v3/professores`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+    const professores = await response.json();
+    const container = document.getElementById('lista-prof-container');
 
-                if (!res.ok) {
-                    const erro = await res.json();
-                    throw new Error(erro.error || 'Erro ao salvar dados');
-                }
-
-                notificar('Dados gravados com sucesso!', 'sucesso');
-                telaGestaoProfessores();
-            } catch (err) {
-                Swal.fire('Erro', err.message, 'error');
-            }
-        }
-    });
+    container.innerHTML = `
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead style="position: sticky; top: 0; background: #1a1a1a;">
+                <tr style="color: #888; font-size: 0.8em; text-transform: uppercase; border-bottom: 2px solid #333;">
+                    <th style="padding: 10px; text-align: left;">Matrícula</th>
+                    <th style="padding: 10px; text-align: left;">Nome do Professor</th>
+                    <th style="padding: 10px; text-align: right; width: 150px;">RECEBEU KIT 6</th>
+                </tr>
+            </thead>
+            <tbody id="tbody-prof">
+                ${professores.map((p, idx) => `
+                    <tr id="row-prof-${idx}" style="border-bottom: 1px solid #222;">
+                        <td style="padding: 8px; color: #555;">${p.matric}</td>
+                        <td style="padding: 8px; font-weight: bold;">
+                            <button onclick="inativarProfessor(${p.id})" style="background:none; border:none; color:#c0392b; cursor:pointer; margin-right:8px;">
+                                <i class="fas fa-user-minus"></i>
+                            </button>
+                            ${p.nome}
+                        </td>
+                        <td style="padding: 8px; text-align: right;">
+                            ${p.data_entrega 
+                                ? `<span style="font-size: 0.8em; color: #27ae60;">${new Date(p.data_entrega).toLocaleDateString()} ✓</span>`
+                                : `<input type="checkbox" class="chk-kit" onchange="prepararEntrega(${p.id}, ${idx}, '${p.nome}')" style="transform: scale(1.3); cursor: pointer;">`
+                            }
+                        </td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
 }
 
-// --- 3. ENTREGAR KIT 6 ---
-async function entregarKitProfessor(id, nome) {
-    const confirmacao = await Swal.fire({
-        title: 'Confirmar Entrega?',
-        text: `Deseja registrar a entrega do KIT 6 para: ${nome}?`,
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonColor: '#e67e22',
-        confirmButtonText: 'SIM, ENTREGAR',
-        cancelButtonText: 'NÃO'
-    });
+// Lógica de Entrega com foco automático
+function prepararEntrega(professorId, index, nome) {
+    const modal = document.getElementById('confirmacao-entrega');
+    const txt = document.getElementById('txt-confirmacao');
+    txt.innerText = `Confirmar entrega para: ${nome}?`;
+    modal.style.display = 'block';
 
-    if (confirmacao.isConfirmed) {
+    document.getElementById('btn-confirma-sim').onclick = async () => {
         try {
-            const res = await fetch(`${API_URL}/entregas/professor`, {
+            const res = await fetch(`${API_URL}/v3/professores/entrega-kit`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
-                body: JSON.stringify({ professorId: id })
+                body: JSON.stringify({ professor_id: professorId, local_id: USUARIO.local_id, usuario_id: USUARIO.id })
             });
-
-            if (!res.ok) {
-                const erro = await res.json();
-                throw new Error(erro.error || 'Erro na entrega');
-            }
-
-            notificar('KIT PROFESSOR ENTREGUE!', 'sucesso');
-            telaGestaoProfessores();
+            if (!res.ok) throw await res.json();
+            
+            modal.style.display = 'none';
+            renderizarListaProfessores().then(() => pularParaProximo(index));
         } catch (err) {
-            Swal.fire('Erro', err.message, 'error');
+            alert(err.error);
+            cancelarSelecao(index);
         }
+    };
+
+    document.getElementById('btn-confirma-nao').onclick = () => {
+        modal.style.display = 'none';
+        cancelarSelecao(index);
+        pularParaProximo(index);
+    };
+}
+
+function pularParaProximo(indexAtual) {
+    const proximaRow = document.getElementById(`row-prof-${indexAtual + 1}`);
+    if (proximaRow) {
+        proximaRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        proximaRow.style.background = '#2c3e50';
+        setTimeout(() => proximaRow.style.background = 'transparent', 1500);
     }
 }
 
-// --- 4. ALTERNAR STATUS ---
-async function alternarStatusProfessor(id, statusAtual) {
-    const novoStatus = statusAtual === 'ATIVO' ? 'INATIVO' : 'ATIVO';
-    try {
-        const res = await fetch(`${API_URL}/professores/${id}/status`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
-            body: JSON.stringify({ status: novoStatus })
-        });
-        
-        if (!res.ok) throw new Error('Erro ao mudar status');
-        telaGestaoProfessores();
-    } catch (err) {
-        notificar(err.message, 'erro');
-    }
+function cancelarSelecao(index) {
+    const inputs = document.querySelectorAll('.chk-kit');
+    if (inputs[index]) inputs[index].checked = false;
+}
+
+// Funções do CRUD Simplicadas (v3)
+async function inativarProfessor(id) {
+    await fetch(`${API_URL}/v3/professores/${id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+        body: JSON.stringify({ status: 'INATIVO' })
+    });
+    renderizarListaProfessores();
+}
+
+async function listarProfessoresInativos() {
+    // Abre um modal rápido com a lista de inativos e botão "Reativar"
+    // Lógica similar à renderizarListaProfessores mudando a URL e o botão para 'ATIVO'
 }
 
 // --- 1. EXIBIÇÃO EM TELA ---

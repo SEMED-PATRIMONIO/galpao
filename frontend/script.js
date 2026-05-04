@@ -22760,44 +22760,84 @@ async function telaGestaoProfessores() {
     renderizarListaProfessoresV3();
 }
 
-function abrirModalCadastroProfessor() {
-    // Remove qualquer modal anterior para não duplicar
+// Função para abrir o modal - COM TRAVA DE SEGURANÇA
+function abrirModalCadastroProfessor(event) {
+    // Impede o loop/recarregamento da tela
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+
+    console.log("Abrindo modal de cadastro...");
+
+    // Remove modal se já existir
     const antigo = document.getElementById('modal-cadastro-prof');
     if (antigo) antigo.remove();
 
     const modal = document.createElement('div');
     modal.id = 'modal-cadastro-prof';
-    modal.className = 'modal-full'; // Usa sua classe de modal existente
-    modal.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); display:flex; align-items:center; justify-content:center; z-index:11000;";
+    // Estilos forçados para garantir que apareça na frente de tudo e centralizado
+    modal.style.cssText = `
+        position: fixed; 
+        top: 0; left: 0; 
+        width: 100vw; height: 100vh; 
+        background: rgba(0,0,0,0.85); 
+        display: flex; 
+        align-items: center; 
+        justify-content: center; 
+        z-index: 99999;
+        backdrop-filter: blur(5px);
+    `;
 
     modal.innerHTML = `
-        <div class="modal-content-vidro" style="width: 400px; padding: 30px; border: 1px solid rgba(255,255,255,0.2);">
-            <h2 style="color:white; margin-bottom:20px; text-align:center;">NOVO PROFESSOR</h2>
+        <div class="modal-content-vidro" style="width: 450px; padding: 40px; background: #1e293b; border: 2px solid #3b82f6; border-radius: 20px; box-shadow: 0 0 30px rgba(0,0,0,0.5);">
+            <h2 style="color:white; margin-bottom:25px; text-align:center; font-family: sans-serif;">CADASTRAR PROFESSOR</h2>
             
-            <label style="color:#aaa; font-size:12px;">NOME COMPLETO</label>
-            <input type="text" id="novo-nome-prof" style="width:100%; padding:12px; margin: 8px 0 20px 0; border-radius:8px; border:none; background:rgba(255,255,255,0.9); color:#000;">
+            <div style="margin-bottom: 20px;">
+                <label style="color:#94a3b8; display:block; margin-bottom:8px; font-size: 12px;">NOME COMPLETO</label>
+                <input type="text" id="novo-nome-prof" placeholder="Ex: JOÃO DA SILVA" 
+                       style="width:100%; padding:14px; border-radius:10px; border:none; background:white; color:black; font-weight:bold; font-size:16px;">
+            </div>
             
-            <label style="color:#aaa; font-size:12px;">MATRÍCULA</label>
-            <input type="text" id="nova-mat-prof" style="width:100%; padding:12px; margin: 8px 0 25px 0; border-radius:8px; border:none; background:rgba(255,255,255,0.9); color:#000;">
+            <div style="margin-bottom: 30px;">
+                <label style="color:#94a3b8; display:block; margin-bottom:8px; font-size: 12px;">MATRÍCULA (OPCIONAL)</label>
+                <input type="text" id="nova-mat-prof" placeholder="000000" 
+                       style="width:100%; padding:14px; border-radius:10px; border:none; background:white; color:black; font-weight:bold; font-size:16px;">
+            </div>
             
-            <div style="display:flex; gap:10px;">
-                <button onclick="salvarNovoProfessorV3()" class="btn-vidro" style="background:#16a34a; flex:1;">SALVAR</button>
-                <button onclick="document.getElementById('modal-cadastro-prof').remove()" class="btn-vidro" style="background:#dc2626; flex:1;">CANCELAR</button>
+            <div style="display:flex; gap:15px;">
+                <button onclick="salvarNovoProfessorV3()" style="flex:1; padding:15px; background:#16a34a; color:white; border:none; border-radius:10px; font-weight:bold; cursor:pointer;">
+                    <i class="fas fa-check"></i> GRAVAR NO BANCO
+                </button>
+                <button onclick="document.getElementById('modal-cadastro-prof').remove()" style="flex:1; padding:15px; background:#dc2626; color:white; border:none; border-radius:10px; font-weight:bold; cursor:pointer;">
+                    CANCELAR
+                </button>
             </div>
         </div>
     `;
 
     document.body.appendChild(modal);
-    document.getElementById('novo-nome-prof').focus();
+    // Foca no campo de nome automaticamente
+    setTimeout(() => document.getElementById('novo-nome-prof').focus(), 100);
 }
 
+// Função que envia para o servidor
 async function salvarNovoProfessorV3() {
-    const nome = document.getElementById('novo-nome-prof').value;
-    const matric = document.getElementById('nova-mat-prof').value;
+    const nomeInput = document.getElementById('novo-nome-prof');
+    const matricInput = document.getElementById('nova-mat-prof');
+    
+    const nome = nomeInput.value.trim().toUpperCase();
+    const matric = matricInput.value.trim();
 
-    if (!nome) return notificar("Digite o nome do professor", "erro");
+    if (!nome) {
+        alert("O nome do professor é obrigatório!");
+        nomeInput.focus();
+        return;
+    }
 
     try {
+        console.log("Enviando dados para o banco:", { nome, matric });
+
         const res = await fetch(`${API_URL}/v3/professores`, {
             method: 'POST',
             headers: { 
@@ -22808,15 +22848,16 @@ async function salvarNovoProfessorV3() {
         });
 
         if (res.ok) {
-            notificar("Professor cadastrado!", "sucesso");
+            notificar("PROFESSOR CADASTRADO COM SUCESSO!", "sucesso");
             document.getElementById('modal-cadastro-prof').remove();
-            renderizarListaProfessoresV3(); // Atualiza a lista ao fundo
+            renderizarListaProfessoresV3(); // Atualiza a tabela ao fundo
         } else {
             const erro = await res.json();
-            notificar(erro.error || "Erro ao salvar", "erro");
+            throw new Error(erro.error || "Erro desconhecido");
         }
     } catch (err) {
-        notificar("Erro de conexão com o servidor", "erro");
+        console.error("Erro no fetch:", err);
+        alert("ERRO AO SALVAR: " + err.message);
     }
 }
 

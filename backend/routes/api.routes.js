@@ -9897,4 +9897,82 @@ router.post('/escola/material/entregas/lote', verificarToken, async (req, res) =
     }
 });
 
+// Rotas v3 - Professores e Entregas
+// GET: Lista professores ativos e status do Kit 6
+router.get('/v3/professores', async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT p.*, ep.data_entrega 
+            FROM professores p 
+            LEFT JOIN entregas_professores ep ON p.id = ep.professor_id AND ep.produto_id = 6
+            WHERE p.status = 'ATIVO' 
+            ORDER BY p.nome ASC
+        `);
+        res.json(result.rows);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET: Lista inativos para reativação
+router.get('/v3/professores/inativos', async (req, res) => {
+    try {
+        const result = await pool.query("SELECT * FROM professores WHERE status = 'INATIVO' ORDER BY nome ASC");
+        res.json(result.rows);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// POST: Criar professor
+router.post('/v3/professores', async (req, res) => {
+    const { nome, matric } = req.body;
+    try {
+        await pool.query("INSERT INTO professores (nome, matric, status) VALUES ($1, $2, 'ATIVO')", [nome.toUpperCase(), matric]);
+        res.sendStatus(201);
+    } catch (err) { res.status(400).json({ error: "Matrícula já existente ou erro nos dados." }); }
+});
+
+// PATCH: Mudar status (Inativar/Reativar)
+router.patch('/v3/professores/:id/status', async (req, res) => {
+    const { status } = req.body;
+    try {
+        await pool.query("UPDATE professores SET status = $1 WHERE id = $2", [status, req.params.id]);
+        res.sendStatus(200);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// POST: Entrega Kit 6 e Baixa no Estoque Local (Transacional)
+router.post('/v3/professores/entrega-kit', async (req, res) => {
+    const { professor_id, local_id, usuario_id } = req.body;
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        
+        // 1. Verifica estoque no local
+        const estoque = await client.query(
+            "SELECT quantidade FROM estoque_por_local WHERE local_id = $1 AND produto_id = 6", 
+            [local_id]
+        );
+        
+        if (!estoque.rows[0] || estoque.rows[0].quantidade <= 0) {
+            throw new Error("Estoque insuficiente neste local.");
+        }
+
+        // 2. Registra entrega
+        await client.query(
+            "INSERT INTO entregas_professores (professor_id, produto_id, usuario_id, local_id) VALUES ($1, 6, $2, $3)",
+            [professor_id, usuario_id, local_id]
+        );
+
+        // 3. Baixa no estoque local
+        await client.query(
+            "UPDATE estoque_por_local SET quantidade = quantidade - 1 WHERE local_id = $1 AND produto_id = 6",
+            [local_id]
+        );
+
+        await client.query('COMMIT');
+        res.sendStatus(201);
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(400).json({ error: err.message });
+    } finally { client.release(); }
+});
+
 module.exports = router;

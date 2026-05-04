@@ -9898,53 +9898,89 @@ router.post('/escola/material/entregas/lote', verificarToken, async (req, res) =
 });
 
 // --- ROTAS DE PROFESSORES V3 (BACKEND) ---
-
-// 1. Listar Professores Ativos (Visão Global)
+// 1. LISTAR TODOS OS PROFESSORES (AGORA GLOBAL)
 router.get('/v3/professores', verificarToken, async (req, res) => {
     try {
+        // Removemos o "AND p.local_id = $1" para que todos vejam todos os professores
         const { rows } = await db.query(`
             SELECT p.id, p.nome, p.matric, p.status, 
                    (SELECT data_entrega FROM entregas_professores 
                     WHERE professor_id = p.id AND produto_id = 6 LIMIT 1) as data_entrega
             FROM professores p 
-            WHERE p.status = 'ATIVO' 
+            WHERE p.status = 'ATIVO'
             ORDER BY p.nome ASC
         `);
+        
         res.json(rows);
     } catch (err) {
-        res.status(500).json({ error: "Erro ao buscar professores ativos." });
+        res.status(500).json({ error: "Erro ao buscar lista global de professores." });
     }
 });
 
-// 2. Listar Professores Inativos
+// 2. CADASTRAR PROFESSOR (SEM VÍNCULO DE LOCAL)
+router.post('/v3/professores', verificarToken, async (req, res) => {
+    const { nome, matric } = req.body;
+
+    try {
+        // Não inserimos mais o local_id aqui
+        await db.query(
+            "INSERT INTO professores (nome, matric, status) VALUES ($1, $2, 'ATIVO')",
+            [nome.toUpperCase(), matric || null]
+        );
+        res.sendStatus(201);
+    } catch (err) {
+        if (err.code === '23505') {
+            return res.status(400).json({ error: "Este professor já está cadastrado no sistema (Matrícula duplicada)." });
+        }
+        res.status(500).json({ error: "Erro ao cadastrar professor." });
+    }
+});
+
+// 3. REGISTRAR ENTREGA (MANTÉM LOCAL_ID PARA BAIXA NO ESTOQUE)
+router.post('/v3/professores/entrega-kit', verificarToken, async (req, res) => {
+    const { professor_id } = req.body;
+    const localId = req.user.local_id; // Local de quem está entregando agora
+    const usuarioId = req.user.id;
+
+    try {
+        await db.query('BEGIN');
+
+        // 1. Verifica se já recebeu em QUALQUER lugar
+        const jaRecebeu = await db.query(
+            "SELECT id FROM entregas_professores WHERE professor_id = $1 AND produto_id = 6",
+            [professor_id]
+        );
+
+        if (jaRecebeu.rows.length > 0) {
+            throw new Error("Este professor já recebeu o kit em outra unidade.");
+        }
+
+        // 2. Registra a entrega na unidade atual
+        await db.query(
+            "INSERT INTO entregas_professores (professor_id, produto_id, usuario_id, local_id) VALUES ($1, 6, $2, $3)",
+            [professor_id, usuarioId, localId]
+        );
+
+        // 3. Baixa no estoque da unidade atual
+        await db.query(
+            "UPDATE estoque_por_local SET quantidade = quantidade - 1 WHERE local_id = $1 AND produto_id = 6",
+            [localId]
+        );
+
+        await db.query('COMMIT');
+        res.sendStatus(201);
+    } catch (err) {
+        await db.query('ROLLBACK');
+        res.status(400).json({ error: err.message });
+    }
+});
+
 router.get('/v3/professores/inativos', verificarToken, async (req, res) => {
     try {
         const { rows } = await db.query("SELECT * FROM professores WHERE status = 'INATIVO' ORDER BY nome ASC");
         res.json(rows);
     } catch (err) {
         res.status(500).json({ error: "Erro ao buscar inativos." });
-    }
-});
-
-router.post('/v3/professores', verificarToken, async (req, res) => {
-    const { nome, matric } = req.body;
-    
-    if (!nome) {
-        return res.status(400).json({ error: "Nome é obrigatório." });
-    }
-
-    try {
-        // Usando 'db' conforme seu padrão de alunos
-        await db.query(
-            "INSERT INTO professores (nome, matric, status) VALUES ($1, $2, 'ATIVO')",
-            [nome.toUpperCase(), matric || null]
-        );
-        
-        console.log(`Professor ${nome} inserido com sucesso.`);
-        res.sendStatus(201);
-    } catch (err) {
-        console.error("Erro ao inserir no banco:", err.message);
-        res.status(500).json({ error: "Erro ao salvar no banco de dados. Verifique se a tabela 'professores' existe." });
     }
 });
 
@@ -9956,46 +9992,6 @@ router.patch('/v3/professores/:id/status', verificarToken, async (req, res) => {
         res.sendStatus(200);
     } catch (err) {
         res.status(500).json({ error: "Erro ao alterar status." });
-    }
-});
-
-// 5. Entrega Kit 6 e Baixa no Estoque (Lógica de Alunos adaptada)
-router.post('/v3/professores/entrega-kit', verificarToken, async (req, res) => {
-    const { professor_id } = req.body;
-    const localId = req.user.local_id; 
-    const usuarioId = req.user.id;
-
-    try {
-        // Inicia transação manual (padrão seguro)
-        await db.query('BEGIN');
-
-        // Verifica estoque local para Kit 6 (Produto ID 6)
-        const estoque = await db.query(
-            "SELECT quantidade FROM estoque_por_local WHERE local_id = $1 AND produto_id = 6",
-            [localId]
-        );
-
-        if (!estoque.rows[0] || estoque.rows[0].quantidade <= 0) {
-            throw new Error("Estoque do Kit 6 esgotado nesta unidade.");
-        }
-
-        // Registra a entrega
-        await db.query(
-            "INSERT INTO entregas_professores (professor_id, produto_id, usuario_id, local_id) VALUES ($1, 6, $2, $3)",
-            [professor_id, usuarioId, localId]
-        );
-
-        // Baixa no estoque
-        await db.query(
-            "UPDATE estoque_por_local SET quantidade = quantidade - 1 WHERE local_id = $1 AND produto_id = 6",
-            [localId]
-        );
-
-        await db.query('COMMIT');
-        res.sendStatus(201);
-    } catch (err) {
-        await db.query('ROLLBACK');
-        res.status(400).json({ error: err.message });
     }
 });
 

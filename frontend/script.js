@@ -22714,48 +22714,110 @@ async function gerarPdfFaltantes(localId, tipo) {
 // --- GESTÃO DE PROFESSORES V3 ---
 
 async function telaGestaoProfessores() {
-    const container = document.getElementById('app-content');
-    if (!container) return;
+    const app = document.getElementById('app-content');
+    if (!app) return;
 
-    container.style.background = "transparent";
-    container.innerHTML = `
-        <div style="display: flex; height: calc(100vh - 120px); gap: 20px; padding: 15px; color: white;">
-            
-            <div style="width: 200px; display: flex; flex-direction: column; gap: 10px;">
-                <button class="btn-vidro" onclick="modalProfessorV3()" style="background: #16a34a; width: 100%; font-size: 0.7rem;">
-                    <i class="fas fa-plus"></i> NOVO PROFESSOR
-                </button>
-                <button class="btn-vidro" onclick="listarInativosV3()" style="background: #2563eb; width: 100%; font-size: 0.7rem;">
-                    <i class="fas fa-user-clock"></i> REATIVAR
-                </button>
-                <button class="btn-voltar-vidro" onclick="carregarDashboard()" style="width: 100%; font-size: 0.7rem;">
-                    VOLTAR
-                </button>
-            </div>
+    // Limpa absolutamente tudo antes de começar para evitar o "shift" (deslocamento)
+    app.innerHTML = ''; 
+    app.style.background = "transparent";
 
-            <div style="flex: 1; display: flex; flex-direction: column; background: rgba(0,0,0,0.4); border-radius: 15px; border: 1px solid rgba(255,255,255,0.1); overflow: hidden;">
-                <div style="padding: 15px; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: center;">
-                    <input type="text" id="filtro-prof-v3" placeholder="LOCALIZAR PROFESSOR..." 
-                           oninput="filtrarProfessoresV3(this.value)"
-                           style="width: 70%; padding: 12px; border-radius: 25px; border: none; background: rgba(255,255,255,0.1); color: white; text-align: center; outline: none;">
-                </div>
-                
-                <div id="container-lista-v3" style="flex: 1; overflow-y: auto;">
-                    </div>
-            </div>
+    // Cria a estrutura base
+    const layout = document.createElement('div');
+    layout.style.cssText = "display: flex; height: calc(100vh - 120px); gap: 20px; padding: 15px; color: white;";
+    
+    layout.innerHTML = `
+        <div style="width: 200px; display: flex; flex-direction: column; gap: 12px;">
+            <button class="btn-vidro" onclick="abrirModalCadastroProfessor()" style="background: #16a34a; width:100%; font-size: 0.75rem;">
+                <i class="fas fa-plus"></i> NOVO PROFESSOR
+            </button>
+            <button class="btn-vidro" onclick="listarInativosV3()" style="background: #2563eb; width:100%; font-size: 0.75rem;">
+                <i class="fas fa-user-clock"></i> REATIVAR
+            </button>
+            <button class="btn-voltar-vidro" onclick="carregarDashboard()" style="width:100%;">VOLTAR</button>
         </div>
 
-        <div id="confirmacao-entrega-v3" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); 
-             background: rgba(15, 23, 42, 0.95); padding: 40px; border: 2px solid #3b82f6; border-radius: 20px; z-index: 10000; text-align: center; backdrop-filter: blur(10px);">
-            <h2 id="txt-confirma-prof" style="color:white; margin-bottom: 25px; font-size: 1.2rem;"></h2>
-            <div style="display: flex; gap: 20px; justify-content: center;">
-                <button id="btn-kit-sim" style="padding: 15px 40px; background: #16a34a; color: white; border: none; border-radius: 10px; font-weight: bold; cursor: pointer;">CONFIRMAR ENTREGA</button>
-                <button id="btn-kit-nao" style="padding: 15px 40px; background: #dc2626; color: white; border: none; border-radius: 10px; font-weight: bold; cursor: pointer;">CANCELAR</button>
+        <div style="flex: 1; display: flex; flex-direction: column; background: rgba(0,0,0,0.3); border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); overflow: hidden;">
+            <div style="padding: 15px; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: center;">
+                <input type="text" id="filtro-prof-v3" placeholder="LOCALIZAR PROFESSOR..." 
+                       oninput="filtrarProfessoresV3(this.value)"
+                       style="width: 60%; padding: 10px 20px; border-radius: 20px; border: none; background: rgba(255,255,255,0.1); color: white; text-align: center; outline: none;">
+            </div>
+            <div id="div-tabela-prof" style="flex: 1; overflow-y: auto;">
+                </div>
+        </div>
+
+        <div id="pop-confirmacao-v3" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); 
+             background: #0f172a; padding: 35px; border: 2px solid #3b82f6; border-radius: 15px; z-index: 10000; text-align: center; box-shadow: 0 0 50px #000;">
+            <h3 id="txt-nome-prof-kit" style="color:white; margin-bottom: 25px;"></h3>
+            <div style="display: flex; gap: 15px; justify-content: center;">
+                <button id="btn-sim-v3" style="padding: 12px 30px; background: #16a34a; color: white; border: none; border-radius: 5px; font-weight: bold; cursor: pointer;">CONFIRMAR</button>
+                <button id="btn-nao-v3" style="padding: 12px 30px; background: #dc2626; color: white; border: none; border-radius: 5px; font-weight: bold; cursor: pointer;">CANCELAR</button>
             </div>
         </div>
     `;
 
+    app.appendChild(layout);
     renderizarListaProfessoresV3();
+}
+
+function abrirModalCadastroProfessor() {
+    // Remove qualquer modal anterior para não duplicar
+    const antigo = document.getElementById('modal-cadastro-prof');
+    if (antigo) antigo.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'modal-cadastro-prof';
+    modal.className = 'modal-full'; // Usa sua classe de modal existente
+    modal.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); display:flex; align-items:center; justify-content:center; z-index:11000;";
+
+    modal.innerHTML = `
+        <div class="modal-content-vidro" style="width: 400px; padding: 30px; border: 1px solid rgba(255,255,255,0.2);">
+            <h2 style="color:white; margin-bottom:20px; text-align:center;">NOVO PROFESSOR</h2>
+            
+            <label style="color:#aaa; font-size:12px;">NOME COMPLETO</label>
+            <input type="text" id="novo-nome-prof" style="width:100%; padding:12px; margin: 8px 0 20px 0; border-radius:8px; border:none; background:rgba(255,255,255,0.9); color:#000;">
+            
+            <label style="color:#aaa; font-size:12px;">MATRÍCULA</label>
+            <input type="text" id="nova-mat-prof" style="width:100%; padding:12px; margin: 8px 0 25px 0; border-radius:8px; border:none; background:rgba(255,255,255,0.9); color:#000;">
+            
+            <div style="display:flex; gap:10px;">
+                <button onclick="salvarNovoProfessorV3()" class="btn-vidro" style="background:#16a34a; flex:1;">SALVAR</button>
+                <button onclick="document.getElementById('modal-cadastro-prof').remove()" class="btn-vidro" style="background:#dc2626; flex:1;">CANCELAR</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+    document.getElementById('novo-nome-prof').focus();
+}
+
+async function salvarNovoProfessorV3() {
+    const nome = document.getElementById('novo-nome-prof').value;
+    const matric = document.getElementById('nova-mat-prof').value;
+
+    if (!nome) return notificar("Digite o nome do professor", "erro");
+
+    try {
+        const res = await fetch(`${API_URL}/v3/professores`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json', 
+                'Authorization': `Bearer ${TOKEN}` 
+            },
+            body: JSON.stringify({ nome, matric })
+        });
+
+        if (res.ok) {
+            notificar("Professor cadastrado!", "sucesso");
+            document.getElementById('modal-cadastro-prof').remove();
+            renderizarListaProfessoresV3(); // Atualiza a lista ao fundo
+        } else {
+            const erro = await res.json();
+            notificar(erro.error || "Erro ao salvar", "erro");
+        }
+    } catch (err) {
+        notificar("Erro de conexão com o servidor", "erro");
+    }
 }
 
 async function renderizarListaProfessoresV3() {

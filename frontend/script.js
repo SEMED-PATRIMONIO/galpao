@@ -424,20 +424,20 @@ async function carregarDashboard() {
         html += `
             <button class="btn-grande btn-vidro" onclick="telaSolicitarServicoImpressora('recarga')"><i>🧪</i><span>SOLICITAR RECARGA</span></button>
             <button class="btn-grande btn-vidro" onclick="telaSolicitarManutencaoPC('')"><i>💻</i><span>MANUTENÇÃO INFORMÁTICA</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaGestaoProfessores()"><i>👩‍🎓</i><span>CADASTRO DE PROFESSORES</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaGestaoProfessores()"><i>👩‍🎓</i><span>CADASTRO DE<br>PROFESSORES</span></button>
             <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()"><i>🗝️</i><span>ALTERAR SENHA</span></button>
         `;
     }
     // --- PERFIL: DTI ---
     else if (perfil === 'dti') {
         html += `
-            <button class="btn-grande btn-vidro" onclick="telaListarChamadosPC_DTI()"><i>💻</i><span>FILA DE CHAMADOS INFORMÁTICA</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaDashboardComputadores()"><i>📈</i><span>ATENDIMENTOS REALIZADOS INFORMÁTICA</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaFilaAtendimentoImpressoras()"><i>🖨️</i><span>FILA DE CHAMADOS IMPRESSORA</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaDashboardImpressoras()"><i>📆</i><span>ATENDIMENTOS REALIZADOS IMPRESSORA</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaListarChamadosPC_DTI()"><i>💻</i><span>FILA DE CHAMADOS<br>INFORMÁTICA</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaDashboardComputadores()"><i>📈</i><span>ATENDIMENTOS REALIZADOS<br>INFORMÁTICA</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaFilaAtendimentoImpressoras()"><i>🖨️</i><span>FILA DE CHAMADOS<br>IMPRESSORA</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaDashboardImpressoras()"><i>📆</i><span>ATENDIMENTOS REALIZADOS<br>IMPRESSORA</span></button>
             <button class="btn-grande btn-vidro" onclick="telaConsumoImpressoras()"><i>📊</i><span>CONSUMO DAS IMPRESSORAS</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaCadastroImpressoras()"><i>➕</i><span>CADASTRAR NOVA IMPRESSORA</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaRelatorioGeralAtivos()"><i>☢️</i><span>STATUS ATUAL DAS IMPRESSORAS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaCadastroImpressoras()"><i>➕</i><span>CADASTRAR NOVA<br>IMPRESSORA</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioGeralAtivos()"><i>☢️</i><span>STATUS ATUAL<br>DAS IMPRESSORAS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()"><i>🗝️</i><span>ALTERAR SENHA</span></button>
         `;
     }
@@ -446,7 +446,7 @@ async function carregarDashboard() {
         html += `
             <button class="btn-grande btn-vidro" onclick="telaListarChamadosAbertos()"><i>🖨️</i><span>FILA DE CHAMADOS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaDashboardImpressoras()"><i>📈</i><span>ATENDIMENTOS REALIZADOS</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaRelatorioGeralAtivos()"><i>📋</i><span>STATUS ATUAL DAS IMPRESSORAS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioGeralAtivos()"><i>📋</i><span>STATUS ATUAL<br>DAS IMPRESSORAS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaAlterarSenha()"><i>🗝️</i><span>ALTERAR SENHA</span></button>
         `; 
     }
@@ -529,7 +529,7 @@ async function carregarDashboard() {
         html += `
             <button class="btn-grande btn-vidro" onclick="infra_telaPendentes()">
                 <div id="badge-infra-count" class="badge-alerta-entrega" style="display:${contagemInfra > 0 ? 'flex' : 'none'};">${contagemInfra}</div>
-                <i>🏃‍♂️‍➡️</i><span>SOLIC. INFRA</span>
+                <i>🏃‍♂️‍➡️</i><span>SOLICITADO<br>INFRA</span>
             </button>
 
             <button class="btn-grande btn-vidro" onclick="abrirMenuPatrimonioAlmoxarifado()">
@@ -574,9 +574,9 @@ async function carregarDashboard() {
 
 function renderSubmenuCadastrosEscola() {
     const botoes = `
-        <button class="btn-grande btn-vidro" onclick="telaEscolaGestaoTurmas()"><i>🏫</i><span>CADASTRO DE TURMAS</span></button>
-        <button class="btn-grande btn-vidro" onclick="telaEscolaGestaoAlunos()"><i>👥</i><span>CADASTRO DE ALUNOS</span></button>
-        <button class="btn-grande btn-vidro" onclick="telaGestaoProfessores()"><i>👥</i><span>CADASTRO DE PROFESSORES</span></button>
+        <button class="btn-grande btn-vidro" onclick="telaEscolaGestaoTurmas()"><i>🏫</i><span>CADASTRO DE<br>TURMAS</span></button>
+        <button class="btn-grande btn-vidro" onclick="telaEscolaGestaoAlunos()"><i>👥</i><span>CADASTRO DE<br>ALUNOS</span></button>
+        <button class="btn-grande btn-vidro" onclick="telaGestaoProfessores()"><i>👥</i><span>CADASTRO DE<br>PROFESSORES</span></button>
         
     `;
     abrirSubmenuVitrificado('CADASTROS', botoes);
@@ -598,11 +598,11 @@ function renderSubmenuUniformesKits() {
 function renderSubmenuRelatoriosEscola() {
     const botoes = `
         <button class="btn-grande btn-vidro" onclick="gerarRelatorioStatusTurmasEmTelaCheia()"><i>📊</i><span>ENTREGAS POR TURMA</span></button>
-        <button class="btn-grande btn-vidro" onclick="abrirSelecaoComprovante()"><i>📝</i><span>LISTAGEM PARA ASSINATURA NA ENTREGA DE UNIFORMES</span></button>
-        <button class="btn-grande btn-vidro" onclick="abrirSelecaoComprovanteMaterial()"><i>📝</i><span>LISTAGEM PARA ASSINATURA NA ENTREGA DE KITS</span></button>
+        <button class="btn-grande btn-vidro" onclick="abrirSelecaoComprovante()"><i>📝</i><span>LISTAGEM PARA ASSINATURA<br>NA ENTREGA DE UNIFORMES</span></button>
+        <button class="btn-grande btn-vidro" onclick="abrirSelecaoComprovanteMaterial()"><i>📝</i><span>LISTAGEM PARA ASSINATURA<br>NA ENTREGA DE KITS</span></button>
         <button class="btn-grande btn-vidro" onclick="telaRelatoriosGeral()"><i>📈</i><span>ENTREGAS DETALHADAS</span></button>
-        <button class="btn-grande btn-vidro" onclick="telaRelatorioProfessores()"><i>📈</i><span>LISTA DE PROFESSORES ATIVOS</span></button>
-        <button class="btn-grande btn-vidro" onclick="telaRelatorioPendenciaKit6()()"><i>👥</i><span>PROFESSORES QUE FALTAM RECEBER KIT 6</span></button>
+        <button class="btn-grande btn-vidro" onclick="telaRelatorioProfessores()"><i>📈</i><span>LISTA DE PROFESSORES<br>ATIVOS</span></button>
+        <button class="btn-grande btn-vidro" onclick="telaRelatorioPendenciaKit6()()"><i>👥</i><span>PROFESSORES QUE FALTAM<br>RECEBER KIT 6</span></button>
     `;
     abrirSubmenuVitrificado('RELATÓRIOS', botoes);
 }
@@ -627,15 +627,15 @@ function getBotoesSubmenu(perfil, titulo, contagem = 0, contagemProntos = 0) {
 
         if (titulo === 'RELATÓRIOS') return `
             <button class="btn-grande btn-vidro" onclick="telaHistoricoRemessas()"><i>🏷️</i><span>ROMANEIOS</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()"><i>🌎</i><span>PAINEL GERAL DE PEDIDOS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()"><i>🌎</i><span>PAINEL GERAL<br>DE PEDIDOS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaAuditoriaPedidos()"><i>♻️</i><span>FLUXO DO PEDIDO</span></button>
             <button class="btn-grande btn-vidro" onclick="telaHistoricoGeral()"><i>🔍</i><span>HISTÓRICO MOVIMENTAÇÃO</span></button>
             <button class="btn-grande btn-vidro" onclick="telaRelatorioLogStatus()"><i>🕵️</i><span>HISTÓRICO PEDIDOS</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaRelatoriosFaltantes()"><i>👕</i><span>ALUNOS QUE FALTAM RECEBER UNIFORME/KIT</span></button>            
-            <button class="btn-grande btn-vidro" onclick="telaProgressoGeralEscolas()"><i>📐</i><span>ENTREGA DE UNIFORMES E KITS</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaRelatorioConsolidado()"><i>🚨</i><span>LISTAGEM RECEBIDO/FALTA RECEBER</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaRelatorioProfessores()"><i>📈</i><span>LISTA DE PROFESSORES ATIVOS</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaRelatorioPendenciaKit6()()"><i>👥</i><span>PROFESSORES QUE FALTAM RECEBER KIT 6</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatoriosFaltantes()"><i>👕</i><span>ALUNOS QUE FALTAM<br>RECEBER UNIFORME/KIT</span></button>            
+            <button class="btn-grande btn-vidro" onclick="telaProgressoGeralEscolas()"><i>📐</i><span>ENTREGA DE UNIFORMES<br>E KITS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioConsolidado()"><i>🚨</i><span>LISTAGEM DE QUEM<br>RECEBEU OU FALTA RECEBER</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioProfessores()"><i>📈</i><span>LISTA DE PROFESSORES<br>ATIVOS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioPendenciaKit6()()"><i>👥</i><span>PROFESSORES QUE<br>FALTAM RECEBER KIT 6</span></button>
         `;
     }
 
@@ -643,7 +643,7 @@ function getBotoesSubmenu(perfil, titulo, contagem = 0, contagemProntos = 0) {
         if (titulo === 'PEDIDOS') return `
             <button class="btn-grande btn-vidro" onclick="telaAdminGerenciarSolicitacoes()">
                 ${contagem > 0 ? `<div class="badge-alerta-entrega">${contagem}</div>` : ''}
-                <i>⚖️</i><span>SOLICITAÇÕES DAS ESCOLAS</span>
+                <i>⚖️</i><span>SOLICITAÇÕES DAS<br>ESCOLAS</span>
             </button>
             <button class="btn-grande btn-vidro" onclick="abrirTelaSaidaPedido()"><i>➕</i><span>CRIAR PEDIDO</span></button>
             <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()"><i>📈</i><span>PAINEL DE PEDIDOS</span></button>
@@ -651,15 +651,15 @@ function getBotoesSubmenu(perfil, titulo, contagem = 0, contagemProntos = 0) {
         `;
         if (titulo === 'RELATÓRIOS') return `
             <button class="btn-grande btn-vidro" onclick="telaHistoricoRemessas()"><i>🏷️</i><span>ROMANEIOS</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()"><i>🌎</i><span>PAINEL GERAL DE PEDIDOS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaAdminDashboard()"><i>🌎</i><span>PAINEL GERAL<br>DE PEDIDOS</span></button>
             <button class="btn-grande btn-vidro" onclick="telaAuditoriaPedidos()"><i>♻️</i><span>FLUXO DO PEDIDO</span></button>
             <button class="btn-grande btn-vidro" onclick="telaHistoricoGeral()"><i>🔍</i><span>HISTÓRICO MOVIMENTAÇÃO</span></button>
             <button class="btn-grande btn-vidro" onclick="telaRelatorioLogStatus()"><i>🕵️</i><span>HISTÓRICO PEDIDOS</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaRelatoriosFaltantes()"><i>👕</i><span>ALUNOS QUE FALTAM RECEBER UNIFORME/KIT</span></button>            
-            <button class="btn-grande btn-vidro" onclick="telaProgressoGeralEscolas()"><i>📐</i><span>ENTREGA DE UNIFORMES E KITS</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaRelatorioConsolidado()"><i>🚨</i><span>LISTAGEM RECEBIDO/FALTA RECEBER</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaRelatorioProfessores()"><i>📈</i><span>LISTA DE PROFESSORES ATIVOS</span></button>
-            <button class="btn-grande btn-vidro" onclick="telaRelatorioPendenciaKit6()()"><i>👥</i><span>PROFESSORES QUE FALTAM RECEBER KIT 6</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatoriosFaltantes()"><i>👕</i><span>ALUNOS QUE FALTAM<br>RECEBER UNIFORME/KIT</span></button>            
+            <button class="btn-grande btn-vidro" onclick="telaProgressoGeralEscolas()"><i>📐</i><span>ENTREGA DE UNIFORMES<br>E KITS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioConsolidado()"><i>🚨</i><span>LISTAGEM DE QUEM<br>RECEBEU OU FALTA RECEBER</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioProfessores()"><i>📈</i><span>LISTA DE PROFESSORES<br>ATIVOS</span></button>
+            <button class="btn-grande btn-vidro" onclick="telaRelatorioPendenciaKit6()()"><i>👥</i><span>PROFESSORES QUE FALTAM<br>RECEBER KIT 6</span></button>
         `;
     }
     return '';
@@ -22711,133 +22711,248 @@ async function gerarPdfFaltantes(localId, tipo) {
     }
 }
 
+// --- GESTÃO DE PROFESSORES V3 ---
+
 async function telaGestaoProfessores() {
-    const container = document.getElementById('render-area');
+    const container = document.getElementById('app-content');
+    if (!container) return;
+
+    container.style.background = "transparent";
     container.innerHTML = `
-        <div style="display: flex; height: 100%; gap: 20px; padding: 10px;">
+        <div style="display: flex; height: calc(100vh - 120px); gap: 20px; padding: 15px; color: white;">
+            
             <div style="width: 200px; display: flex; flex-direction: column; gap: 10px;">
-                <button class="btn-acao" onclick="modalProfessor('incluir')">NOVO PROFESSOR</button>
-                <button class="btn-acao" onclick="listarProfessoresInativos()">REATIVAR</button>
+                <button class="btn-vidro" onclick="modalProfessorV3()" style="background: #16a34a; width: 100%; font-size: 0.7rem;">
+                    <i class="fas fa-plus"></i> NOVO PROFESSOR
+                </button>
+                <button class="btn-vidro" onclick="listarInativosV3()" style="background: #2563eb; width: 100%; font-size: 0.7rem;">
+                    <i class="fas fa-user-clock"></i> REATIVAR
+                </button>
+                <button class="btn-voltar-vidro" onclick="carregarDashboard()" style="width: 100%; font-size: 0.7rem;">
+                    VOLTAR
+                </button>
             </div>
 
-            <div style="flex: 1; display: flex; flex-direction: column; background: #1a1a1a; border-radius: 8px; overflow: hidden;">
-                <div style="padding: 15px; border-bottom: 1px solid #333; text-align: center;">
-                    <input type="text" id="filtro-prof" placeholder="Localizar professor..." 
-                           oninput="filtrarListaProfessores(this.value)"
-                           style="width: 80%; padding: 10px; border-radius: 20px; border: none; outline: none;">
+            <div style="flex: 1; display: flex; flex-direction: column; background: rgba(0,0,0,0.4); border-radius: 15px; border: 1px solid rgba(255,255,255,0.1); overflow: hidden;">
+                <div style="padding: 15px; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: center;">
+                    <input type="text" id="filtro-prof-v3" placeholder="LOCALIZAR PROFESSOR..." 
+                           oninput="filtrarProfessoresV3(this.value)"
+                           style="width: 70%; padding: 12px; border-radius: 25px; border: none; background: rgba(255,255,255,0.1); color: white; text-align: center; outline: none;">
                 </div>
-                <div id="lista-prof-container" style="flex: 1; overflow-y: auto; padding: 10px;">
+                
+                <div id="container-lista-v3" style="flex: 1; overflow-y: auto;">
                     </div>
             </div>
         </div>
 
-        <div id="confirmacao-entrega" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); 
-             background:#2c3e50; padding:25px; border:2px solid #3498db; border-radius:10px; z-index:9999; text-align:center; box-shadow: 0 0 20px #000;">
-            <h3 id="txt-confirmacao" style="color:white; margin-bottom:20px;">Confirma entrega do Kit 6?</h3>
-            <div style="display:flex; gap:15px; justify-content:center;">
-                <button id="btn-confirma-sim" style="background:#27ae60; color:white; border:none; padding:10px 30px; cursor:pointer; font-weight:bold;">SIM</button>
-                <button id="btn-confirma-nao" style="background:#c0392b; color:white; border:none; padding:10px 30px; cursor:pointer; font-weight:bold;">NÃO</button>
+        <div id="confirmacao-entrega-v3" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); 
+             background: rgba(15, 23, 42, 0.95); padding: 40px; border: 2px solid #3b82f6; border-radius: 20px; z-index: 10000; text-align: center; backdrop-filter: blur(10px);">
+            <h2 id="txt-confirma-prof" style="color:white; margin-bottom: 25px; font-size: 1.2rem;"></h2>
+            <div style="display: flex; gap: 20px; justify-content: center;">
+                <button id="btn-kit-sim" style="padding: 15px 40px; background: #16a34a; color: white; border: none; border-radius: 10px; font-weight: bold; cursor: pointer;">CONFIRMAR ENTREGA</button>
+                <button id="btn-kit-nao" style="padding: 15px 40px; background: #dc2626; color: white; border: none; border-radius: 10px; font-weight: bold; cursor: pointer;">CANCELAR</button>
             </div>
         </div>
     `;
-    renderizarListaProfessores();
+
+    renderizarListaProfessoresV3();
 }
 
-async function renderizarListaProfessores() {
-    const response = await fetch(`${API_URL}/v3/professores`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
-    const professores = await response.json();
-    const container = document.getElementById('lista-prof-container');
+async function renderizarListaProfessoresV3() {
+    const listaContainer = document.getElementById('container-lista-v3');
+    try {
+        const res = await fetch(`${API_URL}/v3/professores`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const professores = await res.json();
 
-    container.innerHTML = `
-        <table style="width: 100%; border-collapse: collapse;">
-            <thead style="position: sticky; top: 0; background: #1a1a1a;">
-                <tr style="color: #888; font-size: 0.8em; text-transform: uppercase; border-bottom: 2px solid #333;">
-                    <th style="padding: 10px; text-align: left;">Matrícula</th>
-                    <th style="padding: 10px; text-align: left;">Nome do Professor</th>
-                    <th style="padding: 10px; text-align: right; width: 150px;">RECEBEU KIT 6</th>
-                </tr>
-            </thead>
-            <tbody id="tbody-prof">
-                ${professores.map((p, idx) => `
-                    <tr id="row-prof-${idx}" style="border-bottom: 1px solid #222;">
-                        <td style="padding: 8px; color: #555;">${p.matric}</td>
-                        <td style="padding: 8px; font-weight: bold;">
-                            <button onclick="inativarProfessor(${p.id})" style="background:none; border:none; color:#c0392b; cursor:pointer; margin-right:8px;">
-                                <i class="fas fa-user-minus"></i>
-                            </button>
-                            ${p.nome}
-                        </td>
-                        <td style="padding: 8px; text-align: right;">
-                            ${p.data_entrega 
-                                ? `<span style="font-size: 0.8em; color: #27ae60;">${new Date(p.data_entrega).toLocaleDateString()} ✓</span>`
-                                : `<input type="checkbox" class="chk-kit" onchange="prepararEntrega(${p.id}, ${idx}, '${p.nome}')" style="transform: scale(1.3); cursor: pointer;">`
-                            }
-                        </td>
+        listaContainer.innerHTML = `
+            <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+                <thead style="position: sticky; top: 0; background: #1e3a8a; z-index: 1;">
+                    <tr>
+                        <th style="padding: 12px; text-align: left; width: 60px;">AÇÕES</th>
+                        <th style="padding: 12px; text-align: left;">NOME DO PROFESSOR</th>
+                        <th style="padding: 12px; text-align: left; width: 120px;">MATRÍCULA</th>
+                        <th style="padding: 12px; text-align: center; width: 180px;">RECEBEU KIT 6</th>
                     </tr>
-                `).join('')}
-            </tbody>
-        </table>
-    `;
+                </thead>
+                <tbody id="tbody-prof-v3">
+                    ${professores.map((p, i) => `
+                        <tr id="linha-prof-${i}" style="border-bottom: 1px solid rgba(255,255,255,0.05); transition: 0.3s;">
+                            <td style="padding: 10px;">
+                                <div style="display:flex; gap:8px;">
+                                    <i class="fas fa-edit" onclick="modalProfessorV3(${JSON.stringify(p).replace(/"/g, '&quot;')})" style="cursor:pointer; color:#3b82f6;"></i>
+                                    <i class="fas fa-user-slash" onclick="mudarStatusProfessorV3(${p.id}, 'INATIVO')" style="cursor:pointer; color:#ef4444;"></i>
+                                </div>
+                            </td>
+                            <td style="padding: 10px; font-weight: bold;">${p.nome}</td>
+                            <td style="padding: 10px; color: #94a3b8;">${p.matric || '---'}</td>
+                            <td style="padding: 10px; text-align: center;">
+                                ${p.data_entrega 
+                                    ? `<span style="color: #22c55e; font-size: 0.75rem;">${new Date(p.data_entrega).toLocaleDateString('pt-BR')} ✓</span>`
+                                    : `<input type="checkbox" onclick="prepararEntregaKitV3(${p.id}, '${p.nome}', ${i})" style="width:18px; height:18px; cursor:pointer;">`
+                                }
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+    } catch (err) {
+        notificar("Erro ao carregar lista de professores", "erro");
+    }
 }
 
-// Lógica de Entrega com foco automático
-function prepararEntrega(professorId, index, nome) {
-    const modal = document.getElementById('confirmacao-entrega');
-    const txt = document.getElementById('txt-confirmacao');
-    txt.innerText = `Confirmar entrega para: ${nome}?`;
-    modal.style.display = 'block';
+function filtrarProfessoresV3(termo) {
+    const rows = document.querySelectorAll('#tbody-prof-v3 tr');
+    rows.forEach(row => {
+        const texto = row.innerText.toUpperCase();
+        row.style.display = texto.includes(termo.toUpperCase()) ? '' : 'none';
+    });
+}
 
-    document.getElementById('btn-confirma-sim').onclick = async () => {
+// --- LÓGICA DE ENTREGA (KIT 6) ---
+function prepararEntregaKitV3(id, nome, index) {
+    const div = document.getElementById('confirmacao-entrega-v3');
+    const txt = document.getElementById('txt-confirma-prof');
+    txt.innerText = `CONFIRMA ENTREGA DO KIT 6 PARA:\n${nome}?`;
+    div.style.display = 'block';
+
+    document.getElementById('btn-kit-sim').onclick = async () => {
         try {
             const res = await fetch(`${API_URL}/v3/professores/entrega-kit`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
-                body: JSON.stringify({ professor_id: professorId, local_id: USUARIO.local_id, usuario_id: USUARIO.id })
+                body: JSON.stringify({ 
+                    professor_id: id, 
+                    local_id: localStorage.getItem('local_id'),
+                    usuario_id: localStorage.getItem('usuario_id')
+                })
             });
+
             if (!res.ok) throw await res.json();
             
-            modal.style.display = 'none';
-            renderizarListaProfessores().then(() => pularParaProximo(index));
+            div.style.display = 'none';
+            notificar("Entrega registrada com sucesso!", "sucesso");
+            await renderizarListaProfessoresV3();
+            pularParaProximoV3(index);
         } catch (err) {
-            alert(err.error);
-            cancelarSelecao(index);
+            notificar(err.error || "Erro na entrega", "erro");
+            document.querySelectorAll('#tbody-prof-v3 input[type="checkbox"]')[index].checked = false;
+            div.style.display = 'none';
         }
     };
 
-    document.getElementById('btn-confirma-nao').onclick = () => {
-        modal.style.display = 'none';
-        cancelarSelecao(index);
-        pularParaProximo(index);
+    document.getElementById('btn-kit-nao').onclick = () => {
+        div.style.display = 'none';
+        const chks = document.querySelectorAll('#tbody-prof-v3 input[type="checkbox"]');
+        if (chks[index]) chks[index].checked = false;
+        pularParaProximoV3(index);
     };
 }
 
-function pularParaProximo(indexAtual) {
-    const proximaRow = document.getElementById(`row-prof-${indexAtual + 1}`);
-    if (proximaRow) {
-        proximaRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        proximaRow.style.background = '#2c3e50';
-        setTimeout(() => proximaRow.style.background = 'transparent', 1500);
+function pularParaProximoV3(index) {
+    const proximaLinha = document.getElementById(`linha-prof-${index + 1}`);
+    if (proximaLinha) {
+        proximaLinha.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        proximaLinha.style.background = "rgba(59, 130, 246, 0.2)";
+        setTimeout(() => proximaLinha.style.background = "transparent", 2000);
     }
 }
 
-function cancelarSelecao(index) {
-    const inputs = document.querySelectorAll('.chk-kit');
-    if (inputs[index]) inputs[index].checked = false;
+// --- CRUD V3 (INCLUIR / EDITAR / STATUS) ---
+
+async function mudarStatusProfessorV3(id, novoStatus) {
+    try {
+        const res = await fetch(`${API_URL}/v3/professores/${id}/status`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ status: novoStatus })
+        });
+        if (res.ok) {
+            renderizarListaProfessoresV3();
+            if(novoStatus === 'ATIVO') document.getElementById('modal-reativar')?.remove();
+        }
+    } catch (err) { console.error(err); }
 }
 
-// Funções do CRUD Simplicadas (v3)
-async function inativarProfessor(id) {
-    await fetch(`${API_URL}/v3/professores/${id}/status`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
-        body: JSON.stringify({ status: 'INATIVO' })
+function modalProfessorV3(prof = null) {
+    const modal = document.createElement('div');
+    modal.className = 'modal-full';
+    modal.innerHTML = `
+        <div class="modal-content-vidro" style="width: 400px; padding: 30px;">
+            <h2 style="color:white; margin-bottom:20px;">${prof ? 'EDITAR' : 'NOVO'} PROFESSOR</h2>
+            <input type="text" id="nome-prof-v3" placeholder="NOME COMPLETO" value="${prof ? prof.nome : ''}" style="width:100%; padding:12px; margin-bottom:15px; border-radius:8px; border:none;">
+            <input type="text" id="mat-prof-v3" placeholder="MATRÍCULA" value="${prof ? prof.matric : ''}" style="width:100%; padding:12px; margin-bottom:20px; border-radius:8px; border:none;">
+            
+            <div style="display:flex; gap:10px;">
+                <button onclick="salvarProfessorV3(${prof ? prof.id : 'null'})" class="btn-vidro" style="background:#16a34a; flex:1;">SALVAR</button>
+                <button onclick="this.closest('.modal-full').remove()" class="btn-vidro" style="background:#dc2626; flex:1;">CANCELAR</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    document.getElementById('nome-prof-v3').focus();
+}
+
+async function salvarProfessorV3(id) {
+    const nome = document.getElementById('nome-prof-v3').value;
+    const matric = document.getElementById('mat-prof-v3').value;
+
+    if (!nome) return notificar("Nome é obrigatório", "erro");
+
+    const url = id ? `${API_URL}/v3/professores/${id}` : `${API_URL}/v3/professores`;
+    const method = id ? 'PUT' : 'POST';
+
+    try {
+        const res = await fetch(url, {
+            method: method,
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ nome, matric })
+        });
+
+        if (res.ok) {
+            notificar("Dados salvos!", "sucesso");
+            document.querySelector('.modal-full').remove();
+            renderizarListaProfessoresV3();
+        } else {
+            const d = await res.json();
+            notificar(d.error || "Erro ao salvar", "erro");
+        }
+    } catch (err) { console.error(err); }
+}
+
+async function listarInativosV3() {
+    const res = await fetch(`${API_URL}/v3/professores/inativos`, {
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
     });
-    renderizarListaProfessores();
-}
+    const inativos = await res.json();
 
-async function listarProfessoresInativos() {
-    // Abre um modal rápido com a lista de inativos e botão "Reativar"
-    // Lógica similar à renderizarListaProfessores mudando a URL e o botão para 'ATIVO'
+    const modal = document.createElement('div');
+    modal.id = 'modal-reativar';
+    modal.className = 'modal-full';
+    modal.innerHTML = `
+        <div class="modal-content-vidro" style="width: 600px; max-height: 80vh; overflow: hidden; display:flex; flex-direction:column;">
+            <div style="padding:20px; border-bottom: 1px solid rgba(255,255,255,0.1); display:flex; justify-content:space-between; align-items:center;">
+                <h3 style="color:white;">PROFESSORES INATIVOS</h3>
+                <button onclick="this.closest('.modal-full').remove()" style="background:none; border:none; color:white; font-size:1.5rem; cursor:pointer;">&times;</button>
+            </div>
+            <div style="flex:1; overflow-y:auto; padding:20px;">
+                <table style="width:100%; color:white; font-size:0.9rem;">
+                    ${inativos.map(p => `
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                            <td style="padding:10px;">${p.nome}</td>
+                            <td style="padding:10px; width:100px;">
+                                <button onclick="mudarStatusProfessorV3(${p.id}, 'ATIVO')" style="background:#2563eb; color:white; border:none; padding:5px 10px; border-radius:5px; cursor:pointer;">REATIVAR</button>
+                            </td>
+                        </tr>
+                    `).join('')}
+                    ${inativos.length === 0 ? '<tr><td colspan="2" style="text-align:center; padding:20px; color:#666;">Nenhum inativo encontrado</td></tr>' : ''}
+                </table>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
 }
 
 // --- 1. EXIBIÇÃO EM TELA ---

@@ -2588,8 +2588,8 @@ async function telaCadastrosBase() {
                     <button onclick="telaCadastroCategoria()" class="btn-grande btn-vidro" style="text-align: left; padding: 20px;">
                         📁 <span>CATEGORIA</span>
                     </button>
-                    <button onclick="telaCadastroLocal()" class="btn-grande btn-vidro" style="text-align: left; padding: 20px;">
-                        📍 <span>LOCAL</span>
+                    <button onclick="telaGestaoLocais()" class="btn-grande btn-vidro" style="text-align: left; padding: 20px;">
+                        📍 <span>LOCAIS<br>ESCOLAS</span>
                     </button>
                     <button onclick="formProduto()" class="btn-grande btn-vidro" style="text-align: left; padding: 20px;">
                         📦 <span>PRODUTO</span>
@@ -24043,6 +24043,77 @@ async function gerarComprovanteTurma(turmaId) {
     } catch (err) {
         console.error('Erro:', err);
         if (typeof notificar === 'function') notificar(`Erro: ${err.message}`, 'erro');
+    }
+}
+
+async function telaGestaoLocais() {
+    const app = document.getElementById('app-content');
+    app.innerHTML = `
+        <div style="display: flex; height: calc(100vh - 100px); gap: 15px; padding: 15px; color: white; box-sizing: border-box;">
+            <div style="width: 250px; display: flex; flex-direction: column; gap: 10px;">
+                <button class="btn-vidro" onclick="abrirModalLocalV3()" style="background: #10b981;">
+                    <i class="fas fa-plus"></i> NOVA UNIDADE
+                </button>
+                <button class="btn-voltar-vidro" onclick="carregarDashboard()">VOLTAR</button>
+                
+                <div class="painel-vidro" style="margin-top: 10px; padding: 15px; font-size: 0.8rem;">
+                    <p><b>Dica:</b> O "Nome Curto" é usado em listas e o "Nome Oficial" em documentos.</p>
+                </div>
+            </div>
+
+            <div style="flex: 1; display: flex; flex-direction: column; background: rgba(0,0,0,0.2); border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); overflow: hidden;">
+                <div id="container-locais-v3" style="flex: 1; overflow-y: auto;">
+                    <p style="padding: 20px;">Carregando unidades...</p>
+                </div>
+            </div>
+        </div>
+    `;
+    renderizarListaLocaisV3();
+}
+
+async function renderizarListaLocaisV3() {
+    const container = document.getElementById('container-locais-v3');
+    try {
+        const res = await fetch(`${API_URL}/v3/locais`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const locais = await res.json();
+
+        container.innerHTML = `
+            <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+                <thead style="position: sticky; top: 0; background: #1e3a8a; color: white; z-index: 10;">
+                    <tr>
+                        <th style="padding: 12px; text-align: left; width: 100px;">AÇÕES</th>
+                        <th style="padding: 12px; text-align: left;">NOME CURTO</th>
+                        <th style="padding: 12px; text-align: left;">NOME OFICIAL / ESCOLA</th>
+                        <th style="padding: 12px; text-align: center; width: 100px;">STATUS</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${locais.map(l => `
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); background: ${l.status === 'INATIVO' ? 'rgba(255,0,0,0.05)' : 'transparent'}">
+                            <td style="padding: 10px;">
+                                <div style="display:flex; gap:10px;">
+                                    <i class="fas fa-edit" onclick='abrirModalLocalV3(${JSON.stringify(l)})' style="color:#3b82f6; cursor:pointer;" title="Editar"></i>
+                                    <i class="fas ${l.status === 'ATIVO' ? 'fa-toggle-on' : 'fa-toggle-off'}" 
+                                       onclick="alternarStatusLocalV3(${l.id}, '${l.status}')" 
+                                       style="color: ${l.status === 'ATIVO' ? '#22c55e' : '#64748b'}; cursor:pointer; font-size: 1.2rem;"></i>
+                                </div>
+                            </td>
+                            <td style="padding: 10px; font-weight: bold;">${l.nome}</td>
+                            <td style="padding: 10px; color: #cbd5e1;">${l.nome_oficial || '---'}</td>
+                            <td style="padding: 10px; text-align: center;">
+                                <span style="padding: 3px 8px; border-radius: 4px; font-size: 0.7rem; background: ${l.status === 'ATIVO' ? '#16a34a' : '#dc2626'}">
+                                    ${l.status}
+                                </span>
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+    } catch (err) {
+        container.innerHTML = "<p style='padding:20px; color:red;'>Erro ao carregar locais.</p>";
     }
 }
 

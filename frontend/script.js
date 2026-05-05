@@ -23340,10 +23340,12 @@ async function telaEntregaUniformes() {
             
             /* Tabela com Layout Fixo para Colunas Iguais */
             .tabela-uniforme { 
-                width: 100%; 
-                table-layout: fixed; /* Força colunas iguais */
+                width: auto; /* Permite que a tabela termine antes da extremidade direita */
+                table-layout: fixed; 
                 border-collapse: collapse; 
+                margin-bottom: 20px;
             }
+
             .tabela-uniforme th, .tabela-uniforme td { 
                 border: 1px solid #dee2e6; 
                 text-align: center; 
@@ -23352,10 +23354,24 @@ async function telaEntregaUniformes() {
             
             /* Largura das Colunas */
             .col-nome-aluno { width: 300px !important; text-align: left !important; padding-left: 10px !important; background: #f8f9fa; position: sticky; left: 0; z-index: 11; border-right: 2px solid #dee2e6 !important; }
-            .col-produto { width: 70px; } /* Todas as colunas de produtos terão exatamente 70px */
+            .col-produto { width: 75px; !important; }
 
-            .header-vertical { height: 140px; vertical-align: bottom; padding-bottom: 10px; background: #e9ecef; }
-            .texto-vertical { writing-mode: vertical-rl; transform: rotate(180deg); font-weight: bold; font-size: 11px; margin: 0 auto; }
+            .header-vertical { 
+                height: 50px; /* Altura reduzida de 140px para 50px */
+                vertical-align: middle; 
+                background: #e9ecef; 
+            }                
+
+            .texto-vertical { 
+                writing-mode: horizontal-tb; /* Texto na horizontal */
+                transform: none; /* Remove a rotação */
+                font-weight: bold; 
+                font-size: 10px; 
+                line-height: 1.1; /* Aproxima as linhas nos nomes compostos */
+                margin: 0 auto; 
+                display: block;
+                text-align: center;
+            }            
             
             .select-tamanho { width: 95%; font-size: 11px; border: 1px solid #ccc; cursor: pointer; }
             .select-tamanho:focus { border-color: #007bff; outline: none; }
@@ -23363,7 +23379,14 @@ async function telaEntregaUniformes() {
             
             .btn-salvar { background: #28a745; color: #fff; border: none; padding: 10px 25px; border-radius: 4px; cursor: pointer; font-weight: bold; }
             .btn-salvar:hover { background: #218838; }
-            .status-ok { color: #28a745; font-weight: bold; font-size: 10px; }
+            .status-ok { 
+                color: #16a34a; 
+                font-weight: bold; 
+                font-size: 9px; /* Fonte bem menor */
+                white-space: nowrap; /* Garante que fique tudo na mesma linha */
+                display: inline-block;
+                line-height: 1;
+            }
         </style>
 
         <div class="container-entrega">
@@ -23411,10 +23434,25 @@ async function carregarGradeInteligente(turmaId) {
             });
         }
 
-        let html = `<table class="tabela-uniforme"><thead><tr><th class="col-nome-aluno">ALUNO</th>`;
+        // Inicia a tabela e a primeira coluna
+        let html = `<table class="tabela-uniforme"><thead><tr><th class="col-nome-aluno" style="vertical-align: middle;">ALUNO</th>`;
+        
+        // Loop que percorre os produtos vindos do banco
         data.produtos.forEach(p => {
-            html += `<th class="col-produto header-vertical"><div class="texto-vertical">${p.nome.toUpperCase()}</div></th>`;
+            // Pegamos o nome do banco e preparamos a quebra de linha para os casos compostos
+            let nomeParaExibir = p.nome.toUpperCase()
+                .replace("SHORT SAIA", "SHORT<br>SAIA")
+                .replace("CALCA FEM", "CALCA<br>FEM")
+                .replace("CALCA MAS", "CALCA<br>MAS");
+
+            html += `
+                <th class="col-produto header-vertical">
+                    <div class="texto-vertical" style="writing-mode: horizontal-tb; transform: none; font-weight: bold; line-height: 1.1;">
+                        ${nomeParaExibir}
+                    </div>
+                </th>`;
         });
+        
         html += `</tr></thead><tbody>`;
 
         // Linha de Replicação (Apenas se houver estoque)
@@ -23432,8 +23470,14 @@ async function carregarGradeInteligente(turmaId) {
             html += `<tr><td class="col-nome-aluno">${aluno.nome}</td>`;
             data.produtos.forEach(p => {
                 const entregue = aluno.statusItens[p.id];
+                
                 if (entregue.status === 'entregue') {
-                    html += `<td><span class="status-ok">ENTREGUE<br>${entregue.tamanho}</span></td>`;
+                    // Formata a data para DD/MM (ex: 04/05)
+                    const dataF = entregue.data_entrega 
+                        ? new Date(entregue.data_entrega).toLocaleDateString('pt-BR').substring(0, 5) 
+                        : '--/--';
+
+                    html += `<td><span class="status-ok">${dataF} - ${entregue.tamanho}</span></td>`;
                 } else {
                     html += `<td>
                         <select class="select-tamanho input-entrega" 

@@ -2576,6 +2576,8 @@ async function salvarNovaCategoria() {
 
 async function telaCadastrosBase() {
     const app = document.getElementById('app-content');
+    let localSelecionadoV3 = null;
+
     app.innerHTML = `
         <div style="padding:20px; height: 100%; display: flex; flex-direction: column;">
             <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
@@ -24092,17 +24094,31 @@ async function gerarComprovanteTurma(turmaId) {
 }
 
 async function telaGestaoLocais() {
+    localSelecionadoV3 = null; // Reseta seleção ao abrir
     const app = document.getElementById('app-content');
+    let listaLocaisCache = [];
+
     app.innerHTML = `
         <div style="display: flex; height: calc(100vh - 100px); gap: 15px; padding: 15px; color: white; box-sizing: border-box;">
             <div style="width: 250px; display: flex; flex-direction: column; gap: 10px;">
                 <button class="btn-vidro" onclick="abrirModalLocalV3()" style="background: #10b981;">
                     <i class="fas fa-plus"></i> NOVA UNIDADE
                 </button>
-                <button class="btn-voltar-vidro" onclick="carregarDashboard()">VOLTAR</button>
+                
+                <button class="btn-vidro" onclick="editarSelecionadoV3()" style="background: #3b82f6;">
+                    <i class="fas fa-edit"></i> EDITAR NOME
+                </button>
+                <button class="btn-vidro" onclick="alterarStatusSelecionadoV3('INATIVO')" style="background: #ef4444;">
+                    <i class="fas fa-ban"></i> INATIVAR
+                </button>
+                <button class="btn-vidro" onclick="alterarStatusSelecionadoV3('ATIVO')" style="background: #f59e0b;">
+                    <i class="fas fa-check"></i> REATIVAR
+                </button>
+
+                <button class="btn-voltar-vidro" onclick="carregarDashboard()" style="margin-top:auto;">VOLTAR</button>
                 
                 <div class="painel-vidro" style="margin-top: 10px; padding: 15px; font-size: 0.8rem;">
-                    <p><b>Dica:</b> O "Nome Curto" é usado em listas e o "Nome Oficial" em documentos.</p>
+                    <p><b>Dica:</b> Clique em uma linha da tabela para selecioná-la e use os botões acima.</p>
                 </div>
             </div>
 
@@ -24116,35 +24132,67 @@ async function telaGestaoLocais() {
     renderizarListaLocaisV3();
 }
 
+function editarSelecionadoV3() {
+    if (!localSelecionadoV3) return Swal.fire('Aviso', 'Selecione um local na lista primeiro!', 'warning');
+    abrirModalLocalV3(localSelecionadoV3);
+}
+
+async function alterarStatusSelecionadoV3(novoStatus) {
+    if (!localSelecionadoV3) return Swal.fire('Aviso', 'Selecione um local na lista primeiro!', 'warning');
+    
+    if (localSelecionadoV3.status === novoStatus) {
+        return Swal.fire('Informação', `Este local já está ${novoStatus}.`, 'info');
+    }
+
+    const acao = novoStatus === 'ATIVO' ? 'REATIVAR' : 'INATIVAR';
+    const confirmacao = await Swal.fire({
+        title: 'Confirmar',
+        text: `Deseja realmente ${acao} a unidade ${localSelecionadoV3.nome}?`,
+        icon: 'question',
+        showCancelButton: true
+    });
+
+    if (confirmacao.isConfirmed) {
+        try {
+            const res = await fetch(`${API_URL}/v3/locais/${localSelecionadoV3.id}/status`, {
+                method: 'PATCH',
+                headers: { 'Authorization': `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: novoStatus })
+            });
+
+            if (res.ok) {
+                Swal.fire('Sucesso!', `Unidade ${novoStatus === 'ATIVO' ? 'reativada' : 'inativada'}.`, 'success');
+                renderizarListaLocaisV3();
+                localSelecionadoV3 = null; // Reseta após a ação
+            }
+        } catch (err) {
+            Swal.fire('Erro', 'Não foi possível alterar o status.', 'error');
+        }
+    }
+}
+
 async function renderizarListaLocaisV3() {
     const container = document.getElementById('container-locais-v3');
     try {
         const res = await fetch(`${API_URL}/v3/locais`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
-        const locais = await res.json();
+        listaLocaisCache = await res.json();
 
         container.innerHTML = `
-            <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem; cursor: pointer;">
                 <thead style="position: sticky; top: 0; background: #1e3a8a; color: white; z-index: 10;">
                     <tr>
-                        <th style="padding: 12px; text-align: left; width: 100px;">AÇÕES</th>
                         <th style="padding: 12px; text-align: left;">NOME CURTO</th>
                         <th style="padding: 12px; text-align: left;">NOME OFICIAL / ESCOLA</th>
                         <th style="padding: 12px; text-align: center; width: 100px;">STATUS</th>
                     </tr>
                 </thead>
-                <tbody>
-                    ${locais.map(l => `
-                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); background: ${l.status === 'INATIVO' ? 'rgba(255,0,0,0.05)' : 'transparent'}">
-                            <td style="padding: 10px;">
-                                <div style="display:flex; gap:10px;">
-                                    <i class="fas fa-edit" onclick='abrirModalLocalV3(${JSON.stringify(l)})' style="color:#3b82f6; cursor:pointer;" title="Editar"></i>
-                                    <i class="fas ${l.status === 'ATIVO' ? 'fa-toggle-on' : 'fa-toggle-off'}" 
-                                       onclick="alternarStatusLocalV3(${l.id}, '${l.status}')" 
-                                       style="color: ${l.status === 'ATIVO' ? '#22c55e' : '#64748b'}; cursor:pointer; font-size: 1.2rem;"></i>
-                                </div>
-                            </td>
+                <tbody id="tbody-locais">
+                    ${listaLocaisCache.map(l => `
+                        <tr id="linha-local-${l.id}" 
+                            onclick="selecionarLinhaLocalV3(${l.id})"
+                            style="border-bottom: 1px solid rgba(255,255,255,0.05); background: ${l.status === 'INATIVO' ? 'rgba(255,0,0,0.1)' : 'transparent'}">
                             <td style="padding: 10px; font-weight: bold;">${l.nome}</td>
                             <td style="padding: 10px; color: #cbd5e1;">${l.nome_oficial || '---'}</td>
                             <td style="padding: 10px; text-align: center;">
@@ -24160,6 +24208,21 @@ async function renderizarListaLocaisV3() {
     } catch (err) {
         container.innerHTML = "<p style='padding:20px; color:red;'>Erro ao carregar locais.</p>";
     }
+}
+
+function selecionarLinhaLocalV3(id) {
+    // Remove destaque de todas as linhas
+    const linhas = document.querySelectorAll('#tbody-locais tr');
+    linhas.forEach(tr => tr.style.outline = "none");
+    linhas.forEach(tr => tr.style.background = tr.innerHTML.includes('INATIVO') ? 'rgba(255,0,0,0.1)' : 'transparent');
+
+    // Destaca a linha clicada
+    const linha = document.getElementById(`linha-local-${id}`);
+    linha.style.outline = "2px solid #3b82f6";
+    linha.style.background = "rgba(59, 130, 246, 0.2)";
+
+    // Salva o objeto selecionado do cache
+    localSelecionadoV3 = listaLocaisCache.find(l => l.id === id);
 }
 
 async function alternarStatusLocalV3(id, statusAtual) {

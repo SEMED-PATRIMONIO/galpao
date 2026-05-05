@@ -23471,22 +23471,24 @@ async function carregarGradeInteligente(turmaId) {
             data.produtos.forEach(p => {
                 const entregue = aluno.statusItens[p.id];
                 
-                if (entregue.status === 'entregue') {
-                    // O backend envia como 'data' (devido ao mapeamento feito na rota)
-                    const dataBruta = entregue.data;
-                    
-                    let dataF = '--/--';
-                    if (dataBruta) {
-                        // Criamos o objeto Date. Se for string do Postgres, o JS converte.
-                        const d = new Date(dataBruta);
-                        // Verifica se a data é válida
-                        if (!isNaN(d.getTime())) {
-                            // Formata para DD/MM
-                            dataF = d.toLocaleDateString('pt-BR').substring(0, 5);
-                        }
-                    }
+                if (entregue && entregue.status === 'entregue') {
+                    // Busca a data no campo 'data' (como definido na sua rota)
+                    const d = entregue.data ? new Date(entregue.data) : null;
+                    const dataF = (d && !isNaN(d)) ? d.toLocaleDateString('pt-BR').substring(0, 5) : '--/--';
 
                     html += `<td><span class="status-ok">${dataF} - ${entregue.tamanho}</span></td>`;
+                } else {
+                    // Aqui remontamos o select garantindo que ele busque os tamanhos do estoqueVirtual
+                    const tamanhos = estoqueVirtual[p.id] ? Object.keys(estoqueVirtual[p.id]) : [];
+                    html += `<td>
+                        <select class="select-tamanho input-entrega" 
+                                data-aluno="${aluno.id}" 
+                                data-produto="${p.id}" 
+                                onchange="validarTrocaEstoque(this)">
+                            <option value="">--</option>
+                            ${tamanhos.map(tam => `<option value="${tam}">${tam}</option>`).join('')}
+                        </select>
+                    </td>`;
                 }
             });
             html += `</tr>`;

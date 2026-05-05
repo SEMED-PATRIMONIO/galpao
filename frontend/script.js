@@ -23505,13 +23505,24 @@ async function carregarGradeInteligente(turmaId) {
 }
 
 function replicarColunaInteligente(pId, tamanho) {
-    if (!tamanho) return;
+    // Buscamos todos os selects daquela coluna específica (produto)
     const selects = document.querySelectorAll(`.input-entrega[data-produto="${pId}"]`);
     
     selects.forEach(sel => {
-        if (!sel.value && estoqueVirtual[pId][tamanho] > 0) {
+        // Se o tamanho for vazio (selecionou '--'), limpamos o campo
+        if (!tamanho) {
+            if (sel.value !== "") {
+                sel.value = "";
+                validarTrocaEstoque(sel); // Dispara sua lógica original de estoque
+            }
+            return;
+        }
+
+        // Se o campo estiver vazio OU se for um valor diferente do selecionado no topo,
+        // nós atualizamos para o novo valor selecionado.
+        if (sel.value !== tamanho) {
             sel.value = tamanho;
-            validarTrocaEstoque(sel);
+            validarTrocaEstoque(sel); // Dispara sua lógica original de estoque
         }
     });
 }

@@ -24162,6 +24162,85 @@ async function renderizarListaLocaisV3() {
     }
 }
 
+async function alternarStatusLocalV3(id, statusAtual) {
+    const novoStatus = statusAtual === 'ATIVO' ? 'INATIVO' : 'ATIVO';
+    const acao = novoStatus === 'ATIVO' ? 'reativar' : 'inativar';
+
+    if (!confirm(`Deseja realmente ${acao} esta unidade?`)) return;
+
+    try {
+        const res = await fetch(`${API_URL}/v3/locais/${id}/status`, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ status: novoStatus })
+        });
+
+        if (res.ok) {
+            Swal.fire('Sucesso!', `Unidade ${novoStatus.toLowerCase()}ada.`, 'success');
+            renderizarListaLocaisV3(); // Recarrega a lista
+        } else {
+            const erro = await res.json();
+            throw new Error(erro.error);
+        }
+    } catch (err) {
+        Swal.fire('Erro', err.message, 'error');
+    }
+}
+
+async function abrirModalLocalV3(local = null) {
+    const isEdit = !!local;
+    
+    const { value: formValues } = await Swal.fire({
+        title: isEdit ? 'Editar Unidade' : 'Nova Unidade',
+        html: `
+            <input id="swal-nome" class="swal2-input" placeholder="Nome Curto (Ex: CENTRO)" value="${isEdit ? local.nome : ''}">
+            <input id="swal-oficial" class="swal2-input" placeholder="Nome Oficial / Escola" value="${isEdit ? (local.nome_oficial || '') : ''}">
+        `,
+        focusConfirm: false,
+        showCancelButton: true,
+        confirmButtonText: 'SALVAR',
+        cancelButtonText: 'CANCELAR',
+        preConfirm: () => {
+            const nome = document.getElementById('swal-nome').value;
+            const nome_oficial = document.getElementById('swal-oficial').value;
+            if (!nome) {
+                Swal.showValidationMessage('O Nome Curto é obrigatório');
+                return false;
+            }
+            return { nome, nome_oficial };
+        }
+    });
+
+    if (formValues) {
+        try {
+            const url = isEdit ? `${API_URL}/v3/locais/${local.id}` : `${API_URL}/v3/locais`;
+            const method = isEdit ? 'PUT' : 'POST';
+
+            const res = await fetch(url, {
+                method: method,
+                headers: {
+                    'Authorization': `Bearer ${TOKEN}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(formValues)
+            });
+
+            if (res.ok) {
+                Swal.fire('Salvo!', 'As informações foram atualizadas.', 'success');
+                renderizarListaLocaisV3();
+            } else {
+                const erro = await res.json();
+                throw new Error(erro.error);
+            }
+        } catch (err) {
+            Swal.fire('Erro', err.message, 'error');
+        }
+    }
+}
+
 window.telaVisualizarEstoque = telaVisualizarEstoque;
 window.telaAbastecerEstoque = telaAbastecerEstoque;
 window.telaAdminGerenciarSolicitacoes = telaAdminGerenciarSolicitacoes;

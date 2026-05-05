@@ -23472,22 +23472,21 @@ async function carregarGradeInteligente(turmaId) {
                 const entregue = aluno.statusItens[p.id];
                 
                 if (entregue.status === 'entregue') {
-                    // Formata a data para DD/MM (ex: 04/05)
-                    const dataF = entregue.data_entrega 
-                        ? new Date(entregue.data_entrega).toLocaleDateString('pt-BR').substring(0, 5) 
-                        : '--/--';
+                    // O backend envia como 'data' (devido ao mapeamento feito na rota)
+                    const dataBruta = entregue.data;
+                    
+                    let dataF = '--/--';
+                    if (dataBruta) {
+                        // Criamos o objeto Date. Se for string do Postgres, o JS converte.
+                        const d = new Date(dataBruta);
+                        // Verifica se a data é válida
+                        if (!isNaN(d.getTime())) {
+                            // Formata para DD/MM
+                            dataF = d.toLocaleDateString('pt-BR').substring(0, 5);
+                        }
+                    }
 
                     html += `<td><span class="status-ok">${dataF} - ${entregue.tamanho}</span></td>`;
-                } else {
-                    html += `<td>
-                        <select class="select-tamanho input-entrega" 
-                                data-aluno="${aluno.id}" 
-                                data-produto="${p.id}" 
-                                onchange="validarTrocaEstoque(this)">
-                            <option value="">--</option>
-                            ${Object.keys(estoqueVirtual[p.id] || {}).map(tam => `<option value="${tam}">${tam}</option>`).join('')}
-                        </select>
-                    </td>`;
                 }
             });
             html += `</tr>`;

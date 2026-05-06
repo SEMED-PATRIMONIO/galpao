@@ -589,7 +589,7 @@ function renderSubmenuUniformesKits() {
         <button class="btn-grande btn-vidro" onclick="telaEscolaConsultaEstoque()"><i>📦</i><span>MEU ESTOQUE</span></button>
         <button class="btn-grande btn-vidro" onclick="telaSolicitarUniforme()"><i>📝</i><span>SOLICITAR</span></button>
         <button class="btn-grande btn-vidro" onclick="telaEntregaUniformes()"><i>👕</i><span>ENTREGA DE UNIFORMES</span></button>
-        <button class="btn-grande btn-vidro" onclick="renderizarMatrizMaterialV2()"><i>✏️</i><span>ENTREGA DE KITS</span></button>
+        <button class="btn-grande btn-vidro" onclick="telaEntregaMaterial()"><i>✏️</i><span>ENTREGA DE KITS</span></button>
         <button class="btn-grande btn-vidro" onclick="telaDevolucaoUniforme()"><i>🔄</i><span>DEVOLVER</span></button>
     `;
     abrirSubmenuVitrificado('UNIFORMES & KITS', botoes);
@@ -21357,13 +21357,11 @@ function carregarGradeDeEntregaMaterial() {
         notificar('Por favor, selecione uma turma.', 'aviso');
         return;
     }
-    renderizarMatrizMaterialV2(turmaId);
+    renderizarMatrizEntregaMaterial(turmaId);
 }
 
-async function renderizarMatrizMaterialV2(turmaId, turmaNome) {
+async function renderizarMatrizEntregaMaterial(turmaId, turmaNome) {
     const app = document.getElementById('app-content');
-    // Força o fundo para garantir que o estilo vitrificado apareça
-    app.style.background = "#001220"; 
     app.innerHTML = `<div class="loading-spinner"></div>`;
 
     try {
@@ -21374,71 +21372,85 @@ async function renderizarMatrizMaterialV2(turmaId, turmaNome) {
         const data = await res.json();
         const idPermitido = data.idProdutoPermitido;
 
-        // O segredo para mudar "na marra": Injetamos um ID único no container
+        // HTML DA TELA COM ESTILO VITRIFICADO INLINE (PARA NÃO FALHAR)
         app.innerHTML = `
-            <div id="v-matrix-root-${Date.now()}" style="
-                background: rgba(0, 30, 60, 0.6);
-                backdrop-filter: blur(15px);
-                -webkit-backdrop-filter: blur(15px);
-                border: 1px solid rgba(255,255,255,0.1);
+            <div id="container-entrega-material" style="
+                background: linear-gradient(135deg, rgba(0, 40, 80, 0.9), rgba(0, 20, 40, 0.95));
+                backdrop-filter: blur(20px);
                 border-radius: 15px;
                 padding: 20px;
-                color: #fff;
-                font-family: 'Segoe UI', Roboto, sans-serif;
+                color: white;
+                font-family: sans-serif;
+                border: 1px solid rgba(255,255,255,0.1);
+                margin: 10px;
             ">
+                
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                    <button class="btn-voltar-vidro" onclick="telaEntregaMateriais()">VOLTAR</button>
-                    <h2 style="color: #00d4ff; text-transform: uppercase; margin: 0;">KIT MATERIAL: ${turmaNome}</h2>
-                    <button onclick="salvarEntregasMaterial(${turmaId})" style="background: #00ff88; color: #001a2c; border: none; padding: 10px 25px; border-radius: 8px; font-weight: bold; cursor: pointer;">
+                    <button onclick="telaEntregaMateriais()" style="background: rgba(255,255,255,0.1); color: white; border: 1px solid white; padding: 8px 15px; border-radius: 5px; cursor: pointer;">
+                        VOLTAR
+                    </button>
+                    <h2 style="margin: 0; color: #00d4ff; text-transform: uppercase;">Material: ${turmaNome}</h2>
+                    <button onclick="salvarEntregasMaterial(${turmaId})" style="background: #00ff88; color: #001a2c; border: none; padding: 10px 25px; border-radius: 5px; font-weight: bold; cursor: pointer;">
                         SALVAR ENTREGAS
                     </button>
                 </div>
 
-                <div style="overflow-x: auto; max-height: 65vh; border-radius: 10px; border: 1px solid rgba(255,255,255,0.05);">
+                <div style="overflow: auto; max-height: 60vh; border-radius: 10px; background: rgba(0,0,0,0.2);">
                     <table style="width: 100%; border-collapse: collapse; table-layout: fixed;">
                         <thead>
                             <tr>
-                                <th style="width: 200px; background: #001a2c; color: #00d4ff; padding: 12px; text-align: left; position: sticky; top: 0; z-index: 10; border-bottom: 2px solid #00d4ff; writing-mode: horizontal-tb !important;">
-                                    ALUNO
-                                </th>
+                                <th style="width: 250px; background: #001a2c; color: #00d4ff; padding: 15px; text-align: left; position: sticky; top: 0; z-index: 10;">ALUNO</th>
                                 ${data.produtos.map(p => `
-                                    <th style="background: #001a2c; color: #00d4ff; padding: 10px; text-align: center; position: sticky; top: 0; z-index: 10; border-bottom: 2px solid #00d4ff; writing-mode: horizontal-tb !important;">
+                                    <th style="
+                                        background: #001a2c; 
+                                        color: #00d4ff; 
+                                        padding: 10px; 
+                                        text-align: center; 
+                                        position: sticky; 
+                                        top: 0; 
+                                        z-index: 10;
+                                        writing-mode: horizontal-tb !important; 
+                                        transform: none !important;
+                                        height: 50px;
+                                        border-bottom: 2px solid #00d4ff;
+                                    ">
                                         ${p.nome.toUpperCase()}<br>
-                                        <small style="color: #00ff88; font-size: 10px;">Estoque: ${data.estoqueEscola[p.id] || 0}</small>
+                                        <small style="color: #888;">Qtd: ${data.estoqueEscola[p.id] || 0}</small>
                                     </th>
                                 `).join('')}
                             </tr>
 
-                            <tr style="background: #002a44; position: sticky; top: 52px; z-index: 9;">
-                                <td style="padding: 10px; color: #00d4ff; font-weight: bold; font-size: 11px; border-bottom: 1px solid rgba(255,255,255,0.2);">
-                                    <i class="fas fa-check-double"></i> MARCAR TODA COLUNA
-                                </td>
+                            <tr style="background: rgba(0, 100, 200, 0.4); position: sticky; top: 70px; z-index: 9;">
+                                <th style="padding: 10px; text-align: left; color: #00ff88; font-size: 0.7rem; border-bottom: 1px solid rgba(255,255,255,0.2);">
+                                    MARCAR TODA COLUNA
+                                </th>
                                 ${data.produtos.map(p => `
                                     <td style="text-align: center; border-bottom: 1px solid rgba(255,255,255,0.2);">
                                         ${p.id === idPermitido ? 
-                                            `<input type="checkbox" class="master-chk-mat" data-pid="${p.id}" style="width: 20px; height: 20px; cursor: pointer;">` : 
+                                            `<input type="checkbox" class="chk-todos-m" data-pid="${p.id}" style="transform: scale(1.5); cursor: pointer;">` : 
                                             ''
                                         }
                                     </td>
                                 `).join('')}
                             </tr>
                         </thead>
+
                         <tbody>
                             ${data.alunos.map(aluno => `
-                                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); height: 40px;">
-                                    <td style="padding-left: 12px; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                                        ${aluno.nome}
-                                    </td>
+                                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                                    <td style="padding: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${aluno.nome}</td>
                                     ${data.produtos.map(p => {
-                                        const ok = aluno.entregas?.[p.id];
-                                        const can = p.id === idPermitido;
-                                        if (ok) return `<td style="text-align: center; color: #00ff88; font-weight: bold; font-size: 11px;">OK</td>`;
-                                        if (!can) return `<td style="text-align: center; color: rgba(255,255,255,0.1);">---</td>`;
+                                        const entregue = aluno.entregas?.[p.id];
+                                        const permitido = p.id === idPermitido;
+
+                                        if (entregue) return `<td style="text-align: center; color: #00ff88; font-size: 0.8rem; font-weight: bold;">OK</td>`;
+                                        if (!permitido) return `<td style="text-align: center; color: rgba(255,255,255,0.1);">---</td>`;
+
                                         return `
                                             <td style="text-align: center;">
-                                                <input type="radio" name="al_${aluno.id}" class="radio-mat-input" 
-                                                       data-aid="${aluno.id}" data-pid="${p.id}" 
-                                                       style="width: 18px; height: 18px; cursor: pointer;">
+                                                <input type="radio" name="al_${aluno.id}" class="radio-m" 
+                                                       data-aid="${aluno.id}" data-pid="${p.id}"
+                                                       style="transform: scale(1.3); cursor: pointer;">
                                             </td>`;
                                     }).join('')}
                                 </tr>
@@ -21449,32 +21461,12 @@ async function renderizarMatrizMaterialV2(turmaId, turmaNome) {
             </div>
         `;
 
-        // Ativa a lógica
-        document.querySelectorAll('.master-chk-mat').forEach(chk => {
-            chk.addEventListener('change', (e) => {
-                const pid = e.target.dataset.pid;
-                const active = e.target.checked;
-                const radios = document.querySelectorAll(`.radio-mat-input[data-pid="${pid}"]`);
-                let estoque = data.estoqueEscola[pid] || 0;
-                let count = 0;
-
-                radios.forEach(r => {
-                    if (active && count < estoque) {
-                        r.checked = true;
-                        count++;
-                    } else {
-                        r.checked = false;
-                    }
-                });
-                if (active && count < radios.length && count === estoque) {
-                    notificar(`Estoque atingido: ${count} marcados.`, 'aviso');
-                }
-            });
-        });
+        // Ativação da lógica de marcação
+        vincularLogicaMassa(data.estoqueEscola);
 
     } catch (err) {
         console.error(err);
-        notificar('Erro ao carregar matriz', 'erro');
+        alert("Erro ao carregar tela. Verifique o console.");
     }
 }
 
@@ -21617,7 +21609,7 @@ async function confirmarEntregasMaterial(turmaId) {
         notificar(`SUCESSO! ${entregas.length} entrega(s) de material confirmadas.`, 'sucesso');
         
         // Recarrega a tela
-        renderizarMatrizMaterialV2(turmaId);
+        renderizarMatrizEntregaMaterial(turmaId);
 
     } catch (err) {
         console.error("Erro na entrega de material:", err);

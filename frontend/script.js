@@ -21370,159 +21370,87 @@ async function renderizarMatrizEntregaMaterial(turmaId, turmaNome) {
         });
         if (!res.ok) throw new Error((await res.json()).error || 'Falha ao carregar dados.');
         const data = await res.json();
-
-        // Identifica qual produto é permitido para esta turma conforme sua regra de etapas
         const idPermitido = data.idProdutoPermitido;
 
+        // HTML DA TELA COM ESTILO VITRIFICADO INLINE (PARA NÃO FALHAR)
         app.innerHTML = `
-            <style>
-                /* RESET DE ROTAÇÃO E ESTILO VITRIFICADO */
-                .tabela-material-glass {
-                    background: rgba(0, 26, 44, 0.75) !important;
-                    backdrop-filter: blur(15px);
-                    border: 1px solid rgba(255, 255, 255, 0.1);
-                    border-radius: 12px;
-                    padding: 15px;
-                    margin: 10px;
-                }
-
-                .tabela-wrapper {
-                    max-height: 60vh;
-                    overflow: auto;
-                    border-radius: 8px;
-                }
-
-                .tabela-entrega-mat {
-                    width: 100%;
-                    border-collapse: separate;
-                    border-spacing: 0;
-                    table-layout: fixed;
-                }
-
-                /* FORÇAR CABEÇALHO HORIZONTAL */
-                .tabela-entrega-mat thead th {
-                    position: sticky;
-                    top: 0;
-                    z-index: 100;
-                    background: #001a2c !important;
-                    color: #00d4ff !important;
-                    height: 50px !important;
-                    font-size: 0.7rem !important;
-                    text-align: center !important;
-                    vertical-align: middle !important;
-                    border-bottom: 2px solid #00d4ff;
-                    /* Mata a verticalização de vez */
-                    writing-mode: horizontal-tb !important;
-                    transform: none !important;
-                    white-space: normal !important;
-                }
-
-                /* LINHA TODOS - VITRIFICADA AZUL CLARO */
-                .tabela-entrega-mat .linha-marcar-todos th,
-                .tabela-entrega-mat .linha-marcar-todos td {
-                    position: sticky;
-                    top: 50px;
-                    z-index: 99;
-                    background: rgba(0, 80, 150, 0.8) !important;
-                    height: 40px !important;
-                    color: white !important;
-                    border-bottom: 1px solid rgba(255,255,255,0.2);
-                    vertical-align: middle;
-                }
-
-                .tabela-entrega-mat td {
-                    height: 35px !important;
-                    text-align: center;
-                    border: 1px solid rgba(255, 255, 255, 0.05);
-                    color: white !important;
-                    font-size: 0.8rem;
-                }
-
-                .col-aluno-mat {
-                    width: 250px;
-                    text-align: left !important;
-                    padding-left: 15px !important;
-                    white-space: nowrap;
-                    overflow: hidden;
-                    text-overflow: ellipsis;
-                }
-
-                .col-kit { width: 100px; }
-
-                /* CUSTOMIZAÇÃO DOS INPUTS */
-                .chk-todos-mat { transform: scale(1.3); cursor: pointer; }
-                .radio-mat { transform: scale(1.2); cursor: pointer; }
-
-                .status-ok { color: #00ff88; font-weight: bold; font-size: 0.75rem; }
-                .status-block { color: rgba(255,255,255,0.15); }
-
-                .btn-acao-mat {
-                    background: #00ff88;
-                    color: #001a2c;
-                    border: none;
-                    padding: 10px 30px;
-                    border-radius: 6px;
-                    font-weight: bold;
-                    cursor: pointer;
-                    transition: 0.3s;
-                }
-                .btn-acao-mat:hover { background: #00cc6e; transform: scale(1.05); }
-            </style>
-
-            <div class="tabela-material-glass">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <button class="btn-voltar-vidro" onclick="telaEntregaMateriais()">
-                        <i class="fas fa-arrow-left"></i> VOLTAR
+            <div id="container-entrega-material" style="
+                background: linear-gradient(135deg, rgba(0, 40, 80, 0.9), rgba(0, 20, 40, 0.95));
+                backdrop-filter: blur(20px);
+                border-radius: 15px;
+                padding: 20px;
+                color: white;
+                font-family: sans-serif;
+                border: 1px solid rgba(255,255,255,0.1);
+                margin: 10px;
+            ">
+                
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <button onclick="telaEntregaMateriais()" style="background: rgba(255,255,255,0.1); color: white; border: 1px solid white; padding: 8px 15px; border-radius: 5px; cursor: pointer;">
+                        VOLTAR
                     </button>
-                    <h2 style="color: white; margin: 0; text-transform: uppercase; letter-spacing: 1px;">
-                        Entrega de Material - ${turmaNome}
-                    </h2>
-                    <button class="btn-acao-mat" onclick="salvarEntregasMaterial(${turmaId})">
+                    <h2 style="margin: 0; color: #00d4ff; text-transform: uppercase;">Material: ${turmaNome}</h2>
+                    <button onclick="salvarEntregasMaterial(${turmaId})" style="background: #00ff88; color: #001a2c; border: none; padding: 10px 25px; border-radius: 5px; font-weight: bold; cursor: pointer;">
                         SALVAR ENTREGAS
                     </button>
                 </div>
 
-                <div class="tabela-wrapper">
-                    <table class="tabela-entrega-mat">
+                <div style="overflow: auto; max-height: 60vh; border-radius: 10px; background: rgba(0,0,0,0.2);">
+                    <table style="width: 100%; border-collapse: collapse; table-layout: fixed;">
                         <thead>
                             <tr>
-                                <th class="col-aluno-mat">ALUNO</th>
+                                <th style="width: 250px; background: #001a2c; color: #00d4ff; padding: 15px; text-align: left; position: sticky; top: 0; z-index: 10;">ALUNO</th>
                                 ${data.produtos.map(p => `
-                                    <th class="col-kit">
+                                    <th style="
+                                        background: #001a2c; 
+                                        color: #00d4ff; 
+                                        padding: 10px; 
+                                        text-align: center; 
+                                        position: sticky; 
+                                        top: 0; 
+                                        z-index: 10;
+                                        writing-mode: horizontal-tb !important; 
+                                        transform: none !important;
+                                        height: 50px;
+                                        border-bottom: 2px solid #00d4ff;
+                                    ">
                                         ${p.nome.toUpperCase()}<br>
-                                        <span style="color: #aaa; font-size: 10px;">Qtd: ${data.estoqueEscola[p.id] || 0}</span>
+                                        <small style="color: #888;">Qtd: ${data.estoqueEscola[p.id] || 0}</small>
                                     </th>
                                 `).join('')}
                             </tr>
-                            <tr class="linha-marcar-todos">
-                                <th class="col-aluno-mat">MARCAR TODA COLUNA</th>
+
+                            <tr style="background: rgba(0, 100, 200, 0.4); position: sticky; top: 70px; z-index: 9;">
+                                <th style="padding: 10px; text-align: left; color: #00ff88; font-size: 0.7rem; border-bottom: 1px solid rgba(255,255,255,0.2);">
+                                    MARCAR TODA COLUNA
+                                </th>
                                 ${data.produtos.map(p => `
-                                    <td class="col-kit">
+                                    <td style="text-align: center; border-bottom: 1px solid rgba(255,255,255,0.2);">
                                         ${p.id === idPermitido ? 
-                                            `<input type="checkbox" class="chk-todos-mat" data-prod="${p.id}">` : 
+                                            `<input type="checkbox" class="chk-todos-m" data-pid="${p.id}" style="transform: scale(1.5); cursor: pointer;">` : 
                                             ''
                                         }
                                     </td>
                                 `).join('')}
                             </tr>
                         </thead>
+
                         <tbody>
                             ${data.alunos.map(aluno => `
-                                <tr>
-                                    <td class="col-aluno-mat">${aluno.nome}</td>
+                                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                                    <td style="padding: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${aluno.nome}</td>
                                     ${data.produtos.map(p => {
-                                        const jaEntregue = aluno.entregas?.[p.id];
-                                        const ehPermitido = p.id === idPermitido;
+                                        const entregue = aluno.entregas?.[p.id];
+                                        const permitido = p.id === idPermitido;
 
-                                        if (jaEntregue) return `<td class="status-ok">ENTREGUE</td>`;
-                                        if (!ehPermitido) return `<td class="status-block">---</td>`;
+                                        if (entregue) return `<td style="text-align: center; color: #00ff88; font-size: 0.8rem; font-weight: bold;">OK</td>`;
+                                        if (!permitido) return `<td style="text-align: center; color: rgba(255,255,255,0.1);">---</td>`;
 
                                         return `
-                                            <td>
-                                                <input type="radio" class="radio-mat" 
-                                                       name="aluno_${aluno.id}" 
-                                                       data-aluno="${aluno.id}" 
-                                                       data-prod="${p.id}">
+                                            <td style="text-align: center;">
+                                                <input type="radio" name="al_${aluno.id}" class="radio-m" 
+                                                       data-aid="${aluno.id}" data-pid="${p.id}"
+                                                       style="transform: scale(1.3); cursor: pointer;">
                                             </td>`;
                                     }).join('')}
                                 </tr>
@@ -21533,13 +21461,39 @@ async function renderizarMatrizEntregaMaterial(turmaId, turmaNome) {
             </div>
         `;
 
-        // Ativa a lógica do botão "Marcar Todos"
-        vincularEventosSelecaoMassa(data.estoqueEscola);
+        // Ativação da lógica de marcação
+        vincularLogicaMassa(data.estoqueEscola);
 
     } catch (err) {
         console.error(err);
-        notificar('Erro ao carregar matriz de material', 'erro');
+        alert("Erro ao carregar tela. Verifique o console.");
     }
+}
+
+function vincularLogicaMassa(estoque) {
+    document.querySelectorAll('.chk-todos-m').forEach(chk => {
+        chk.addEventListener('change', (e) => {
+            const pId = e.target.dataset.pid;
+            const status = e.target.checked;
+            const radios = document.querySelectorAll(`.radio-m[data-pid="${pId}"]`);
+            
+            let disponivel = estoque[pId] || 0;
+            let count = 0;
+
+            radios.forEach(r => {
+                if (status && count < disponivel) {
+                    r.checked = true;
+                    count++;
+                } else {
+                    r.checked = false;
+                }
+            });
+
+            if (status && count < radios.length && count === disponivel) {
+                alert(`Estoque limitado! Apenas ${count} itens marcados.`);
+            }
+        });
+    });
 }
 
 function vincularEventosSelecaoMassa(estoque) {

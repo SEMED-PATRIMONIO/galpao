@@ -21362,6 +21362,8 @@ function carregarGradeDeEntregaMaterial() {
 
 async function renderizarMatrizEntregaMaterial(turmaId, turmaNome) {
     const app = document.getElementById('app-content');
+    // Força o fundo para garantir que o estilo vitrificado apareça
+    app.style.background = "#001220"; 
     app.innerHTML = `<div class="loading-spinner"></div>`;
 
     try {
@@ -21372,85 +21374,71 @@ async function renderizarMatrizEntregaMaterial(turmaId, turmaNome) {
         const data = await res.json();
         const idPermitido = data.idProdutoPermitido;
 
-        // HTML DA TELA COM ESTILO VITRIFICADO INLINE (PARA NÃO FALHAR)
+        // O segredo para mudar "na marra": Injetamos um ID único no container
         app.innerHTML = `
-            <div id="container-entrega-material" style="
-                background: linear-gradient(135deg, rgba(0, 40, 80, 0.9), rgba(0, 20, 40, 0.95));
-                backdrop-filter: blur(20px);
+            <div id="v-matrix-root-${Date.now()}" style="
+                background: rgba(0, 30, 60, 0.6);
+                backdrop-filter: blur(15px);
+                -webkit-backdrop-filter: blur(15px);
+                border: 1px solid rgba(255,255,255,0.1);
                 border-radius: 15px;
                 padding: 20px;
-                color: white;
-                font-family: sans-serif;
-                border: 1px solid rgba(255,255,255,0.1);
-                margin: 10px;
+                color: #fff;
+                font-family: 'Segoe UI', Roboto, sans-serif;
             ">
-                
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                    <button onclick="telaEntregaMateriais()" style="background: rgba(255,255,255,0.1); color: white; border: 1px solid white; padding: 8px 15px; border-radius: 5px; cursor: pointer;">
-                        VOLTAR
-                    </button>
-                    <h2 style="margin: 0; color: #00d4ff; text-transform: uppercase;">Material: ${turmaNome}</h2>
-                    <button onclick="salvarEntregasMaterial(${turmaId})" style="background: #00ff88; color: #001a2c; border: none; padding: 10px 25px; border-radius: 5px; font-weight: bold; cursor: pointer;">
+                    <button class="btn-voltar-vidro" onclick="telaEntregaMateriais()">VOLTAR</button>
+                    <h2 style="color: #00d4ff; text-transform: uppercase; margin: 0;">KIT MATERIAL: ${turmaNome}</h2>
+                    <button onclick="salvarEntregasMaterial(${turmaId})" style="background: #00ff88; color: #001a2c; border: none; padding: 10px 25px; border-radius: 8px; font-weight: bold; cursor: pointer;">
                         SALVAR ENTREGAS
                     </button>
                 </div>
 
-                <div style="overflow: auto; max-height: 60vh; border-radius: 10px; background: rgba(0,0,0,0.2);">
+                <div style="overflow-x: auto; max-height: 65vh; border-radius: 10px; border: 1px solid rgba(255,255,255,0.05);">
                     <table style="width: 100%; border-collapse: collapse; table-layout: fixed;">
                         <thead>
                             <tr>
-                                <th style="width: 250px; background: #001a2c; color: #00d4ff; padding: 15px; text-align: left; position: sticky; top: 0; z-index: 10;">ALUNO</th>
+                                <th style="width: 200px; background: #001a2c; color: #00d4ff; padding: 12px; text-align: left; position: sticky; top: 0; z-index: 10; border-bottom: 2px solid #00d4ff; writing-mode: horizontal-tb !important;">
+                                    ALUNO
+                                </th>
                                 ${data.produtos.map(p => `
-                                    <th style="
-                                        background: #001a2c; 
-                                        color: #00d4ff; 
-                                        padding: 10px; 
-                                        text-align: center; 
-                                        position: sticky; 
-                                        top: 0; 
-                                        z-index: 10;
-                                        writing-mode: horizontal-tb !important; 
-                                        transform: none !important;
-                                        height: 50px;
-                                        border-bottom: 2px solid #00d4ff;
-                                    ">
+                                    <th style="background: #001a2c; color: #00d4ff; padding: 10px; text-align: center; position: sticky; top: 0; z-index: 10; border-bottom: 2px solid #00d4ff; writing-mode: horizontal-tb !important;">
                                         ${p.nome.toUpperCase()}<br>
-                                        <small style="color: #888;">Qtd: ${data.estoqueEscola[p.id] || 0}</small>
+                                        <small style="color: #00ff88; font-size: 10px;">Estoque: ${data.estoqueEscola[p.id] || 0}</small>
                                     </th>
                                 `).join('')}
                             </tr>
 
-                            <tr style="background: rgba(0, 100, 200, 0.4); position: sticky; top: 70px; z-index: 9;">
-                                <th style="padding: 10px; text-align: left; color: #00ff88; font-size: 0.7rem; border-bottom: 1px solid rgba(255,255,255,0.2);">
-                                    MARCAR TODA COLUNA
-                                </th>
+                            <tr style="background: #002a44; position: sticky; top: 52px; z-index: 9;">
+                                <td style="padding: 10px; color: #00d4ff; font-weight: bold; font-size: 11px; border-bottom: 1px solid rgba(255,255,255,0.2);">
+                                    <i class="fas fa-check-double"></i> MARCAR TODA COLUNA
+                                </td>
                                 ${data.produtos.map(p => `
                                     <td style="text-align: center; border-bottom: 1px solid rgba(255,255,255,0.2);">
                                         ${p.id === idPermitido ? 
-                                            `<input type="checkbox" class="chk-todos-m" data-pid="${p.id}" style="transform: scale(1.5); cursor: pointer;">` : 
+                                            `<input type="checkbox" class="master-chk-mat" data-pid="${p.id}" style="width: 20px; height: 20px; cursor: pointer;">` : 
                                             ''
                                         }
                                     </td>
                                 `).join('')}
                             </tr>
                         </thead>
-
                         <tbody>
                             ${data.alunos.map(aluno => `
-                                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                                    <td style="padding: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${aluno.nome}</td>
+                                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); height: 40px;">
+                                    <td style="padding-left: 12px; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                        ${aluno.nome}
+                                    </td>
                                     ${data.produtos.map(p => {
-                                        const entregue = aluno.entregas?.[p.id];
-                                        const permitido = p.id === idPermitido;
-
-                                        if (entregue) return `<td style="text-align: center; color: #00ff88; font-size: 0.8rem; font-weight: bold;">OK</td>`;
-                                        if (!permitido) return `<td style="text-align: center; color: rgba(255,255,255,0.1);">---</td>`;
-
+                                        const ok = aluno.entregas?.[p.id];
+                                        const can = p.id === idPermitido;
+                                        if (ok) return `<td style="text-align: center; color: #00ff88; font-weight: bold; font-size: 11px;">OK</td>`;
+                                        if (!can) return `<td style="text-align: center; color: rgba(255,255,255,0.1);">---</td>`;
                                         return `
                                             <td style="text-align: center;">
-                                                <input type="radio" name="al_${aluno.id}" class="radio-m" 
-                                                       data-aid="${aluno.id}" data-pid="${p.id}"
-                                                       style="transform: scale(1.3); cursor: pointer;">
+                                                <input type="radio" name="al_${aluno.id}" class="radio-mat-input" 
+                                                       data-aid="${aluno.id}" data-pid="${p.id}" 
+                                                       style="width: 18px; height: 18px; cursor: pointer;">
                                             </td>`;
                                     }).join('')}
                                 </tr>
@@ -21461,12 +21449,32 @@ async function renderizarMatrizEntregaMaterial(turmaId, turmaNome) {
             </div>
         `;
 
-        // Ativação da lógica de marcação
-        vincularLogicaMassa(data.estoqueEscola);
+        // Ativa a lógica
+        document.querySelectorAll('.master-chk-mat').forEach(chk => {
+            chk.addEventListener('change', (e) => {
+                const pid = e.target.dataset.pid;
+                const active = e.target.checked;
+                const radios = document.querySelectorAll(`.radio-mat-input[data-pid="${pid}"]`);
+                let estoque = data.estoqueEscola[pid] || 0;
+                let count = 0;
+
+                radios.forEach(r => {
+                    if (active && count < estoque) {
+                        r.checked = true;
+                        count++;
+                    } else {
+                        r.checked = false;
+                    }
+                });
+                if (active && count < radios.length && count === estoque) {
+                    notificar(`Estoque atingido: ${count} marcados.`, 'aviso');
+                }
+            });
+        });
 
     } catch (err) {
         console.error(err);
-        alert("Erro ao carregar tela. Verifique o console.");
+        notificar('Erro ao carregar matriz', 'erro');
     }
 }
 

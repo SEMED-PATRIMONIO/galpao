@@ -589,7 +589,7 @@ function renderSubmenuUniformesKits() {
         <button class="btn-grande btn-vidro" onclick="telaEscolaConsultaEstoque()"><i>📦</i><span>MEU ESTOQUE</span></button>
         <button class="btn-grande btn-vidro" onclick="telaSolicitarUniforme()"><i>📝</i><span>SOLICITAR</span></button>
         <button class="btn-grande btn-vidro" onclick="telaEntregaUniformes()"><i>👕</i><span>ENTREGA DE UNIFORMES</span></button>
-        <button class="btn-grande btn-vidro" onclick="telaEntregaMaterial()"><i>✏️</i><span>ENTREGA DE KITS</span></button>
+        <button class="btn-grande btn-vidro" onclick="renderizarMatrizMaterialV2()"><i>✏️</i><span>ENTREGA DE KITS</span></button>
         <button class="btn-grande btn-vidro" onclick="telaDevolucaoUniforme()"><i>🔄</i><span>DEVOLVER</span></button>
     `;
     abrirSubmenuVitrificado('UNIFORMES & KITS', botoes);
@@ -21357,10 +21357,10 @@ function carregarGradeDeEntregaMaterial() {
         notificar('Por favor, selecione uma turma.', 'aviso');
         return;
     }
-    renderizarMatrizEntregaMaterial(turmaId);
+    renderizarMatrizMaterialV2(turmaId);
 }
 
-async function renderizarMatrizEntregaMaterial(turmaId, turmaNome) {
+async function renderizarMatrizMaterialV2(turmaId, turmaNome) {
     const app = document.getElementById('app-content');
     // Força o fundo para garantir que o estilo vitrificado apareça
     app.style.background = "#001220"; 
@@ -21617,7 +21617,7 @@ async function confirmarEntregasMaterial(turmaId) {
         notificar(`SUCESSO! ${entregas.length} entrega(s) de material confirmadas.`, 'sucesso');
         
         // Recarrega a tela
-        renderizarMatrizEntregaMaterial(turmaId);
+        renderizarMatrizMaterialV2(turmaId);
 
     } catch (err) {
         console.error("Erro na entrega de material:", err);

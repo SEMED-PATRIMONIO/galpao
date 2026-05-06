@@ -21371,151 +21371,201 @@ async function renderizarMatrizEntregaMaterial(turmaId, turmaNome) {
         if (!res.ok) throw new Error((await res.json()).error || 'Falha ao carregar dados.');
         const data = await res.json();
 
-        // O id do produto que esta turma pode receber (ex: Kit 3 para o 3º ano)
-        const idPermitido = data.idProdutoPermitido; 
+        // Identifica qual produto é permitido para esta turma conforme sua regra de etapas
+        const idPermitido = data.idProdutoPermitido;
 
         app.innerHTML = `
             <style>
-                .tabela-entrega-wrapper {
-                    max-height: 65vh;
+                /* RESET DE ROTAÇÃO E ESTILO VITRIFICADO */
+                .tabela-material-glass {
+                    background: rgba(0, 26, 44, 0.75) !important;
+                    backdrop-filter: blur(15px);
+                    border: 1px solid rgba(255, 255, 255, 0.1);
+                    border-radius: 12px;
+                    padding: 15px;
+                    margin: 10px;
+                }
+
+                .tabela-wrapper {
+                    max-height: 60vh;
                     overflow: auto;
-                    background: rgba(0, 26, 44, 0.6);
-                    border: 1px solid rgba(255,255,255,0.1);
                     border-radius: 8px;
                 }
 
-                .tabela-entrega {
+                .tabela-entrega-mat {
                     width: 100%;
-                    border-collapse: collapse;
-                    table-layout: fixed; /* ESSENCIAL: Mantém as larguras que definirmos */
+                    border-collapse: separate;
+                    border-spacing: 0;
+                    table-layout: fixed;
                 }
 
-                /* TÍTULOS: Força horizontal e remove qualquer herança de rotação */
-                .tabela-entrega thead th {
+                /* FORÇAR CABEÇALHO HORIZONTAL */
+                .tabela-entrega-mat thead th {
                     position: sticky;
                     top: 0;
-                    z-index: 20;
-                    background: #001a2c;
-                    color: #00d4ff;
-                    font-size: 0.65rem;
-                    height: 50px; /* Altura suficiente para duas linhas de texto horizontal */
+                    z-index: 100;
+                    background: #001a2c !important;
+                    color: #00d4ff !important;
+                    height: 50px !important;
+                    font-size: 0.7rem !important;
+                    text-align: center !important;
+                    vertical-align: middle !important;
                     border-bottom: 2px solid #00d4ff;
-                    text-align: center;
-                    vertical-align: middle;
-                    
-                    /* BLOQUEIA ROTAÇÃO */
-                    writing-mode: horizontal-tb !important; 
+                    /* Mata a verticalização de vez */
+                    writing-mode: horizontal-tb !important;
                     transform: none !important;
-                    white-space: normal; /* Permite quebrar linha se o nome for grande, mas na horizontal */
+                    white-space: normal !important;
                 }
 
-                /* LINHA MARCAR TODOS: Agora vai aparecer abaixo do título */
-                .tabela-entrega .linha-todos th, 
-                .tabela-entrega .linha-todos td {
+                /* LINHA TODOS - VITRIFICADA AZUL CLARO */
+                .tabela-entrega-mat .linha-marcar-todos th,
+                .tabela-entrega-mat .linha-marcar-todos td {
                     position: sticky;
-                    top: 50px; /* Exatamente a altura do th acima */
-                    z-index: 19;
-                    background: #002a44 !important;
-                    height: 35px;
+                    top: 50px;
+                    z-index: 99;
+                    background: rgba(0, 80, 150, 0.8) !important;
+                    height: 40px !important;
+                    color: white !important;
                     border-bottom: 1px solid rgba(255,255,255,0.2);
+                    vertical-align: middle;
                 }
 
-                /* COLUNAS */
-                .col-aluno {
-                    width: 200px; /* Largura fixa para o nome do aluno */
-                    text-align: left !important;
-                    padding-left: 10px !important;
-                    color: white;
-                    font-size: 0.75rem;
-                }
-
-                .col-material {
-                    width: 80px; /* Largura suficiente para o rádio e o texto KIT horizontal */
-                }
-
-                .tabela-entrega td {
-                    height: 35px; /* Linha baixa e compacta */
-                    border: 1px solid rgba(255,255,255,0.05);
+                .tabela-entrega-mat td {
+                    height: 35px !important;
                     text-align: center;
-                    color: white;
+                    border: 1px solid rgba(255, 255, 255, 0.05);
+                    color: white !important;
+                    font-size: 0.8rem;
                 }
 
-                .celula-entregue { color: #00ff88; font-weight: bold; font-size: 0.7rem; }
-                .celula-bloqueada { color: rgba(255,255,255,0.1); }
+                .col-aluno-mat {
+                    width: 250px;
+                    text-align: left !important;
+                    padding-left: 15px !important;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+
+                .col-kit { width: 100px; }
+
+                /* CUSTOMIZAÇÃO DOS INPUTS */
+                .chk-todos-mat { transform: scale(1.3); cursor: pointer; }
+                .radio-mat { transform: scale(1.2); cursor: pointer; }
+
+                .status-ok { color: #00ff88; font-weight: bold; font-size: 0.75rem; }
+                .status-block { color: rgba(255,255,255,0.15); }
+
+                .btn-acao-mat {
+                    background: #00ff88;
+                    color: #001a2c;
+                    border: none;
+                    padding: 10px 30px;
+                    border-radius: 6px;
+                    font-weight: bold;
+                    cursor: pointer;
+                    transition: 0.3s;
+                }
+                .btn-acao-mat:hover { background: #00cc6e; transform: scale(1.05); }
             </style>
 
-            <div class="header-animado">
-                <button class="btn-voltar-vidro" onclick="telaEntregaMateriais()" style="padding: 4px 12px; font-size: 0.8rem;">
-                    <i class="fas fa-arrow-left"></i> VOLTAR
-                </button>
-                <h1 class="titulo-turma-central"><i class="fas fa-box"></i> MATERIAL: ${turmaNome}</h1>
-            </div>
+            <div class="tabela-material-glass">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <button class="btn-voltar-vidro" onclick="telaEntregaMateriais()">
+                        <i class="fas fa-arrow-left"></i> VOLTAR
+                    </button>
+                    <h2 style="color: white; margin: 0; text-transform: uppercase; letter-spacing: 1px;">
+                        Entrega de Material - ${turmaNome}
+                    </h2>
+                    <button class="btn-acao-mat" onclick="salvarEntregasMaterial(${turmaId})">
+                        SALVAR ENTREGAS
+                    </button>
+                </div>
 
-            <div class="tabela-entrega-wrapper">
-                <table class="tabela-entrega">
-                    <thead>
-                        <tr>
-                            <th class="col-aluno">ALUNO</th>
-                            ${data.produtos.map(p => `
-                                <th class="col-material">
-                                    <div style="line-height: 1.1;">
-                                        ${p.nome.toUpperCase()}<br>
-                                        <span style="color: #aaa; font-size: 9px;">Qtd: ${data.estoqueEscola[p.id] || 0}</span>
-                                    </div>
-                                </th>`).join('')}
-                        </tr>
-                        <tr class="linha-todos">
-                            <th class="col-aluno" style="color: #00d4ff; font-size: 0.6rem;">
-                                <i class="fas fa-check-double"></i> MARCAR TODOS
-                            </th>
-                            ${data.produtos.map(p => {
-                                const ehPermitido = p.id === data.idProdutoPermitido;
-                                return `
-                                <td class="col-material">
-                                    ${ehPermitido ? `<input type="checkbox" class="checkbox-todos-mat" data-prod-id="${p.id}">` : ''}
-                                </td>`;
-                            }).join('')}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${data.alunos.map(aluno => `
+                <div class="tabela-wrapper">
+                    <table class="tabela-entrega-mat">
+                        <thead>
                             <tr>
-                                <td class="col-aluno" title="${aluno.nome}">${aluno.nome}</td>
-                                ${data.produtos.map(p => {
-                                    const jaEntregue = aluno.entregas && aluno.entregas[p.id];
-                                    const ehPermitido = p.id === idPermitido;
-
-                                    if (jaEntregue) return `<td class="col-material celula-entregue">OK</td>`;
-                                    if (!ehPermitido) return `<td class="col-material celula-bloqueada">---</td>`;
-
-                                    // Se chegou aqui, é porque pode receber e ainda não recebeu
-                                    return `
-                                        <td class="col-material">
-                                            <input type="radio" class="radio-aluno-mat" 
-                                                   name="radio_${aluno.id}" 
-                                                   data-aluno-id="${aluno.id}" 
-                                                   data-prod-id="${p.id}">
-                                        </td>`;
-                                }).join('')}
+                                <th class="col-aluno-mat">ALUNO</th>
+                                ${data.produtos.map(p => `
+                                    <th class="col-kit">
+                                        ${p.nome.toUpperCase()}<br>
+                                        <span style="color: #aaa; font-size: 10px;">Qtd: ${data.estoqueEscola[p.id] || 0}</span>
+                                    </th>
+                                `).join('')}
                             </tr>
-                        `).join('')}
-                    </tbody>
-                    <div style="text-align:center; padding: 15px;">
-                        <button class="btn-confirmar-entrega" onclick="salvarEntregasMaterial(${turmaId})" 
-                            style="background: #00ff88; color: #001a2c; padding: 12px 40px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer;">
-                            SALVAR ENTREGAS
-                        </button>
-                    </div>
-                </table>
-            </div>
+                            <tr class="linha-marcar-todos">
+                                <th class="col-aluno-mat">MARCAR TODA COLUNA</th>
+                                ${data.produtos.map(p => `
+                                    <td class="col-kit">
+                                        ${p.id === idPermitido ? 
+                                            `<input type="checkbox" class="chk-todos-mat" data-prod="${p.id}">` : 
+                                            ''
+                                        }
+                                    </td>
+                                `).join('')}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${data.alunos.map(aluno => `
+                                <tr>
+                                    <td class="col-aluno-mat">${aluno.nome}</td>
+                                    ${data.produtos.map(p => {
+                                        const jaEntregue = aluno.entregas?.[p.id];
+                                        const ehPermitido = p.id === idPermitido;
 
+                                        if (jaEntregue) return `<td class="status-ok">ENTREGUE</td>`;
+                                        if (!ehPermitido) return `<td class="status-block">---</td>`;
+
+                                        return `
+                                            <td>
+                                                <input type="radio" class="radio-mat" 
+                                                       name="aluno_${aluno.id}" 
+                                                       data-aluno="${aluno.id}" 
+                                                       data-prod="${p.id}">
+                                            </td>`;
+                                    }).join('')}
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         `;
 
-        configurarAcoesEmMassaMaterial(data.estoqueEscola);
+        // Ativa a lógica do botão "Marcar Todos"
+        vincularEventosSelecaoMassa(data.estoqueEscola);
 
     } catch (err) {
-        notificar(`Erro: ${err.message}`, 'erro');
+        console.error(err);
+        notificar('Erro ao carregar matriz de material', 'erro');
     }
+}
+
+function vincularEventosSelecaoMassa(estoque) {
+    document.querySelectorAll('.chk-todos-mat').forEach(chk => {
+        chk.addEventListener('change', (e) => {
+            const prodId = e.target.dataset.prod;
+            const marcar = e.target.checked;
+            const radiosDisponiveis = document.querySelectorAll(`.radio-mat[data-prod="${prodId}"]`);
+            
+            let limite = estoque[prodId] || 0;
+            let contador = 0;
+
+            radiosDisponiveis.forEach(radio => {
+                if (marcar && contador < limite) {
+                    radio.checked = true;
+                    contador++;
+                } else {
+                    radio.checked = false;
+                }
+            });
+
+            if (marcar && contador < radiosDisponiveis.length && contador === limite) {
+                notificar(`Atenção: Estoque insuficiente (${limite}). Foram marcados apenas os primeiros.`, 'aviso');
+            }
+        });
+    });
 }
 
 function configurarAcoesEmMassaMaterial(estoque) {

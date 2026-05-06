@@ -21436,8 +21436,9 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
                     position: sticky;
                     top: 50px;
                     z-index: 9;
-                    background: #002a44;
-                    border-bottom: 1px solid rgba(255,255,255,0.2);
+                    background: #1e3a8a !important; /* Azul Escuro */
+                    color: white !important;        /* Fonte Branca */
+                    border-bottom: 1px solid rgba(255,255,255,0.3);
                 }
 
                 .tabela-entrega td {
@@ -21516,11 +21517,14 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
                                     </small>
                                 </th>`).join('')}
                         </tr>
-                        <tr class="linha-todos">
-                            <th class="col-aluno" style="color: #00d4ff;">SELECIONAR TODOS</th>
+                        <tr class="linha-todos" style="background: #1e3a8a;">
+                            <th class="col-aluno" style="color: white !important; font-weight: bold;">
+                                <i class="fas fa-check-double"></i> SELECIONAR COLUNA
+                            </th>
                             ${data.produtos.map(produto => `
-                                <td class="col-prod-mat">
+                                <td class="col-prod-mat" style="background: #1e3a8a;">
                                     <input type="checkbox" class="checkbox-todos" 
+                                           style="filter: brightness(0) invert(1); transform: scale(1.3);"
                                            data-produto-id="${produto.id}" 
                                            id="todos-${produto.id}">
                                 </td>
@@ -23415,7 +23419,7 @@ async function carregarGradeInteligente(turmaId) {
         // Linha de Replicação (Apenas se houver estoque)
         html += `<tr style="background:#1e3a8a; color:white;">
             <td class="col-nome-aluno" style="background:#1e3a8a !important; color:white !important; border-right: 2px solid #3b82f6 !important;">
-                <b>MARCAR TODA COLUNA</b>
+                <b> </b>
             </td>`;
         data.produtos.forEach(p => {
             html += `<td style="background:#1e3a8a;">

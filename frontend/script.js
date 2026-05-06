@@ -21427,8 +21427,9 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
 
                 /* Linhas de Alunos Compactas */
                 .tabela-entrega tbody td {
-                    height: 26px !important; /* Altura bem pequena como a de uniformes */
-                    padding: 2px 8px !important;
+                    height: 22px !important; /* Altura mínima para leitura */
+                    line-height: 22px;       /* Centraliza o texto verticalmente */
+                    padding: 0px 4px !important;
                     border: 1px solid #eee;
                     font-size: 12px;
                     color: #333;
@@ -21532,90 +21533,70 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
 // LÓGICA CORRIGIDA DO BOTÃO "TODOS" E INTERAÇÕES
 // ============================================================
 function configurarAcoesEmMassaMaterial(produtos, estoque) {
-
-    // --- 1. Lógica do checkbox "Todos" ---
     document.querySelectorAll('.checkbox-todos').forEach(chk => {
         chk.addEventListener('change', (e) => {
             const produtoId = e.target.dataset.produtoId;
             const marcar = e.target.checked;
             
-            // Pega APENAS os rádios do produto (coluna) que o usuário clicou
-            const radiosDestaColuna = document.querySelectorAll(`.radio-aluno[data-produto-id="${produtoId}"]`);
-
-            if (marcar) {
-                // Verificar estoque real
-                const estoqueDisponivel = estoque[produtoId] || 0;
-                let selecionadosComSucesso = 0;
-
-                // Desmarcar os outros checkboxes "Todos" (só 1 coluna ativa por vez)
-                document.querySelectorAll('.checkbox-todos').forEach(outro => {
-                    if (outro !== e.target) outro.checked = false;
-                });
-
-                // Marcar os rádios RESPEITANDO O LIMITE DO ESTOQUE
-                radiosDestaColuna.forEach(r => {
-                    if (selecionadosComSucesso < estoqueDisponivel) {
-                        r.checked = true;
-                        r.dataset.wasChecked = 'true'; // Mantém o toggle sincronizado
-                        selecionadosComSucesso++;
-                    } else {
-                        r.checked = false;
-                        r.dataset.wasChecked = 'false';
-                    }
-                });
-
-                // Dá o feedback correto se faltou produto
-                if (radiosDestaColuna.length > estoqueDisponivel) {
-                    if (typeof notificar === 'function') {
-                        notificar(`Atenção: Apenas ${estoqueDisponivel} itens marcados (limite do estoque).`, 'aviso');
-                    } else {
-                        alert(`Atenção: Apenas ${estoqueDisponivel} itens marcados (limite do estoque).`);
-                    }
-                }
-
-            } else {
-                // DESMARCAR: limpa APENAS os radios desta coluna específica!
-                radiosDestaColuna.forEach(r => {
+            if (!marcar) {
+                // Se desmarcar o "Todos", limpa apenas quem NÃO estava salvo ainda
+                document.querySelectorAll(`.radio-aluno[data-produto-id="${produtoId}"]`).forEach(r => {
                     r.checked = false;
                     r.dataset.wasChecked = 'false';
                 });
+                return;
+            }
+
+            // --- Lógica de MARCAR inteligente ---
+            let estoqueDisponivel = estoque[produtoId] || 0;
+            let marcadosNestaRodada = 0;
+
+            // Buscamos todas as linhas da tabela
+            const linhas = document.querySelectorAll('.tabela-entrega tbody tr');
+
+            linhas.forEach(linha => {
+                // 1. Localiza o rádio desta coluna específica nesta linha
+                const radio = linha.querySelector(`.radio-aluno[data-produto-id="${produtoId}"]`);
+                
+                // 2. Verifica se a célula já contém um "OK" (já entregue)
+                // Buscamos se existe o texto "OK" ou a classe 'celula-entregue'
+                const jaEntregue = linha.querySelector('.celula-entregue') !== null || 
+                                 linha.innerText.includes('OK');
+
+                // 3. Verifica se a célula está bloqueada (fora da etapa do aluno)
+                const estaBloqueado = radio === null || radio.closest('td').classList.contains('celula-bloqueada');
+
+                // SÓ MARCA SE: tiver rádio, não estiver entregue, não estiver bloqueado e houver estoque
+                if (radio && !jaEntregue && !estaBloqueado) {
+                    if (marcadosNestaRodada < estoqueDisponivel) {
+                        radio.checked = true;
+                        radio.dataset.wasChecked = 'true';
+                        marcadosNestaRodada++;
+                    }
+                }
+            });
+
+            // Feedback visual sobre o estoque
+            if (marcadosNestaRodada < (linhas.length) && marcadosNestaRodada === estoqueDisponivel && estoqueDisponivel > 0) {
+                notificar(`Atenção: Apenas ${marcadosNestaRodada} alunos marcados. O estoque de este item esgotou!`, 'aviso');
             }
         });
     });
 
-    // --- 2. Clique individual no radio do aluno ---
-    // Permite desmarcar um radio clicando nele de novo
+    // Mantém a lógica de clique individual (toggle)
     document.querySelectorAll('.radio-aluno').forEach(radio => {
         radio.addEventListener('click', (e) => {
-            const aluno = e.target;
-            const alunoId = aluno.dataset.alunoId;
-
-            // Se já estava marcado no mesmo, desmarcar (toggle)
-            if (aluno.dataset.wasChecked === 'true') {
-                aluno.checked = false;
-                aluno.dataset.wasChecked = 'false';
+            const el = e.target;
+            if (el.dataset.wasChecked === 'true') {
+                el.checked = false;
+                el.dataset.wasChecked = 'false';
+                // Desmarca o "Todos" do topo se o usuário tirar um individualmente
+                const masterCheck = document.getElementById(`todos-${el.dataset.produtoId}`);
+                if (masterCheck) masterCheck.checked = false;
             } else {
-                // Desmarca os outros da mesma linha (mesmo aluno) e marca este
-                document.querySelectorAll(`input[name="radio_aluno_${alunoId}"]`).forEach(r => {
-                    r.dataset.wasChecked = 'false';
-                });
-                aluno.dataset.wasChecked = 'true';
-            }
-
-            // CORREÇÃO DO ERRO DA FUNÇÃO FANTASMA:
-            // Se o usuário desmarcar um aluno manualmente, o checkbox "Todos" lá em cima 
-            // tem que ser desmarcado para não confundir visualmente.
-            const produtoId = aluno.dataset.produtoId;
-            const checkTodos = document.getElementById(`todos-${produtoId}`);
-            if (checkTodos && !aluno.checked) {
-                checkTodos.checked = false;
+                el.dataset.wasChecked = 'true';
             }
         });
-    });
-
-    // Inicializa o flag wasChecked em todos os radios logo que a tela carrega
-    document.querySelectorAll('.radio-aluno').forEach(r => {
-        r.dataset.wasChecked = r.checked ? 'true' : 'false';
     });
 }
 

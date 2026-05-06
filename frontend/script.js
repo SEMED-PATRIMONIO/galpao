@@ -21517,6 +21517,9 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
                                     </small>
                                 </th>`).join('')}
                         </tr>
+
+                    </thead>
+                    <tbody>
                         <tr class="linha-todos" style="background: #1e3a8a;">
                             <th class="col-aluno" style="color: white !important; font-weight: bold;">
                                 <i class="fas fa-check-double"></i> SELECIONAR COLUNA
@@ -21530,8 +21533,6 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
                                 </td>
                             `).join('')}
                         </tr>
-                    </thead>
-                    <tbody>
                         ${data.alunos.map(aluno => {
                             const jaEntregue = aluno.status === 'entregue';
                             const dataFormatada = (jaEntregue && aluno.entregaInfo && aluno.entregaInfo.data_entrega)

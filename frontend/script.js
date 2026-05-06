@@ -21362,96 +21362,129 @@ function carregarGradeDeEntregaMaterial() {
 
 async function renderizarMatrizEntregaMaterial(turmaId, turmaNome) {
     const app = document.getElementById('app-content');
-    app.innerHTML = `<div class="loading-spinner"></div>`;
+    app.innerHTML = '<div style="color:white;text-align:center;padding:50px;">Carregando Interface Blindada...</div>';
 
     try {
-        const res = await fetch(`${API_URL}/turma/${turmaId}/grade-entrega-material`, {
+        const res = await fetch(`${API_URL}/turma/${turmaId}/grade-entrega-material?v=${Date.now()}`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
-        if (!res.ok) throw new Error((await res.json()).error || 'Falha ao carregar dados.');
+        if (!res.ok) throw new Error('Erro ao buscar dados');
         const data = await res.json();
         const idPermitido = data.idProdutoPermitido;
 
-        // HTML DA TELA COM ESTILO VITRIFICADO INLINE (PARA NÃO FALHAR)
-        app.innerHTML = `
-            <div id="container-entrega-material" style="
-                background: linear-gradient(135deg, rgba(0, 40, 80, 0.9), rgba(0, 20, 40, 0.95));
-                backdrop-filter: blur(20px);
-                border-radius: 15px;
-                padding: 20px;
-                color: white;
-                font-family: sans-serif;
-                border: 1px solid rgba(255,255,255,0.1);
-                margin: 10px;
-            ">
+        // Criamos um container único para isolar do CSS global
+        app.innerHTML = '<div id="shadow-wrapper"></div>';
+        const wrapper = document.getElementById('shadow-wrapper');
+        const shadow = wrapper.attachShadow({ mode: 'open' });
+
+        // CSS INTERNO DO SHADOW DOM (O style.css não entra aqui)
+        const styles = `
+            <style>
+                :host { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+                .glass-container {
+                    background: linear-gradient(135deg, rgba(0, 30, 60, 0.9), rgba(0, 10, 20, 1));
+                    border-radius: 15px;
+                    padding: 20px;
+                    color: white;
+                    border: 1px solid rgba(255,255,255,0.1);
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+                }
+                .header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 20px;
+                }
+                .btn-voltar { background: rgba(255,255,255,0.1); border: 1px solid white; color: white; padding: 8px 15px; border-radius: 5px; cursor: pointer; }
+                .btn-salvar { background: #00ff88; color: #001a2c; border: none; padding: 10px 25px; border-radius: 5px; font-weight: bold; cursor: pointer; }
                 
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                    <button onclick="telaEntregaMateriais()" style="background: rgba(255,255,255,0.1); color: white; border: 1px solid white; padding: 8px 15px; border-radius: 5px; cursor: pointer;">
-                        VOLTAR
-                    </button>
-                    <h2 style="margin: 0; color: #00d4ff; text-transform: uppercase;">Material: ${turmaNome}</h2>
-                    <button onclick="salvarEntregasMaterial(${turmaId})" style="background: #00ff88; color: #001a2c; border: none; padding: 10px 25px; border-radius: 5px; font-weight: bold; cursor: pointer;">
-                        SALVAR ENTREGAS
-                    </button>
+                .scroll-area { 
+                    overflow: auto; 
+                    max-height: 65vh; 
+                    border-radius: 8px; 
+                    background: rgba(0,0,0,0.2); 
+                }
+                
+                table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+                
+                th { 
+                    background: #001a2c; 
+                    color: #00d4ff; 
+                    padding: 12px; 
+                    font-size: 11px; 
+                    position: sticky; 
+                    top: 0; 
+                    z-index: 10;
+                    border-bottom: 2px solid #00d4ff;
+                    writing-mode: horizontal-tb !important; /* Força horizontal */
+                }
+                
+                .linha-todos { 
+                    background: rgba(0, 110, 255, 0.3); 
+                    position: sticky; 
+                    top: 55px; /* Ajustado para ficar abaixo do th */
+                    z-index: 9;
+                }
+
+                td { 
+                    padding: 10px; 
+                    text-align: center; 
+                    border-bottom: 1px solid rgba(255,255,255,0.05);
+                    font-size: 13px;
+                }
+
+                .col-aluno { width: 250px; text-align: left !important; padding-left: 15px; }
+                .col-item { width: 100px; }
+                
+                input[type="checkbox"], input[type="radio"] { 
+                    transform: scale(1.4); 
+                    cursor: pointer; 
+                }
+                
+                .ok-label { color: #00ff88; font-weight: bold; font-size: 11px; }
+                .block-label { color: rgba(255,255,255,0.1); }
+            </style>
+        `;
+
+        const html = `
+            <div class="glass-container">
+                <div class="header">
+                    <button class="btn-voltar" id="btn-v">VOLTAR</button>
+                    <h2 style="margin:0; color:#00d4ff;">MATERIAL: ${turmaNome}</h2>
+                    <button class="btn-salvar" id="btn-s">SALVAR ENTREGAS</button>
                 </div>
 
-                <div style="overflow: auto; max-height: 60vh; border-radius: 10px; background: rgba(0,0,0,0.2);">
-                    <table style="width: 100%; border-collapse: collapse; table-layout: fixed;">
+                <div class="scroll-area">
+                    <table>
                         <thead>
                             <tr>
-                                <th style="width: 250px; background: #001a2c; color: #00d4ff; padding: 15px; text-align: left; position: sticky; top: 0; z-index: 10;">ALUNO</th>
+                                <th class="col-aluno">ALUNO</th>
                                 ${data.produtos.map(p => `
-                                    <th style="
-                                        background: #001a2c; 
-                                        color: #00d4ff; 
-                                        padding: 10px; 
-                                        text-align: center; 
-                                        position: sticky; 
-                                        top: 0; 
-                                        z-index: 10;
-                                        writing-mode: horizontal-tb !important; 
-                                        transform: none !important;
-                                        height: 50px;
-                                        border-bottom: 2px solid #00d4ff;
-                                    ">
+                                    <th class="col-item">
                                         ${p.nome.toUpperCase()}<br>
-                                        <small style="color: #888;">Qtd: ${data.estoqueEscola[p.id] || 0}</small>
+                                        <small style="color:#00ff88">Est: ${data.estoqueEscola[p.id] || 0}</small>
                                     </th>
                                 `).join('')}
                             </tr>
-
-                            <tr style="background: rgba(0, 100, 200, 0.4); position: sticky; top: 70px; z-index: 9;">
-                                <th style="padding: 10px; text-align: left; color: #00ff88; font-size: 0.7rem; border-bottom: 1px solid rgba(255,255,255,0.2);">
-                                    MARCAR TODA COLUNA
-                                </th>
+                            <tr class="linha-todos">
+                                <td class="col-aluno" style="color:#00ff88; font-weight:bold;">MARCAR TODA COLUNA</td>
                                 ${data.produtos.map(p => `
-                                    <td style="text-align: center; border-bottom: 1px solid rgba(255,255,255,0.2);">
-                                        ${p.id === idPermitido ? 
-                                            `<input type="checkbox" class="chk-todos-m" data-pid="${p.id}" style="transform: scale(1.5); cursor: pointer;">` : 
-                                            ''
-                                        }
+                                    <td class="col-item">
+                                        ${p.id === idPermitido ? `<input type="checkbox" class="master-check" data-pid="${p.id}">` : ''}
                                     </td>
                                 `).join('')}
                             </tr>
                         </thead>
-
                         <tbody>
                             ${data.alunos.map(aluno => `
-                                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                                    <td style="padding: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${aluno.nome}</td>
+                                <tr>
+                                    <td class="col-aluno">${aluno.nome}</td>
                                     ${data.produtos.map(p => {
                                         const entregue = aluno.entregas?.[p.id];
                                         const permitido = p.id === idPermitido;
-
-                                        if (entregue) return `<td style="text-align: center; color: #00ff88; font-size: 0.8rem; font-weight: bold;">OK</td>`;
-                                        if (!permitido) return `<td style="text-align: center; color: rgba(255,255,255,0.1);">---</td>`;
-
-                                        return `
-                                            <td style="text-align: center;">
-                                                <input type="radio" name="al_${aluno.id}" class="radio-m" 
-                                                       data-aid="${aluno.id}" data-pid="${p.id}"
-                                                       style="transform: scale(1.3); cursor: pointer;">
-                                            </td>`;
+                                        if (entregue) return '<td><span class="ok-label">OK</span></td>';
+                                        if (!permitido) return '<td><span class="block-label">---</span></td>';
+                                        return `<td><input type="radio" name="r_${aluno.id}" class="child-radio" data-aid="${aluno.id}" data-pid="${p.id}"></td>`;
                                     }).join('')}
                                 </tr>
                             `).join('')}
@@ -21461,12 +21494,22 @@ async function renderizarMatrizEntregaMaterial(turmaId, turmaNome) {
             </div>
         `;
 
-        // Ativação da lógica de marcação
-        vincularLogicaMassa(data.estoqueEscola);
+        shadow.innerHTML = styles + html;
+
+        // EVENTOS (Dentro do Shadow DOM)
+        shadow.getElementById('btn-v').onclick = () => telaEntregaMateriais();
+        shadow.getElementById('btn-s').onclick = () => salvarEntregasMaterial(turmaId);
+        
+        shadow.querySelectorAll('.master-check').forEach(master => {
+            master.onchange = (e) => {
+                const pid = e.target.dataset.pid;
+                const radios = shadow.querySelectorAll(`.child-radio[data-pid="${pid}"]`);
+                radios.forEach(r => r.checked = e.target.checked);
+            };
+        });
 
     } catch (err) {
-        console.error(err);
-        alert("Erro ao carregar tela. Verifique o console.");
+        app.innerHTML = `<div style="color:red;padding:20px;">Erro: ${err.message}</div>`;
     }
 }
 

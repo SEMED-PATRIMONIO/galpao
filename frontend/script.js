@@ -1001,51 +1001,6 @@ async function analisarPedidoEstoque(pedidoId) {
     `;
 }
 
-async function analisarPedido(id) {
-    const modal = document.getElementById('modal-analise');
-    const res = await fetch(`${API_URL}/pedidos/detalhes-estoque/${id}`, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
-    const itens = await res.json();
-
-    let estoqueSuficiente = true;
-    let htmlItens = itens.map(i => {
-        const falta = i.solicitado > i.em_estoque;
-        if (falta) estoqueSuficiente = false;
-        return `
-            <tr style="border-bottom: 1px solid #eee; background: ${falta ? '#fff1f2' : 'transparent'}">
-                <td style="padding:10px;">${i.produto} (${i.tamanho})</td>
-                <td style="padding:10px; font-weight:bold;">${i.solicitado}</td>
-                <td style="padding:10px; color: ${falta ? '#e11d48' : '#16a34a'}; font-weight:bold;">${i.em_estoque}</td>
-                <td style="padding:10px;">${falta ? '❌ INSUFICIENTE' : '✅ OK'}</td>
-            </tr>
-        `;
-    }).join('');
-
-    modal.style.display = 'flex';
-    modal.style.alignItems = 'center';
-    modal.style.justifyContent = 'center';
-    modal.innerHTML = `
-        <div style="background:white; padding:30px; border-radius:15px; width:90%; max-width:700px; max-height:80vh; overflow-y:auto;">
-            <h3 style="color:#1e3a8a; margin-top:0;">📊 Análise de Saldo - Pedido #${id}</h3>
-            <table style="width:100%; border-collapse:collapse; margin-bottom:20px;">
-                <thead style="background:#f1f5f9;">
-                    <tr><th style="text-align:left; padding:10px;">PRODUTO</th><th>PEDIDO</th><th>ESTOQUE</th><th>STATUS</th></tr>
-                </thead>
-                <tbody>${htmlItens}</tbody>
-            </table>
-            
-            <div style="display:flex; gap:10px;">
-                <button onclick="editarQuantidades(${id})" style="flex:1; background:#f59e0b; color:white; border:none; padding:15px; border-radius:8px; font-weight:bold; cursor:pointer;">✏️ EDITAR QUANTIDADES</button>
-                <button ${!estoqueSuficiente ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''} 
-                        onclick="finalizarPedido(${id}, 'APROVADO')" 
-                        style="flex:1; background:#16a34a; color:white; border:none; padding:15px; border-radius:8px; font-weight:bold; cursor:pointer;">
-                    ✅ AUTORIZAR SAÍDA
-                </button>
-                <button onclick="document.getElementById('modal-analise').style.display='none'" style="flex:1; background:#64748b; color:white; border:none; padding:15px; border-radius:8px; font-weight:bold; cursor:pointer;">FECHAR</button>
-            </div>
-        </div>
-    `;
-}
-
 async function editarQuantidades(pedidoId) {
     const modal = document.getElementById('modal-analise');
     const res = await fetch(`${API_URL}/pedidos/detalhes-estoque/${pedidoId}`, { 
@@ -1085,7 +1040,7 @@ async function editarQuantidades(pedidoId) {
                 <button onclick="salvarEdicaoPedido(${pedidoId})" style="flex:2; background:#1e40af; color:white; border:none; padding:15px; border-radius:8px; font-weight:bold; cursor:pointer; font-size:1rem;">
                     💾 SALVAR ALTERAÇÕES
                 </button>
-                <button onclick="analisarPedido(${pedidoId})" style="flex:1; background:#94a3b8; color:white; border:none; padding:15px; border-radius:8px; font-weight:bold; cursor:pointer;">
+                <button onclick="analisarPedidoEstoque(${pedidoId})" style="flex:1; background:#94a3b8; color:white; border:none; padding:15px; border-radius:8px; font-weight:bold; cursor:pointer;">
                     CANCELAR
                 </button>
             </div>
@@ -1116,8 +1071,8 @@ async function salvarEdicaoPedido(pedidoId) {
 
         if (res.ok) {
             notificar("✅ Quantidades ajustadas com sucesso!");
-            // Após salvar, volta para a tela de análise para verificar se o botão "Autorizar" já pode ser liberado
-            analisarPedido(pedidoId);
+            // MUDANÇA CIRÚRGICA: Chama analisarPedidoEstoque para recarregar a tela correta com metadados
+            analisarPedidoEstoque(pedidoId);
         } else {
             notificar("Erro ao salvar alterações.");
         }

@@ -23413,12 +23413,17 @@ async function carregarGradeInteligente(turmaId) {
         html += `</tr></thead><tbody>`;
 
         // Linha de Replicação (Apenas se houver estoque)
-        html += `<tr style="background:#f1f3f5;"><td class="col-nome-aluno"><b>MARCAR TODA COLUNA</b></td>`;
+        html += `<tr style="background:#1e3a8a; color:white;">
+            <td class="col-nome-aluno" style="background:#1e3a8a !important; color:white !important; border-right: 2px solid #3b82f6 !important;">
+                <b>MARCAR TODA COLUNA</b>
+            </td>`;
         data.produtos.forEach(p => {
-            html += `<td><select class="select-tamanho" onchange="replicarColunaInteligente(${p.id}, this.value)">
-                <option value="">--</option>
-                ${Object.keys(estoqueVirtual[p.id] || {}).map(tam => `<option value="${tam}">${tam} (${estoqueVirtual[p.id][tam]})</option>`).join('')}
-            </select></td>`;
+            html += `<td style="background:#1e3a8a;">
+                <select class="select-tamanho" style="background:white; color:black; font-weight:bold;" onchange="replicarColunaInteligente(${p.id}, this.value)">
+                    <option value="">--</option>
+                    ${Object.keys(estoqueVirtual[p.id] || {}).map(tam => `<option value="${tam}">${tam} (${estoqueVirtual[p.id][tam]})</option>`).join('')}
+                </select>
+            </td>`;
         });
         html += `</tr>`;
 

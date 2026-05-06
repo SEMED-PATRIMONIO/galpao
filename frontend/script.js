@@ -21434,11 +21434,10 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
                 .tabela-entrega .linha-todos th, 
                 .tabela-entrega .linha-todos td {
                     position: sticky;
-                    top: 50px;
+                    top: 55px; /* Ajustado para ficar logo abaixo da primeira linha do topo */
                     z-index: 9;
-                    background: #1e3a8a !important; /* Azul Escuro */
-                    color: white !important;        /* Fonte Branca */
-                    border-bottom: 1px solid rgba(255,255,255,0.3);
+                    background: #1e3a8a !important; 
+                    color: white !important;
                 }
 
                 .tabela-entrega td {
@@ -21508,9 +21507,9 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
                 <table class="tabela-entrega">
                     <thead>
                         <tr>
-                            <th class="col-aluno">ALUNO</th>
+                            <th class="col-aluno" style="background: #001a2c; color: #00d4ff;">ALUNO</th>
                             ${data.produtos.map(p => `
-                                <th class="col-prod-mat">
+                                <th class="col-prod-mat" style="background: #001a2c; color: #00d4ff;">
                                     ${p.nome.toUpperCase()}<br>
                                     <small style="opacity:0.8; color: #fff;">
                                         Disp: ${data.estoqueEscola[p.id] || 0}
@@ -21518,21 +21517,21 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
                                 </th>`).join('')}
                         </tr>
 
-                    </thead>
-                    <tbody>
-                        <tr class="linha-todos" style="background: #1e3a8a;">
-                            <th class="col-aluno" style="color: white !important; font-weight: bold;">
+                        <tr class="linha-todos" style="background: #1e3a8a !important;">
+                            <th class="col-aluno" style="background: #1e3a8a !important; color: white !important; font-weight: bold; padding: 10px !important; border: 1px solid rgba(255,255,255,0.2);">
                                 <i class="fas fa-check-double"></i> SELECIONAR COLUNA
                             </th>
                             ${data.produtos.map(produto => `
-                                <td class="col-prod-mat" style="background: #1e3a8a;">
+                                <th class="col-prod-mat" style="background: #1e3a8a !important; text-align: center; border: 1px solid rgba(255,255,255,0.2);">
                                     <input type="checkbox" class="checkbox-todos" 
-                                           style="filter: brightness(0) invert(1); transform: scale(1.3);"
+                                           style="filter: brightness(0) invert(1); transform: scale(1.3); cursor: pointer;"
                                            data-produto-id="${produto.id}" 
                                            id="todos-${produto.id}">
-                                </td>
+                                </th>
                             `).join('')}
                         </tr>
+                    </thead>
+                    <tbody>
                         ${data.alunos.map(aluno => {
                             const jaEntregue = aluno.status === 'entregue';
                             const dataFormatada = (jaEntregue && aluno.entregaInfo && aluno.entregaInfo.data_entrega)

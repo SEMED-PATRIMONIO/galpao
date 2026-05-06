@@ -21371,11 +21371,12 @@ async function renderizarMatrizEntregaMaterial(turmaId, turmaNome) {
         if (!res.ok) throw new Error((await res.json()).error || 'Falha ao carregar dados.');
         const data = await res.json();
 
-        // ---------------------------------------------------------
-        // CSS IDÊNTICO AO DE UNIFORMES (COMPACTO E HORIZONTAL)
-        // ---------------------------------------------------------
+        // O id do produto que esta turma pode receber (ex: Kit 3 para o 3º ano)
+        const idPermitido = data.idProdutoPermitido; 
+
         app.innerHTML = `
             <style>
+                /* COPIADO EXATAMENTE DO SEU CÓDIGO DE UNIFORMES */
                 .tabela-entrega-wrapper {
                     max-height: 65vh;
                     overflow-y: auto;
@@ -21388,7 +21389,7 @@ async function renderizarMatrizEntregaMaterial(turmaId, turmaNome) {
                 .tabela-entrega {
                     width: 100%;
                     border-collapse: collapse;
-                    table-layout: fixed;
+                    table-layout: fixed; /* ISSO IMPEDE AS LINHAS DE FICAREM ALTAS */
                 }
                 .col-aluno {
                     width: 25%;
@@ -21398,7 +21399,6 @@ async function renderizarMatrizEntregaMaterial(turmaId, turmaNome) {
                     white-space: nowrap;
                     overflow: hidden;
                     text-overflow: ellipsis;
-                    color: white;
                 }
                 .col-material {
                     width: calc(75% / ${data.produtos.length});
@@ -21411,48 +21411,36 @@ async function renderizarMatrizEntregaMaterial(turmaId, turmaNome) {
                     background: #001a2c;
                     font-size: 0.6rem;
                     color: #00d4ff;
-                    height: 45px;
+                    height: 45px; /* ALTURA FIXA IGUAL UNIFORME */
                     border-bottom: 2px solid #00d4ff;
-                    word-wrap: break-word; /* Título Horizontal */
                     vertical-align: middle;
                 }
                 .tabela-entrega .linha-todos th, 
                 .tabela-entrega .linha-todos td {
                     position: sticky;
-                    top: 45px; /* Logo abaixo do título */
+                    top: 45px; /* LOGO ABAIXO DO TÍTULO */
                     z-index: 9;
                     background: #002a44;
                     border-bottom: 1px solid rgba(255,255,255,0.2);
-                    height: 35px;
+                    height: 38px;
                 }
                 .tabela-entrega td {
                     text-align: center;
                     border: 1px solid rgba(255,255,255,0.05);
-                    height: 32px; /* Linha bem baixa/compacta */
+                    height: 38px; /* LINHA BAIXA IGUAL UNIFORME */
+                    color: white;
                 }
-                .checkbox-todos-material {
-                    cursor: pointer;
-                    transform: scale(1.2);
-                }
+                .checkbox-todos-mat { transform: scale(1.2); cursor: pointer; }
                 .celula-entregue { font-size: 0.7rem; color: #00ff88; font-weight: bold; }
-                .celula-bloqueada { color: rgba(255,255,255,0.1); font-size: 1.2rem; }
-                
-                .titulo-turma-central {
-                    width: 100%;
-                    text-align: center;
-                    color: #00d4ff;
-                    font-size: 1.6rem;
-                    font-weight: 800;
-                    text-transform: uppercase;
-                    margin-bottom: 20px;
-                }
+                .celula-bloqueada { color: rgba(255,255,255,0.1); font-size: 0.7rem; }
+                .titulo-turma-central { width: 100%; text-align: center; color: #00d4ff; font-size: 1.6rem; font-weight: 800; margin-bottom: 20px; }
             </style>
 
             <div class="header-animado">
                 <button class="btn-voltar-vidro" onclick="telaEntregaMateriais()" style="padding: 4px 12px; font-size: 0.8rem;">
                     <i class="fas fa-arrow-left"></i> VOLTAR
                 </button>
-                <h1 class="titulo-turma-central">ENTREGA DE MATERIAL: ${turmaNome}</h1>
+                <h1 class="titulo-turma-central"><i class="fas fa-box"></i> MATERIAL: ${turmaNome}</h1>
             </div>
 
             <div class="tabela-entrega-wrapper">
@@ -21463,17 +21451,17 @@ async function renderizarMatrizEntregaMaterial(turmaId, turmaNome) {
                             ${data.produtos.map(p => `
                                 <th class="col-material">
                                     ${p.nome.toUpperCase()}<br>
-                                    <small style="color:#aaa">Qtd: ${data.estoqueEscola[p.id] || 0}</small>
+                                    <span style="color:#aaa; font-size:10px">Qtd: ${data.estoqueEscola[p.id] || 0}</span>
                                 </th>`).join('')}
                         </tr>
                         <tr class="linha-todos">
                             <th class="col-aluno" style="color: #00d4ff;">MARCAR TODA COLUNA</th>
                             ${data.produtos.map(p => {
-                                // Lógica: Só mostra o checkbox se for o produto permitido pela etapa
-                                const ehPermitido = p.id === data.idProdutoPermitido; 
+                                // SÓ MOSTRA O CHECKBOX NA COLUNA QUE A TURMA PODE RECEBER
+                                const ehPermitido = p.id === idPermitido;
                                 return `
                                 <td class="col-material">
-                                    ${ehPermitido ? `<input type="checkbox" class="checkbox-todos-material" data-produto-id="${p.id}">` : ''}
+                                    ${ehPermitido ? `<input type="checkbox" class="checkbox-todos-mat" data-prod-id="${p.id}">` : ''}
                                 </td>`;
                             }).join('')}
                         </tr>
@@ -21483,18 +21471,19 @@ async function renderizarMatrizEntregaMaterial(turmaId, turmaNome) {
                             <tr>
                                 <td class="col-aluno" title="${aluno.nome}">${aluno.nome}</td>
                                 ${data.produtos.map(p => {
-                                    const jaEntregue = aluno.entregas?.[p.id];
-                                    const ehPermitido = p.id === data.idProdutoPermitido;
+                                    const jaEntregue = aluno.entregas && aluno.entregas[p.id];
+                                    const ehPermitido = p.id === idPermitido;
 
                                     if (jaEntregue) return `<td class="col-material celula-entregue">OK</td>`;
                                     if (!ehPermitido) return `<td class="col-material celula-bloqueada">---</td>`;
 
+                                    // Se chegou aqui, é porque pode receber e ainda não recebeu
                                     return `
                                         <td class="col-material">
-                                            <input type="radio" class="radio-aluno-material" 
+                                            <input type="radio" class="radio-aluno-mat" 
                                                    name="radio_${aluno.id}" 
                                                    data-aluno-id="${aluno.id}" 
-                                                   data-produto-id="${p.id}">
+                                                   data-prod-id="${p.id}">
                                         </td>`;
                                 }).join('')}
                             </tr>
@@ -21503,7 +21492,7 @@ async function renderizarMatrizEntregaMaterial(turmaId, turmaNome) {
                 </table>
             </div>
 
-            <div style="text-align:center; padding: 20px;">
+            <div style="text-align:center; padding: 15px;">
                 <button class="btn-confirmar-entrega" onclick="salvarEntregasMaterial(${turmaId})" 
                         style="background: #00ff88; color: #001a2c; padding: 12px 40px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer;">
                     SALVAR ENTREGAS
@@ -21518,32 +21507,33 @@ async function renderizarMatrizEntregaMaterial(turmaId, turmaNome) {
     }
 }
 
-// Lógica de seleção inteligente (respeitando quem já recebeu e regras)
 function configurarAcoesEmMassaMaterial(estoque) {
-    document.querySelectorAll('.checkbox-todos-material').forEach(chk => {
+    document.querySelectorAll('.checkbox-todos-mat').forEach(chk => {
         chk.addEventListener('change', (e) => {
-            const prodId = e.target.dataset.produtoId;
+            const prodId = e.target.dataset.prodId;
             const marcar = e.target.checked;
-            const radios = document.querySelectorAll(`.radio-aluno-material[data-produto-id="${prodId}"]`);
             
-            let limiteEstoque = estoque[prodId] || 0;
+            // Seleciona apenas os rádios daquela coluna que estão Visíveis (não são OK nem bloqueados)
+            const radiosDisponiveis = document.querySelectorAll(`.radio-aluno-mat[data-prod-id="${prodId}"]`);
+            
+            let estoqueDisponivel = estoque[prodId] || 0;
             let contador = 0;
 
-            radios.forEach(radio => {
-                // A regra já está no HTML: Se o radio existe, é porque NÃO recebeu (não é OK) 
-                // e é PERMITIDO pela etapa.
+            radiosDisponiveis.forEach(radio => {
                 if (marcar) {
-                    if (contador < limiteEstoque) {
+                    if (contador < estoqueDisponivel) {
                         radio.checked = true;
                         contador++;
+                    } else {
+                        radio.checked = false; // Acabou o estoque, não marca o resto
                     }
                 } else {
                     radio.checked = false;
                 }
             });
 
-            if (marcar && contador < radios.length && contador === limiteEstoque) {
-                notificar(`Estoque insuficiente! Apenas ${contador} marcados.`, 'aviso');
+            if (marcar && contador < radiosDisponiveis.length && contador === estoqueDisponivel) {
+                notificar(`Atenção: Estoque insuficiente para toda a turma. Marcados apenas os ${contador} primeiros.`, 'aviso');
             }
         });
     });

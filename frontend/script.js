@@ -21360,7 +21360,7 @@ function carregarGradeDeEntregaMaterial() {
     renderizarMatrizEntregaMaterial(turmaId);
 }
 
-async function renderizarMatrizEntregaMaterial(turmaId) {
+async function renderizarMatrizEntregaMaterial(turmaId, turmaNome) {
     const app = document.getElementById('app-content');
     app.innerHTML = `<div class="loading-spinner"></div>`;
 
@@ -21368,218 +21368,182 @@ async function renderizarMatrizEntregaMaterial(turmaId) {
         const res = await fetch(`${API_URL}/turma/${turmaId}/grade-entrega-material`, {
             headers: { 'Authorization': `Bearer ${TOKEN}` }
         });
+        if (!res.ok) throw new Error((await res.json()).error || 'Falha ao carregar dados.');
         const data = await res.json();
-        
-        if (!res.ok) throw new Error(data.error || 'Falha ao carregar dados da turma.');
 
-        const turmaNome = data.turmaInfo.nome;
-
-        if (!data.produtos || data.produtos.length === 0) {
-            app.innerHTML = `
-                <div class="glass-panel" style="text-align:center; padding: 40px; margin: 20px;">
-                    <h2>Nenhum Kit de Material Escolar Encontrado</h2>
-                    <button class="btn-voltar-vidro" onclick="telaEntregaMaterial()">Voltar</button>
-                </div>`;
-            return;
-        }
-
+        // ---------------------------------------------------------
+        // CSS IDÊNTICO AO DE UNIFORMES (COMPACTO E HORIZONTAL)
+        // ---------------------------------------------------------
         app.innerHTML = `
-        <style>
-            .tabela-material-wrapper {
-                max-height: 70vh;
-                overflow: auto;
-                border: 1px solid #ddd;
-            }
-            .tabela-entrega {
-                width: 100%;
-                border-collapse: separate;
-                border-spacing: 0;
-            }
-            /* Cabeçalho 1: Nomes dos Produtos (HORIZONTAL AGORA) */
-            .tabela-entrega thead tr:nth-child(1) th {
-                position: sticky;
-                top: 0;
-                z-index: 30;
-                background: #f8f9fa;
-                height: 40px; /* Altura fixa e baixa */
-                font-size: 11px;
-                border: 1px solid #ddd;
-                vertical-align: middle;
-                padding: 5px;
-            }
-            /* Cabeçalho 2: Linha Marcar Todos */
-            .tabela-entrega .linha-todos th, 
-            .tabela-entrega .linha-todos td {
-                position: sticky;
-                top: 40px; /* Exatamente a altura do th acima */
-                z-index: 25;
-                background: #1e3a8a !important;
-                color: white !important;
-                height: 30px !important;
-                font-size: 10px;
-                border: 1px solid #2563eb;
-            }
-            /* Linhas de Alunos Compactas */
-            .tabela-entrega tbody td {
-                height: 28px !important;
-                padding: 0 8px !important;
-                border: 1px solid #eee;
-                font-size: 12px;
-                vertical-align: middle;
-            }
-            .col-aluno {
-                width: 250px;
-                text-align: left !important;
-                position: sticky;
-                left: 0;
-                background: white;
-                z-index: 10;
-                border-right: 2px solid #ddd !important;
-            }
-            .celula-bloqueada { background: #f9f9f9; color: #ccc; }
-        </style>
+            <style>
+                .tabela-entrega-wrapper {
+                    max-height: 65vh;
+                    overflow-y: auto;
+                    overflow-x: hidden;
+                    border-radius: 8px;
+                    background: rgba(0, 26, 44, 0.6);
+                    margin-bottom: 15px;
+                    border: 1px solid rgba(255,255,255,0.1);
+                }
+                .tabela-entrega {
+                    width: 100%;
+                    border-collapse: collapse;
+                    table-layout: fixed;
+                }
+                .col-aluno {
+                    width: 25%;
+                    text-align: left !important;
+                    padding-left: 10px !important;
+                    font-size: 0.7rem;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    color: white;
+                }
+                .col-material {
+                    width: calc(75% / ${data.produtos.length});
+                    padding: 5px 2px !important;
+                }
+                .tabela-entrega thead th {
+                    position: sticky;
+                    top: 0;
+                    z-index: 10;
+                    background: #001a2c;
+                    font-size: 0.6rem;
+                    color: #00d4ff;
+                    height: 45px;
+                    border-bottom: 2px solid #00d4ff;
+                    word-wrap: break-word; /* Título Horizontal */
+                    vertical-align: middle;
+                }
+                .tabela-entrega .linha-todos th, 
+                .tabela-entrega .linha-todos td {
+                    position: sticky;
+                    top: 45px; /* Logo abaixo do título */
+                    z-index: 9;
+                    background: #002a44;
+                    border-bottom: 1px solid rgba(255,255,255,0.2);
+                    height: 35px;
+                }
+                .tabela-entrega td {
+                    text-align: center;
+                    border: 1px solid rgba(255,255,255,0.05);
+                    height: 32px; /* Linha bem baixa/compacta */
+                }
+                .checkbox-todos-material {
+                    cursor: pointer;
+                    transform: scale(1.2);
+                }
+                .celula-entregue { font-size: 0.7rem; color: #00ff88; font-weight: bold; }
+                .celula-bloqueada { color: rgba(255,255,255,0.1); font-size: 1.2rem; }
+                
+                .titulo-turma-central {
+                    width: 100%;
+                    text-align: center;
+                    color: #00d4ff;
+                    font-size: 1.6rem;
+                    font-weight: 800;
+                    text-transform: uppercase;
+                    margin-bottom: 20px;
+                }
+            </style>
 
-        <div class="tabela-material-wrapper">
-            <table class="tabela-entrega">
-                <thead>
-                    <tr>
-                        <th class="col-aluno">ALUNO</th>
-                        ${data.produtos.map(p => `
-                            <th class="col-prod-mat">
-                                ${p.nome.toUpperCase()}<br>
-                                <small style="color: #3b82f6;">Disp: ${data.estoqueEscola[p.id] || 0}</small>
-                            </th>`).join('')}
-                    </tr>
-                    <tr class="linha-todos">
-                        <th class="col-aluno" style="padding-left: 10px !important;">
-                            <i class="fas fa-check-double"></i> MARCAR TODA COLUNA
-                        </th>
-                        ${data.produtos.map(produto => {
-                            if (produto.id !== idPermitidoDaTurma) return '<td></td>'; // Coluna bloqueada fica vazia
-                            return `<td><input type="checkbox" class="checkbox-todos" ...></td>`;
-                            // Lógica para só mostrar o checkbox na coluna permitida
-                            // Você pode validar aqui se este produto é o idPermitido da turma
-                            return `
-                            <td class="col-prod-mat">
-                                <input type="checkbox" class="checkbox-todos" 
-                                    data-produto-id="${produto.id}" 
-                                    id="todos-${produto.id}">
-                            </td>`;
-                        }).join('')}
-                    </tr>
-                </thead>
-                <tbody>
-                    ${data.alunos.map(aluno => `
+            <div class="header-animado">
+                <button class="btn-voltar-vidro" onclick="telaEntregaMateriais()" style="padding: 4px 12px; font-size: 0.8rem;">
+                    <i class="fas fa-arrow-left"></i> VOLTAR
+                </button>
+                <h1 class="titulo-turma-central">ENTREGA DE MATERIAL: ${turmaNome}</h1>
+            </div>
+
+            <div class="tabela-entrega-wrapper">
+                <table class="tabela-entrega">
+                    <thead>
                         <tr>
-                            <td class="col-aluno">${aluno.nome}</td>
+                            <th class="col-aluno">ALUNO</th>
+                            ${data.produtos.map(p => `
+                                <th class="col-material">
+                                    ${p.nome.toUpperCase()}<br>
+                                    <small style="color:#aaa">Qtd: ${data.estoqueEscola[p.id] || 0}</small>
+                                </th>`).join('')}
+                        </tr>
+                        <tr class="linha-todos">
+                            <th class="col-aluno" style="color: #00d4ff;">MARCAR TODA COLUNA</th>
                             ${data.produtos.map(p => {
-                                const jaEntregue = aluno.entregas && aluno.entregas[p.id];
-                                // Substitua 'p.id === 3' pela sua variável de lógica de etapa idPermitido
-                                const ehPermitido = true; 
-
-                                if (jaEntregue) return '<td class="celula-entregue">OK</td>';
-                                if (!ehPermitido) return '<td class="celula-bloqueada">---</td>';
-
+                                // Lógica: Só mostra o checkbox se for o produto permitido pela etapa
+                                const ehPermitido = p.id === data.idProdutoPermitido; 
                                 return `
-                                    <td class="col-prod-mat">
-                                        <input type="radio" class="radio-aluno" 
-                                            name="radio_aluno_${aluno.id}" 
-                                            data-aluno-id="${aluno.id}" 
-                                            data-produto-id="${p.id}">
-                                    </td>`;
+                                <td class="col-material">
+                                    ${ehPermitido ? `<input type="checkbox" class="checkbox-todos-material" data-produto-id="${p.id}">` : ''}
+                                </td>`;
                             }).join('')}
                         </tr>
-                    `).join('')}
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        ${data.alunos.map(aluno => `
+                            <tr>
+                                <td class="col-aluno" title="${aluno.nome}">${aluno.nome}</td>
+                                ${data.produtos.map(p => {
+                                    const jaEntregue = aluno.entregas?.[p.id];
+                                    const ehPermitido = p.id === data.idProdutoPermitido;
 
-            <div id="footer-material">
-                <button class="btn-imprimir-comprovante" onclick="gerarComprovanteTurmaMaterial(${turmaId})" 
-                        style="background: #3b82f6; color: white; padding: 12px 20px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 8px;">
-                    <i class="fas fa-print"></i> COMPROVANTE
-                </button>
-                <button class="btn-confirmar-entrega" onclick="confirmarEntregasMaterial(${turmaId})" 
-                        style="background: #00ff88; color: #001a2c; padding: 12px 30px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 8px;">
-                    <i class="fas fa-check"></i> CONFIRMAR ENTREGAS
+                                    if (jaEntregue) return `<td class="col-material celula-entregue">OK</td>`;
+                                    if (!ehPermitido) return `<td class="col-material celula-bloqueada">---</td>`;
+
+                                    return `
+                                        <td class="col-material">
+                                            <input type="radio" class="radio-aluno-material" 
+                                                   name="radio_${aluno.id}" 
+                                                   data-aluno-id="${aluno.id}" 
+                                                   data-produto-id="${p.id}">
+                                        </td>`;
+                                }).join('')}
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+
+            <div style="text-align:center; padding: 20px;">
+                <button class="btn-confirmar-entrega" onclick="salvarEntregasMaterial(${turmaId})" 
+                        style="background: #00ff88; color: #001a2c; padding: 12px 40px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer;">
+                    SALVAR ENTREGAS
                 </button>
             </div>
-        </div>
         `;
-        
-        configurarAcoesEmMassaMaterial(data.produtos, data.estoqueEscola);
+
+        configurarAcoesEmMassaMaterial(data.estoqueEscola);
 
     } catch (err) {
-        console.error("Erro ao renderizar matriz de material:", err.message);
         notificar(`Erro: ${err.message}`, 'erro');
     }
 }
 
-// ============================================================
-// LÓGICA CORRIGIDA DO BOTÃO "TODOS" E INTERAÇÕES
-// ============================================================
-function configurarAcoesEmMassaMaterial(produtos, estoque) {
-    document.querySelectorAll('.checkbox-todos').forEach(chk => {
+// Lógica de seleção inteligente (respeitando quem já recebeu e regras)
+function configurarAcoesEmMassaMaterial(estoque) {
+    document.querySelectorAll('.checkbox-todos-material').forEach(chk => {
         chk.addEventListener('change', (e) => {
-            const produtoId = e.target.dataset.produtoId;
+            const prodId = e.target.dataset.produtoId;
             const marcar = e.target.checked;
+            const radios = document.querySelectorAll(`.radio-aluno-material[data-produto-id="${prodId}"]`);
             
-            if (!marcar) {
-                // Se desmarcar o "Todos", limpa apenas quem NÃO estava salvo ainda
-                document.querySelectorAll(`.radio-aluno[data-produto-id="${produtoId}"]`).forEach(r => {
-                    r.checked = false;
-                    r.dataset.wasChecked = 'false';
-                });
-                return;
-            }
+            let limiteEstoque = estoque[prodId] || 0;
+            let contador = 0;
 
-            // --- Lógica de MARCAR inteligente ---
-            let estoqueDisponivel = estoque[produtoId] || 0;
-            let marcadosNestaRodada = 0;
-
-            // Buscamos todas as linhas da tabela
-            const linhas = document.querySelectorAll('.tabela-entrega tbody tr');
-
-            linhas.forEach(linha => {
-                // 1. Localiza o rádio desta coluna específica nesta linha
-                const radio = linha.querySelector(`.radio-aluno[data-produto-id="${produtoId}"]`);
-                
-                // 2. Verifica se a célula já contém um "OK" (já entregue)
-                // Buscamos se existe o texto "OK" ou a classe 'celula-entregue'
-                const jaEntregue = linha.querySelector('.celula-entregue') !== null || 
-                                 linha.innerText.includes('OK');
-
-                // 3. Verifica se a célula está bloqueada (fora da etapa do aluno)
-                const estaBloqueado = radio === null || radio.closest('td').classList.contains('celula-bloqueada');
-
-                // SÓ MARCA SE: tiver rádio, não estiver entregue, não estiver bloqueado e houver estoque
-                if (radio && !jaEntregue && !estaBloqueado) {
-                    if (marcadosNestaRodada < estoqueDisponivel) {
+            radios.forEach(radio => {
+                // A regra já está no HTML: Se o radio existe, é porque NÃO recebeu (não é OK) 
+                // e é PERMITIDO pela etapa.
+                if (marcar) {
+                    if (contador < limiteEstoque) {
                         radio.checked = true;
-                        radio.dataset.wasChecked = 'true';
-                        marcadosNestaRodada++;
+                        contador++;
                     }
+                } else {
+                    radio.checked = false;
                 }
             });
 
-            // Feedback visual sobre o estoque
-            if (marcadosNestaRodada < (linhas.length) && marcadosNestaRodada === estoqueDisponivel && estoqueDisponivel > 0) {
-                notificar(`Atenção: Apenas ${marcadosNestaRodada} alunos marcados. O estoque de este item esgotou!`, 'aviso');
-            }
-        });
-    });
-
-    // Mantém a lógica de clique individual (toggle)
-    document.querySelectorAll('.radio-aluno').forEach(radio => {
-        radio.addEventListener('click', (e) => {
-            const el = e.target;
-            if (el.dataset.wasChecked === 'true') {
-                el.checked = false;
-                el.dataset.wasChecked = 'false';
-                // Desmarca o "Todos" do topo se o usuário tirar um individualmente
-                const masterCheck = document.getElementById(`todos-${el.dataset.produtoId}`);
-                if (masterCheck) masterCheck.checked = false;
-            } else {
-                el.dataset.wasChecked = 'true';
+            if (marcar && contador < radios.length && contador === limiteEstoque) {
+                notificar(`Estoque insuficiente! Apenas ${contador} marcados.`, 'aviso');
             }
         });
     });

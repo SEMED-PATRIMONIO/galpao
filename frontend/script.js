@@ -21376,64 +21376,72 @@ async function renderizarMatrizEntregaMaterial(turmaId, turmaNome) {
 
         app.innerHTML = `
             <style>
-                /* COPIADO EXATAMENTE DO SEU CÓDIGO DE UNIFORMES */
                 .tabela-entrega-wrapper {
                     max-height: 65vh;
-                    overflow-y: auto;
-                    overflow-x: hidden;
-                    border-radius: 8px;
+                    overflow: auto;
                     background: rgba(0, 26, 44, 0.6);
-                    margin-bottom: 15px;
                     border: 1px solid rgba(255,255,255,0.1);
+                    border-radius: 8px;
                 }
+
                 .tabela-entrega {
                     width: 100%;
                     border-collapse: collapse;
-                    table-layout: fixed; /* ISSO IMPEDE AS LINHAS DE FICAREM ALTAS */
+                    table-layout: fixed; /* ESSENCIAL: Mantém as larguras que definirmos */
                 }
-                .col-aluno {
-                    width: 25%;
-                    text-align: left !important;
-                    padding-left: 10px !important;
-                    font-size: 0.7rem;
-                    white-space: nowrap;
-                    overflow: hidden;
-                    text-overflow: ellipsis;
-                }
-                .col-material {
-                    width: calc(75% / ${data.produtos.length});
-                    padding: 5px 2px !important;
-                }
+
+                /* TÍTULOS: Força horizontal e remove qualquer herança de rotação */
                 .tabela-entrega thead th {
                     position: sticky;
                     top: 0;
-                    z-index: 10;
+                    z-index: 20;
                     background: #001a2c;
-                    font-size: 0.6rem;
                     color: #00d4ff;
-                    height: 45px; /* ALTURA FIXA IGUAL UNIFORME */
+                    font-size: 0.65rem;
+                    height: 50px; /* Altura suficiente para duas linhas de texto horizontal */
                     border-bottom: 2px solid #00d4ff;
+                    text-align: center;
                     vertical-align: middle;
+                    
+                    /* BLOQUEIA ROTAÇÃO */
+                    writing-mode: horizontal-tb !important; 
+                    transform: none !important;
+                    white-space: normal; /* Permite quebrar linha se o nome for grande, mas na horizontal */
                 }
+
+                /* LINHA MARCAR TODOS: Agora vai aparecer abaixo do título */
                 .tabela-entrega .linha-todos th, 
                 .tabela-entrega .linha-todos td {
                     position: sticky;
-                    top: 45px; /* LOGO ABAIXO DO TÍTULO */
-                    z-index: 9;
-                    background: #002a44;
+                    top: 50px; /* Exatamente a altura do th acima */
+                    z-index: 19;
+                    background: #002a44 !important;
+                    height: 35px;
                     border-bottom: 1px solid rgba(255,255,255,0.2);
-                    height: 38px;
                 }
+
+                /* COLUNAS */
+                .col-aluno {
+                    width: 200px; /* Largura fixa para o nome do aluno */
+                    text-align: left !important;
+                    padding-left: 10px !important;
+                    color: white;
+                    font-size: 0.75rem;
+                }
+
+                .col-material {
+                    width: 80px; /* Largura suficiente para o rádio e o texto KIT horizontal */
+                }
+
                 .tabela-entrega td {
-                    text-align: center;
+                    height: 35px; /* Linha baixa e compacta */
                     border: 1px solid rgba(255,255,255,0.05);
-                    height: 38px; /* LINHA BAIXA IGUAL UNIFORME */
+                    text-align: center;
                     color: white;
                 }
-                .checkbox-todos-mat { transform: scale(1.2); cursor: pointer; }
-                .celula-entregue { font-size: 0.7rem; color: #00ff88; font-weight: bold; }
-                .celula-bloqueada { color: rgba(255,255,255,0.1); font-size: 0.7rem; }
-                .titulo-turma-central { width: 100%; text-align: center; color: #00d4ff; font-size: 1.6rem; font-weight: 800; margin-bottom: 20px; }
+
+                .celula-entregue { color: #00ff88; font-weight: bold; font-size: 0.7rem; }
+                .celula-bloqueada { color: rgba(255,255,255,0.1); }
             </style>
 
             <div class="header-animado">
@@ -21450,15 +21458,18 @@ async function renderizarMatrizEntregaMaterial(turmaId, turmaNome) {
                             <th class="col-aluno">ALUNO</th>
                             ${data.produtos.map(p => `
                                 <th class="col-material">
-                                    ${p.nome.toUpperCase()}<br>
-                                    <span style="color:#aaa; font-size:10px">Qtd: ${data.estoqueEscola[p.id] || 0}</span>
+                                    <div style="line-height: 1.1;">
+                                        ${p.nome.toUpperCase()}<br>
+                                        <span style="color: #aaa; font-size: 9px;">Qtd: ${data.estoqueEscola[p.id] || 0}</span>
+                                    </div>
                                 </th>`).join('')}
                         </tr>
                         <tr class="linha-todos">
-                            <th class="col-aluno" style="color: #00d4ff;">MARCAR TODA COLUNA</th>
+                            <th class="col-aluno" style="color: #00d4ff; font-size: 0.6rem;">
+                                <i class="fas fa-check-double"></i> MARCAR TODOS
+                            </th>
                             ${data.produtos.map(p => {
-                                // SÓ MOSTRA O CHECKBOX NA COLUNA QUE A TURMA PODE RECEBER
-                                const ehPermitido = p.id === idPermitido;
+                                const ehPermitido = p.id === data.idProdutoPermitido;
                                 return `
                                 <td class="col-material">
                                     ${ehPermitido ? `<input type="checkbox" class="checkbox-todos-mat" data-prod-id="${p.id}">` : ''}
@@ -21489,15 +21500,15 @@ async function renderizarMatrizEntregaMaterial(turmaId, turmaNome) {
                             </tr>
                         `).join('')}
                     </tbody>
+                    <div style="text-align:center; padding: 15px;">
+                        <button class="btn-confirmar-entrega" onclick="salvarEntregasMaterial(${turmaId})" 
+                            style="background: #00ff88; color: #001a2c; padding: 12px 40px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer;">
+                            SALVAR ENTREGAS
+                        </button>
+                    </div>
                 </table>
             </div>
 
-            <div style="text-align:center; padding: 15px;">
-                <button class="btn-confirmar-entrega" onclick="salvarEntregasMaterial(${turmaId})" 
-                        style="background: #00ff88; color: #001a2c; padding: 12px 40px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer;">
-                    SALVAR ENTREGAS
-                </button>
-            </div>
         `;
 
         configurarAcoesEmMassaMaterial(data.estoqueEscola);

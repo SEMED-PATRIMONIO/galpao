@@ -1,9 +1,14 @@
 <?php
 
+/**
+ * Função para extrair o texto de uma área recortada (Crop)
+ * Adicionei o cabeçalho da função que estava faltando para corrigir o erro na linha 26.
+ */
+function extrairTexto($crop) {
     $crop->normalizeImage();
-
     $crop->contrastStretchImage(0.1, 0.1);
 
+    // Certifique-se que a pasta 'uploads' existe e tem permissão de escrita
     $tmp = __DIR__ . '/uploads/n_' . uniqid() . '.jpg';
 
     $crop->writeImage($tmp);
@@ -15,11 +20,9 @@
     $txt = shell_exec($cmd);
 
     @unlink($tmp);
-
     $crop->destroy();
 
     $txt = trim($txt);
-
     $txt = preg_replace('/[^\p{L}\p{N}\s]/u', '', $txt);
 
     return $txt ?: 'Não identificado';
@@ -33,7 +36,6 @@ function compararResultados($gab, $alu)
     $det = [];
 
     foreach ($gab as $q => $correta) {
-
         $r = $alu[$q] ?? 'BRANCO';
 
         if ($r === $correta) {
@@ -69,3 +71,4 @@ function enviarStatus($at, $to, $al, $co = false, $re = [])
     @ob_flush();
     @flush();
 }
+

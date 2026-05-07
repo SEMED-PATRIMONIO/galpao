@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OMR Vision Pro - Master</title>
+    <title>SEMED</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
     <style>
@@ -19,9 +19,16 @@
 
     <div class="container mx-auto max-w-5xl pt-10 px-4">
         
-        <header class="text-center mb-10 animate__animated animate__fadeIn">
-            <h1 class="text-5xl font-black tracking-tighter text-white">VISION<span class="text-blue-500">SCAN</span></h1>
-            <p class="text-slate-500 mt-2 uppercase tracking-widest text-xs">Sistema de Correção Gamificado v2.0</p>
+        <header class="flex flex-col items-center mb-10 animate__animated animate__fadeIn">
+            <div class="flex items-center gap-4">
+                <img src="logap.png" alt="Logotipo SEMED" class="h-12 w-auto object-contain">
+                
+                <h1 class="text-5xl font-black tracking-tighter text-white">VISION<span class="text-blue-500">SCAN</span></h1>
+            </div>
+
+            <p class="text-slate-500 mt-3 uppercase tracking-widest text-xs text-center">
+                Desenvolvido pela Subsecretaria Adjunta de Inovação e Tecnologia da SEMED - Queimados/RJ
+            </p>
         </header>
 
         <!-- PASSO 1: UPLOAD DO GABARITO MESTRE -->

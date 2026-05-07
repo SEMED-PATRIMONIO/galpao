@@ -13,6 +13,30 @@
         #box-name { border-color: #3b82f6; background: rgba(59, 130, 246, 0.2); }
         #box-grid { border-color: #ec4899; background: rgba(236, 72, 153, 0.2); }
         .progress-fill { transition: width 0.3s ease-in-out; }
+        #canvas-container {
+            max-height: 75vh; /* Usa 75% da altura da tela */
+            width: fit-content;
+            margin: 0 auto;
+            overflow: hidden; /* Remove as barras de rolagem */
+            border-radius: 8px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            background: #000;
+        }
+
+        #preview-img {
+            max-height: 75vh; /* A imagem nunca será maior que o container */
+            width: auto;
+            display: block;
+        }
+
+        /* Garante que o canvas de desenho acompanhe o tamanho reduzido da imagem */
+        #selection-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
     </style>
 </head>
 <body class="bg-slate-950 text-slate-200 min-h-screen font-sans pb-20">

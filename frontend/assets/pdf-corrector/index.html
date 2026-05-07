@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Corretor de Provas PDF</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <h1>Corretor OMR - Processamento</h1>
+    <div class="card">
+        <h3>1. Carregar Respostas dos Alunos</h3>
+        <input type="file" id="pdfAlunos" accept="application/pdf">
+        <button onclick="iniciarProcessamento()">Iniciar Interpretação</button>
+    </div>
+
+    <div id="progress-container" style="display:none; margin-top: 20px;">
+        <p>Processando alunos... <span id="percent">0%</span></p>
+        <div style="width: 100%; bg: #eee;"><div id="bar" style="width:0%; height:20px; background:blue;"></div></div>
+    </div>
+
+    <script>
+        async function iniciarProcessamento() {
+            const config = localStorage.getItem('gabaritoConfig');
+            if(!config) return alert("Configure o gabarito primeiro!");
+
+            const file = document.getElementById('pdfAlunos').files[0];
+            const formData = new FormData();
+            formData.append('pdfAlunos', file);
+            formData.append('config', config);
+
+            document.getElementById('progress-container').style.display = 'block';
+
+            const response = await fetch('/processar', { method: 'POST', body: formData });
+            const reader = response.body.getReader();
+
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                const str = new TextDecoder().decode(value);
+                if(str.includes('progresso')) {
+                    const data = JSON.parse(str.replace('data: ', ''));
+                    document.getElementById('bar').style.width = data.progresso + '%';
+                    document.getElementById('percent').innerText = data.progresso + '%';
+                }
+            }
+        }
+    </script>
+</body>
+</html>

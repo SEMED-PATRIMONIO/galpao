@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Mapeador de Gabarito</title>
+    <style>
+        #canvas-container { position: relative; border: 1px solid #000; display: inline-block; }
+        canvas { cursor: crosshair; }
+        .controls { margin-bottom: 10px; padding: 15px; background: #f0f0f0; }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <input type="file" id="pdfMaster" accept="application/pdf">
+        <button onclick="setMode('escola')">Marcar Escola</button>
+        <button onclick="setMode('aluno')">Marcar Aluno</button>
+        <button onclick="setMode('turma')">Marcar Turma</button>
+        <button onclick="setMode('questoes')">Marcar Círculos Resposta</button>
+        <button onclick="saveConfig()" style="background: green; color: white;">Salvar Configuração</button>
+    </div>
+    <div id="canvas-container">
+        <canvas id="pdfCanvas"></canvas>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+    <script>
+        // Lógica simplificada de Canvas para desenho de retângulos
+        let config = { areaEscola: null, areaAluno: null, areaTurma: null, questoes: [] };
+        let mode = '';
+        const canvas = document.getElementById('pdfCanvas');
+        const ctx = canvas.getContext('2d');
+
+        document.getElementById('pdfMaster').onchange = async (e) => {
+            const file = e.target.files[0];
+            const pdf = await pdfjsLib.getDocument(URL.createObjectURL(file)).promise;
+            const page = await pdf.getPage(1);
+            const viewport = page.getViewport({ scale: 1.5 });
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            await page.render({ canvasContext: ctx, viewport }).promise;
+        };
+
+        function setMode(m) { mode = m; alert("Modo: " + m + ". Desenhe o retângulo no PDF."); }
+
+        // Eventos de mouse para capturar X, Y, W, H e salvar em 'config'
+        // (Aqui entraria o código de drag-and-drop do retângulo)
+        
+        function saveConfig() {
+            localStorage.setItem('gabaritoConfig', JSON.stringify(config));
+            window.location.href = 'index.html';
+        }
+    </script>
+</body>
+</html>

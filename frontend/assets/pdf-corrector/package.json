@@ -1,0 +1,13 @@
+{
+  "name": "pdf-omr-corrector",
+  "version": "1.0.0",
+  "main": "server.js",
+  "dependencies": {
+    "express": "^4.19.2",
+    "multer": "^1.4.5-lts.1",
+    "pdf-img-convert": "^1.2.1",
+    "sharp": "^0.33.2",
+    "tesseract.js": "^5.0.5",
+    "csv-writer": "^1.6.0"
+  }
+}

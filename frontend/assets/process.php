@@ -1,15 +1,15 @@
 <?php
 /**
  * VISION SCAN - Motor de Correção OMR & OCR
- * Desenvolvido para SEMED - Queimados/RJ
+ * Versão Corrigida: Unificação de Lógica + Estabilidade de Stream
  */
 
-// 1. Configurações de Streaming e Memória
+// 1. Configurações de Ambiente e Memória
 set_time_limit(0); 
 ini_set('memory_limit', '512M');
-error_reporting(0); // Desativa erros brutos para não quebrar o JSON
+error_reporting(E_ALL); // Ative para ver erros se necessário, mas o try/catch cuidará disso
 
-// Cabeçalhos para forçar o envio imediato dos dados (evita travar em 0%)
+// 2. Cabeçalhos Anti-Buffering (Impede que o progresso trave em 0%)
 header('Content-Type: application/json');
 header('Cache-Control: no-cache');
 header('X-Accel-Buffering: no'); 
@@ -31,10 +31,10 @@ if ($action === 'preview') {
 } elseif ($action === 'process') {
     handleProcess($uploadDir);
 } else {
-    echo json_encode(['error' => 'Ação não reconhecida.']);
+    echo json_encode(['error' => 'Ação inválida.']);
 }
 
-// --- LOGICA DE PROCESSAMENTO ---
+// --- FUNÇÕES PRINCIPAIS ---
 
 function handlePreview($uploadDir) {
     try {
@@ -42,11 +42,11 @@ function handlePreview($uploadDir) {
         $temp = $_FILES['file']['tmp_name'];
         $prefix = $uploadDir . 'prev_' . time();
         
-        // Usa pdftoppm (mais rápido que Imagick para PDFs grandes)
+        // Converte apenas a pág 1 para o canvas de mapeamento
         shell_exec("pdftoppm -f 1 -l 1 -jpeg -r 100 " . escapeshellarg($temp) . " " . $prefix);
         
         $files = glob($prefix . "-*.jpg");
-        if (!$files) throw new Exception("Falha ao gerar preview. Verifique se o 'poppler-utils' está instalado.");
+        if (!$files) throw new Exception("Erro ao gerar imagem. Verifique se o 'poppler-utils' (pdftoppm) está instalado.");
         
         echo json_encode(['image' => 'uploads/' . basename($files[0])]);
     } catch (Exception $e) {
@@ -61,17 +61,17 @@ function handleProcess($uploadDir) {
         $provasPath = $_FILES['provas']['tmp_name'];
         $prefix = $uploadDir . 'proc_' . uniqid();
 
-        // 1. Processa o Gabarito Mestre para criar o gabarito de comparação
+        // 1. Processa o Gabarito Mestre (Mapeia as respostas corretas)
         shell_exec("pdftoppm -f 1 -l 1 -jpeg -r 200 " . escapeshellarg($gabaritoPath) . " " . $prefix . "_gab");
         $gabFiles = glob($prefix . "_gab-*.jpg");
-        if (!$gabFiles) throw new Exception("Erro ao processar arquivo do gabarito.");
+        if (!$gabFiles) throw new Exception("Falha ao ler gabarito mestre.");
 
         $imgGab = new Imagick($gabFiles[0]);
-        $mapaGabarito = detectarMarcacoes($imgGab, $coords['grid'], 0.90); // 90% de confiança
+        $mapaGabarito = detectarMarcacoes($imgGab, $coords['grid'], 0.90);
         $imgGab->destroy();
         @unlink($gabFiles[0]);
 
-        // 2. Converte as Provas (Bulk Conversion)
+        // 2. Processa as Provas (Lote)
         shell_exec("pdftoppm -jpeg -r 150 " . escapeshellarg($provasPath) . " " . $prefix);
         $paginas = glob($prefix . "-*.jpg");
         $total = count($paginas);
@@ -80,7 +80,7 @@ function handleProcess($uploadDir) {
         foreach ($paginas as $index => $path) {
             $img = new Imagick($path);
             
-            // Otimização de imagem para OCR/OMR
+            // Tratamento de imagem para melhorar OCR/OMR
             $img->transformImageColorSpace(Imagick::COLORSPACE_GRAY);
             $img->blackThresholdImage("gray(50%)");
             $img->whiteThresholdImage("gray(50%)");
@@ -91,17 +91,18 @@ function handleProcess($uploadDir) {
             // OMR das Respostas
             $respostas = detectarMarcacoes($img, $coords['grid'], 0.90);
             
-            // Comparação com o Gabarito Mestre
+            // Compara com gabarito mestre
             $stats = compararResultados($mapaGabarito, $respostas);
 
-            $resultados[] = [
+            $res = [
                 'aluno' => $nome,
                 'acertos' => $stats['acertos'],
                 'brancos' => $stats['brancos'],
                 'rasuras' => $stats['rasuras']
             ];
+            $resultados[] = $res;
 
-            // Envia progresso em tempo real
+            // Envia atualização para o navegador em tempo real
             enviarStatus($index + 1, $total, $nome);
 
             $img->clear();
@@ -109,16 +110,15 @@ function handleProcess($uploadDir) {
             @unlink($path);
         }
 
-        // Finaliza o stream enviando todos os dados
-        enviarStatus($total, $total, "Processamento Finalizado", true, $resultados);
+        // Finaliza enviando o array completo de resultados
+        enviarStatus($total, $total, "Finalizado", true, $resultados);
 
     } catch (Exception $e) {
-        // Envia o erro em formato JSON para não quebrar o JS
         echo json_encode(['error' => $e->getMessage()]);
     }
 }
 
-// --- FUNÇÕES MOTORAS (OMR/OCR) ---
+// --- MOTOR OMR / OCR ---
 
 function detectarMarcacoes($img, $c, $threshold) {
     $realW = $img->getImageWidth(); 
@@ -131,7 +131,7 @@ function detectarMarcacoes($img, $c, $threshold) {
     $gridW = $c['w'] * $scaleX; 
     $gridH = $c['h'] * $scaleY;
 
-    $rowH = $gridH / 50; // Assume-se 50 questões conforme o código antigo
+    $rowH = $gridH / 50; // Assume 50 questões
     $colW = $gridW / 5;  // A, B, C, D, E
     $respostas = [];
 
@@ -145,20 +145,15 @@ function detectarMarcacoes($img, $c, $threshold) {
             $stats = $regiao->getImageStatistics();
             $media = (($stats['red']['mean'] ?? 0) + ($stats['green']['mean'] ?? 0) + ($stats['blue']['mean'] ?? 0)) / 3;
 
-            // Se a média for baixa (perto de 0), a área está pintada (preto)
             if ($media < (65535 * (1 - $threshold))) {
                 $marcacoes[] = chr(65 + $a);
             }
             $regiao->destroy();
         }
         
-        if (count($marcacoes) === 1) {
-            $respostas[$q + 1] = $marcacoes[0];
-        } elseif (count($marcacoes) > 1) {
-            $respostas[$q + 1] = "RASURA:" . implode($marcacoes);
-        } else {
-            $respostas[$q + 1] = "BRANCO";
-        }
+        if (count($marcacoes) === 1) $respostas[$q + 1] = $marcacoes[0];
+        elseif (count($marcacoes) > 1) $respostas[$q + 1] = "RASURA";
+        else $respostas[$q + 1] = "BRANCO";
     }
     return $respostas;
 }
@@ -173,7 +168,6 @@ function extrairTextoOCR($img, $c) {
     $tmp = __DIR__ . '/uploads/ocr_' . uniqid() . '.jpg';
     $crop->writeImage($tmp);
 
-    // Usa o Tesseract para ler o nome do aluno
     $cmd = "tesseract " . escapeshellarg($tmp) . " stdout -l por --psm 7 2>/dev/null";
     $txt = shell_exec($cmd);
 
@@ -181,8 +175,7 @@ function extrairTextoOCR($img, $c) {
     $crop->destroy();
     
     $txt = trim($txt);
-    $txt = preg_replace('/[^\p{L}\p{N}\s]/u', '', $txt);
-    return $txt ?: "Não identificado";
+    return preg_replace('/[^\p{L}\p{N}\s]/u', '', $txt) ?: "Não identificado";
 }
 
 function compararResultados($gab, $alu) {
@@ -191,7 +184,7 @@ function compararResultados($gab, $alu) {
         $r = $alu[$q] ?? 'BRANCO';
         if ($r === $correta) $ac++;
         elseif ($r === "BRANCO") $br++;
-        elseif (strpos($r, "RASURA") !== false) $rs++;
+        elseif ($r === "RASURA") $rs++;
     }
     return ['acertos' => $ac, 'brancos' => $br, 'rasuras' => $rs];
 }
@@ -204,8 +197,6 @@ function enviarStatus($at, $to, $al, $co = false, $re = []) {
         'concluido' => $co, 
         'resultados' => $re
     ]) . "\n";
-    
-    // Força a saída para o navegador não travar em 0%
     @ob_flush();
     @flush();
 }

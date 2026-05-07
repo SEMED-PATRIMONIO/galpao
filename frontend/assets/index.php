@@ -256,7 +256,21 @@
             document.getElementById('btn-executar').classList.add('hidden');
             document.getElementById('progress-container').classList.remove('hidden');
 
-            const response = await fetch('process.php', { method: 'POST', body: formData });
+            const response = await fetch('process.php', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!response.ok) {
+                const txt = await response.text();
+                alert("Erro no servidor:\n\n" + txt);
+                return;
+            }
+
+            if (!response.body) {
+                alert("O navegador não recebeu stream do servidor.");
+                return;
+            }            
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
 

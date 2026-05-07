@@ -1,37 +1,46 @@
 <?php
-/**
- * VISION SCAN - Motor de Correção OMR & OCR
- * Versão Corrigida: Unificação de Lógica + Estabilidade de Stream
- */
 
-// 1. Configurações de Ambiente e Memória
 set_time_limit(0); 
 ini_set('memory_limit', '512M');
-error_reporting(E_ALL); // Ative para ver erros se necessário, mas o try/catch cuidará disso
 
-// 2. Cabeçalhos Anti-Buffering (Impede que o progresso trave em 0%)
+// 1. Verificação de Limites de Upload (O segredo do erro 500/Ação Inválida)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($_POST) && empty($_FILES) && $_SERVER['CONTENT_LENGTH'] > 0) {
+    header('Content-Type: application/json');
+    echo json_encode([
+        'error' => "Arquivos muito grandes! O servidor rejeitou o POST. " .
+                   "Aumente 'post_max_size' e 'upload_max_filesize' no php.ini. " .
+                   "Tamanho enviado: " . round($_SERVER['CONTENT_LENGTH'] / 1024 / 1024, 2) . "MB"
+    ]);
+    exit;
+}
+
+// 2. Cabeçalhos de Stream
 header('Content-Type: application/json');
 header('Cache-Control: no-cache');
 header('X-Accel-Buffering: no'); 
 @ini_set('zlib.output_compression', 0);
 @ini_set('implicit_flush', 1);
-
 while (ob_get_level()) { ob_end_flush(); }
 ob_implicit_flush(true);
 
 $uploadDir = __DIR__ . '/uploads/';
 if (!is_dir($uploadDir)) mkdir($uploadDir, 0777, true);
 
+// 3. Captura da Ação
 $action = $_POST['action'] ?? '';
-
-// --- ROTEAMENTO ---
 
 if ($action === 'preview') {
     handlePreview($uploadDir);
 } elseif ($action === 'process') {
     handleProcess($uploadDir);
 } else {
-    echo json_encode(['error' => 'Ação inválida.']);
+    // Se cair aqui, vamos mostrar o que REALMENTE chegou no POST para debugar
+    echo json_encode([
+        'error' => "Ação inválida.",
+        'debug_post' => $_POST,
+        'debug_method' => $_SERVER['REQUEST_METHOD']
+    ]);
+    exit;
 }
 
 // --- FUNÇÕES PRINCIPAIS ---

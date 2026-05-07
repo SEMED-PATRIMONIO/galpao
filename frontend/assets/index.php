@@ -135,21 +135,34 @@
             const file = document.getElementById('file-gabarito').files[0];
             if(!file) return;
             
+            // Feedback visual de carregamento
+            document.querySelector('label[for="file-gabarito"]').innerText = "PROCESSANDO PDF...";
+
             const formData = new FormData();
             formData.append('action', 'preview');
             formData.append('file', file);
 
-            const res = await fetch('process.php', { method: 'POST', body: formData });
-            const data = await res.json();
+            try {
+                const res = await fetch('process.php', { method: 'POST', body: formData });
+                
+                if (!res.ok) throw new Error("Erro no servidor. Verifique se o Imagick está instalado.");
+                
+                const data = await res.json();
 
-            if (data.image) {
-                const img = document.getElementById('preview-img');
-                img.src = data.image;
-                img.onload = () => {
-                    document.getElementById('step-1').classList.add('hidden');
-                    document.getElementById('step-2').classList.remove('hidden');
-                    initCanvas();
-                };
+                if (data.image) {
+                    const img = document.getElementById('preview-img');
+                    img.src = data.image + "?t=" + new Date().getTime(); // Evita cache
+                    img.onload = () => {
+                        document.getElementById('step-1').classList.add('hidden');
+                        document.getElementById('step-2').classList.remove('hidden');
+                        initCanvas();
+                    };
+                } else {
+                    alert("Erro: " + (data.error || "Não foi possível gerar o preview do PDF."));
+                }
+            } catch (err) {
+                alert(err.message);
+                document.querySelector('label[for="file-gabarito"]').innerText = "SELECIONAR PDF MESTRE";
             }
         }
 

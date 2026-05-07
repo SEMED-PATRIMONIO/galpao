@@ -1,5 +1,5 @@
 server {
-    listen 80;
+    listen 3037;
     server_name gabarito.paiva.api.br;
 
     location / {

@@ -251,11 +251,9 @@
             const provas = document.getElementById('file-provas').files[0];
             const gabarito = document.getElementById('file-gabarito').files[0];
             
-            // Validação detalhada
-            if (!gabarito) return alert("Selecione o arquivo de GABARITO!");
-            if (!coords.name.w || coords.name.w < 5) return alert("Falta marcar a área do NOME (Botão Azul)!");
-            if (!coords.grid.w || coords.grid.w < 5) return alert("Falta marcar a área da GRADE (Botão Rosa)!");
-            if (!provas) return alert("Selecione o arquivo das PROVAS dos alunos!");
+            if (!gabarito || !coords.name.w || !coords.grid.w || !provas) {
+                return alert("Certifique-se de carregar os arquivos e mapear as áreas azul e rosa!");
+            }
 
             const formData = new FormData();
             formData.append('action', 'process');
@@ -263,29 +261,42 @@
             formData.append('provas', provas);
             formData.append('coords', JSON.stringify(coords));
 
-            document.getElementById('btn-executar').classList.add('hidden');
-            document.getElementById('progress-container').classList.remove('hidden');
+            // AQUI ESTÁ O SEGREDO: 
+            // Usamos a URL completa com HTTPS para o Cloudflare não tentar redirecionar
+            const urlCorreta = window.location.origin + window.location.pathname.replace('index.php', '') + 'process.php';
 
             try {
-                const response = await fetch('process.php', { method: 'POST', body: formData });
+                const response = await fetch(urlCorreta, {
+                    method: 'POST',
+                    body: formData,
+                    // Adicionamos esses headers para o Cloudflare entender que é uma requisição legítima
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
+
+                // Se o servidor retornar qualquer erro, ele vai cair aqui
+                if (!response.ok) throw new Error("Erro no servidor (Status " + response.status + ")");
+
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder();
 
                 while(true) {
                     const {done, value} = await reader.read();
                     if (done) break;
+                    
                     const chunk = decoder.decode(value);
                     const lines = chunk.split("\n");
+                    
                     lines.forEach(line => {
                         if(!line.trim()) return;
                         try {
                             const data = JSON.parse(line);
-                            if(data.error) throw new Error(data.error);
-                            
+                            // Atualiza a barra de progresso
                             const pct = Math.round((data.atual / data.total) * 100);
                             document.getElementById('progress-bar').style.width = pct + '%';
                             document.getElementById('percent-text').innerText = pct + '%';
-                            document.getElementById('status-text').innerText = `Lendo: ${data.aluno}`;
+                            document.getElementById('status-text').innerText = `Processando: ${data.aluno}`;
 
                             if (data.concluido) {
                                 finalData = data.resultados;
@@ -295,8 +306,8 @@
                     });
                 }
             } catch (err) {
-                alert("Erro Crítico: " + err.message);
-                document.getElementById('btn-executar').classList.remove('hidden');
+                alert("O Cloudflare bloqueou a conexão. Verifique se está usando HTTPS na barra de endereços.");
+                console.error(err);
             }
         }
 

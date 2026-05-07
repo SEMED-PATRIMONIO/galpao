@@ -129,9 +129,10 @@
     </main>
 
     <script>
+        // 1. Inicialização correta das coordenadas
         let coords = {
-            name: { x:0, y:0, w:0, h:0, imgW:0, imgH:0 },
-            grid: { x:0, y:0, w:0, h:0, imgW:0, imgH:0 }
+            name: { x: 0, y: 0, w: 0, h: 0, imgW: 0, imgH: 0 },
+            grid: { x: 0, y: 0, w: 0, h: 0, imgW: 0, imgH: 0 }
         };
         let currentMode = null;
         let isDrawing = false;
@@ -142,20 +143,19 @@
         const ctx = canvas.getContext('2d');
         const container = document.getElementById('canvas-container');
 
-        // Modo de Seleção
         function setMode(mode) {
             currentMode = mode;
-            document.getElementById('btn-name').classList.remove('bg-blue-600', 'text-white');
-            document.getElementById('btn-grid').classList.remove('bg-pink-600', 'text-white');
+            document.getElementById('btn-name').className = mode === 'name' ? 
+                'flex-1 py-2 rounded-lg text-xs font-bold bg-blue-600 text-white transition-all' : 
+                'flex-1 py-2 rounded-lg text-xs font-bold border border-blue-500/50 text-blue-500 hover:bg-blue-500 hover:text-white transition-all';
             
-            if(mode === 'name') document.getElementById('btn-name').classList.add('bg-blue-600', 'text-white');
-            if(mode === 'grid') document.getElementById('btn-grid').classList.add('bg-pink-600', 'text-white');
+            document.getElementById('btn-grid').className = mode === 'grid' ? 
+                'flex-1 py-2 rounded-lg text-xs font-bold bg-pink-600 text-white transition-all' : 
+                'flex-1 py-2 rounded-lg text-xs font-bold border border-pink-500/50 text-pink-500 hover:bg-pink-500 hover:text-white transition-all';
         }
 
-        // Preview do Gabarito via PHP/Imagick
         async function carregarPreview(input) {
             if(!input.files[0]) return;
-            
             document.getElementById('loading-preview').classList.remove('hidden');
             document.getElementById('empty-state').classList.add('hidden');
 
@@ -166,8 +166,7 @@
             try {
                 const res = await fetch('process.php', { method: 'POST', body: fd });
                 const data = await res.json();
-                
-                if(data.error) throw new Exception(data.error);
+                if(data.error) throw new Error(data.error);
 
                 const img = new Image();
                 img.onload = () => {
@@ -176,137 +175,137 @@
                     ctx.drawImage(img, 0, 0);
                     document.getElementById('loading-preview').classList.add('hidden');
                     container.style.display = 'inline-block';
+                    // Resetar caixas ao carregar nova imagem
+                    document.getElementById('box-name').style.display = 'none';
+                    document.getElementById('box-grid').style.display = 'none';
                 };
                 img.src = data.image + '?t=' + Date.now();
             } catch(e) {
-                alert("Erro ao carregar preview: " + e.message);
+                alert("Erro: " + e.message);
                 document.getElementById('loading-preview').classList.add('hidden');
             }
         }
 
-        // Lógica de Desenho (Mouse)
-        container.onmousedown = (e) => {
+        // LÓGICA DE DESENHO CORRIGIDA
+        container.addEventListener('mousedown', (e) => {
             if(!currentMode) return;
             isDrawing = true;
-            const rect = canvas.getBoundingClientRect();
-            startX = e.clientX - rect.left;
-            startY = e.clientY - rect.top;
-        };
-
-        container.onmousemove = (e) => {
-            if(!isDrawing) return;
-            const rect = canvas.getBoundingClientRect();
-            const currentX = e.clientX - rect.left;
-            const currentY = e.clientY - rect.top;
+            const rect = container.getBoundingClientRect();
+            // Ajuste para considerar o scroll e a escala da tela
+            startX = (e.clientX - rect.left);
+            startY = (e.clientY - rect.top);
             
             const box = document.getElementById(`box-${currentMode}`);
             box.style.display = 'block';
-            box.style.left = Math.min(startX, currentX) + 'px';
-            box.style.top = Math.min(startY, currentY) + 'px';
-            box.style.width = Math.abs(currentX - startX) + 'px';
-            box.style.height = Math.abs(currentY - startY) + 'px';
-        };
+            box.style.left = startX + 'px';
+            box.style.top = startY + 'px';
+            box.style.width = '0px';
+            box.style.height = '0px';
+        });
 
-        container.onmouseup = (e) => {
+        window.addEventListener('mousemove', (e) => {
+            if(!isDrawing) return;
+            const rect = container.getBoundingClientRect();
+            const currentX = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+            const currentY = Math.max(0, Math.min(e.clientY - rect.top, rect.height));
+            
+            const box = document.getElementById(`box-${currentMode}`);
+            const left = Math.min(startX, currentX);
+            const top = Math.min(startY, currentY);
+            const width = Math.abs(currentX - startX);
+            const height = Math.abs(currentY - startY);
+
+            box.style.left = left + 'px';
+            box.style.top = top + 'px';
+            box.style.width = width + 'px';
+            box.style.height = height + 'px';
+        });
+
+        window.addEventListener('mouseup', (e) => {
             if(!isDrawing) return;
             isDrawing = false;
-            const rect = canvas.getBoundingClientRect();
-            const endX = e.clientX - rect.left;
-            const endY = e.clientY - rect.top;
+            
+            const box = document.getElementById(`box-${currentMode}`);
+            // Pegamos os valores direto do estilo da caixa para garantir precisão
+            const finalX = parseFloat(box.style.left);
+            const finalY = parseFloat(box.style.top);
+            const finalW = parseFloat(box.style.width);
+            const finalH = parseFloat(box.style.height);
 
-            // Salva coordenadas relativas à imagem original
+            // Ajuste de Escala: O CSS pode estar redimensionando o Canvas. 
+            // Precisamos converter os pixels da tela para os pixels reais da imagem.
+            const scale = canvas.width / container.offsetWidth;
+
             coords[currentMode] = {
-                x: Math.min(startX, endX),
-                y: Math.min(startY, endY),
-                w: Math.abs(endX - startX),
-                h: Math.abs(endY - startY),
+                x: finalX * scale,
+                y: finalY * scale,
+                w: finalW * scale,
+                h: finalH * scale,
                 imgW: canvas.width,
                 imgH: canvas.height
             };
-        };
+            console.log(`Mapeado ${currentMode}:`, coords[currentMode]);
+        });
 
-        // Função de Processamento Principal
         async function processarTudo() {
             const provas = document.getElementById('file-provas').files[0];
             const gabarito = document.getElementById('file-gabarito').files[0];
             
-            if (!provas || !gabarito) return alert("Selecione os dois arquivos (Gabarito e Provas)!");
-            if (!coords.grid.w || !coords.name.w) return alert("Mapeie as áreas de Nome e Grade no canvas primeiro!");
+            // Validação detalhada
+            if (!gabarito) return alert("Selecione o arquivo de GABARITO!");
+            if (!coords.name.w || coords.name.w < 5) return alert("Falta marcar a área do NOME (Botão Azul)!");
+            if (!coords.grid.w || coords.grid.w < 5) return alert("Falta marcar a área da GRADE (Botão Rosa)!");
+            if (!provas) return alert("Selecione o arquivo das PROVAS dos alunos!");
 
             const formData = new FormData();
-            // IMPORTANTE: Adiciona action explicitamente antes de tudo
             formData.append('action', 'process');
             formData.append('gabarito', gabarito);
             formData.append('provas', provas);
             formData.append('coords', JSON.stringify(coords));
 
-            // Feedback Visual
             document.getElementById('btn-executar').classList.add('hidden');
             document.getElementById('progress-container').classList.remove('hidden');
-            document.getElementById('area-resultados').classList.add('hidden');
 
             try {
-                // Usamos './process.php' para evitar redirecionamentos indesejados do servidor
-                const response = await fetch('./process.php', {
-                    method: 'POST',
-                    body: formData
-                });
-
-                if (!response.ok) {
-                    const txt = await response.text();
-                    throw new Error("Erro Crítico no Servidor: " + txt);
-                }
-
+                const response = await fetch('process.php', { method: 'POST', body: formData });
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder();
 
                 while(true) {
                     const {done, value} = await reader.read();
                     if (done) break;
-                    
                     const chunk = decoder.decode(value);
                     const lines = chunk.split("\n");
-                    
                     lines.forEach(line => {
                         if(!line.trim()) return;
                         try {
                             const data = JSON.parse(line);
+                            if(data.error) throw new Error(data.error);
                             
-                            if (data.error) {
-                                alert("Erro no PHP: " + data.error);
-                                location.reload();
-                                return;
-                            }
-
                             const pct = Math.round((data.atual / data.total) * 100);
                             document.getElementById('progress-bar').style.width = pct + '%';
                             document.getElementById('percent-text').innerText = pct + '%';
-                            document.getElementById('status-text').innerText = `Processando: ${data.aluno}`;
+                            document.getElementById('status-text').innerText = `Lendo: ${data.aluno}`;
 
                             if (data.concluido) {
                                 finalData = data.resultados;
-                                concluirInterface();
+                                ativarResultados();
                             }
-                        } catch(e) {
-                            // Ignora chunks incompletos de JSON no stream
-                        }
+                        } catch(e) {}
                     });
                 }
             } catch (err) {
-                alert(err.message);
+                alert("Erro Crítico: " + err.message);
                 document.getElementById('btn-executar').classList.remove('hidden');
-                document.getElementById('progress-container').classList.add('hidden');
             }
         }
 
-        function concluirInterface() {
-            document.getElementById('status-text').innerText = "Concluído com Sucesso!";
-            document.getElementById('status-text').classList.replace('text-blue-400', 'text-green-400');
-            document.getElementById('btn-resultados').classList.remove('hidden');
-            document.getElementById('btn-resultados').disabled = false;
-            document.getElementById('btn-resultados').classList.replace('bg-slate-800', 'bg-green-600');
-            document.getElementById('btn-resultados').classList.replace('text-slate-500', 'text-white');
-            document.getElementById('btn-resultados').classList.remove('cursor-not-allowed');
+        function ativarResultados() {
+            const btn = document.getElementById('btn-resultados');
+            btn.disabled = false;
+            btn.classList.remove('hidden', 'cursor-not-allowed');
+            btn.classList.add('bg-green-600', 'text-white');
+            document.getElementById('status-text').innerText = "Processamento finalizado!";
         }
 
         function verResultados() {
@@ -314,19 +313,13 @@
             const corpo = document.getElementById('tabela-corpo');
             corpo.innerHTML = finalData.map(r => `
                 <tr class="border-t border-white/5 hover:bg-white/5 transition-colors">
-                    <td class="p-6 font-bold text-slate-100">${r.aluno}</td>
-                    <td class="p-6 text-center text-green-400 font-black text-xl">${r.acertos}</td>
-                    <td class="p-6 text-center text-slate-400">${r.brancos}</td>
-                    <td class="p-6 text-center text-red-500">${r.rasuras}</td>
+                    <td class="p-5 font-bold text-slate-100">${r.aluno}</td>
+                    <td class="p-5 text-center text-green-400 font-black text-xl">${r.acertos}</td>
+                    <td class="p-5 text-center text-slate-500">${r.brancos}</td>
+                    <td class="p-5 text-center text-red-500">${r.rasuras}</td>
                 </tr>
             `).join('');
-            
-            setTimeout(() => {
-                window.scrollTo({ 
-                    top: document.getElementById('area-resultados').offsetTop - 50, 
-                    behavior: 'smooth' 
-                });
-            }, 100);
+            window.scrollTo({ top: document.getElementById('area-resultados').offsetTop, behavior: 'smooth' });
         }
     </script>
 </body>

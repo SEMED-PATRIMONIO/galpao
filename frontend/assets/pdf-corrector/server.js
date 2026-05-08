@@ -77,12 +77,26 @@ app.post('/gerar-gabarito', async (req, res) => {
         doc.fontSize(10).rect(50, 85, 450, 25).stroke().text('ESCOLA:', 55, 93);
         doc.rect(50, 115, 450, 25).stroke().text('ESTUDANTE:', 55, 123);
         let curX = 50, curY = 190;
-        blocos.forEach(b => {
-            doc.font('Helvetica-Bold').fontSize(11).text(b.nome.toUpperCase(), curX, curY); curY += 20;
-            for(let i=0; i<b.questoes; i++) {
-                doc.font('Helvetica').fontSize(9).text(`${i+1})`, curX, curY);
-                ['A','B','C','D'].forEach((l, li) => { doc.circle(curX+25+(li*25), curY+4, 6).stroke(); doc.fontSize(6).text(l, curX+23+(li*25), curY+2); });
-                curY += 18; if (curY > 780) { curY = 190; curX += 130; }
+        let questaoGlobalIdx = 1;
+        blocos.forEach((bloco) => {
+            doc.font('Helvetica-Bold').fontSize(11).text(bloco.nome.toUpperCase(), curX, curY);
+            curY += 20;
+
+            for(let i=0; i < bloco.questoes; i++) {
+                doc.font('Helvetica').fontSize(9).text(`${questaoGlobalIdx})`, curX, curY);
+                
+                // USA bloco.alternativas (4 ou 5) enviado pelo front-end
+                const numAlt = bloco.alternativas || 4; 
+                for(let lIdx = 0; lIdx < numAlt; lIdx++) {
+                    let letra = String.fromCharCode(65 + lIdx);
+                    let circleX = curX + 25 + (lIdx * 22); // Espaçamento ajustado
+                    doc.circle(circleX, curY + 4, 6).stroke();
+                    doc.fontSize(6).text(letra, circleX - 2, curY + 2);
+                }
+
+                questaoGlobalIdx++;
+                curY += 18;
+                if (curY > 780) { curY = 190; curX += 140; } // Salta de coluna
             }
             curY += 20;
         });

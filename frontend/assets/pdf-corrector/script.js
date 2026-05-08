@@ -1,3 +1,73 @@
+let configuracaoTemporaria = {};
+
+function abrirConfiguracaoGabarito() {
+    const titulo = document.getElementById('tit-prova').value;
+    const blocos = [];
+    let htmlGabarito = "";
+    let qTotal = 1;
+
+    document.querySelectorAll('.bloco-item').forEach(el => {
+        const nome = el.querySelector('.bl-nome').value;
+        const qtd = parseInt(el.querySelector('.bl-qtd').value);
+        const alt = parseInt(el.querySelector('.bl-alt').value);
+        
+        blocos.push({ nome, questoes: qtd, alternativas: alt });
+
+        htmlGabarito += `<h4>${nome}</h4><div class="grid-gabarito">`;
+        for(let i=1; i<=qtd; i++) {
+            htmlGabarito += `
+                <div class="q-row">
+                    <span>${qTotal})</span>
+                    <select class="resp-correta" data-q="${qTotal}">
+                        ${Array.from({length: alt}, (_, i) => String.fromCharCode(65 + i))
+                          .map(letra => `<option value="${letra}">${letra}</option>`).join('')}
+                    </select>
+                </div>`;
+            qTotal++;
+        }
+        htmlGabarito += `</div>`;
+    });
+
+    configuracaoTemporaria = { titulo, blocos };
+    document.getElementById('lista-questoes-gabarito').innerHTML = htmlGabarito;
+    document.getElementById('modal-gabarito').style.display = 'block';
+}
+
+async function processarGeracaoFinal() {
+    const respostasCorretas = {};
+    document.querySelectorAll('.resp-correta').forEach(sel => {
+        respostasCorretas[sel.dataset.q] = sel.value;
+    });
+
+    const btn = event.target;
+    btn.innerText = "GERANDO PDF E SALVANDO...";
+    btn.disabled = true;
+
+    try {
+        const response = await fetch('/gerar-gabarito', {
+            method: 'POST', // GARANTE QUE É POST
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                titulo: configuracaoTemporaria.titulo,
+                blocos: configuracaoTemporaria.blocos,
+                sequencia: respostasCorretas
+            })
+        });
+
+        const data = await response.json();
+        if (data.sucesso) {
+            window.location.href = data.url; // Baixa o PDF
+        } else {
+            alert("Erro: " + data.erro);
+        }
+    } catch (e) {
+        alert("Erro de conexão com o servidor.");
+    } finally {
+        btn.disabled = false;
+        btn.innerText = "FINALIZAR E GERAR PDF";
+    }
+}
+
 function showSection(id) {
     document.querySelectorAll('section').forEach(s => s.classList.remove('active'));
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
@@ -12,42 +82,14 @@ function addBloco() {
     const div = document.createElement('div');
     div.className = 'bloco-item';
     div.innerHTML = `
-        <input type="text" placeholder="Nome (Ex: Matemática)" class="bl-nome">
+        <input type="text" placeholder="Matéria" class="bl-nome">
         <input type="number" placeholder="Qtd" class="bl-qtd">
+        <select class="bl-alt">
+            <option value="4">4 Alternativas (A-D)</option>
+            <option value="5">5 Alternativas (A-E)</option>
+        </select>
     `;
     container.appendChild(div);
-}
-
-async function processarGeracao() {
-    const btn = event.target;
-    btn.disabled = true;
-    btn.innerText = "GERANDO...";
-
-    const titulo = document.getElementById('tit-prova').value;
-    const blocos = [];
-    document.querySelectorAll('.bloco-item').forEach(el => {
-        blocos.push({
-            nome: el.querySelector('.bl-nome').value,
-            questoes: parseInt(el.querySelector('.bl-qtd').value)
-        });
-    });
-
-    try {
-        const res = await fetch('/gerar-gabarito', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ titulo, blocos, sequencia: {} })
-        });
-        const data = await res.json();
-        if (data.sucesso) {
-            window.location.href = data.url;
-        }
-    } catch (e) {
-        alert("Erro ao gerar PDF");
-    } finally {
-        btn.disabled = false;
-        btn.innerText = "GERAR E SALVAR";
-    }
 }
 
 // Lógica de Importação

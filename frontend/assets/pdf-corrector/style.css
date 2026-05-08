@@ -1,0 +1,94 @@
+:root {
+    --primary: #1e3a8a;
+    --bg: #f1f5f9;
+    --sidebar: #ffffff;
+    --text: #334155;
+    --accent: #3b82f6;
+}
+
+body {
+    margin: 0; font-family: 'Inter', sans-serif;
+    background-color: var(--bg); color: var(--text);
+    height: 100vh; overflow: hidden;
+}
+
+.top-bar {
+    height: 60px; background: white; border-bottom: 1px solid #e2e8f0;
+    display: flex; align-items: center; padding: 0 20px;
+}
+
+.logo-img { height: 35px; margin-right: 15px; }
+
+.header-title { font-size: 1.1rem; color: var(--primary); letter-spacing: 0.5px; }
+
+.container { display: flex; height: calc(100vh - 60px); }
+
+.sidebar {
+    width: 200px; background: var(--sidebar); border-right: 1px solid #e2e8f0;
+    padding: 20px; display: flex; flex-direction: column; gap: 15px;
+}
+
+.nav-btn {
+    aspect-ratio: 1/1; border-radius: 12px; border: 1px solid #e2e8f0;
+    background: white; cursor: pointer; transition: 0.3s;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 10px; font-weight: 700; font-size: 0.75rem; color: #64748b;
+}
+
+.nav-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
+.nav-btn i { font-size: 1.5rem; }
+
+.content { flex: 1; padding: 40px; overflow-y: auto; }
+
+section { display: none; }
+section.active { display: block; }
+
+h2 { margin-top: 0; color: var(--primary); font-size: 1.5rem; }
+
+.card {
+    background: white; padding: 30px; border-radius: 16px;
+    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); max-width: 800px;
+}
+
+input {
+    width: 100%; padding: 12px; margin: 10px 0 20px;
+    border: 1px solid #e2e8f0; border-radius: 8px;
+}
+
+.bloco-item { display: flex; gap: 10px; }
+
+.btn-primary {
+    background: var(--primary); color: white; border: none;
+    padding: 15px 30px; border-radius: 8px; font-weight: 700;
+    cursor: pointer; width: 100%; margin-top: 10px;
+}
+
+.btn-small { background: #f1f5f9; border: none; padding: 8px; border-radius: 4px; cursor: pointer; }
+
+.drag-area {
+    border: 2px dashed #cbd5e1; text-align: center; padding: 60px;
+}
+.drag-area i { font-size: 3rem; color: var(--accent); margin-bottom: 10px; }
+
+.rel-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+    background: white;
+}
+
+.rel-table th, .rel-table td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.rel-table th {
+    background: #f8fafc;
+    color: var(--primary);
+    font-weight: 700;
+}
+
+.fa-spin {
+    margin-right: 10px;
+}

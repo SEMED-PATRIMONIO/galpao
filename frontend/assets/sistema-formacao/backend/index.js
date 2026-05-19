@@ -555,6 +555,51 @@ app.get('/api/v2/relatorios/estatisticas', verificarToken, async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// =================================================================
+// CAMADA DE COMPATIBILIDADE: ROTAS ESPELHADAS PARA O FRONT-END ATUAL
+// =================================================================
+
+// 1. Espelhamento da rota de listagem de eventos (/api/admin/eventos)
+app.get('/api/admin/eventos', verificarToken, async (req, res) => {
+    try {
+        const query = `
+            SELECT e.*, l.nome as local_nome, p.nome as publico_alvo_nome 
+            FROM eventos e
+            LEFT JOIN locais l ON e.local_id = l.id
+            LEFT JOIN publicoalvo p ON e.publico_alvo_id = p.id
+            ORDER BY e.data_evento DESC, e.hora_inicio DESC
+        `;
+        const result = await pool.query(query);
+        // Retorna o array puro que o .map() do Front-end está esperando
+        return res.json(result.rows); 
+    } catch (error) {
+        console.error('Erro na rota de compatibilidade /api/admin/eventos:', error);
+        return res.status(500).json({ error: 'Erro interno ao recuperar eventos para o painel administrativo.' });
+    }
+});
+
+// 2. Espelhamento da rota de relatório geral (/api/admin/relatorio-geral)
+app.get('/api/admin/relatorio-geral', verificarToken, async (req, res) => {
+    try {
+        // Buscando uma estrutura analítica em formato de lista (Array) exigida pelo front
+        const query = `
+            SELECT e.id, e.titulo, e.data_evento, e.carga_horaria, e.palestrante,
+                   l.nome as local_nome,
+                   COUNT(f.id) as total_participantes
+            FROM eventos e
+            LEFT JOIN locais l ON e.local_id = l.id
+            LEFT JOIN frequencias f ON e.id = f.evento_id
+            GROUP BY e.id, l.nome
+            ORDER BY e.data_evento DESC
+        `;
+        const result = await pool.query(query);
+        return res.json(result.rows);
+    } catch (error) {
+        console.error('Erro na rota de compatibilidade /api/admin/relatorio-geral:', error);
+        return res.status(500).json({ error: 'Erro interno ao gerar matriz do relatório geral.' });
+    }
+});
+
 // Tratamento de Rotas não localizadas
 app.use((req, res) => res.status(404).json({ error: 'Endpoint não localizado no servidor Formar v4.' }));
 

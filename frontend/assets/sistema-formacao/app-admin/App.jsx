@@ -1,661 +1,403 @@
-// ============================================================================
-// ARQUIVO: app-admin/src/App.jsx — PARTE 1 DE 2 (ESTADOS, API E HANDLERS)
-// ============================================================================
-
 import React, { useState, useEffect } from 'react';
 
-const API_URL = 'https://qrcode.paiva.api.br/api';
-
 export default function App() {
-  // Controle de Navegação e Carregamento
-  const [abaAtual, setAbaAtual] = useState('dashboard');
-  const [carregando, setCarregando] = useState(false);
+    const [token, setToken] = useState(localStorage.getItem('admin_token') || null);
+    const [user, setUser] = useState(JSON.parse(localStorage.getItem('admin_user')) || null);
+    const [view, setView] = useState('eventos');
+    const [usuarioInput, setUsuarioInput] = useState('');
+    const [senhaInput, setSenhaInput] = useState('');
+    const [novaSenha, setNovaSenha] = useState('');
+    const [confirmarNovaSenha, setConfirmarNovaSenha] = useState('');
+    const [erro, setErro] = useState('');
+    
+    const [lista, setLista] = useState([]);
+    const [selecionado, setSelecionado] = useState(null);
+    const [form, setForm] = useState({});
+    const [isEditando, setIsEditando] = useState(false);
+    
+    const [dataInicio, setDataInicio] = useState('');
+    const [dataFim, setDataFim] = useState('');
+    const [tipoRelatorio, setTipoRelatorio] = useState('prestacao-contas');
 
-  // Estados dos Dados do Banco de Dados
-  const [usuarios, setUsuarios] = useState([]);
-  const [locais, setLocais] = useState([]);
-  const [publicosAlvo, setPublicosAlvo] = useState([]);
-  const [eventos, setEventos] = useState([]);
-  const [eventosFiltradosRel, setEventosFiltradosRel] = useState([]);
+    useEffect(() => {
+        if (token) {
+            carregarDados();
+        }
+    }, [view, token]);
 
-  // Estados dos Formulários de Cadastro/Edição
-  const [formUsuario, setFormUsuario] = useState({ id: null, nome: '', email: '', perfil: 'professor' });
-  const [formLocal, setFormLocal] = useState({ id: null, nome: '' });
-  const [formPublicoAlvo, setFormPublicoAlvo] = useState({ id: null, nome: '' });
-  const [formEvento, setFormEvento] = useState({
-    id: null, titulo: '', data: '', horario_inicio: '', horario_fim: '', local_id: '', publico_alvo_id: ''
-  });
+    const apiFetch = async (endpoint, options = {}) => {
+        const headers = {
+            'Content-Type': 'application/json',
+            ...(token && { 'Authorization': `Bearer ${token}` })
+        };
+        const response = await fetch(`http://localhost:3009${endpoint}`, { ...options, headers });
+        if (response.status === 401 || response.status === 403) {
+            handleLogout();
+            throw new Error('Sessão expirada.');
+        }
+        if (!response.ok) {
+            const errData = await response.json();
+            throw new Error(errData.error || 'Erro na requisição.');
+        }
+        return response.json();
+    };
 
-  // Estado dos Filtros do Relatório
-  const [filtroRelPublico, setFiltroRelPublico] = useState({ inicio: '', fim: '', publico_alvo_id: '' });
+    const handleLogin = async (e) => {
+        e.preventDefault();
+        setErro('');
+        try {
+            const data = await apiFetch('/api/auth/login', {
+                method: 'POST',
+                body: JSON.stringify({ usuario: usuarioInput, senha: senhaInput })
+            });
+            localStorage.setItem('admin_token', data.token);
+            localStorage.setItem('admin_user', JSON.stringify(data.user));
+            setToken(data.token);
+            setUser(data.user);
+            if (data.user.deve_alterar_senha) {
+                setView('alterar-senha');
+            } else {
+                setView('eventos');
+            }
+        } catch (err) {
+            setErro(err.message);
+        }
+    };
 
-  // Funções Utilitárias
-  const calcularCargaHoraria = (inicio, fim) => {
-    if (!inicio || !fim) return 0;
-    const [hInicio, mInicio] = inicio.split(':').map(Number);
-    const [hFim, mFim] = fim.split(':').map(Number);
-    const diff = (hFim + mFim / 60) - (hInicio + mInicio / 60);
-    return diff > 0 ? diff.toFixed(1) : 0;
-  };
+    const handleLogout = () => {
+        localStorage.removeItem('admin_token');
+        localStorage.removeItem('admin_user');
+        setToken(null);
+        setUser(null);
+        setView('eventos');
+    };
 
-  // ============================================================================
-  // INTEGRAÇÃO COM AS ROTAS DO BACKEND (FETCH ASSÍNCRONO REAL)
-  // ============================================================================
-  
-  const buscarUsuarios = async () => {
-    setCarregando(true);
-    try {
-      const res = await fetch(`${API_URL}/usuarios`);
-      if (!res.ok) throw new Error('Erro ao obter usuários');
-      const dados = await res.json();
-      setUsuarios(dados);
-    } catch (err) {
-      console.error(err);
-      alert('Não foi possível carregar os usuários do banco de dados.');
-    } finally {
-      setCarregando(false);
-    }
-  };
+    const handleAlterarSenha = async (e) => {
+        e.preventDefault();
+        setErro('');
+        if (novaSenha !== confirmarNovaSenha) {
+            setErro('As senhas não coincidem.');
+            return;
+        }
+        try {
+            await apiFetch(`/api/v2/usuarios/${user.id}/senha`, {
+                method: 'PATCH',
+                body: JSON.stringify({ novaSenha })
+            });
+            const updatedUser = { ...user, deve_alterar_senha: false };
+            localStorage.setItem('admin_user', JSON.stringify(updatedUser));
+            setUser(updatedUser);
+            setView('eventos');
+            alert('Senha alterada com sucesso!');
+        } catch (err) {
+            setErro(err.message);
+        }
+    };
 
-  const buscarLocais = async () => {
-    setCarregando(true);
-    try {
-      const res = await fetch(`${API_URL}/locais`);
-      if (!res.ok) throw new Error('Erro ao obter locais');
-      const dados = await res.json();
-      setLocais(dados);
-    } catch (err) {
-      console.error(err);
-      alert('Não foi possível carregar os locais do banco de dados.');
-    } finally {
-      setCarregando(false);
-    }
-  };
+    const carregarDados = async () => {
+        try {
+            let endpoint = `/api/v2/${view}`;
+            if (view === 'relatorios') {
+                endpoint = `/api/v2/relatorios/${tipoRelatorio}?data_inicio=${dataInicio}&data_fim=${dataFim}`;
+            }
+            const data = await apiFetch(endpoint);
+            setLista(data);
+            setSelecionado(null);
+            setForm({});
+            setIsEditando(false);
+        } catch (err) {
+            console.error(err.message);
+        }
+    };
 
-  const buscarPublicos = async () => {
-    setCarregando(true);
-    try {
-      const res = await fetch(`${API_URL}/publicos`);
-      if (!res.ok) throw new Error('Erro ao obter públicos-alvo');
-      const dados = await res.json();
-      setPublicosAlvo(dados);
-    } catch (err) {
-      console.error(err);
-      alert('Não foi possível carregar os públicos-alvo do banco de dados.');
-    } finally {
-      setCarregando(false);
-    }
-  };
+    const handleSalvar = async (e) => {
+        e.preventDefault();
+        try {
+            const method = isEditando ? 'PUT' : 'POST';
+            const endpoint = isEditando ? `/api/v2/${view}/${selecionado.id}` : `/api/v2/${view}`;
+            await apiFetch(endpoint, { method, body: JSON.stringify(form) });
+            carregarDados();
+        } catch (err) {
+            alert(err.message);
+        }
+    };
 
-  const buscarEventos = async () => {
-    setCarregando(true);
-    try {
-      const res = await fetch(`${API_URL}/eventos`);
-      if (!res.ok) throw new Error('Erro ao obter eventos');
-      const dados = await res.json();
-      setEventos(dados);
-    } catch (err) {
-      console.error(err);
-      alert('Não foi possível carregar os eventos do banco de dados.');
-    } finally {
-      setCarregando(false);
-    }
-  };
+    const handleInativarReativar = async (id, ativo) => {
+        try {
+            const acao = ativo ? 'inativar' : 'reativar';
+            await apiFetch(`/api/v2/${view}/${id}/${acao}`, { method: 'PATCH' });
+            carregarDados();
+        } catch (err) {
+            alert(err.message);
+        }
+    };
 
-  const filtrarRelatorioPublico = async (e) => {
-    if (e) e.preventDefault();
-    setCarregando(true);
-    try {
-      const params = new URLSearchParams({
-        data_inicio: filtroRelPublico.inicio,
-        data_fim: filtroRelPublico.fim,
-        publico_alvo_id: filtroRelPublico.publico_alvo_id
-      });
-      const res = await fetch(`${API_URL}/relatorios/publico?${params.toString()}`);
-      if (!res.ok) throw new Error('Erro ao filtrar relatório');
-      const dados = await res.json();
-      setEventosFiltradosRel(dados);
-    } catch (err) {
-      console.error(err);
-      alert('Erro ao processar filtros do relatório.');
-    } finally {
-      setCarregando(false);
-    }
-  };
+    const handleGerarPDF = () => {
+        const conteudo = document.getElementById('area-tabela').innerHTML;
+        const janelaJanela = window.open('', '_blank');
+        janelaJanela.document.write(`
+            <html>
+            <head><title>Relatório - Prefeitura de Queimados</title></head>
+            <body onload="window.print()">
+                <h2>Relatório: ${tipoRelatorio.toUpperCase()}</h2>
+                <p>Período: ${dataInicio || 'Início'} até ${dataFim || 'Fim'}</p>
+                ${conteudo}
+            </body>
+            </html>
+        `);
+        janelaJanela.document.close();
+    };
 
-  // Efeito colateral para recarregar dados dinamicamente conforme aba ativa
-  useEffect(() => {
-    if (abaAtual === 'dashboard') {
-      buscarUsuarios(); buscarLocais(); buscarPublicos(); buscarEventos();
-    } else if (abaAtual === 'usuarios') {
-      buscarUsuarios();
-    } else if (abaAtual === 'locais') {
-      buscarLocais();
-    } else if (abaAtual === 'publicos') {
-      buscarPublicos();
-    } else if (abaAtual === 'eventos') {
-      buscarEventos(); buscarLocais(); buscarPublicos();
-    } else if (abaAtual === 'rel_publico') {
-      buscarPublicos();
-      filtrarRelatorioPublico();
-    }
-  }, [abaAtual]);
-
-  // ============================================================================
-  // PROCESSAMENTO DAS OPERAÇÕES DO BANCO DE DADOS (SUBMIT HANDLERS)
-  // ============================================================================
-
-  const handleSalvarUsuario = async (e) => {
-    e.preventDefault();
-    const metodo = formUsuario.id ? 'PUT' : 'POST';
-    const endpoint = formUsuario.id ? `${API_URL}/usuarios/${formUsuario.id}` : `${API_URL}/usuarios`;
-
-    try {
-      const res = await fetch(endpoint, {
-        method: metodo,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formUsuario)
-      });
-      const respostaApi = await res.json();
-
-      if (!res.ok) throw new Error(respostaApi.mensagem || 'Erro na operação');
-
-      alert(formUsuario.id ? 'Usuário atualizado com sucesso!' : 'Usuário cadastrado com sucesso!');
-      setFormUsuario({ id: null, nome: '', email: '', perfil: 'professor' });
-      buscarUsuarios();
-    } catch (err) {
-      alert(err.message);
-    }
-  };
-
-  const toggleStatusUsuario = async (usuario) => {
-    try {
-      const res = await fetch(`${API_URL}/usuarios/${usuario.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ativo: !usuario.ativo })
-      });
-      if (!res.ok) throw new Error('Erro ao alterar status');
-      buscarUsuarios();
-    } catch (err) {
-      alert('Erro ao alterar o status do usuário.');
-    }
-  };
-
-  const handleSalvarLocal = async (e) => {
-    e.preventDefault();
-    const metodo = formLocal.id ? 'PUT' : 'POST';
-    const endpoint = formLocal.id ? `${API_URL}/locais/${formLocal.id}` : `${API_URL}/locais`;
-
-    try {
-      const res = await fetch(endpoint, {
-        method: metodo,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formLocal)
-      });
-      if (!res.ok) throw new Error('Erro na operação de local');
-      
-      alert(formLocal.id ? 'Sede atualizada com sucesso!' : 'Local cadastrado com sucesso!');
-      setFormLocal({ id: null, nome: '' });
-      buscarLocais();
-    } catch (err) {
-      alert(err.message);
-    }
-  };
-
-  const toggleStatusLocal = async (local) => {
-    try {
-      const res = await fetch(`${API_URL}/locais/${local.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ativo: !local.ativo })
-      });
-      if (!res.ok) throw new Error('Erro ao alterar status');
-      buscarLocais();
-    } catch (err) {
-      alert('Erro ao alterar status do local.');
-    }
-  };
-
-  const handleSalvarPublico = async (e) => {
-    e.preventDefault();
-    const metodo = formPublicoAlvo.id ? 'PUT' : 'POST';
-    const endpoint = formPublicoAlvo.id ? `${API_URL}/publicos/${formPublicoAlvo.id}` : `${API_URL}/publicos`;
-
-    try {
-      const res = await fetch(endpoint, {
-        method: metodo,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formPublicoAlvo)
-      });
-      if (!res.ok) throw new Error('Erro na operação de público');
-
-      alert(formPublicoAlvo.id ? 'Alvo atualizado com sucesso!' : 'Público-Alvo cadastrado com sucesso!');
-      setFormPublicoAlvo({ id: null, nome: '' });
-      buscarPublicos();
-    } catch (err) {
-      alert(err.message);
-    }
-  };
-
-  const toggleStatusPublico = async (pub) => {
-    try {
-      const res = await fetch(`${API_URL}/publicos/${pub.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ativo: !pub.ativo })
-      });
-      if (!res.ok) throw new Error('Erro ao alterar status');
-      buscarPublicos();
-    } catch (err) {
-      alert('Erro ao alterar status do público.');
-    }
-  };
-
-  const handleSalvarEvento = async (e) => {
-    e.preventDefault();
-    const cargaCalculada = calcularCargaHoraria(formEvento.horario_inicio, formEvento.horario_fim);
-    if (cargaCalculada <= 0) {
-      alert('Inconsistência de horário: O término previsto deve ser maior que o início do evento.');
-      return;
+    if (!token) {
+        return (
+            <div style={styles.loginContainer}>
+                <form onSubmit={handleLogin} style={styles.loginForm}>
+                    <h2 style={{ textAlign: 'center', marginBottom: 20 }}>SGO - Queimados Admin</h2>
+                    {erro && <div style={styles.errorAlert}>{erro}</div>}
+                    <input type="text" placeholder="Usuário" value={usuarioInput} onChange={e => setUsuarioInput(e.target.value)} style={styles.input} required />
+                    <input type="password" placeholder="Senha" value={senhaInput} onChange={e => setSenhaInput(e.target.value)} style={styles.input} required />
+                    <button type="submit" style={styles.btnPrimario}>Entrar no Sistema</button>
+                </form>
+            </div>
+        );
     }
 
-    const metodo = formEvento.id ? 'PUT' : 'POST';
-    const endpoint = formEvento.id ? `${API_URL}/eventos/${formEvento.id}` : `${API_URL}/eventos`;
-
-    try {
-      const res = await fetch(endpoint, {
-        method: metodo,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formEvento)
-      });
-      const respostaApi = await res.json();
-      if (!res.ok) throw new Error(respostaApi.mensagem || 'Erro na operação de evento');
-
-      alert(formEvento.id ? 'Evento modificado com sucesso!' : 'Novo evento agendado e salvo no banco!');
-      setFormEvento({ id: null, titulo: '', data: '', horario_inicio: '', horario_fim: '', local_id: '', publico_alvo_id: '' });
-      buscarEventos();
-    } catch (err) {
-      alert(err.message);
+    if (view === 'alterar-senha' || user?.deve_alterar_senha) {
+        return (
+            <div style={styles.loginContainer}>
+                <form onSubmit={handleAlterarSenha} style={styles.loginForm}>
+                    <h2 style={{ textAlign: 'center', marginBottom: 20 }}>Alteração Obrigatória de Senha</h2>
+                    {erro && <div style={styles.errorAlert}>{erro}</div>}
+                    <input type="password" placeholder="Nova Senha" value={novaSenha} onChange={e => setNovaSenha(e.target.value)} style={styles.input} required />
+                    <input type="password" placeholder="Confirme a Nova Senha" value={confirmarNovaSenha} onChange={e => setConfirmarNovaSenha(e.target.value)} style={styles.input} required />
+                    <button type="submit" style={styles.btnPrimario}>Atualizar Senha</button>
+                </form>
+            </div>
+        );
     }
-  };
 
-  const toggleStatusEvento = async (ev) => {
-    try {
-      const res = await fetch(`${API_URL}/eventos/${ev.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ativo: !ev.ativo })
-      });
-      if (!res.ok) throw new Error('Erro ao alterar status');
-      buscarEventos();
-    } catch (err) {
-      alert('Erro ao alterar status do evento.');
-    }
-  };
+    return (
+        <div style={styles.dashboardContainer}>
+            <div style={styles.sidebar}>
+                <div style={styles.logoArea}>
+                    <span style={{ fontWeight: 'bold', color: '#fff' }}>QUEIMADOS</span>
+                    <span style={{ fontSize: 11, color: '#1E5EE6' }}> EDUCAÇÃO</span>
+                </div>
+                <button onClick={() => setView('eventos')} style={view === 'eventos' ? styles.sidebarBtnAtivo : styles.sidebarBtn}>Gestão de Eventos</button>
+                <button onClick={() => setView('professores')} style={view === 'professores' ? styles.sidebarBtnAtivo : styles.sidebarBtn}>Professores</button>
+                <button onClick={() => setView('locais')} style={view === 'locais' ? styles.sidebarBtnAtivo : styles.sidebarBtn}>Locais</button>
+                <button onClick={() => setView('usuarios')} style={view === 'usuarios' ? styles.sidebarBtnAtivo : styles.sidebarBtn}>Usuários</button>
+                <button onClick={() => setView('publico-alvo')} style={view === 'publico-alvo' ? styles.sidebarBtnAtivo : styles.sidebarBtn}>Público Alvo</button>
+                <button onClick={() => setView('relatorios')} style={view === 'relatorios' ? styles.sidebarBtnAtivo : styles.sidebarBtn}>Relatórios</button>
+                <div style={{ marginTop: 'auto', padding: 10 }}>
+                    <p style={{ color: '#aaa', fontSize: 12, marginBottom: 5 }}>Olá, {user?.nome}</p>
+                    <button onClick={() => setView('alterar-senha')} style={styles.btnSenha}>Alterar Senha</button>
+                    <button onClick={handleLogout} style={styles.btnSair}>Sair</button>
+                </div>
+            </div>
 
-  // Itens fixos do menu lateral
-  const itensMenu = [
-    { id: 'dashboard', label: '📊 Painel Consolidado' },
-    { id: 'usuarios', label: '👥 Controle de Usuários' },
-    { id: 'publicos', label: '🎯 Público-Alvo' },
-    { id: 'eventos', label: '📅 Gestão de Eventos' },
-    { id: 'locais', label: '📍 Controle de Locais' },
-    { id: 'rel_publico', label: '🎯 Filtro por Público' }
-  ];
+            <div style={styles.conteudoPrincipal}>
+                {view === 'relatorios' ? (
+                    <div>
+                        <h2>Prestação de Contas (MEC) / Logs</h2>
+                        <div style={styles.filtroContainer}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                                <label style={{ fontSize: 11, color: '#aaa', fontWeight: 'bold' }}>TIPO DE RELATÓRIO</label>
+                                <select value={tipoRelatorio} onChange={e => setTipoRelatorio(e.target.value)} style={styles.inputFiltro}>
+                                    <option value="prestacao-contas">Prestação de Contas</option>
+                                    <option value="log-frequencia">Log de Frequência Individual</option>
+                                    <option value="log-fraudes">Log de Fraudes</option>
+                                </select>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                                <label style={{ fontSize: 11, color: '#aaa', fontWeight: 'bold' }}>FILTRAR POR PERÍODO</label>
+                                <div style={{ display: 'flex', gap: 10 }}>
+                                    <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} style={styles.inputFiltro} />
+                                    <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} style={styles.inputFiltro} />
+                                </div>
+                            </div>
+                            <button onClick={carregarDados} style={styles.btnGerar}>GERAR LISTAGEM</button>
+                            <button onClick={handleGerarPDF} style={styles.btnPdf}>EXPORTAR PDF</button>
+                        </div>
 
-  return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans flex flex-col md:flex-row">
-      {/* SIDEBAR LATERAL — LAYOUT DA INTERFACE VISUAL */}
-      <aside className="w-full md:w-64 bg-slate-900 border-b md:border-b-0 md:border-r border-slate-800 p-6 flex flex-col justify-between shrink-0">
-        <div className="space-y-6">
-          <div className="border-b border-slate-800 pb-4">
-            <h1 className="text-md font-black tracking-widest text-blue-500 uppercase">QR Code Paiva</h1>
-            <p className="text-[10px] text-slate-500 font-mono mt-0.5">MÓDULO ADMINISTRATIVO v2.5</p>
-          </div>
-          <nav className="space-y-1">
-            {itensMenu.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => setAbaAtual(item.id)}
-                className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
-                  abaAtual === item.id 
-                    ? 'bg-blue-600/10 text-blue-400 border border-blue-500/20' 
-                    : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
-                }`}
-              >
-                {item.label}
-              </button>
-            ))}
-          </nav>
+                        <div id="area-tabela" style={{ marginTop: 25 }}>
+                            <table style={styles.tabela}>
+                                <thead>
+                                    <tr style={styles.tabelaHeader}>
+                                        {tipoRelatorio === 'prestacao-contas' && (
+                                            <>
+                                                <th style={styles.th}>EVENTO</th>
+                                                <th style={styles.th}>DATA</th>
+                                                <th style={styles.th}>CH</th>
+                                                <th style={styles.th}>LOCAL</th>
+                                                <th style={styles.th}>PARTICIPANTES</th>
+                                            </>
+                                        )}
+                                        {tipoRelatorio === 'log-frequencia' && (
+                                            <>
+                                                <th style={styles.th}>PROFESSOR</th>
+                                                <th style={styles.th}>EVENTO</th>
+                                                <th style={styles.th}>ENTRADA</th>
+                                                <th style={styles.th}>SAÍDA</th>
+                                            </>
+                                        )}
+                                        {tipoRelatorio === 'log-fraudes' && (
+                                            <>
+                                                <th style={styles.th}>EVENTO</th>
+                                                <th style={styles.th}>DISPOSITIVO</th>
+                                                <th style={styles.th}>MOTIVO</th>
+                                                <th style={styles.th}>DATA HORA</th>
+                                            </>
+                                        )}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {lista.map((item, idx) => (
+                                        <tr key={idx} style={styles.tabelaLinha}>
+                                            {tipoRelatorio === 'prestacao-contas' && (
+                                                <>
+                                                    <td style={styles.td}>{item.titulo}</td>
+                                                    <td style={styles.td}>{new Date(item.data_evento).toLocaleDateString('pt-BR')}</td>
+                                                    <td style={styles.td}>{item.carga_horaria}h</td>
+                                                    <td style={styles.td}>{item.local_nome}</td>
+                                                    <td style={styles.td}>{item.total_participantes}</td>
+                                                </>
+                                            )}
+                                            {tipoRelatorio === 'log-frequencia' && (
+                                                <>
+                                                    <td style={styles.td}>{item.participante_nome}</td>
+                                                    <td style={styles.td}>{item.evento_titulo}</td>
+                                                    <td style={styles.td}>{item.data_entrada ? new Date(item.data_entrada).toLocaleString('pt-BR') : '-'}</td>
+                                                    <td style={styles.td}>{item.data_saida ? new Date(item.data_saida).toLocaleString('pt-BR') : '-'}</td>
+                                                </>
+                                            )}
+                                            {tipoRelatorio === 'log-fraudes' && (
+                                                <>
+                                                    <td style={styles.td}>{item.evento_titulo}</td>
+                                                    <td style={styles.td}>{item.device_fingerprint || 'Desconhecido'}</td>
+                                                    <td style={styles.td}>{item.motivo}</td>
+                                                    <td style={styles.td}>{new Date(item.data_tentativa).toLocaleString('pt-BR')}</td>
+                                                </>
+                                            )}
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                ) : (
+                    <div style={styles.splitLayout}>
+                        <div style={styles.colunaEsquerda}>
+                            <h2>Listagem de {view.toUpperCase()}</h2>
+                            <div style={styles.acoesTop}>
+                                <button onClick={() => { setIsEditando(false); setForm({}); setSelecionado(null); }} style={styles.btnPrimario}>Novo Registro</button>
+                            </div>
+                            <div style={{ overflowY: 'auto', maxHeight: '70vh' }}>
+                                <table style={styles.tabela}>
+                                    <thead>
+                                        <tr style={styles.tabelaHeader}>
+                                            <th style={styles.th}>ID</th>
+                                            <th style={styles.th}>NOME / TÍTULO</th>
+                                            <th style={styles.th}>STATUS</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {lista.map(item => (
+                                            <tr key={item.id} onClick={() => { setSelecionado(item); setForm(item); setIsEditando(true); }} style={{ ...styles.tabelaLinha, backgroundColor: selecionado?.id === item.id ? '#e9ecef' : 'transparent' }}>
+                                                <td style={styles.td}>{item.id}</td>
+                                                <td style={styles.td}>{item.nome || item.titulo}</td>
+                                                <td style={styles.td}>{item.ativo ?? true ? 'Ativo' : 'Inativo'}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div style={styles.colunaDireita}>
+                            <h2>{isEditando ? 'Editar Registro' : 'Incluir Registro'}</h2>
+                            <form onSubmit={handleSalvar} style={styles.formulario}>
+                                {view === 'eventos' && (
+                                    <>
+                                        <input type="text" placeholder="Título do Evento" value={form.titulo || ''} onChange={e => setForm({...form, titulo: e.target.value})} style={styles.input} required />
+                                        <input type="date" value={form.data_evento || ''} onChange={e => setForm({...form, data_evento: e.target.value})} style={styles.input} required />
+                                        <input type="number" placeholder="Carga Horária" value={form.carga_horaria || ''} onChange={e => setForm({...form, carga_horaria: e.target.value})} style={styles.input} required />
+                                        <input type="text" placeholder="Palestrante" value={form.palestrante || ''} onChange={e => setForm({...form, palestrante: e.target.value})} style={styles.input} />
+                                        <input type="number" placeholder="ID Local" value={form.local_id || ''} onChange={e => setForm({...form, local_id: e.target.value})} style={styles.input} required />
+                                        <input type="text" placeholder="Hora Início (HH:MM)" value={form.hora_inicio || ''} onChange={e => setForm({...form, hora_inicio: e.target.value})} style={styles.input} required />
+                                        <input type="text" placeholder="Hora Fim (HH:MM)" value={form.hora_fim || ''} onChange={e => setForm({...form, hora_fim: e.target.value})} style={styles.input} required />
+                                        <input type="number" placeholder="ID Público Alvo" value={form.publico_alvo_id || ''} onChange={e => setForm({...form, publico_alvo_id: e.target.value})} style={styles.input} required />
+                                        <input type="text" placeholder="Token QR Code" value={form.token_qr || ''} onChange={e => setForm({...form, token_qr: e.target.value})} style={styles.input} />
+                                    </>
+                                )}
+                                {view === 'professores' && (
+                                    <>
+                                        <input type="text" placeholder="Nome Completo" value={form.nome_completo || ''} onChange={e => setForm({...form, nome_completo: e.target.value})} style={styles.input} required />
+                                        <input type="text" placeholder="Matrícula" value={form.matricula || ''} onChange={e => setForm({...form, matricula: e.target.value})} style={styles.input} required />
+                                        <input type="text" placeholder="CPF" value={form.cpf || ''} onChange={e => setForm({...form, cpf: e.target.value})} style={styles.input} required />
+                                    </>
+                                )}
+                                {(view === 'locais' || view === 'publico-alvo' || view === 'usuarios') && (
+                                    <>
+                                        <input type="text" placeholder="Nome" value={form.nome || ''} onChange={e => setForm({...form, nome: e.target.value})} style={styles.input} required />
+                                        {view === 'locais' && (
+                                            <>
+                                                <input type="text" placeholder="Endereço" value={form.endereco || ''} onChange={e => setForm({...form, endereco: e.target.value})} style={styles.input} required />
+                                                <input type="number" step="any" placeholder="Latitude" value={form.latitude || ''} onChange={e => setForm({...form, latitude: e.target.value})} style={styles.input} required />
+                                                <input type="number" step="any" placeholder="Longitude" value={form.longitude || ''} onChange={e => setForm({...form, longitude: e.target.value})} style={styles.input} required />
+                                            </>
+                                        )}
+                                        {view === 'usuarios' && (
+                                            <>
+                                                <input type="text" placeholder="Usuário login" value={form.usuario || ''} onChange={e => setForm({...form, usuario: e.target.value})} style={styles.input} required />
+                                                <input type="password" placeholder="Senha" value={form.senha || ''} onChange={e => setForm({...form, senha: e.target.value})} style={styles.input} required />
+                                            </>
+                                        )}
+                                    </>
+                                )}
+                                <div style={{ display: 'flex', gap: 10, marginTop: 15 }}>
+                                    <button type="submit" style={styles.btnPrimario}>Salvar Alterações</button>
+                                    {isEditando && (
+                                        <button type="button" onClick={() => handleInativarReativar(selecionado.id, selecionado.ativo ?? true)} style={styles.btnPerigo}>
+                                            {selecionado.ativo ?? true ? 'Inativar Registro' : 'Reativar Registro'}
+                                        </button>
+                                    )}
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                )}
+            </div>
         </div>
-        <div className="pt-6 border-t border-slate-800 mt-6 hidden md:block">
-          <div className="flex items-center gap-2.5">
-            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-            <p className="text-[10px] text-slate-400 font-bold">Banco PostgreSQL Conectado</p>
-          </div>
-        </div>
-      </aside>
-
-
-      <main className="flex-1 p-4 md:p-8 overflow-y-auto max-w-7xl mx-auto w-full"></main>
-
-        {carregando && (
-          <div className="fixed bottom-6 right-6 bg-blue-600 text-white font-black px-4 py-2.5 rounded-xl text-xs tracking-wider uppercase shadow-2xl animate-pulse z-50 border border-blue-400/30 flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-white animate-ping"></span>
-            Comunicando com PostgreSQL...
-          </div>
-        )}
-
-        {abaAtual === 'dashboard' && (
-          <div className="space-y-6">
-            <div>
-              <h2 className="text-xl font-black text-white">Painel Consolidado</h2>
-              <p className="text-xs text-slate-400 mt-1">Indicadores e volumetria geral extraídos do banco de dados.</p>
-            </div>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-sm">
-                <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Docentes Cadastrados</p>
-                <p className="text-2xl font-black text-white mt-2 font-mono">{usuarios.filter(u => u.perfil === 'professor').length}</p>
-              </div>
-              <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-sm">
-                <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Locais Sedes Ativos</p>
-                <p className="text-2xl font-black text-emerald-400 mt-2 font-mono">{locais.filter(l => l.ativo).length}</p>
-              </div>
-              <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-sm">
-                <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Públicos-Alvo Mapeados</p>
-                <p className="text-2xl font-black text-blue-400 mt-2 font-mono">{publicosAlvo.length}</p>
-              </div>
-              <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-sm">
-                <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Eventos Oferecidos</p>
-                <p className="text-2xl font-black text-amber-400 mt-2 font-mono">{eventos.length}</p>
-              </div>
-            </div>
-
-            <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6">
-              <h3 className="text-xs font-black uppercase text-slate-300 tracking-wider mb-4">Próximos Eventos na Agenda</h3>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="border-b border-slate-800 text-slate-400 font-bold font-mono text-[11px]"><th className="pb-3">Evento</th><th className="pb-3">Data/Hora</th><th className="pb-3">Sede</th><th className="pb-3 text-center">Status</th></tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800/60">
-                    {eventos.slice(0, 5).map(ev => (
-                      <tr key={ev.id} className="hover:bg-slate-800/10">
-                        <td className="py-3 font-bold text-white max-w-[220px] truncate">{ev.titulo}</td>
-                        <td className="py-3 font-mono text-slate-300">{ev.data} <span className="text-[10px] text-slate-500 ml-1">({ev.horario_inicio} - {ev.horario_fim})</span></td>
-                        <td className="py-3 text-slate-400">{ev.local_nome || 'Não Definido'}</td>
-                        <td className="py-3 text-center">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${ev.ativo ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
-                            {ev.ativo ? 'Agendado' : 'Cancelado'}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {abaAtual === 'usuarios' && (
-          <div className="space-y-6">
-            <h2 className="text-xl font-black text-white">Controle de Usuários</h2>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <form onSubmit={handleSalvarUsuario} className="bg-slate-900 p-5 rounded-2xl border border-slate-800 space-y-4 h-fit">
-                <h3 className="text-xs font-black text-slate-300 uppercase tracking-wider">{formUsuario.id ? 'Editar Usuário' : 'Novo Usuário'}</h3>
-                <div>
-                  <label className="text-[10px] uppercase font-bold text-slate-400">Nome Completo</label>
-                  <input type="text" className="w-full bg-slate-950 border border-slate-800 p-2.5 rounded-xl text-xs mt-1 outline-none text-white focus:border-blue-500" value={formUsuario.nome} onChange={e => setFormUsuario({...formUsuario, nome: e.target.value})} placeholder="Ex: Professor da Silva" required />
-                </div>
-                <div>
-                  <label className="text-[10px] uppercase font-bold text-slate-400">E-mail Institucional</label>
-                  <input type="email" className="w-full bg-slate-950 border border-slate-800 p-2.5 rounded-xl text-xs mt-1 outline-none text-white focus:border-blue-500 font-mono" value={formUsuario.email} onChange={e => setFormUsuario({...formUsuario, email: e.target.value})} placeholder="nome@paiva.br" required />
-                </div>
-                <div>
-                  <label className="text-[10px] uppercase font-bold text-slate-400">Perfil de Acesso</label>
-                  <select className="w-full bg-slate-950 border border-slate-800 p-2.5 rounded-xl text-xs mt-1 outline-none text-white focus:border-blue-500 font-bold" value={formUsuario.perfil} onChange={e => setFormUsuario({...formUsuario, perfil: e.target.value})}>
-                    <option value="professor">Professor / Docente</option>
-                    <option value="admin">Administrador Geral</option>
-                  </select>
-                </div>
-                <button type="submit" className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold p-2.5 rounded-xl text-xs transition">Salvar Usuário</button>
-              </form>
-              <div className="lg:col-span-2 bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead className="bg-slate-950 text-slate-400 font-bold border-b border-slate-800 font-mono text-[11px]">
-                    <tr><th className="p-4">Nome / Email</th><th className="p-4">Perfil</th><th className="p-4 text-center">Ações</th></tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800">
-                    {usuarios.map(u => (
-                      <tr key={u.id} className="hover:bg-slate-800/20">
-                        <td className="p-4"><p className="font-bold text-white">{u.nome}</p><p className="text-[10px] text-slate-500 font-mono">{u.email}</p></td>
-                        <td className="p-4 uppercase text-[10px] font-bold"><span className={u.perfil === 'admin' ? 'text-blue-400' : 'text-slate-400'}>{u.perfil}</span></td>
-                        <td className="p-4 flex items-center justify-center gap-4">
-                          <button onClick={() => setFormUsuario({ id: u.id, nome: u.nome, email: u.email, perfil: u.perfil })} className="text-blue-400 hover:underline font-bold">Editar</button>
-                          <button onClick={() => toggleStatusUsuario(u)} className={`px-2 py-0.5 rounded text-[10px] font-black ${u.ativo ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>{u.ativo ? 'Ativo' : 'Inativo'}</button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {abaAtual === 'publicos' && (
-          <div className="space-y-6">
-            <h2 className="text-xl font-black text-white">Gestão de Público-Alvo</h2>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <form onSubmit={handleSalvarPublico} className="bg-slate-900 p-5 rounded-2xl border border-slate-800 space-y-4 h-fit">
-                <h3 className="text-xs font-black text-slate-300 uppercase tracking-wider">{formPublicoAlvo.id ? 'Editar Público' : 'Novo Público'}</h3>
-                <div>
-                  <label className="text-[10px] uppercase font-bold text-slate-400">Descrição do Público</label>
-                  <input type="text" className="w-full bg-slate-950 border border-slate-800 p-2.5 rounded-xl text-xs mt-1 outline-none text-white focus:border-blue-500" value={formPublicoAlvo.nome} onChange={e => setFormPublicoAlvo({...formPublicoAlvo, nome: e.target.value})} placeholder="Ex: Professores do Ensino Fundamental" required />
-                </div>
-                <button type="submit" className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold p-2.5 rounded-xl text-xs transition">Salvar Público</button>
-              </form>
-              <div className="lg:col-span-2 bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead className="bg-slate-950 text-slate-400 font-bold border-b border-slate-800 font-mono text-[11px]">
-                    <tr><th className="p-4">Público-Alvo</th><th className="p-4 text-center">Ações</th></tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800">
-                    {publicosAlvo.map(p => (
-                      <tr key={p.id} className="hover:bg-slate-800/20">
-                        <td className="p-4 font-bold text-white">{p.nome}</td>
-                        <td className="p-4 flex items-center justify-center gap-4">
-                          <button onClick={() => setFormPublicoAlvo({ id: p.id, nome: p.nome })} className="text-blue-400 hover:underline font-bold">Editar</button>
-                          <button onClick={() => toggleStatusPublico(p)} className={`px-2 py-0.5 rounded text-[10px] font-black ${p.ativo ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>{p.ativo ? 'Ativo' : 'Inativo'}</button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {abaAtual === 'eventos' && (
-          <div className="space-y-6">
-            <h2 className="text-xl font-black text-white">Gestão de Eventos</h2>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <form onSubmit={handleSalvarEvento} className="bg-slate-900 p-5 rounded-2xl border border-slate-800 space-y-4 h-fit">
-                <h3 className="text-xs font-black text-slate-300 uppercase tracking-wider">{formEvento.id ? 'Editar Evento' : 'Novo Evento'}</h3>
-                <div>
-                  <label className="text-[10px] uppercase font-bold text-slate-400">Título do Evento</label>
-                  <input type="text" className="w-full bg-slate-950 border border-slate-800 p-2.5 rounded-xl text-xs mt-1 outline-none text-white focus:border-blue-500" value={formEvento.titulo} onChange={e => setFormEvento({...formEvento, titulo: e.target.value})} required />
-                </div>
-                <div>
-                  <label className="text-[10px] uppercase font-bold text-slate-400">Público-Alvo Direcionado</label>
-                  <select className="w-full bg-slate-950 border border-slate-800 p-2.5 rounded-xl text-xs mt-1 outline-none text-white focus:border-blue-500 font-bold" value={formEvento.publico_alvo_id} onChange={e => setFormEvento({...formEvento, publico_alvo_id: e.target.value})} required>
-                    <option value="">Selecione na listagem...</option>
-                    {publicosAlvo.map(p => <option key={p.id} value={p.id} disabled={!p.ativo}>{p.nome}</option>)}
-                  </select>
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  <div>
-                    <label className="text-[10px] uppercase font-bold text-slate-400">Data</label>
-                    <input type="date" className="w-full bg-slate-950 border border-slate-800 p-2 rounded-xl text-xs mt-1 outline-none text-white font-mono" value={formEvento.data} onChange={e => setFormEvento({...formEvento, data: e.target.value})} required />
-                  </div>
-                  <div>
-                    <label className="text-[10px] uppercase font-bold text-slate-400">Início</label>
-                    <input type="time" className="w-full bg-slate-950 border border-slate-800 p-2 rounded-xl text-xs mt-1 outline-none text-white font-mono" value={formEvento.horario_inicio} onChange={e => setFormEvento({...formEvento, horario_inicio: e.target.value})} required />
-                  </div>
-                  <div>
-                    <label className="text-[10px] uppercase font-bold text-slate-400">Término</label>
-                    <input type="time" className="w-full bg-slate-950 border border-slate-800 p-2 rounded-xl text-xs mt-1 outline-none text-white font-mono" value={formEvento.horario_fim} onChange={e => setFormEvento({...formEvento, horario_fim: e.target.value})} required />
-                  </div>
-                </div>
-                <div>
-                  <label className="text-[10px] uppercase font-bold text-slate-400">Local Sede Executora</label>
-                  <select className="w-full bg-slate-950 border border-slate-800 p-2.5 rounded-xl text-xs mt-1 outline-none text-white focus:border-blue-500 font-bold" value={formEvento.local_id} onChange={e => setFormEvento({...formEvento, local_id: e.target.value})} required>
-                    <option value="">Selecione o local...</option>
-                    {locais.map(l => <option key={l.id} value={l.id} disabled={!l.ativo}>{l.nome}</option>)}
-                  </select>
-                </div>
-                <button type="submit" className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold p-2.5 rounded-xl text-xs transition">Salvar Evento</button>
-              </form>
-              <div className="lg:col-span-2 bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead className="bg-slate-950 text-slate-400 font-bold border-b border-slate-800 font-mono text-[11px]">
-                      <tr><th className="p-4">Evento / Público</th><th className="p-4">Horários / Sede</th><th className="p-4 text-center">Horas</th><th className="p-4 text-center">Ações</th></tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800">
-                      {eventos.map(ev => (
-                        <tr key={ev.id} className="hover:bg-slate-800/20">
-                          <td className="p-4">
-                            <p className="font-bold text-white max-w-[180px] truncate">{ev.titulo}</p>
-                            <p className="text-[10px] text-amber-400 mt-0.5">{ev.publico_alvo_nome || 'Geral'}</p>
-                          </td>
-                          <td className="p-4">
-                            <p className="font-mono text-slate-300">{ev.data} <span className="text-[10px] text-slate-500">({ev.horario_inicio}-{ev.horario_fim})</span></p>
-                            <p className="text-[10px] text-slate-400 mt-0.5">{ev.local_nome}</p>
-                          </td>
-                          <td className="p-4 text-center"><span className="bg-blue-500/10 text-blue-400 font-mono font-black px-2 py-0.5 rounded-md">{ev.horas_ofertadas}h</span></td>
-                          <td className="p-4 flex items-center justify-center gap-3 mt-1.5">
-                            <button onClick={() => setFormEvento({ id: ev.id, titulo: ev.titulo, data: ev.data, horario_inicio: ev.horario_inicio, horario_fim: ev.horario_fim, local_id: ev.local_id, publico_alvo_id: ev.publico_alvo_id })} className="text-blue-400 hover:underline font-bold">Editar</button>
-                            <button onClick={() => toggleStatusEvento(ev)} className={`px-2 py-0.5 rounded text-[10px] font-black ${ev.ativo ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>{ev.ativo ? 'Ativo' : 'Inativo'}</button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {abaAtual === 'locais' && (
-          <div className="space-y-6">
-            <h2 className="text-xl font-black text-white">Controle de Locais Sede</h2>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <form onSubmit={handleSalvarLocal} className="bg-slate-900 p-5 rounded-2xl border border-slate-800 space-y-4 h-fit">
-                <h3 className="text-xs font-black text-slate-300 uppercase tracking-wider">{formLocal.id ? 'Editar Local' : 'Novo Local'}</h3>
-                <div>
-                  <label className="text-[10px] uppercase font-bold text-slate-400">Identificação do Espaço</label>
-                  <input type="text" className="w-full bg-slate-950 border border-slate-800 p-2.5 rounded-xl text-xs mt-1 outline-none text-white focus:border-blue-500" value={formLocal.nome} onChange={e => setFormLocal({...formLocal, nome: e.target.value})} placeholder="Ex: Auditório Master Bloco B" required />
-                </div>
-                <button type="submit" className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold p-2.5 rounded-xl text-xs transition">Salvar Local</button>
-              </form>
-              <div className="lg:col-span-2 bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead className="bg-slate-950 text-slate-400 font-bold border-b border-slate-800 font-mono text-[11px]">
-                    <tr><th className="p-4">Local Sede</th><th className="p-4 text-center">Ações</th></tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800">
-                    {locais.map(l => (
-                      <tr key={l.id} className="hover:bg-slate-800/20">
-                        <td className="p-4 font-bold text-white">{l.nome}</td>
-                        <td className="p-4 flex items-center justify-center gap-4">
-                          <button onClick={() => setFormLocal({ id: l.id, nome: l.nome })} className="text-blue-400 hover:underline font-bold">Editar</button>
-                          <button onClick={() => toggleStatusLocal(l)} className={`px-2 py-0.5 rounded text-[10px] font-black ${l.ativo ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>{l.ativo ? 'Ativo' : 'Inativo'}</button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {abaAtual === 'rel_publico' && (
-          <div className="space-y-6">
-            <div>
-              <h2 className="text-xl font-black text-white">Eventos por Público-Alvo</h2>
-              <p className="text-xs text-slate-400 mt-1">Filtre formações, cargas horárias e participações coletadas do PostgreSQL.</p>
-            </div>
-
-            <form onSubmit={filtrarRelatorioPublico} className="bg-slate-900 p-4 rounded-2xl border border-slate-800 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end shadow-md">
-              <div>
-                <label className="text-[10px] uppercase font-bold text-slate-400">Data Inicial</label>
-                <input type="date" className="w-full bg-slate-950 border border-slate-800 p-2.5 rounded-xl text-xs mt-1 outline-none text-white font-mono focus:border-blue-500" value={filtroRelPublico.inicio} onChange={e => setFiltroRelPublico({...filtroRelPublico, inicio: e.target.value})} />
-              </div>
-              <div>
-                <label className="text-[10px] uppercase font-bold text-slate-400">Data Final</label>
-                <input type="date" className="w-full bg-slate-950 border border-slate-800 p-2.5 rounded-xl text-xs mt-1 outline-none text-white font-mono focus:border-blue-500" value={filtroRelPublico.fim} onChange={e => setFiltroRelPublico({...filtroRelPublico, fim: e.target.value})} />
-              </div>
-              <div>
-                <label className="text-[10px] uppercase font-bold text-slate-400">Selecione o Público-Alvo</label>
-                <select className="w-full bg-slate-950 border border-slate-800 p-2.5 rounded-xl text-xs mt-1 outline-none text-white font-bold focus:border-blue-500" value={filtroRelPublico.publico_alvo_id} onChange={e => setFiltroRelPublico({...filtroRelPublico, publico_alvo_id: e.target.value})}>
-                  <option value="">Mostrar Todos os Públicos</option>
-                  {publicosAlvo.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
-                </select>
-              </div>
-              <button type="submit" className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-xl text-xs transition uppercase tracking-wider font-mono">Filtrar Base</button>
-            </form>
-
-            <div className="bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead className="bg-slate-950 text-slate-400 font-bold border-b border-slate-800 font-mono text-[11px]">
-                    <tr>
-                      <th className="p-4">Evento / Público-Alvo</th>
-                      <th className="p-4">Cronograma e Sede</th>
-                      <th className="p-4 text-center">Participantes</th>
-                      <th className="p-4 text-center">Horas Registradas</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800">
-                    {eventosFiltradosRel.map(ev => (
-                      <tr key={ev.id} className="hover:bg-slate-800/20">
-                        <td className="p-4">
-                          <p className="font-bold text-white">{ev.titulo}</p>
-                          <p className="text-[10px] text-blue-400 mt-0.5">{ev.publico_alvo_nome || 'Todos os Públicos'}</p>
-                        </td>
-                        <td className="p-4">
-                          <p className="font-mono text-slate-300">{ev.data} <span className="text-[10px] text-slate-500">({ev.horario_inicio} às {ev.horario_fim})</span></p>
-                          <p className="text-[10px] text-slate-500 mt-0.5 font-bold">{ev.local_nome}</p>
-                        </td>
-                        <td className="p-4 text-center">
-                          <span className="bg-slate-950 font-mono text-slate-300 font-bold px-2.5 py-1 rounded-lg border border-slate-800">
-                            {ev.total_participantes || 0}
-                          </span>
-                        </td>
-                        <td className="p-4 text-center">
-                          <span className="bg-blue-500/10 text-blue-400 font-black font-mono px-2 py-1 rounded-lg">
-                            {ev.horas_ofertadas}h
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                    {eventosFiltradosRel.length === 0 && (
-                      <tr><td colSpan="4" className="p-8 text-center text-slate-500 font-medium">Nenhum evento localizado para os filtros informados.</td></tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
-      </main>
-    </div>
-  );
+    );
 }
+
+const styles = {
+    loginContainer: { display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', backgroundColor: '#f4f6f9' },
+    loginForm: { padding: 30, backgroundColor: '#fff', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', width: 350, display: 'flex', flexDirection: 'column', gap: 12 },
+    input: { padding: 12, border: '1px solid #ced4da', borderRadius: 6, fontSize: 14, outline: 'none' },
+    btnPrimario: { backgroundColor: '#5442E6', color: '#fff', border: 'none', padding: 12, borderRadius: 6, cursor: 'pointer', fontWeight: 'bold' },
+    errorAlert: { padding: 10, backgroundColor: '#f8d7da', color: '#721c24', borderRadius: 4, fontSize: 13 },
+    dashboardContainer: { display: 'flex', height: '100vh', backgroundColor: '#f8f9fa' },
+    sidebar: { width: 240, backgroundColor: '#0d1527', display: 'flex', flexDirection: 'column', padding: '20px 10px', gap: 6 },
+    logoArea: { padding: '10px 15px', marginBottom: 20, borderBottom: '1px solid #1e293b' },
+    sidebarBtn: { backgroundColor: 'transparent', color: '#94a3b8', border: 'none', textAlign: 'left', padding: '12px 15px', borderRadius: 6, cursor: 'pointer', fontWeight: '500', fontSize: 14 },
+    sidebarBtnAtivo: { backgroundColor: '#1E5EE6', color: '#fff', border: 'none', textAlign: 'left', padding: '12px 15px', borderRadius: 6, cursor: 'pointer', fontWeight: 'bold', fontSize: 14 },
+    conteudoPrincipal: { flex: 1, padding: 30, overflowY: 'auto' },
+    filtroContainer: { display: 'flex', backgroundColor: '#fff', padding: 20, borderRadius: 12, border: '1px solid #e2e8f0', alignItems: 'flex-end', gap: 20, marginTop: 15 },
+    inputFiltro: { padding: '10px 15px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 14, minWidth: 180, outline: 'none' },
+    btnGerar: { backgroundColor: '#5442E6', color: '#fff', border: 'none', padding: '12px 25px', borderRadius: 8, cursor: 'pointer', fontWeight: 'bold', fontSize: 13 },
+    btnPdf: { backgroundColor: '#475569', color: '#fff', border: 'none', padding: '12px 20px', borderRadius: 8, cursor: 'pointer', fontWeight: 'bold', fontSize: 13 },
+    tabela: { width: '100%', borderCollapse: 'collapse', backgroundColor: '#fff', borderRadius: 8, overflow: 'hidden' },
+    tabelaHeader: { backgroundColor: '#f1f5f9', borderBottom: '2px solid #e2e8f0' },
+    th: { textAlign: 'left', padding: '12px 16px', color: '#64748b', fontSize: 12, fontWeight: 'bold', textTransform: 'uppercase' },
+    tabelaLinha: { borderBottom: '1px solid #edf2f7', cursor: 'pointer' },
+    td: { padding: '14px 16px', color: '#334155', fontSize: 14 },
+    splitLayout: { display: 'flex', gap: 30, height: '100%' },
+    colunaEsquerda: { flex: 1.2, display: 'flex', flexDirection: 'column', gap: 15 },
+    colunaDireita: { flex: 0.8, backgroundColor: '#fff', padding: 25, borderRadius: 12, border: '1px solid #e2e8f0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' },
+    formulario: { display: 'flex', flexDirection: 'column', gap: 12 },
+    btnPerigo: { backgroundColor: '#ef4444', color: '#fff', border: 'none', padding: 12, borderRadius: 6, cursor: 'pointer', fontWeight: 'bold' },
+    btnSenha: { backgroundColor: '#334155', color: '#fff', border: 'none', padding: 8, borderRadius: 6, cursor: 'pointer', width: '100%', fontSize: 12, marginBottom: 5 },
+    btnSair: { backgroundColor: '#b91c1c', color: '#fff', border: 'none', padding: 8, borderRadius: 6, cursor: 'pointer', width: '100%', fontSize: 12 }
+};

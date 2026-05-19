@@ -1,523 +1,498 @@
-// ============================================================================
-// ARQUIVO: backend/index.js — PARTE 1 DE 3 (POSTGRESQL & CRUD USUÁRIOS/LOCAIS)
-// ============================================================================
-
 const express = require('express');
 const cors = require('cors');
-const { Pool } = require('pg'); // Driver nativo e real do PostgreSQL
-require('dotenv').config();
+const { Pool } = require('pg');
+const jwt = require('jsonwebtoken');
 
 const app = express();
 const PORT = process.env.PORT || 3009;
+const JWT_SECRET = process.env.JWT_SECRET || 'secret_token_queimados_educacao_2026';
 
-// Middlewares obrigatórios
+// Configuração de conexão com o banco de dados PostgreSQL baseada nas tabelas reais
+const pool = new Pool({
+    user: process.env.DB_USER || 'postgres',
+    host: process.env.DB_HOST || 'localhost',
+    database: process.env.DB_NAME || 'postgres',
+    password: process.env.DB_PASSWORD || 'Gatosap2009*2',
+    port: process.env.DB_PORT || 5432,
+});
+
 app.use(cors());
 app.use(express.json());
 
-// Configuração de conexão real com o banco PostgreSQL 'postgres'
-const pool = new Pool({
-  user: process.env.DB_USER || 'postgres',
-  host: process.env.DB_HOST || 'localhost',
-  database: process.env.DB_NAME || 'postgres',
-  password: process.env.DB_PASSWORD || 'Gatosap2009*2',
-  port: process.env.DB_PORT || 5432,
-});
+const verificarToken = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
 
-// Testando a conexão com o banco na inicialização do servidor
-pool.connect((err, client, release) => {
-  if (err) {
-    return console.error('❌ Erro crítico de conexão com o PostgreSQL:', err.stack);
-  }
-  console.log('✅ Conectado com sucesso ao banco PostgreSQL (postgres)!');
-  release();
-});
-
-// ============================================================================
-// 1. CRUD DE USUÁRIOS
-// ============================================================================
-
-// Listar todos os usuários ativos e inativos
-app.get('/api/usuarios', async (req, res) => {
-  try {
-    const query = 'SELECT id, nome, email, perfil, ativo FROM usuarios ORDER BY nome ASC';
-    const { rows } = await pool.query(query);
-    res.status(200).json(rows);
-  } catch (error) {
-    console.error('Erro ao buscar usuários:', error);
-    res.status(500).json({ mensagem: 'Erro interno ao consultar usuários.' });
-  }
-});
-
-// Cadastrar novo usuário com verificação de duplicidade de email
-app.post('/api/usuarios', async (req, res) => {
-  try {
-    const { nome, email, perfil } = req.body;
-    
-    if (!nome || !email || !perfil) {
-      return res.status(400).json({ mensagem: 'Campos nome, email e perfil são obrigatórios.' });
+    if (!token) {
+        return res.status(401).json({ error: 'Acesso negado. Token de autenticação não fornecido.' });
     }
 
-    const checkEmail = await pool.query('SELECT id FROM usuarios WHERE email = $1', [email]);
-    if (checkEmail.rows.length > 0) {
-      return res.status(400).json({ mensagem: 'Este e-mail já está cadastrado.' });
-    }
-
-    const query = 'INSERT INTO usuarios (nome, email, perfil, ativo) VALUES ($1, $2, $3, true) RETURNING *';
-    const { rows } = await pool.query(query, [nome, email, perfil]);
-    
-    res.status(201).json(rows[0]);
-  } catch (error) {
-    console.error('Erro ao criar usuário:', error);
-    res.status(500).json({ mensagem: 'Erro interno ao salvar usuário.' });
-  }
-});
-
-// Atualizar dados ou alternar status ativo/inativo do usuário
-app.put('/api/usuarios/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { nome, email, perfil, ativo } = req.body;
-
-    const checkUser = await pool.query('SELECT * FROM usuarios WHERE id = $1', [id]);
-    if (checkUser.rows.length === 0) {
-      return res.status(404).json({ message: 'Usuário não localizado.' });
-    }
-
-    const u = checkUser.rows[0];
-    const query = `
-      UPDATE usuarios 
-      SET nome = $1, email = $2, perfil = $3, ativo = $4 
-      WHERE id = $5 RETURNING *
-    `;
-    const valores = [
-      nome !== undefined ? nome : u.nome,
-      email !== undefined ? email : u.email,
-      perfil !== undefined ? perfil : u.perfil,
-      ativo !== undefined ? ativo : u.ativo,
-      id
-    ];
-
-    const { rows } = await pool.query(query, valores);
-    res.status(200).json(rows[0]);
-  } catch (error) {
-    console.error('Erro ao editar usuário:', error);
-    res.status(500).json({ mensagem: 'Erro interno ao atualizar usuário.' });
-  }
-});
-
-// ============================================================================
-// 2. CRUD DE LOCAIS SÉDE
-// ============================================================================
-
-// Listar todos os locais cadastrados
-app.get('/api/locais', async (req, res) => {
-  try {
-    const { rows } = await pool.query('SELECT id, nome, ativo FROM locais ORDER BY nome ASC');
-    res.status(200).json(rows);
-  } catch (error) {
-    console.error('Erro ao buscar locais:', error);
-    res.status(500).json({ mensagem: 'Erro interno ao consultar locais.' });
-  }
-});
-
-// Cadastrar novo local
-app.post('/api/locais', async (req, res) => {
-  try {
-    const { nome } = req.body;
-    if (!nome) {
-      return res.status(400).json({ mensagem: 'O campo nome do local é obrigatório.' });
-    }
-
-    const { rows } = await pool.query('INSERT INTO locais (nome, ativo) VALUES ($1, true) RETURNING *', [nome]);
-    res.status(201).json(rows[0]);
-  } catch (error) {
-    console.error('Erro ao criar local:', error);
-    res.status(500).json({ mensagem: 'Erro interno ao salvar local.' });
-  }
-});
-
-// Editar local ou alterar status ativo/inativo
-app.put('/api/locais/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { nome, ativo } = req.body;
-
-    const checkLocal = await pool.query('SELECT * FROM locais WHERE id = $1', [id]);
-    if (checkLocal.rows.length === 0) {
-      return res.status(404).json({ mensagem: 'Local não localizado.' });
-    }
-
-    const l = checkLocal.rows[0];
-    const query = 'UPDATE locais SET nome = $1, ativo = $2 WHERE id = $3 RETURNING *';
-    const { rows } = await pool.query(query, [
-      nome !== undefined ? nome : l.nome,
-      ativo !== undefined ? ativo : l.ativo,
-      id
-    ]);
-
-    res.status(200).json(rows[0]);
-  } catch (error) {
-    console.error('Erro ao editar local:', error);
-    res.status(500).json({ mensagem: 'Erro interno ao atualizar local.' });
-  }
-});
-// ============================================================================
-// ARQUIVO: backend/index.js — PARTE 2 DE 3 (CRUD PÚBLICO-ALVO & CRUD EVENTOS)
-// ============================================================================
-
-// ============================================================================
-// 3. CRUD DE PÚBLICO-ALVO
-// ============================================================================
-
-// Listar todos os públicos-alvo
-app.get('/api/publicos', async (req, res) => {
-  try {
-    const { rows } = await pool.query('SELECT id, nome, ativo FROM publico_alvo ORDER BY nome ASC');
-    res.status(200).json(rows);
-  } catch (error) {
-    console.error('Erro ao buscar públicos-alvo:', error);
-    res.status(500).json({ mensagem: 'Erro interno ao consultar públicos-alvo.' });
-  }
-});
-
-// Cadastrar novo público-alvo
-app.post('/api/publicos', async (req, res) => {
-  try {
-    const { nome } = req.body;
-    if (!nome) {
-      return res.status(400).json({ mensagem: 'O nome do público-alvo é obrigatório.' });
-    }
-
-    const query = 'INSERT INTO publico_alvo (nome, ativo) VALUES ($1, true) RETURNING *';
-    const { rows } = await pool.query(query, [nome]);
-    res.status(201).json(rows[0]);
-  } catch (error) {
-    console.error('Erro ao criar público-alvo:', error);
-    res.status(500).json({ mensagem: 'Erro interno ao salvar público-alvo.' });
-  }
-});
-
-// Editar público-alvo ou alterar status de atividade
-app.put('/api/publicos/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { nome, ativo } = req.body;
-
-    const checkPublico = await pool.query('SELECT * FROM publico_alvo WHERE id = $1', [id]);
-    if (checkPublico.rows.length === 0) {
-      return res.status(404).json({ mensagem: 'Público-alvo não localizado.' });
-    }
-
-    const p = checkPublico.rows[0];
-    const query = 'UPDATE publico_alvo SET nome = $1, ativo = $2 WHERE id = $3 RETURNING *';
-    const { rows } = await pool.query(query, [
-      nome !== undefined ? nome : p.nome,
-      ativo !== undefined ? ativo : p.ativo,
-      id
-    ]);
-
-    res.status(200).json(rows[0]);
-  } catch (error) {
-    console.error('Erro ao editar público-alvo:', error);
-    res.status(500).json({ mensagem: 'Erro interno ao atualizar público-alvo.' });
-  }
-});
-
-// ============================================================================
-// 4. CRUD DE EVENTOS (COM CONTROLE DE HORÁRIOS E CÁLCULO DE HORAS OFERTADAS)
-// ============================================================================
-
-// Listar todos os eventos trazendo os nomes reais do Local e do Público-Alvo via JOIN
-app.get('/api/eventos', async (req, res) => {
-  try {
-    const query = `
-      SELECT 
-        e.id, e.titulo, e.data, e.horario_inicio, e.horario_fim, e.horas_ofertadas, e.ativo,
-        e.local_id, l.nome AS local_nome,
-        e.publico_alvo_id, p.nome AS publico_alvo_nome
-      FROM eventos e
-      LEFT JOIN locais l ON e.local_id = l.id
-      LEFT JOIN publico_alvo p ON e.publico_alvo_id = p.id
-      ORDER BY e.data DESC, e.horario_inicio DESC
-    `;
-    const { rows } = await pool.query(query);
-    res.status(200).json(rows);
-  } catch (error) {
-    console.error('Erro ao buscar eventos:', error);
-    res.status(500).json({ mensagem: 'Erro interno ao consultar eventos.' });
-  }
-});
-
-// Cadastrar novo evento (Calculando a carga horária dinamicamente no servidor)
-app.post('/api/eventos', async (req, res) => {
-  try {
-    const { titulo, data, horario_inicio, horario_fim, local_id, publico_alvo_id } = req.body;
-
-    if (!titulo || !data || !horario_inicio || !horario_fim || !local_id || !publico_alvo_id) {
-      return res.status(400).json({ mensagem: 'Todos os campos do evento são obrigatórios.' });
-    }
-
-    // Lógica rigorosa de cálculo de horas ofertadas baseada nos horários informados
-    const [hInicio, mInicio] = horario_inicio.split(':').map(Number);
-    const [hFim, mFim] = horario_fim.split(':').map(Number);
-    const diffHoras = (hFim + mFim / 60) - (hInicio + mInicio / 60);
-
-    if (diffHoras <= 0) {
-      return res.status(400).json({ mensagem: 'O horário de término deve ser posterior ao horário de início.' });
-    }
-    
-    const horasOfertadas = parseFloat(diffHoras.toFixed(1));
-
-    const query = `
-      INSERT INTO eventos (titulo, data, horario_inicio, horario_fim, horas_ofertadas, local_id, publico_alvo_id, ativo)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, true) RETURNING *
-    `;
-    const { rows } = await pool.query(query, [titulo, data, horario_inicio, horario_fim, horasOfertadas, local_id, publico_alvo_id]);
-    
-    res.status(201).json(rows[0]);
-  } catch (error) {
-    console.error('Erro ao criar evento:', error);
-    res.status(500).json({ mensagem: 'Erro interno ao salvar evento.' });
-  }
-});
-
-// Editar evento existente ou alternar status ativo/inativo
-app.put('/api/eventos/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { titulo, data, horario_inicio, horario_fim, local_id, publico_alvo_id, ativo } = req.body;
-
-    const checkEvento = await pool.query('SELECT * FROM eventos WHERE id = $1', [id]);
-    if (checkEvento.rows.length === 0) {
-      return res.status(404).json({ mensagem: 'Evento não encontrado.' });
-    }
-
-    const ev = checkEvento.rows[0];
-
-    // Atualiza os valores mantendo os originais caso não sejam enviados
-    const rTitulo = titulo !== undefined ? titulo : ev.titulo;
-    const rData = data !== undefined ? data : ev.data;
-    const rInicio = horario_inicio !== undefined ? horario_inicio : ev.horario_inicio;
-    const rFim = horario_fim !== undefined ? horario_fim : ev.horario_fim;
-    const rLocal = local_id !== undefined ? local_id : ev.local_id;
-    const rPublico = publico_alvo_id !== undefined ? publico_alvo_id : ev.publico_alvo_id;
-    const rAtivo = ativo !== undefined ? ativo : ev.ativo;
-
-    // Recalcula as horas com base nos horários atualizados
-    const [hInicio, mInicio] = rInicio.split(':').map(Number);
-    const [hFim, mFim] = rFim.split(':').map(Number);
-    const diffHoras = (hFim + mFim / 60) - (hInicio + mInicio / 60);
-
-    if (diffHoras <= 0) {
-      return res.status(400).json({ mensagem: 'O horário de término deve ser posterior ao horário de início.' });
-    }
-    const rHorasOfertadas = parseFloat(diffHoras.toFixed(1));
-
-    const query = `
-      UPDATE eventos 
-      SET titulo = $1, data = $2, horario_inicio = $3, horario_fim = $4, horas_ofertadas = $5, local_id = $6, publico_alvo_id = $7, ativo = $8
-      WHERE id = $9 RETURNING *
-    `;
-    const { rows } = await pool.query(query, [rTitulo, rData, rInicio, rFim, rHorasOfertadas, rLocal, rPublico, rAtivo, id]);
-    
-    res.status(200).json(rows[0]);
-  } catch (error) {
-    console.error('Erro ao editar evento:', error);
-    res.status(500).json({ mensagem: 'Erro interno ao atualizar evento.' });
-  }
-});
-
-// ============================================================================
-// 5. REGISTRO DE FREQUÊNCIA COM CAPTURA DE GEOLOCALIZAÇÃO REAL
-// ============================================================================
-// ============================================================================
-// NOVO ENDPOINT DE FREQUÊNCIA: CHECK-IN, CHECK-OUT E AUTO-CADASTRO
-// ============================================================================
-app.post('/api/frequencias', async (req, res) => {
-  try {
-    const { 
-      usuario_id, evento_id, latitude, longitude,
-      nao_cadastrado, matricula, nome, publico_alvo_id, // Campos para auto-identificação
-      nota_satisfacao, comentario // Campos para o Check-out
-    } = req.body;
-
-    if (!evento_id) {
-      return res.status(400).json({ mensagem: 'O ID do evento é obrigatório.' });
-    }
-
-    if (latitude === undefined || longitude === undefined || latitude === null || longitude === null) {
-      return res.status(400).json({ mensagem: 'Bloqueio de segurança: GPS do aparelho é obrigatório.' });
-    }
-
-    let idUsuarioFinal = usuario_id;
-
-    // ESTRATÉGIA DE AUTO-IDENTIFICAÇÃO (Se o professor não estiver pré-cadastrado)
-    if (nao_cadastrado || !idUsuarioFinal) {
-      if (!matricula || !nome || !publico_alvo_id) {
-        return res.status(400).json({ mensagem: 'Para professores não listados, Matrícula, Nome e Público-Alvo são obrigatórios.' });
-      }
-
-      const emailGerado = `${matricula.trim()}@paiva.br`;
-      
-      // Verifica se ele já se auto-cadastrou em algum momento anterior
-      const checkUser = await pool.query('SELECT id FROM usuarios WHERE email = $1', [emailGerado]);
-      
-      if (checkUser.rows.length > 0) {
-        idUsuarioFinal = checkUser.rows[0].id;
-      } else {
-        // Cria o registro do professor dinamicamente no PostgreSQL
-        const newUser = await pool.query(
-          "INSERT INTO usuarios (nome, email, perfil, ativo) VALUES ($1, $2, 'professor', true) RETURNING id",
-          [nome.trim(), emailGerado]
-        );
-        idUsuarioFinal = newUser.rows[0].id;
-      }
-    }
-
-    // BUSCA SE JÁ EXISTE UM REGISTRO DE FREQUÊNCIA PARA ESTE PROFESSOR NESTE EVENTO
-    const checkFrequencia = await pool.query(
-      'SELECT id, data_registro, data_saida FROM frequencias WHERE usuario_id = $1 AND evento_id = $2',
-      [idUsuarioFinal, evento_id]
-    );
-
-    // ==========================================
-    // FLUXO A: PRIMEIRO ACESSO (CHECK-IN / ENTRADA)
-    // ==========================================
-    if (checkFrequencia.rows.length === 0) {
-      const queryIn = `
-        INSERT INTO frequencias (usuario_id, evento_id, data_registro, latitude, longitude)
-        VALUES ($1, $2, NOW(), $3, $4) RETURNING *
-      `;
-      await pool.query(queryIn, [idUsuarioFinal, evento_id, latitude, longitude]);
-      
-      return res.status(201).json({ 
-        status: 'check-in', 
-        mensagem: 'Sua chegada foi registrada com sucesso! Bom evento.' 
-      });
-    }
-
-    // ==========================================
-    // FLUXO B: SEGUNDO ACESSO (CHECK-OUT / SAÍDA)
-    // ==========================================
-    const freqExistente = checkFrequencia.rows[0];
-
-    if (freqExistente.data_saida) {
-      return res.status(400).json({ mensagem: 'Sua participação e carga horária já foram computadas e encerradas neste evento.' });
-    }
-
-    // Validação matemática do intervalo de tempo (Mínimo de 30 minutos)
-    const checkTempo = await pool.query(
-      `SELECT EXTRACT(EPOCH FROM (NOW() - $1))/60 AS minutos_passados`,
-      [freqExistente.data_registro]
-    );
-    const minutosPassados = parseFloat(checkTempo.rows[0].minutos_passados);
-
-    if (minutosPassados < 30) {
-      const faltam = Math.ceil(30 - minutosPassados);
-      return res.status(400).json({ 
-        mensagem: `Intervalo não atingido. Você deve aguardar mais ${faltam} minuto(s) para liberar sua saída e responder a pesquisa.` 
-      });
-    }
-
-    // Exige a nota da pesquisa de satisfação para fechar o check-out
-    if (!nota_satisfacao) {
-      return res.status(200).json({ 
-        status: 'liberado_para_checkout', 
-        mensagem: 'Intervalo de 30 min validado! Por favor, responda à pesquisa de satisfação para computar suas horas.' 
-      });
-    }
-
-    // Realiza o Check-out definitivo gravando a nota, o comentário e a data de saída
-    const queryOut = `
-      UPDATE frequencias 
-      SET data_saida = NOW(), latitude = $1, longitude = $2 
-      WHERE id = $3
-    `;
-    await pool.query(queryOut, [latitude, longitude, freqExistente.id]);
-
-    // Opcional: Se sua tabela frequencias já tiver as colunas nota e comentario, salvamos diretamente.
-    // Caso não tenha alterado a tabela ainda, usamos uma query segura que aceita os campos se existirem.
-    try {
-      await pool.query(
-        'UPDATE frequencias SET nota_satisfacao = $1, comentario = $2 WHERE id = $3',
-        [nota_satisfacao, comentario || '', freqExistente.id]
-      );
-    } catch (e) {
-      console.log("Aviso: Colunas de satisfação não encontradas na tabela frequencias, mas o check-out foi concluído.");
-    }
-
-    return res.status(200).json({ 
-      status: 'check-out_concluido', 
-      mensagem: 'Participação encerrada! Suas horas foram computadas no banco de dados.' 
+    jwt.verify(token, JWT_SECRET, (err, decoded) => {
+        if (err) {
+            return res.status(403).json({ error: 'Sessão expirada ou token inválido. Faça login novamente.' });
+        }
+        req.user = decoded;
+        next();
     });
+};
 
-  } catch (error) {
-    console.error('Erro no processamento da frequência:', error);
-    res.status(500).json({ mensagem: 'Erro interno ao processar registro no PostgreSQL.' });
-  }
+app.post('/api/auth/login', async (req, res) => {
+    const { usuario, senha } = req.body;
+
+    if (!usuario || !senha) {
+        return res.status(400).json({ error: 'Os campos usuário e senha são estritamente obrigatórios.' });
+    }
+
+    try {
+        const queryText = 'SELECT id, nome, usuario, senha, ativo, deve_alterar_senha FROM usuarios WHERE usuario = $1';
+        const result = await pool.query(queryText, [usuario]);
+
+        if (result.rows.length === 0) {
+            return res.status(401).json({ error: 'Credenciais de acesso incorretas.' });
+        }
+
+        const user = result.rows[0];
+
+        if (!user.ativo) {
+            return res.status(403).json({ error: 'Este usuário está inativo no sistema administrativo.' });
+        }
+
+        if (senha !== user.senha) {
+            return res.status(401).json({ error: 'Credenciais de acesso incorretas.' });
+        }
+
+        const token = jwt.sign(
+            { id: user.id, nome: user.nome, usuario: user.usuario },
+            JWT_SECRET,
+            { expiresIn: '8h' }
+        );
+
+        return res.json({
+            token,
+            user: {
+                id: user.id,
+                nome: user.nome,
+                usuario: user.usuario,
+                deve_alterar_senha: user.deve_alterar_senha
+            }
+        });
+
+    } catch (error) {
+        console.error('Erro na rota de autenticação de login:', error);
+        return res.status(500).json({ error: 'Ocorreu um erro interno no servidor ao processar o login.' });
+    }
 });
 
-// ============================================================================
-// 6. ENDPOINT DO RELATÓRIO FILTRADO POR PÚBLICO-ALVO E INTERVALO DE DATAS
-// ============================================================================
-app.get('/api/relatorios/publico', async (req, res) => {
-  try {
-    const { data_inicio, data_fim, publico_alvo_id } = req.query;
-
-    // Query base unindo os eventos, público-alvo, locais e totalizando presenças via COUNT
-    let query = `
-      SELECT 
-        e.id, e.titulo, e.data, e.horario_inicio, e.horario_fim, e.horas_ofertadas, e.ativo,
-        p.nome AS publico_alvo_nome,
-        l.nome AS local_nome,
-        COUNT(f.id) AS total_participantes
-      FROM eventos e
-      LEFT JOIN publico_alvo p ON e.publico_alvo_id = p.id
-      LEFT JOIN locais l ON e.local_id = l.id
-      LEFT JOIN frequencias f ON e.id = f.evento_id
-      WHERE 1=1
-    `;
-    const params = [];
-    let contador = 1;
-
-    // Filtro condicional por Público-Alvo
-    if (publico_alvo_id && publico_alvo_id !== '') {
-      query += ` AND e.publico_alvo_id = $${contador}`;
-      params.push(publico_alvo_id);
-      contador++;
+app.get('/api/v2/locais', verificarToken, async (req, res) => {
+    try {
+        const queryText = 'SELECT id, nome, endereco, latitude, longitude, ativo FROM locais ORDER BY nome ASC';
+        const result = await pool.query(queryText);
+        return res.json(result.rows);
+    } catch (error) {
+        console.error('Erro ao buscar lista geral de locais:', error);
+        return res.status(500).json({ error: 'Erro interno ao recuperar os locais do banco de dados.' });
     }
-
-    // Filtro condicional por Data Inicial (Período)
-    if (data_inicio && data_inicio !== '') {
-      query += ` AND e.data >= $${contador}`;
-      params.push(data_inicio);
-      contador++;
-    }
-
-    // Filtro condicional por Data Final (Período)
-    if (data_fim && data_fim !== '') {
-      query += ` AND e.data <= $${contador}`;
-      params.push(data_fim);
-      contador++;
-    }
-
-    // Agrupamento necessário devido ao COUNT de participantes
-    query += `
-      GROUP BY e.id, p.nome, l.nome
-      ORDER BY e.data DESC, e.horario_inicio DESC
-    `;
-
-    const { rows } = await pool.query(query, params);
-    res.status(200).json(rows);
-  } catch (error) {
-    console.error('Erro ao gerar relatório por público:', error);
-    res.status(500).json({ mensagem: 'Erro interno ao processar o relatório filtrado.' });
-  }
 });
 
-// ============================================================================
-// INICIALIZAÇÃO DO SERVIDOR
-// ============================================================================
+// Listagem exclusiva de locais ativos para alimentar o select do formulário de eventos
+app.get('/api/v2/locais/ativos', verificarToken, async (req, res) => {
+    try {
+        const queryText = 'SELECT id, nome FROM locais WHERE ativo = true ORDER BY nome ASC';
+        const result = await pool.query(queryText);
+        return res.json(result.rows);
+    } catch (error) {
+        console.error('Erro ao buscar locais ativos:', error);
+        return res.status(500).json({ error: 'Erro interno ao recuperar os locais ativos.' });
+    }
+});
+
+// Criação de um novo local na base de dados
+app.post('/api/v2/locais', verificarToken, async (req, res) => {
+    const { nome, endereco, latitude, longitude } = req.body;
+
+    if (!nome || !endereco || latitude === undefined || longitude === undefined) {
+        return res.status(400).json({ error: 'Todos os campos (nome, endereço, latitude, longitude) precisam ser preenchidos.' });
+    }
+
+    try {
+        const queryText = 'INSERT INTO locais (nome, endereco, latitude, longitude, ativo) VALUES ($1, $2, $3, $4, true) RETURNING *';
+        const result = await pool.query(queryText, [nome, endereco, latitude, longitude]);
+        return res.status(201).json(result.rows[0]);
+    } catch (error) {
+        console.error('Erro ao inserir novo local na tabela:', error);
+        return res.status(500).json({ error: 'Erro interno ao salvar os dados do novo local.' });
+    }
+});
+
+// Alteração de dados cadastrais de um local existente
+app.put('/api/v2/locais/:id', verificarToken, async (req, res) => {
+    const { id } = req.params;
+    const { nome, endereco, latitude, longitude } = req.body;
+
+    if (!nome || !endereco || latitude === undefined || longitude === undefined) {
+        return res.status(400).json({ error: 'Parâmetros incompletos para a atualização do local.' });
+    }
+
+    try {
+        const queryText = 'UPDATE locais SET nome = $1, endereco = $2, latitude = $3, longitude = $4 WHERE id = $5 RETURNING *';
+        const result = await pool.query(queryText, [nome, endereco, latitude, longitude, id]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Nenhum local foi encontrado com o ID informado.' });
+        }
+
+        return res.json(result.rows[0]);
+    } catch (error) {
+        console.error('Erro ao atualizar local cadastrado:', error);
+        return res.status(500).json({ error: 'Erro interno ao salvar as modificações do local.' });
+    }
+});
+
+// Inativação lógica do local (Soft Delete para preservar integridade com a tabela eventos)
+app.patch('/api/v2/locais/:id/inativar', verificarToken, async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        const queryText = 'UPDATE locais SET ativo = false WHERE id = $1 RETURNING *';
+        const result = await pool.query(queryText, [id]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Nenhum local encontrado para inativação.' });
+        }
+
+        return res.json({ message: 'O local foi inativado com sucesso.', local: result.rows[0] });
+    } catch (error) {
+        console.error('Erro ao inativar local do sistema:', error);
+        return res.status(500).json({ error: 'Erro interno ao modificar o status de atividade do local.' });
+    }
+});
+
+app.patch('/api/v2/locais/:id/restaurar', verificarToken, async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        const queryText = 'UPDATE locais SET ativo = true WHERE id = $1 RETURNING *';
+        const result = await pool.query(queryText, [id]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Nenhum local encontrado para restauração.' });
+        }
+
+        return res.json({ message: 'O local foi restaurado com sucesso.', local: result.rows[0] });
+    } catch (error) {
+        console.error('Erro ao restaurar local do sistema:', error);
+        return res.status(500).json({ error: 'Erro interno ao reativar o status do local.' });
+    }
+});
+app.get('/api/v2/publico-alvo', verificarToken, async (req, res) => {
+    try {
+        const result = await pool.query('SELECT id, nome, ativo FROM publicoalvo ORDER BY nome ASC');
+        return res.json(result.rows);
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ error: 'Erro interno ao recuperar público-alvo.' });
+    }
+});
+
+app.get('/api/v2/publico-alvo/ativos', verificarToken, async (req, res) => {
+    try {
+        const result = await pool.query('SELECT id, nome FROM publicoalvo WHERE ativo = true ORDER BY nome ASC');
+        return res.json(result.rows);
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ error: 'Erro interno ao recuperar públicos-alvo ativos.' });
+    }
+});
+
+app.post('/api/v2/publico-alvo', verificarToken, async (req, res) => {
+    const { nome } = req.body;
+    if (!nome) {
+        return res.status(400).json({ error: 'O nome é obrigatório.' });
+    }
+    try {
+        const result = await pool.query('INSERT INTO publicoalvo (nome, ativo) VALUES ($1, true) RETURNING *', [nome]);
+        return res.status(201).json(result.rows[0]);
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ error: 'Erro interno ao salvar público-alvo.' });
+    }
+});
+
+app.put('/api/v2/publico-alvo/:id', verificarToken, async (req, res) => {
+    const { id } = req.params;
+    const { nome } = req.body;
+    if (!nome) {
+        return res.status(400).json({ error: 'O nome é obrigatório.' });
+    }
+    try {
+        const result = await pool.query('UPDATE publicoalvo SET nome = $1 WHERE id = $2 RETURNING *', [nome, id]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Público-alvo não encontrado.' });
+        }
+        return res.json(result.rows[0]);
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ error: 'Erro interno ao atualizar público-alvo.' });
+    }
+});
+
+app.patch('/api/v2/publico-alvo/:id/inativar', verificarToken, async (req, res) => {
+    const { id } = req.params;
+    try {
+        const result = await pool.query('UPDATE publicoalvo SET ativo = false WHERE id = $1 RETURNING *', [id]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Público-alvo não encontrado.' });
+        }
+        return res.json({ message: 'Inativado com sucesso.', data: result.rows[0] });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ error: 'Erro interno ao inativar público-alvo.' });
+    }
+});
+
+app.patch('/api/v2/publico-alvo/:id/reativar', verificarToken, async (req, res) => {
+    const { id } = req.params;
+    try {
+        const result = await pool.query('UPDATE publicoalvo SET ativo = true WHERE id = $1 RETURNING *', [id]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Público-alvo não encontrado.' });
+        }
+        return res.json({ message: 'Reativado com sucesso.', data: result.rows[0] });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ error: 'Erro interno ao reativar público-alvo.' });
+    }
+});
+
+app.get('/api/v2/eventos', verificarToken, async (req, res) => {
+    try {
+        const query = `
+            SELECT e.*, l.nome as local_nome, p.nome as publico_alvo_nome 
+            FROM eventos e
+            LEFT JOIN locais l ON e.local_id = l.id
+            LEFT JOIN publicoalvo p ON e.publico_alvo_id = p.id
+            ORDER BY e.data_evento DESC, e.hora_inicio DESC
+        `;
+        const result = await pool.query(query);
+        return res.json(result.rows);
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ error: 'Erro interno ao buscar eventos.' });
+    }
+});
+
+app.post('/api/v2/eventos', verificarToken, async (req, res) => {
+    const { titulo, data_evento, carga_horaria, palestrante, local, token_qr, endereco, latitude, longitude, local_id, hora_inicio, hora_fim, publico_alvo_id } = req.body;
+
+    if (!titulo || !data_evento || !carga_horaria || !local_id || !hora_inicio || !hora_fim || !publico_alvo_id) {
+        return res.status(400).json({ error: 'Campos obrigatórios ausentes.' });
+    }
+
+    try {
+        const conflitoQuery = `
+            SELECT id FROM eventos 
+            WHERE local_id = $1 
+              AND data_evento = $2 
+              AND hora_inicio < $4 
+              AND hora_fim > $3
+        `;
+        const conflitoResult = await pool.query(conflitoQuery, [local_id, data_evento, hora_inicio, hora_fim]);
+
+        if (conflitoResult.rows.length > 0) {
+            return res.status(409).json({ error: 'Conflito de horário: Já existe um evento agendado para este local neste mesmo intervalo de tempo.' });
+        }
+
+        const insertQuery = `
+            INSERT INTO eventos (titulo, data_evento, carga_horaria, palestrante, local, token_qr, endereco, latitude, longitude, local_id, hora_inicio, hora_fim, publico_alvo_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+            RETURNING *
+        `;
+        const result = await pool.query(insertQuery, [titulo, data_evento, carga_horaria, palestrante, local, token_qr, endereco, latitude, longitude, local_id, hora_inicio, hora_fim, publico_alvo_id]);
+        return res.status(201).json(result.rows[0]);
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ error: 'Erro interno ao criar evento.' });
+    }
+});
+
+app.put('/api/v2/eventos/:id', verificarToken, async (req, res) => {
+    const { id } = req.params;
+    const { titulo, data_evento, carga_horaria, palestrante, local, token_qr, endereco, latitude, longitude, local_id, hora_inicio, hora_fim, publico_alvo_id } = req.body;
+
+    if (!titulo || !data_evento || !carga_horaria || !local_id || !hora_inicio || !hora_fim || !publico_alvo_id) {
+        return res.status(400).json({ error: 'Campos obrigatórios ausentes.' });
+    }
+
+    try {
+        const conflitoQuery = `
+            SELECT id FROM eventos 
+            WHERE local_id = $1 
+              AND data_evento = $2 
+              AND hora_inicio < $4 
+              AND hora_fim > $3
+              AND id != $5
+        `;
+        const conflitoResult = await pool.query(conflitoQuery, [local_id, data_evento, hora_inicio, hora_fim, id]);
+
+        if (conflitoResult.rows.length > 0) {
+            return res.status(409).json({ error: 'Conflito de horário: Já existe outro evento agendado para este local neste mesmo intervalo de tempo.' });
+        }
+
+        const updateQuery = `
+            UPDATE eventos 
+            SET titulo = $1, data_evento = $2, carga_horaria = $3, palestrante = $4, local = $5, token_qr = $6, endereco = $7, latitude = $8, longitude = $9, local_id = $10, hora_inicio = $11, hora_fim = $12, publico_alvo_id = $13
+            WHERE id = $14
+            RETURNING *
+        `;
+        const result = await pool.query(updateQuery, [titulo, data_evento, carga_horaria, palestrante, local, token_qr, endereco, latitude, longitude, local_id, hora_inicio, hora_fim, publico_alvo_id, id]);
+        
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Evento não encontrado.' });
+        }
+        return res.json(result.rows[0]);
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ error: 'Erro interno ao atualizar evento.' });
+    }
+});
+app.delete('/api/v2/eventos/:id', verificarToken, async (req, res) => {
+    const { id } = req.params;
+    try {
+        const result = await pool.query('DELETE FROM eventos WHERE id = $1 RETURNING *', [id]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Evento não encontrado.' });
+        }
+        return res.json({ message: 'Evento excluído com sucesso.' });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ error: 'Erro interno ao excluir evento.' });
+    }
+});
+
+app.post('/api/v2/pesquisa-satisfacao', verificarToken, async (req, res) => {
+    const { participante_id, evento_id, publico_alvo_id, avaliacao, comentarios } = req.body;
+    if (!evento_id || !avaliacao) {
+        return res.status(400).json({ error: 'Campos obrigatórios ausentes.' });
+    }
+    try {
+        const result = await pool.query(
+            'INSERT INTO pesquisa_satisfacao (participante_id, evento_id, publico_alvo_id, avaliacao, comentarios) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+            [participante_id, evento_id, publico_alvo_id, avaliacao, comentarios]
+        );
+        return res.status(201).json(result.rows[0]);
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ error: 'Erro interno ao salvar pesquisa de satisfação.' });
+    }
+});
+
+app.get('/api/v2/pesquisa-satisfacao/evento/:evento_id', verificarToken, async (req, res) => {
+    const { evento_id } = req.params;
+    try {
+        const result = await pool.query(`
+            SELECT p.*, part.nome_completo as participante_nome, part.matricula, pa.nome as publico_alvo_nome
+            FROM pesquisa_satisfacao p
+            LEFT JOIN participantes part ON p.participante_id = part.id
+            LEFT JOIN publicoalvo pa ON p.publico_alvo_id = pa.id
+            WHERE p.evento_id = $1
+            ORDER BY p.criado_em DESC
+        `, [evento_id]);
+        return res.json(result.rows);
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ error: 'Erro interno ao recuperar pesquisas do evento.' });
+    }
+});
+
+app.get('/api/v2/relatorios/prestacao-contas', verificarToken, async (req, res) => {
+    const { data_inicio, data_fim } = req.query;
+    try {
+        let query = `
+            SELECT e.id, e.titulo, e.data_evento, e.carga_horaria, e.palestrante, e.hora_inicio, e.hora_fim,
+                   l.nome as local_nome,
+                   COUNT(f.id) as total_participantes
+            FROM eventos e
+            LEFT JOIN locais l ON e.local_id = l.id
+            LEFT JOIN frequencias f ON e.id = f.evento_id
+        `;
+        const params = [];
+        if (data_inicio && data_fim) {
+            query += ` WHERE e.data_evento BETWEEN $1 AND $2 `;
+            params.push(data_inicio, data_fim);
+        }
+        query += ` GROUP BY e.id, l.nome ORDER BY e.data_evento DESC, e.hora_inicio DESC `;
+        const result = await pool.query(query, params);
+        return res.json(result.rows);
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ error: 'Erro interno ao gerar relatório de prestação de contas.' });
+    }
+});
+
+app.get('/api/v2/relatorios/log-frequencia', verificarToken, async (req, res) => {
+    const { data_inicio, data_fim, evento_id } = req.query;
+    try {
+        let query = `
+            SELECT f.*, p.nome_completo as participante_nome, e.titulo as evento_titulo, l.nome as local_nome
+            FROM frequencias f
+            JOIN participantes p ON f.participante_id = p.id
+            JOIN eventos e ON f.evento_id = e.id
+            LEFT JOIN locais l ON e.local_id = l.id
+            WHERE 1=1
+        `;
+        const params = [];
+        let paramCount = 1;
+        if (data_inicio && data_fim) {
+            query += ` AND e.data_evento BETWEEN $${paramCount} AND $${paramCount + 1} `;
+            params.push(data_inicio, data_fim);
+            paramCount += 2;
+        }
+        if (evento_id) {
+            query += ` AND f.evento_id = $${paramCount} `;
+            params.push(evento_id);
+            paramCount++;
+        }
+        query += ` ORDER BY f.data_entrada DESC `;
+        const result = await pool.query(query, params);
+        return res.json(result.rows);
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ error: 'Erro interno ao recuperar log de frequências.' });
+    }
+});
+
+app.get('/api/v2/relatorios/log-fraudes', verificarToken, async (req, res) => {
+    const { data_inicio, data_fim } = req.query;
+    try {
+        let query = `
+            SELECT lf.*, e.titulo as evento_titulo, e.data_evento
+            FROM log_fraudes lf
+            JOIN eventos e ON lf.evento_id = e.id
+            WHERE 1=1
+        `;
+        const params = [];
+        if (data_inicio && data_fim) {
+            query += ` AND e.data_evento BETWEEN $1 AND $2 `;
+            params.push(data_inicio, data_fim);
+        }
+        query += ` ORDER BY lf.data_tentativa DESC `;
+        const result = await pool.query(query, params);
+        return res.json(result.rows);
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ error: 'Erro interno ao recuperar log de fraudes.' });
+    }
+});
+
+app.use((req, res) => {
+    return res.status(404).json({ error: 'Rota não encontrada no servidor.' });
+});
+
+app.use((err, req, res, next) => {
+    console.error(err.stack);
+    return res.status(500).json({ error: 'Ocorreu um erro interno crítico no servidor.' });
+});
+
 app.listen(PORT, () => {
-  console.log(`🚀 Servidor backend rodando perfeitamente na porta ${PORT}`);
+    console.log(`Servidor ativo na porta ${PORT}`);
 });

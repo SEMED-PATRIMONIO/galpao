@@ -600,6 +600,62 @@ app.get('/api/admin/relatorio-geral', verificarToken, async (req, res) => {
     }
 });
 
+// =================================================================
+// CAMADA DE COMPATIBILIDADE PARA O FRONT-END ANTERIOR (RESOLVE 404)
+// =================================================================
+
+// 1. Rota de compatibilidade para Professores/Participantes
+app.get('/api/admin/professores', async (req, res) => {
+    try {
+        // Busca os participantes para abastecer a listagem do painel
+        const result = await pool.query("SELECT * FROM participantes ORDER BY id ASC");
+        return res.json(result.rows);
+    } catch (error) {
+        console.error('Erro na rota antiga /api/admin/professores:', error);
+        return res.status(500).json({ error: 'Erro interno ao recuperar professores.' });
+    }
+});
+
+// 2. Rota de compatibilidade para Eventos
+app.get('/api/admin/eventos', async (req, res) => {
+    try {
+        // Retorna os eventos com o nome do local correspondente, evitando quebras
+        const query = `
+            SELECT e.*, l.nome as local_nome 
+            FROM eventos e
+            LEFT JOIN locais l ON e.local_id = l.id
+            ORDER BY e.data_evento DESC, e.hora_inicio DESC
+        `;
+        const result = await pool.query(query);
+        return res.json(result.rows);
+    } catch (error) {
+        console.error('Erro na rota antiga /api/admin/eventos:', error);
+        return res.status(500).json({ error: 'Erro interno ao recuperar eventos.' });
+    }
+});
+
+// 3. Rota de compatibilidade para o Relatório Geral
+app.get('/api/admin/relatorio-geral', async (req, res) => {
+    try {
+        // Agrupa os dados volumétricos que o dashboard antigo renderiza na tabela
+        const query = `
+            SELECT e.id, e.titulo, e.data_evento, e.carga_horaria, e.palestrante,
+                   l.nome as local_nome,
+                   COUNT(f.id) as total_participantes
+            FROM eventos e
+            LEFT JOIN locais l ON e.local_id = l.id
+            LEFT JOIN frequencias f ON e.id = f.evento_id
+            GROUP BY e.id, l.nome
+            ORDER BY e.data_evento DESC
+        `;
+        const result = await pool.query(query);
+        return res.json(result.rows);
+    } catch (error) {
+        console.error('Erro na rota antiga /api/admin/relatorio-geral:', error);
+        return res.status(500).json({ error: 'Erro interno ao gerar relatório geral.' });
+    }
+});
+
 // Tratamento de Rotas não localizadas
 app.use((req, res) => res.status(404).json({ error: 'Endpoint não localizado no servidor Formar v4.' }));
 

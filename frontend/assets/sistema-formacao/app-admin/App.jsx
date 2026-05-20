@@ -588,7 +588,7 @@ export default function App() {
                                     </div>
                                     <label style={estilos.rotulo}>Demarque no Mapa de Queimados:</label>
                                     <div id="mapa-cadastro-local" style={{ height: 220, borderRadius: 8, border: '1px solid #cbd5e1', backgroundColor: '#f8fafc' }}></div>
-                                    <button type="submit" style={estilos.btnPrimario} style={{ marginTop: 10, ...estilos.btnPrimario }}>SALVAR LOCALIZAÇÃO GEOGRÁFICA</button>
+                                    <button type="submit" style={estilos.btnPrimario} >SALVAR LOCALIZAÇÃO GEOGRÁFICA</button>
                                 </form>
                             </div>
                         </div>

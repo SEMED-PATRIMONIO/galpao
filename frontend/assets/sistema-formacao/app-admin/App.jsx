@@ -1,6 +1,20 @@
 import React, { useState, useEffect } from 'react';
 
 export default function App() {
+    // FUNÇÃO AUXILIAR BLINDADA PARA LER O LOCALSTORAGE SEM QUEBRAR A TELA
+    const obterUsuarioSeguro = () => {
+        try {
+            const dadosSalvos = localStorage.getItem('admin_user');
+            if (!dadosSalvos) return null;
+            // Se for apenas uma string simples (como "Sandro"), o JSON.parse vai falhar e cair no catch
+            return JSON.parse(dadosSalvos);
+        } catch (e) {
+            console.warn("Detectado dado inválido no localStorage, limpando...", e);
+            localStorage.removeItem('admin_user');
+            localStorage.removeItem('admin_token');
+            return null;
+        }
+    };
     const [token, setToken] = useState(localStorage.getItem('admin_token') || null);
     const [user, setUser] = useState(JSON.parse(localStorage.getItem('admin_user')) || null);
     const [view, setView] = useState('eventos');

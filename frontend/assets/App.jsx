@@ -292,9 +292,17 @@ export default function App() {
         return (
             <div style={estilos.telaLogin}>
                 <div style={estilos.caixaLogin}>
-                    <div style={estilos.logoInstitucional}>FORMAÇÕES</div>
-                    <h2 style={estilos.tituloLogin}>Painel Administrativo</h2>
+                    
+                    {/* Logotipo pequena centralizada acima do título */}
+                    <img 
+                        src="/logap.png" 
+                        alt="Logo" 
+                        style={{ height: '45px', objectFit: 'contain', marginBottom: '15px', display: 'inline-block' }} />
+                    {/* Título alterado para FORMAÇÕES em maiúsculo e negrito */}
+                    <h2 style={{ ...estilos.tituloLogin, fontWeight: '900', letterSpacing: '0.5px' }}>FORMAÇÕES</h2>
+                    
                     {erro && <div style={estilos.erroBox}>{erro}</div>}
+                    
                     <form onSubmit={lidarComLogin} style={estilos.formulario}>
                         <div style={estilos.campoGrupo}>
                             <label style={estilos.rotulo}>Usuário</label>
@@ -307,20 +315,19 @@ export default function App() {
                         <button type="submit" style={estilos.btnPrimario}>ENTRAR</button>
                     </form>
                 </div>
+                {/* Rodapé institucional disfarçado e centralizado */}
+                <div style={{ position: 'absolute', bottom: '15px', left: 0, right: 0, textAlign: 'center', color: '#64748b', fontSize: '11px', opacity: 0.7, padding: '0 10px', pointerEvents: 'none' }}>
+                    Desenvolvido pela Subsecretaria Adjunta de Inovação e Tecnologia - SEMED - Queimados/RJ
+                </div>
             </div>
         );
     }
 
     return (
         <div style={estilos.layoutPrincipal}>
-                <div style={estilos.barraLateral}>
-                <div style={{ width: '260px', backgroundColor: '#0f172a', color: '#fff', display: 'flex', flexDirection: 'column', padding: '20px' }}></div>
-                <div style={{ marginBottom: '30px', textAlign: 'center', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                    <img 
-                        src="/logap.png" 
-                        alt="Logo Formar" 
-                        style={{ height: '40px', objectFit: 'contain' }} 
-                    />
+            <div style={estilos.barraLateral}>
+                <div style={{ marginBottom: '30px', textAlign: 'center', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '5px 0' }}>
+                    <img src="/logap.png" alt="Logo Painel" style={{ height: '38px', objectFit: 'contain' }} />
                 </div>
                 <div style={estilos.usuarioStatus}>Logado como: {user?.usuario}</div>
                 <div style={view === 'eventos' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('eventos'); setDadosEstatisticos(null); }}>Formações</div>
@@ -679,10 +686,31 @@ export default function App() {
 }
 
 const estilos = {
-    telaLogin: { display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', backgroundColor: '#f8fafc' },
-    caixaLogin: { backgroundColor: '#fff', padding: 30, borderRadius: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', width: '100%', maxWidth: 400 },
+    telaLogin: { 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        minHeight: '100vh', 
+        backgroundColor: '#0f172a', // Alterado para o azul escuro conforme solicitado
+        padding: '20px',
+        position: 'relative' // Necessário para fixar o rodapé disfarçado
+    },
+    caixaLogin: { 
+        backgroundColor: '#fff', 
+        padding: '30px', 
+        borderRadius: 12, 
+        width: '100%', 
+        maxWidth: 360, 
+        boxShadow: '0 10px 25px -5px rgba(0,0,0,0.3)', 
+        textAlign: 'center' 
+    },
     logoInstitucional: { fontSize: 20, fontWeight: '800', color: '#1e3a8a', textAlign: 'center', marginBottom: 5 },
-    tituloLogin: { fontSize: 14, color: '#475569', textAlign: 'center', marginBottom: 20 },
+    tituloLogin: { 
+        fontSize: 22, 
+        color: '#0f172a', // Alterado para combinar com o fundo escuro da tela
+        marginBottom: 20, 
+        textAlign: 'center' 
+    },
     formulario: { display: 'flex', flexDirection: 'column', gap: 12 },
     campoGrupo: { display: 'flex', flexDirection: 'column', gap: 4 },
     rotulo: { fontSize: 11, fontWeight: '700', color: '#475569', textTransform: 'uppercase' },

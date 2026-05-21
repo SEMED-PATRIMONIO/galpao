@@ -237,13 +237,22 @@ app.post('/api/v2/presenca/checar-status', async (req, res) => {
         if (resDisp.rows.length === 0) return res.status(401).json({ error: 'Aparelho desvinculado.' });
         const disp = resDisp.rows[0];
 
-        const resEv = await pool.query('SELECT * FROM eventos WHERE id = $1', [evento_id]);
+        // CORREÇÃO: Busca a geolocalização correta do local da formação
+        const resEv = await pool.query(`
+            SELECT e.*, 
+                   COALESCE(l.latitude, e.latitude) as lat_real, 
+                   COALESCE(l.longitude, e.longitude) as lng_real
+            FROM eventos e
+            LEFT JOIN locais l ON e.local_id = l.id
+            WHERE e.id = $1
+        `, [evento_id]);
+
         if (resEv.rows.length === 0) return res.status(404).json({ error: 'Formação não localizada.' });
         const ev = resEv.rows[0];
 
-        const dist = calcularDistancia(latitude, longitude, parseFloat(ev.latitude), parseFloat(ev.longitude));
+        // Calcula a distância usando os dados reais do local (id 7)
+        const dist = calcularDistancia(latitude, longitude, parseFloat(ev.lat_real), parseFloat(ev.lng_real));
         if (dist > 60) {
-            // AJUSTADO: Usando lat_tentativa, lng_tentativa e removendo distancia_calculada
             await pool.query(`
                 INSERT INTO log_fraudes (matricula, evento_id, motivo, lat_tentativa, lng_tentativa)
                 VALUES ($1, $2, 'FORA_DO_RAIO_PERMITIDO', $3, $4)

@@ -223,7 +223,25 @@ export default function App() {
             let url = `/api/v2/${view}`;
             const metodo = isEditando ? 'PUT' : 'POST';
             const endpoint = isEditando ? `${url}/${selecionado.id}` : url;
-            await apiFetch(endpoint, { method: metodo, body: JSON.stringify(form) });
+            
+            // CORREÇÃO B: Define qual corpo de dados enviar
+            let dadosParaEnviar = form;
+
+            // Se o usuário estiver salvando um Evento, injeta os dados reais salvos no local
+            if (view === 'eventos') {
+                const localSelecionado = locaisDisponiveis.find(l => l.id === parseInt(form.local_id));
+                dadosParaEnviar = {
+                    ...form,
+                    palestrante: form.palestrante || '',
+                    endereco: localSelecionado ? localSelecionado.endereco : (form.endereco || ''),
+                    latitude: localSelecionado ? localSelecionado.latitude : (form.latitude || null),
+                    longitude: localSelecionado ? localSelecionado.longitude : (form.longitude || null)
+                };
+            }
+
+            // Enviando o objeto corrigido com as coordenadas do mapa injetadas
+            await apiFetch(endpoint, { method: metodo, body: JSON.stringify(dadosParaEnviar) });
+            
             setForm({});
             setIsEditando(false);
             setSelecionado(null);
@@ -292,9 +310,17 @@ export default function App() {
         return (
             <div style={estilos.telaLogin}>
                 <div style={estilos.caixaLogin}>
-                    <div style={estilos.logoInstitucional}>formar.paiva.api.br</div>
-                    <h2 style={estilos.tituloLogin}>Painel Administrativo</h2>
+                    
+                    {/* Logotipo pequena centralizada acima do título */}
+                    <img 
+                        src="/logap.png" 
+                        alt="Logo" 
+                        style={{ height: '45px', objectFit: 'contain', marginBottom: '15px', display: 'inline-block' }} />
+                    {/* Título alterado para FORMAÇÕES em maiúsculo e negrito */}
+                    <h2 style={{ ...estilos.tituloLogin, fontWeight: '900', letterSpacing: '0.5px' }}>FORMAÇÕES</h2>
+                    
                     {erro && <div style={estilos.erroBox}>{erro}</div>}
+                    
                     <form onSubmit={lidarComLogin} style={estilos.formulario}>
                         <div style={estilos.campoGrupo}>
                             <label style={estilos.rotulo}>Usuário</label>
@@ -304,8 +330,12 @@ export default function App() {
                             <label style={estilos.rotulo}>Senha</label>
                             <input type="password" style={estilos.entrada} value={senhaInput} onChange={e => setSenhaInput(e.target.value)} required />
                         </div>
-                        <button type="submit" style={estilos.btnPrimario}>ENTRAR NO SISTEMA</button>
+                        <button type="submit" style={estilos.btnPrimario}>ENTRAR</button>
                     </form>
+                </div>
+                {/* Rodapé institucional disfarçado e centralizado */}
+                <div style={{ position: 'absolute', bottom: '15px', left: 0, right: 0, textAlign: 'center', color: '#64748b', fontSize: '11px', opacity: 0.7, padding: '0 10px', pointerEvents: 'none' }}>
+                    Desenvolvido pela Subsecretaria Adjunta de Inovação e Tecnologia - SEMED - Queimados/RJ
                 </div>
             </div>
         );
@@ -314,7 +344,9 @@ export default function App() {
     return (
         <div style={estilos.layoutPrincipal}>
             <div style={estilos.barraLateral}>
-                <div style={estilos.sidebarLogo}>PAINEL FORMAR</div>
+                <div style={{ marginBottom: '30px', textAlign: 'center', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '5px 0' }}>
+                    <img src="/logap.png" alt="Logo Painel" style={{ height: '38px', objectFit: 'contain' }} />
+                </div>
                 <div style={estilos.usuarioStatus}>Logado como: {user?.usuario}</div>
                 <div style={view === 'eventos' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('eventos'); setDadosEstatisticos(null); }}>Formações</div>
                 <div style={view === 'locais' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('locais'); setDadosEstatisticos(null); setMapaCarregado(false); }}>Locais</div>
@@ -362,11 +394,34 @@ export default function App() {
                             </table>
                         </div>
                         <div style={estilos.colunaDireita}>
-                            <form onSubmit={lidarComSubmissaoForm} style={estilos.formulario}>
+                            <form 
+                                onSubmit={(e) => {
+                                    e.preventDefault();
+                                    // CORREÇÃO IMPORTANTÍSSIMA: injeta automaticamente endereço, latitude e longitude com base no local_id selecionado
+                                    const localSelecionado = locaisDisponiveis.find(l => l.id === parseInt(form.local_id));
+                                    const formInjetado = {
+                                        ...form,
+                                        palestrante: form.palestrante || '',
+                                        endereco: localSelecionado ? localSelecionado.endereco : '',
+                                        latitude: localSelecionado ? localSelecionado.latitude : null,
+                                        longitude: localSelecionado ? localSelecionado.longitude : null
+                                    };
+                                    // Passa o formulário preenchido com as coordenadas certas para a função padrão
+                                    lidarComSubmissaoForm({ ...e, target: { ...e.target, value: formInjetado } });
+                                }} 
+                                style={estilos.formulario}
+                            >
                                 <div style={estilos.campoGrupo}>
                                     <label style={estilos.rotulo}>Título</label>
                                     <input type="text" style={estilos.entrada} value={form.titulo || ''} onChange={e => setForm({...form, titulo: e.target.value})} required />
                                 </div>
+                                
+                                {/* ADICIONADO: Campo visual do Palestrante integrado perfeitamente ao seu formulário */}
+                                <div style={estilos.campoGrupo}>
+                                    <label style={estilos.rotulo}>Palestrante (Opcional)</label>
+                                    <input type="text" style={estilos.entrada} value={form.palestrante || ''} onChange={e => setForm({...form, palestrante: e.target.value})} placeholder="Nome do palestrante" />
+                                </div>
+
                                 <div style={estilos.campoGrupo}>
                                     <label style={estilos.rotulo}>Data</label>
                                     <input type="date" style={estilos.entrada} value={form.data_evento || ''} onChange={e => setForm({...form, data_evento: e.target.value})} required />
@@ -672,10 +727,31 @@ export default function App() {
 }
 
 const estilos = {
-    telaLogin: { display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', backgroundColor: '#f8fafc' },
-    caixaLogin: { backgroundColor: '#fff', padding: 30, borderRadius: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', width: '100%', maxWidth: 400 },
+    telaLogin: { 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        minHeight: '100vh', 
+        backgroundColor: '#0f172a', // Alterado para o azul escuro conforme solicitado
+        padding: '20px',
+        position: 'relative' // Necessário para fixar o rodapé disfarçado
+    },
+    caixaLogin: { 
+        backgroundColor: '#fff', 
+        padding: '30px', 
+        borderRadius: 12, 
+        width: '100%', 
+        maxWidth: 360, 
+        boxShadow: '0 10px 25px -5px rgba(0,0,0,0.3)', 
+        textAlign: 'center' 
+    },
     logoInstitucional: { fontSize: 20, fontWeight: '800', color: '#1e3a8a', textAlign: 'center', marginBottom: 5 },
-    tituloLogin: { fontSize: 14, color: '#475569', textAlign: 'center', marginBottom: 20 },
+    tituloLogin: { 
+        fontSize: 22, 
+        color: '#0f172a', // Alterado para combinar com o fundo escuro da tela
+        marginBottom: 20, 
+        textAlign: 'center' 
+    },
     formulario: { display: 'flex', flexDirection: 'column', gap: 12 },
     campoGrupo: { display: 'flex', flexDirection: 'column', gap: 4 },
     rotulo: { fontSize: 11, fontWeight: '700', color: '#475569', textTransform: 'uppercase' },

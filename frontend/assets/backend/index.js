@@ -38,47 +38,54 @@ const calcularDistancia = (lat1, lon1, lat2, lon2) => {
     return R * c;
 };
 
+// ==========================================
+// FUNÇÕES AUXILIARES DE DATA, HORA E FUSO
+// ==========================================
+const obterAgoraBrasilia = () => {
+    const d = new Date();
+    const utc = d.getTime() + (d.getTimezoneOffset() * 60000);
+    const dataBrasilia = new Date(utc + (3600000 * -3)); // Fuso -03:00
+    
+    const ano = dataBrasilia.getFullYear();
+    const mes = String(dataBrasilia.getMonth() + 1).padStart(2, '0');
+    const dia = String(dataBrasilia.getDate()).padStart(2, '0');
+    
+    return {
+        dataStr: `${ano}-${mes}-${dia}`,
+        minutosAbsolutos: (dataBrasilia.getHours() * 60) + dataBrasilia.getMinutes()
+    };
+};
+
+const paraMinutos = (timeStr) => {
+    if (!timeStr) return 0;
+    const partes = timeStr.split(':');
+    return (parseInt(partes[0], 10) * 60) + parseInt(partes[1], 10);
+};
+
+// ==========================================
+// ROTAS DE AUTENTICAÇÃO ADMINISTRATIVA
+// ==========================================
 app.post('/api/auth/login', async (req, res) => {
     const { usuario, senha } = req.body;
     try {
-        // 1. Busca o usuário no banco de dados pelo nome de usuário
         const result = await pool.query('SELECT * FROM usuarios WHERE usuario = $1', [usuario]);
-        
         if (result.rows.length === 0) {
             return res.status(401).json({ error: 'Credenciais inválidas.' });
         }
-        
         const user = result.rows[0];
-        
-        // 2. Verifica se o usuário está ativo no sistema
         if (!user.ativo) {
             return res.status(403).json({ error: 'Usuário inativo.' });
         }
-        
-        // 3. COMPARAÇÃO EM TEXTO LIMPO (Sem hash/criptografia, conforme sua preferência)
         if (user.senha !== senha) {
             return res.status(401).json({ error: 'Credenciais inválidas.' });
         }
-        
-        // 4. ATENÇÃO: No seu banco Postgres, a coluna 'deve_alterar_senha' vem como TRUE por padrão.
-        // Se deixarmos a linha abaixo ativa e o seu painel em React não tiver a tela de troca de senha pronta, 
-        // o sistema vai travar o login e não vai gerar o Token. 
-        // Deixei comentada abaixo para permitir o login direto imediato:
-        // if (user.deve_alterar_senha) return res.json({ deve_alterar_senha: true, usuario: user.usuario });
-        
-        // 5. Gera o token JWT de acesso administrativo (Válido por 8 horas)
         const token = jwt.sign(
             { id: user.id, usuario: user.usuario }, 
             JWT_SECRET, 
             { expiresIn: '8h' }
         );
-        
-        // Remove a senha do objeto antes de enviar para o navegador por segurança
         delete user.senha;
-        
-        // 6. Retorna a combinação exata esperada pelo frontend React (App.jsx)
         return res.json({ token, user });
-        
     } catch (error) {
         console.error("Erro interno no login:", error);
         return res.status(500).json({ error: 'Erro interno no servidor.' });
@@ -96,25 +103,29 @@ app.post('/api/auth/alterar-senha', async (req, res) => {
     }
 });
 
+// ==========================================
+// ROTAS DE GERENCIAMENTO DE DISPOSITIVOS
+// ==========================================
 app.get('/api/v2/dispositivo/status', async (req, res) => {
     const { device_token } = req.query;
     try {
         if (!device_token) return res.json({ atribuido: false });
-        const resDisp = await pool.query('SELECT * FROM dispositivos WHERE token = $1 AND ativo = true', [device_token]);
+        const resDisp = await pool.query('SELECT * FROM dispositivos WHERE device_token = $1 AND ativo = true', [device_token]);
         if (resDisp.rows.length === 0) return res.json({ atribuido: false });
         const disp = resDisp.rows[0];
         const resPart = await pool.query('SELECT * FROM participantes WHERE id = $1', [disp.participante_id]);
         return res.json({ atribuido: true, participante: resPart.rows[0] });
     } catch (error) {
+        console.error("Erro na rota /dispositivo/status:", error.message);
         return res.status(500).json({ error: 'Erro interno.' });
     }
 });
 
 app.post('/api/v2/dispositivo/associar', async (req, res) => {
-    const { matricula, nome, device_token } = req.body;
+    const { matricula, nome, device_token, token } = req.body;
     try {
-        const tokenDispositivo = device_token || uuidv4();
-        const resVerif = await pool.query('SELECT * FROM dispositivos WHERE token = $1 AND ativo = true', [tokenDispositivo]);
+        const tokenDispositivo = device_token || token || uuidv4();
+        const resVerif = await pool.query('SELECT * FROM dispositivos WHERE device_token = $1 AND ativo = true', [tokenDispositivo]);
         if (resVerif.rows.length > 0) {
             const vinculo = resVerif.rows[0];
             const partDono = await pool.query('SELECT * FROM participantes WHERE id = $1', [vinculo.participante_id]);
@@ -122,133 +133,219 @@ app.post('/api/v2/dispositivo/associar', async (req, res) => {
                 return res.status(400).json({ error: 'Este dispositivo já está associado a outro participante.' });
             }
         }
+
         let resPart = await pool.query('SELECT * FROM participantes WHERE matricula = $1', [matricula]);
         let participanteId;
         if (resPart.rows.length === 0) {
-            const novoPart = await pool.query('INSERT INTO participantes (nome_completo, matricula, ativo) VALUES ($1, $2, true) RETURNING id', [nome, matricula]);
+            const novoPart = await pool.query(
+                'INSERT INTO participantes (nome_completo, matricula, ativo) VALUES ($1, $2, true) RETURNING id', 
+                [nome, matricula]
+            );
             participanteId = novoPart.rows[0].id;
         } else {
             participanteId = resPart.rows[0].id;
         }
-        await pool.query('INSERT INTO dispositivos (token, participante_id, ativo) VALUES ($1, $2, true) ON CONFLICT (token) DO UPDATE SET participante_id = $2, ativo = true', [tokenDispositivo, participanteId]);
+
+        await pool.query(`
+            INSERT INTO dispositivos (device_token, participante_id, participante_matricula, ativo) 
+            VALUES ($1, $2, $3, true) 
+            ON CONFLICT (device_token) 
+            DO UPDATE SET participante_id = $2, participante_matricula = $3, ativo = true
+        `, [tokenDispositivo, participanteId, matricula]);
+
         const partFinal = await pool.query('SELECT * FROM participantes WHERE id = $1', [participanteId]);
-        return res.json({ device_token: tokenDispositivo, participante: partFinal.rows[0] });
+        return res.json({ 
+            device_token: tokenDispositivo, 
+            token: tokenDispositivo, 
+            participante: partFinal.rows[0] 
+        });
     } catch (error) {
-        return res.status(500).json({ error: 'Erro interno.' });
+        console.error("Erro crítico na rota /dispositivo/associar:", error.message);
+        return res.status(500).json({ error: 'Erro interno ao associar dispositivo.' });
     }
 });
 
-app.post('/api/v2/presenca/registrar', async (req, res) => {
-    const { device_token, latitude, longitude } = req.body;
+// ====================================================
+// FLUXO DE PRESENÇA REESTRUTURADO (NOVA ESTRATÉGIA V2)
+// ====================================================
+
+// 1. Inicialização: Verifica eventos no dia e horários permitidos (Sem exigir GPS imediato)
+app.post('/api/v2/presenca/inicializar', async (req, res) => {
+    const { device_token } = req.body;
     try {
-        const resDisp = await pool.query('SELECT * FROM dispositivos WHERE token = $1 AND ativo = true', [device_token]);
-        if (resDisp.rows.length === 0) return res.status(401).json({ error: 'Dispositivo inválido ou desvinculado.' });
+        if (!device_token) return res.status(400).json({ error: 'Identificação do dispositivo ausente.' });
+
+        const resDisp = await pool.query('SELECT * FROM dispositivos WHERE device_token = $1 AND ativo = true', [device_token]);
+        if (resDisp.rows.length === 0) return res.status(401).json({ error: 'Aparelho não associado.' });
         const disp = resDisp.rows[0];
-        const participanteId = disp.participante_id;
-        const resPart = await pool.query('SELECT * FROM participantes WHERE id = $1', [participanteId]);
-        const participante = resPart.rows[0];
-        
-        const resAtivo = await pool.query("SELECT * FROM frequencias WHERE participante_id = $1 AND data_saida IS NULL", [participanteId]);
-        if (resAtivo.rows.length > 0) {
-            const freqAtiva = resAtivo.rows[0];
-            const resEv = await pool.query("SELECT * FROM eventos WHERE id = $1", [freqAtiva.evento_id]);
-            const ev = resEv.rows[0];
-            const agora = new Date();
-            const entrada = new Date(freqAtiva.data_entrada);
-            const diffMinutos = Math.floor((agora - entrada) / 60000);
-            const terminoPrevisto = new Date(ev.data_evento.toISOString().substring(0,10) + 'T' + ev.hora_fim);
-            const limiteSaida = new Date(terminoPrevisto.getTime() + 40 * 60000);
-            
-            if (agora > limiteSaida) {
-                await pool.query("INSERT INTO log_fraudes (matricula, evento_id, motivo, distancia_calculada) VALUES ($1, $2, $3, $4)", [participante.matricula, ev.id, 'Esqueceu de registrar saída (Passou 40min do término prev.)', 0]);
-                await pool.query("DELETE FROM frequencias WHERE id = $1", [freqAtiva.id]);
-                return res.status(400).json({ error: 'Tempo limite expirado. Sua saída foi enviada para auditoria.' });
-            }
-            if (diffMinutos < 30) {
-                return res.json({ requere_confirmacao_30min: true, frequencia_id: freqAtiva.id, evento_titulo: ev.titulo });
-            }
-            return res.json({ requere_pesquisa: true, frequencia_id: freqAtiva.id, evento_id: ev.id, evento_titulo: ev.titulo, publico_alvo_id: ev.publico_alvo_id });
+
+        const { dataStr, minutosAbsolutos } = obterAgoraBrasilia();
+
+        // Puxa as coordenadas reais do local para validar no front
+        const resEventos = await pool.query(`
+            SELECT e.id, e.titulo, e.local, 
+                   l.nome as local_nome, l.endereco as local_endereco,
+                   COALESCE(l.latitude, e.latitude) as latitude, 
+                   COALESCE(l.longitude, e.longitude) as longitude,
+                   e.hora_inicio::text as h_ini, e.hora_fim::text as h_fim 
+            FROM eventos e
+            LEFT JOIN locais l ON e.local_id = l.id
+            WHERE e.data_evento = $1
+        `, [dataStr]);
+
+        if (resEventos.rows.length === 0) {
+            return res.json({ status: 'sem_eventos', mensagem: 'NÃO HÁ FORMAÇÃO AGENDADA PARA HOJE' });
         }
-        
-        const resEventos = await pool.query("SELECT * FROM eventos WHERE data_evento = CURRENT_DATE");
-        const eventosProximos = [];
-        for (const ev of resEventos.rows) {
-            const resLoc = await pool.query("SELECT * FROM locais WHERE id = $1", [ev.local_id]);
-            if (resLoc.rows.length > 0) {
-                const loc = resLoc.rows[0];
-                const dist = calcularDistancia(parseFloat(latitude), parseFloat(longitude), parseFloat(loc.latitude), parseFloat(loc.longitude));
-                if (dist <= 50) {
-                    eventosProximos.push({ ...ev, distancia: dist });
-                }
-            }
+
+        // REGRA REAJUSTADA: 20 minutos antes do início e até 40 minutos após o fim do evento
+        const elegiveisHorario = resEventos.rows.filter(ev => {
+            const minInicio = paraMinutos(ev.h_ini);
+            const minFim = paraMinutos(ev.h_fim);
+            return minutosAbsolutos >= (minInicio - 20) && minutosAbsolutos <= (minFim + 40);
+        });
+
+        if (elegiveisHorario.length === 0) {
+            await pool.query(`
+                INSERT INTO log_fraudes (matricula, evento_id, motivo)
+                VALUES ($1, $2, 'FORA_DA_FAIXA_DE_HORARIO_PERMITIDA')
+            `, [disp.participante_matricula, resEventos.rows[0].id]);
+
+            return res.json({ status: 'fora_horario', mensagem: 'FORA DA FAIXA DE HORÁRIO PERMITIDA' });
         }
-        if (eventosProximos.length === 0) {
-            await pool.query("INSERT INTO log_fraudes (matricula, evento_id, motivo, distancia_calculada) VALUES ($1, null, $2, $3)", [participante.matricula, 'Tentativa fora do raio de 50 metros', 0]);
-            return res.status(400).json({ error: 'Nenhum evento ativo encontrado no seu raio de localização.' });
-        }
-        if (eventosProximos.length > 1) {
-            return res.json({ multiplos_eventos: true, eventos: eventosProximos });
-        }
-        const evSelecionado = eventosProximos[0];
-        await pool.query("INSERT INTO frequencias (participante_id, evento_id, data_entrada) VALUES ($1, $2, NOW())", [participanteId, evSelecionado.id]);
-        return res.json({ sucesso: true, mensagem: `Chegada registrada com sucesso no evento: ${evSelecionado.titulo}` });
+
+        return res.json({
+            status: 'sucesso',
+            eventos: elegiveisHorario.map(e => ({
+                id: e.id,
+                titulo: e.titulo,
+                local: e.local_nome || e.local || 'Auditório',
+                endereco: e.local_endereco || e.endereco || '',
+                latitude: e.latitude,
+                longitude: e.longitude
+            }))
+        });
     } catch (error) {
-        return res.status(500).json({ error: 'Erro interno.' });
+        console.error("Erro em /presenca/inicializar:", error.message);
+        return res.status(500).json({ error: 'Erro interno ao inicializar verificação.' });
     }
 });
 
-app.post('/api/v2/presenca/registrar-especifico', async (req, res) => {
+// 2. Checagem de Status: Valida o raio de 60 metros e busca histórico de frequências do dia
+app.post('/api/v2/presenca/checar-status', async (req, res) => {
+    const { device_token, evento_id, latitude, longitude } = req.body;
+    try {
+        const resDisp = await pool.query('SELECT * FROM dispositivos WHERE device_token = $1 AND ativo = true', [device_token]);
+        if (resDisp.rows.length === 0) return res.status(401).json({ error: 'Aparelho desvinculado.' });
+        const disp = resDisp.rows[0];
+
+        const resEv = await pool.query(`
+            SELECT e.*, COALESCE(l.latitude, e.latitude) as lat_real, COALESCE(l.longitude, e.longitude) as lng_real
+            FROM eventos e
+            LEFT JOIN locais l ON e.local_id = l.id
+            WHERE e.id = $1
+        `, [evento_id]);
+
+        if (resEv.rows.length === 0) return res.status(404).json({ error: 'Formação não localizada.' });
+        const ev = resEv.rows[0];
+
+        const dist = calcularDistancia(latitude, longitude, parseFloat(ev.lat_real), parseFloat(ev.lng_real));
+        if (dist > 60) {
+            await pool.query(`
+                INSERT INTO log_fraudes (matricula, evento_id, motivo, lat_tentativa, lng_tentativa)
+                VALUES ($1, $2, 'FORA_DO_RAIO_PERMITIDO', $3, $4)
+            `, [disp.participante_matricula, evento_id, latitude, longitude]);
+
+            return res.status(400).json({ error: 'Não existe evento elegível neste local nesta faixa de horário.' });
+        }
+
+        const { dataStr } = obterAgoraBrasilia();
+
+        const resFreq = await pool.query(`
+            SELECT *, EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - data_entrada))/60 as minutos_decorridos
+            FROM frequencias
+            WHERE participante_id = $1 AND evento_id = $2 AND data_entrada::date = $3::date
+        `, [disp.participante_id, evento_id, dataStr]);
+
+        if (resFreq.rows.length > 0) {
+            const freq = resFreq.rows[0];
+            if (freq.data_saida !== null) {
+                return res.json({ status: 'completo', titulo: ev.titulo, local: ev.local });
+            } else {
+                return res.json({ 
+                    status: 'somente_entrada', 
+                    titulo: ev.titulo, 
+                    minutos: Math.floor(freq.minutos_decorridos || 0)
+                });
+            }
+        }
+
+        return res.json({ status: 'nenhum', titulo: ev.titulo });
+    } catch (error) {
+        return res.status(500).json({ error: 'Erro ao checar status de presença.' });
+    }
+});
+
+// 3. Confirmar Entrada Limpa
+app.post('/api/v2/presenca/confirmar-entrada', async (req, res) => {
     const { device_token, evento_id } = req.body;
     try {
-        const resDisp = await pool.query('SELECT * FROM dispositivos WHERE token = $1 AND ativo = true', [device_token]);
-        if (resDisp.rows.length === 0) return res.status(41).json({ error: 'Não autorizado.' });
-        await pool.query("INSERT INTO frequencias (participante_id, evento_id, data_entrada) VALUES ($1, $2, NOW())", [resDisp.rows[0].participante_id, evento_id]);
-        return res.json({ sucesso: true, mensagem: 'Chegada registrada no evento selecionado!' });
-    } catch (error) {
-        return res.status(500).json({ error: 'Erro interno.' });
-    }
-});
-
-app.post('/api/v2/presenca/confirmar-saida-precoce', async (req, res) => {
-    const { frequencia_id, device_token } = req.body;
-    try {
-        const resDisp = await pool.query('SELECT * FROM dispositivos WHERE token = $1 AND ativo = true', [device_token]);
-        if (resDisp.rows.length === 0) return res.status(401).json({ error: 'Não autorizado.' });
+        const resDisp = await pool.query('SELECT * FROM dispositivos WHERE device_token = $1 AND ativo = true', [device_token]);
         const disp = resDisp.rows[0];
-        const resPart = await pool.query('SELECT * FROM participantes WHERE id = $1', [disp.participante_id]);
-        const part = resPart.rows[0];
-        const resFreq = await pool.query('SELECT * FROM frequencias WHERE id = $1', [frequencia_id]);
-        const freq = resFreq.rows[0];
-        await pool.query("INSERT INTO log_fraudes (matricula, evento_id, motivo, distancia_calculada) VALUES ($1, $2, $3, $4)", [part.matricula, freq.evento_id, 'Saída precoce confirmada pelo usuário (Menos de 30 minutos de permanência)', 0]);
-        await pool.query("UPDATE frequencias SET data_saida = NOW(), permanencia = '00:00:00' WHERE id = $1", [frequencia_id]);
-        return res.json({ sucesso: true, mensagem: 'Saída registrada. Permanência zerada por não cumprir tempo mínimo.' });
+
+        await pool.query(`
+            INSERT INTO frequencias (participante_id, evento_id, data_entrada)
+            VALUES ($1, $2, CURRENT_TIMESTAMP)
+        `, [disp.participante_id, evento_id]);
+
+        return res.json({ status: 'sucesso', mensagem: 'REGISTRO EFETUADO!' });
     } catch (error) {
-        return res.status(500).json({ error: 'Erro interno.' });
+        console.error("Erro crítico em /presenca/confirmar-entrada:", error.message);
+        return res.status(500).json({ error: 'Erro ao registrar entrada.' });
     }
 });
 
-app.post('/api/v2/presenca/concluir-saida', async (req, res) => {
-    const { frequencia_id, estrelas, comentario, device_token, evento_id, publico_alvo_id } = req.body;
+// 4. Confirmar Saída + Pesquisa de Satisfação (Mapeada para os campos reais do banco)
+app.post('/api/v2/presenca/confirmar-saida', async (req, res) => {
+    const { device_token, evento_id, estrelas, comentario } = req.body;
     try {
-        const resDisp = await pool.query('SELECT * FROM dispositivos WHERE token = $1 AND ativo = true', [device_token]);
-        if (resDisp.rows.length === 0) return res.status(401).json({ error: 'Não autorizado.' });
+        const resDisp = await pool.query('SELECT * FROM dispositivos WHERE device_token = $1 AND ativo = true', [device_token]);
         const disp = resDisp.rows[0];
-        await pool.query("INSERT INTO pesquisa_satisfacao (participante_id, evento_id, estrelas, comentario, data_resposta, publico_alvo_id) VALUES ($1, $2, $3, $4, NOW(), $5)", [disp.participante_id, evento_id, estrelas, comentario, publico_alvo_id || null]);
-        const resFreq = await pool.query('SELECT * FROM frequencias WHERE id = $1', [frequencia_id]);
-        const entrada = new Date(resFreq.rows[0].data_entrada);
-        const agora = new Date();
-        const diffMs = agora - entrada;
-        const diffHrs = Math.floor(diffMs / 3600000);
-        const diffMins = Math.floor((diffMs % 3600000) / 60000);
-        const diffSecs = Math.floor((diffMs % 60000) / 1000);
-        const permanenciaStr = `${String(diffHrs).padStart(2, '0')}:${String(diffMins).padStart(2, '0')}:${String(diffSecs).padStart(2, '0')}`;
-        await pool.query("UPDATE frequencias SET data_saida = NOW(), permanencia = $1 WHERE id = $2", [permanenciaStr, frequencia_id]);
-        return res.json({ sucesso: true, mensagem: 'Saída e pesquisa computadas com sucesso!' });
+        const { dataStr } = obterAgoraBrasilia();
+
+        const resEv = await pool.query('SELECT * FROM eventos WHERE id = $1', [evento_id]);
+        const publicoAlvoId = resEv.rows.length > 0 ? resEv.rows[0].publico_alvo_id : null;
+
+        // Converte as estrelas numéricas no formato de texto exigido pelo CHECK constraint da sua tabela
+        let avaliacaoTexto = 'Ótimo';
+        if (estrelas == 1) avaliacaoTexto = 'Ruim';
+        else if (estrelas == 2) avaliacaoTexto = 'Regular';
+        else if (estrelas == 3) avaliacaoTexto = 'Bom';
+        else if (estrelas == 4) avaliacaoTexto = 'Muito Bom';
+
+        // Salva a pesquisa de satisfação usando as colunas reais: avaliacao e comentarios
+        await pool.query(`
+            INSERT INTO pesquisa_satisfacao (participante_id, evento_id, publico_alvo_id, avaliacao, comentarios, criado_em)
+            VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+        `, [disp.participante_id, evento_id, publicoAlvoId, avaliacaoTexto, comentario || '']);
+
+        // Atualiza a saída e calcula a permanência nativamente
+        await pool.query(`
+            UPDATE frequencias 
+            SET data_saida = CURRENT_TIMESTAMP,
+                permanencia = to_char(CURRENT_TIMESTAMP - data_entrada, 'HH24:MI:SS')
+            WHERE participante_id = $1 AND evento_id = $2 AND data_saida IS NULL AND data_entrada::date = $3::date
+        `, [disp.participante_id, evento_id, dataStr]);
+
+        return res.json({ status: 'sucesso', mensagem: 'REGISTRO EFETUADO!' });
     } catch (error) {
-        return res.status(500).json({ error: 'Erro interno.' });
+        console.error("Erro crítico em /presenca/confirmar-saida:", error.message);
+        return res.status(500).json({ error: 'Erro ao registrar saída.' });
     }
 });
 
+// ==========================================
+// OUTRAS ROTAS DO SISTEMA (DASHBOARD / RELATÓRIOS)
+// ==========================================
 app.get('/api/v2/eventos', verificarToken, async (req, res) => {
     try {
         const result = await pool.query('SELECT * FROM eventos ORDER BY data_evento DESC');
@@ -376,15 +473,22 @@ app.get('/api/v2/log-fraudes', verificarToken, async (req, res) => {
 app.get('/api/v2/pesquisa-satisfacao', verificarToken, async (req, res) => {
     try {
         const result = await pool.query(`
-            SELECT ps.*, p.nome_completo as participante_nome, e.titulo as evento_titulo 
+            SELECT 
+                ps.id,
+                ps.avaliacao as estrelas,
+                ps.comentarios as comentario,
+                ps.criado_em as data_resposta,
+                p.nome_completo as participante_nome,
+                e.titulo as evento_titulo
             FROM pesquisa_satisfacao ps
-            JOIN participantes p ON ps.participante_id = p.id
-            JOIN eventos e ON ps.evento_id = e.id
-            ORDER BY ps.data_resposta DESC
+            LEFT JOIN participantes p ON ps.participante_id = p.id
+            LEFT JOIN eventos e ON ps.evento_id = e.id
+            ORDER BY ps.criado_em DESC
         `);
         return res.json(result.rows);
     } catch (error) {
-        return res.status(500).json({ error: 'Erro.' });
+        console.error("Erro detalhado no Postgres (Pesquisa):", error.message);
+        return res.status(500).json({ error: 'Erro interno ao recuperar pesquisas de satisfação.' });
     }
 });
 

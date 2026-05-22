@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 
 const API_URL = window.location.origin.includes('localhost') ? 'http://localhost:3009' : '';
 
-// Helper para calcular a distância direto no cliente e ativar os botões dinamicamente
+// Helper para calcular a distância direto no cliente
 const calcularDistanciaCliente = (lat1, lon1, lat2, lon2) => {
     const R = 6371e3; // Raio da Terra em metros
     const phi1 = lat1 * Math.PI / 180;
@@ -17,13 +17,18 @@ const calcularDistanciaCliente = (lat1, lon1, lat2, lon2) => {
 };
 
 export default function App() {
-    const [deviceToken] = useState(localStorage.getItem('device_token') || 'token_teste_prof'); 
-    const [statusTela, setStatusTela] = useState('carregando'); // carregando | listagem | modal_pergunta | pesquisa | encerrado
+    // Inicializa pegando o token existente ou vazio para novos dispositivos
+    const [deviceToken, setDeviceToken] = useState(localStorage.getItem('device_token') || ''); 
+    const [statusTela, setStatusTela] = useState('carregando'); // carregando | vincular | listagem | modal_pergunta | pesquisa | encerrado
     const [eventos, setEventos] = useState([]);
     const [eventoSelecionado, setEventoSelecionado] = useState(null);
     const [coords, setCoords] = useState({ lat: null, lng: null });
     
-    // Estados de Alerta e Mensagens
+    // Formulário de Vínculo de Novo Aparelho
+    const [matriculaInput, setMatriculaInput] = useState('');
+    const [nomeInput, setNomeInput] = useState('');
+
+    // Estados de Alerta e Modais
     const [alerta, setAlerta] = useState({ visivel: false, msg: '', tipo: 'sucesso' });
     const [conteudoModal, setConteudoModal] = useState(null);
 
@@ -31,7 +36,7 @@ export default function App() {
     const [estrelas, setEstrelas] = useState(5);
     const [comentario, setComentario] = useState('');
 
-    // Disparador de Alerta de Exatos 8 Segundos
+    // Alerta temporizado estrito de 8 segundos
     const dispararAlerta8Segundos = (mensagem, tipo = 'erro', acaoPosterior = null) => {
         setAlerta({ visivel: true, msg: mensagem, tipo });
         setTimeout(() => {
@@ -40,54 +45,90 @@ export default function App() {
         }, 8000);
     };
 
-    // 1. Passo Inicial: Executado ao abrir o App
+    // Executado ao abrir o App para verificar se o aparelho já é conhecido ou novo
     useEffect(() => {
-        const inicializarApp = async () => {
-            try {
-                const res = await fetch(`${API_URL}/api/v2/presenca/inicializar`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ device_token: deviceToken })
-                });
-                const data = await res.json();
-
-                if (data.status === 'sem_eventos' || data.status === 'fora_horario') {
-                    dispararAlerta8Segundos(data.mensagem, 'erro', () => setStatusTela('encerrado'));
-                    return;
-                }
-
-                if (data.status === 'sucesso') {
-                    setEventos(data.eventos);
-                    setStatusTela('listagem');
-                    obterLocalizacaoEAtivarBotoes(data.eventos);
-                } else {
-                    dispararAlerta8Segundos(data.error || 'Erro de conexão.', 'erro');
-                }
-            } catch (err) {
-                dispararAlerta8Segundos('Não foi possível contatar o servidor.', 'erro');
-            }
-        };
-
-        inicializarApp();
+        if (!deviceToken) {
+            setStatusTela('vincular'); // Se não tem token, é um novo aparelho. Vai pro cadastro.
+            return;
+        }
+        executarInicializacao(deviceToken);
     }, [deviceToken]);
 
-    // 2. Passo de Localização: Ativa botões caso esteja dentro do raio de 60 metros
-    const obterLocalizacaoEAtivarBotoes = (listaEventosAtuais) => {
+    const executarInicializacao = async (tokenParaValidar) => {
+        try {
+            const res = await fetch(`${API_URL}/api/v2/presenca/inicializar`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ device_token: tokenParaValidar })
+            });
+
+            // CORREÇÃO CRÍTICA: Se retornar 401, limpa o token corrompido e abre a tela de cadastro
+            if (res.status === 401) {
+                localStorage.removeItem('device_token');
+                setDeviceToken('');
+                setStatusTela('vincular');
+                return;
+            }
+
+            const data = await res.json();
+
+            if (data.status === 'sem_eventos' || data.status === 'fora_horario') {
+                dispararAlerta8Segundos(data.mensagem, 'erro', () => setStatusTela('encerrado'));
+                return;
+            }
+
+            if (data.status === 'sucesso') {
+                setEventos(data.eventos);
+                setStatusTela('listagem');
+                obterLocalizacaoGPS();
+            } else {
+                dispararAlerta8Segundos(data.error || 'Erro de conexão.', 'erro');
+            }
+        } catch (err) {
+            dispararAlerta8Segundos('Não foi possível contatar o servidor.', 'erro');
+        }
+    };
+
+    // Ação para associar novos aparelhos em tempo real
+    const lidarComVinculoAparelho = async (e) => {
+        e.preventDefault();
+        try {
+            const res = await fetch(`${API_URL}/api/v2/dispositivo/associar`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ matricula: matriculaInput, nome: nomeInput })
+            });
+            const data = await res.json();
+
+            if (!res.ok) {
+                dispararAlerta8Segundos(data.error || 'Erro ao vincular.', 'erro');
+                return;
+            }
+
+            // Salva o novo token gerado
+            localStorage.setItem('device_token', data.device_token);
+            setDeviceToken(data.device_token);
+            dispararAlerta8Segundos('APARELHO VINCULADO COM SUCESSO!', 'sucesso');
+        } catch (err) {
+            dispararAlerta8Segundos('Erro de rede ao tentar associar dispositivo.', 'erro');
+        }
+    };
+
+    const obterLocalizacaoGPS = () => {
         navigator.geolocation.getCurrentPosition(
             (pos) => {
                 setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
             },
             () => {
-                dispararAlerta8Segundos('Por favor, conceda permissão de localização para ativar os eventos.', 'erro');
+                dispararAlerta8Segundos('Ative o GPS do seu dispositivo para validar a distância do local.', 'erro');
             },
             { enableHighAccuracy: true }
         );
     };
 
-    // 3. Ao Clicar em um Evento Elegível/Ativo
     const selecionarEvento = async (ev) => {
         if (!coords.lat || !coords.lng) {
-            dispararAlerta8Segundos('Aguardando coordenadas de localização...', 'erro');
+            dispararAlerta8Segundos('Aguardando capturar sua localização geográfica...', 'erro');
             return;
         }
 
@@ -105,19 +146,17 @@ export default function App() {
             const data = await res.json();
 
             if (!res.ok) {
-                dispararAlerta8Segundos(data.error || 'Erro na validação do local.', 'erro');
+                dispararAlerta8Segundos(data.error || 'Erro na validação.', 'erro');
                 return;
             }
 
             setEventoSelecionado(ev);
 
-            // Cenário 1: Entrada e Saída Concluídas
             if (data.status === 'completo') {
                 dispararAlerta8Segundos(`Já consta entrada e saída registrada para este evento:\n${data.titulo}\nLocal: ${data.local}`, 'sucesso');
                 return;
             }
 
-            // Cenário 2: Apenas Entrada feita previamente
             if (data.status === 'somente_entrada') {
                 if (data.minutos >= 30) {
                     setConteudoModal({
@@ -126,13 +165,11 @@ export default function App() {
                     });
                     setStatusTela('modal_pergunta');
                 } else {
-                    // Se tiver menos de 30 minutos, fecha sem alarde conforme a regra
-                    dispararAlerta8Segundos('Sua entrada já está registrada. Para registrar a saída, aguarde o tempo mínimo de permanência.', 'erro');
+                    dispararAlerta8Segundos('Sua entrada já está registrada. Para assinar a saída, aguarde o tempo mínimo de permanência.', 'erro');
                 }
                 return;
             }
 
-            // Cenário 3: Sem nenhum registro técnico prévio
             if (data.status === 'nenhum') {
                 setConteudoModal({
                     tipo: 'confirmar_entrada',
@@ -140,13 +177,11 @@ export default function App() {
                 });
                 setStatusTela('modal_pergunta');
             }
-
         } catch (err) {
             dispararAlerta8Segundos('Erro de comunicação com o servidor.', 'erro');
         }
     };
 
-    // Ações de Confirmação dos Modals
     const processarAceiteModal = async () => {
         if (conteudoModal.tipo === 'confirmar_entrada') {
             try {
@@ -162,41 +197,13 @@ export default function App() {
                 dispararAlerta8Segundos('Falha ao registrar entrada.', 'erro');
             }
         } else if (conteudoModal.tipo === 'pergunta_saida') {
-            // Avança para o formulário de satisfação
             setStatusTela('pesquisa');
         }
     };
 
-    const submeterPesquisaSaida = async (e) => {
-        e.preventDefault();
-        try {
-            const res = await fetch(`${API_URL}/api/v2/presenca/confirmar-saida`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    device_token: deviceToken,
-                    evento_id: eventoSelecionado.id,
-                    estrelas,
-                    comentario
-                })
-            });
-            if (res.ok) {
-                dispararAlerta8Segundos('REGISTRO EFETUADO!', 'sucesso', () => {
-                    setEstrelas(5);
-                    setComentario('');
-                    setStatusTela('listagem');
-                });
-            }
-        } catch (err) {
-            dispararAlerta8Segundos('Erro ao processar sua saída.', 'erro');
-        }
-    };
-
-    // Renderizadores de Interface Dinâmica
     return (
-        <div style={{ fontFamily: 'Arial, sans-serif', padding: '20px', maxWidth: '500px', margin: '0 auto', textAlign: 'center', color: '#333' }}>
+        <div style={{ fontFamily: 'Arial, sans-serif', padding: '20px', maxWidth: '450px', margin: '0 auto', textAlign: 'center', color: '#333' }}>
             
-            {/* ALERTAS FLUTUANTES DE 8 SEGUNDOS */}
             {alerta.visivel && (
                 <div style={{
                     backgroundColor: alerta.tipo === 'sucesso' ? '#d4edda' : '#f8d7da',
@@ -208,15 +215,35 @@ export default function App() {
                 </div>
             )}
 
-            {/* STATUS 1: CARREGANDO INICIAL */}
             {statusTela === 'carregando' && (
-                <div>
-                    <h3 style={{ color: '#0284c7' }}>Buscando eventos presenciais...</h3>
-                    <p style={{ color: '#666', fontSize: '14px' }}>Aguarde enquanto validamos as credenciais e listamos os agendamentos de hoje.</p>
+                <div style={{ padding: '30px' }}>
+                    <h3 style={{ color: '#0284c7' }}>Verificando conexão física...</h3>
+                    <p style={{ color: '#666', fontSize: '13px' }}>Aguarde enquanto estruturamos o painel de frequências.</p>
                 </div>
             )}
 
-            {/* STATUS 2: LISTAGEM DE BOTÕES INTUITIVOS */}
+            {/* NOVA TELA AUTOMÁTICA PARA NOVOS DISPOSITIVOS */}
+            {statusTela === 'vincular' && (
+                <form onSubmit={lidarComVinculoAparelho} style={{ border: '1px solid #cbd5e1', padding: '25px', borderRadius: '12px', backgroundColor: '#ffffff', textAlign: 'left' }}>
+                    <h2 style={{ color: '#1e3a8a', marginTop: 0, textAlign: 'center' }}>Vincular Aparelho</h2>
+                    <p style={{ color: '#64748b', fontSize: '13px', textAlign: 'center', marginBottom: '20px' }}>Identificamos que este dispositivo é novo. Cadastre-o para liberar a assinatura automática.</p>
+                    
+                    <div style={{ marginBottom: '15px' }}>
+                        <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '5px', fontSize: '13px' }}>Matrícula do Professor:</label>
+                        <input type="text" value={matriculaInput} onChange={e => setMatriculaInput(e.target.value)} placeholder="Ex: 15013/2" required style={{ width: '100%', padding: '11px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} />
+                    </div>
+
+                    <div style={{ marginBottom: '20px' }}>
+                        <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '5px', fontSize: '13px' }}>Nome Completo:</label>
+                        <input type="text" value={nomeInput} onChange={e => setNomeInput(e.target.value)} placeholder="Digite seu nome" required style={{ width: '100%', padding: '11px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} />
+                    </div>
+
+                    <button type="submit" style={{ width: '100%', padding: '14px', borderRadius: '6px', border: 'none', backgroundColor: '#1e3a8a', color: '#fff', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer' }}>
+                        VINCULAR MEU DISPOSITIVO
+                    </button>
+                </form>
+            )}
+
             {statusTela === 'listagem' && (
                 <div>
                     <h2 style={{ color: '#1e3a8a', marginBottom: '5px' }}>Portal de Presença</h2>
@@ -224,7 +251,6 @@ export default function App() {
                     
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                         {eventos.map(ev => {
-                            // Calcula se está dentro do raio no dispositivo do cliente
                             const distancia = coords.lat && coords.lng ? calcularDistanciaCliente(coords.lat, coords.lng, parseFloat(ev.latitude), parseFloat(ev.longitude)) : 999;
                             const estaNoRaio = distancia <= 60;
 
@@ -234,11 +260,7 @@ export default function App() {
                                     onClick={() => selecionarEvento(ev)}
                                     disabled={!estaNoRaio}
                                     style={{
-                                        padding: '16px',
-                                        borderRadius: '10px',
-                                        border: 'none',
-                                        fontWeight: 'bold',
-                                        fontSize: '15px',
+                                        padding: '16px', borderRadius: '10px', border: 'none', fontWeight: 'bold', fontSize: '15px',
                                         cursor: estaNoRaio ? 'pointer' : 'not-allowed',
                                         backgroundColor: estaNoRaio ? '#0284c7' : '#e5e7eb',
                                         color: estaNoRaio ? '#ffffff' : '#9ca3af',
@@ -258,69 +280,31 @@ export default function App() {
                 </div>
             )}
 
-            {/* STATUS 3: MODAL DE PERGUNTA AMIGÁVEL (ENTRADA OU SAÍDA) */}
             {statusTela === 'modal_pergunta' && conteudoModal && (
                 <div style={{ border: '1px solid #e2e8f0', padding: '25px', borderRadius: '12px', backgroundColor: '#f8fafc', marginTop: '20px' }}>
                     <p style={{ fontSize: '16px', fontWeight: '500', lineHeight: '1.5', marginBottom: '25px' }}>{conteudoModal.texto}</p>
                     <div style={{ display: 'flex', gap: '15px' }}>
-                        <button 
-                            onClick={processarAceiteModal}
-                            style={{ flex: 1, padding: '12px', borderRadius: '6px', border: 'none', backgroundColor: '#16a34a', color: '#fff', fontWeight: 'bold', cursor: 'pointer' }}
-                        >
-                            Sim, confirmar
-                        </button>
-                        <button 
-                            onClick={() => setStatusTela('listagem')}
-                            style={{ flex: 1, padding: '12px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#fff', color: '#64748b', fontWeight: 'bold', cursor: 'pointer' }}
-                        >
-                            Não, retornar
-                        </button>
+                        <button onClick={processarAceiteModal} style={{ flex: 1, padding: '12px', borderRadius: '6px', border: 'none', backgroundColor: '#16a34a', color: '#fff', fontWeight: 'bold', cursor: 'pointer' }}>Sim, confirmar</button>
+                        <button onClick={() => setStatusTela('listagem')} style={{ flex: 1, padding: '12px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#fff', color: '#64748b', fontWeight: 'bold', cursor: 'pointer' }}>Não, retornar</button>
                     </div>
                 </div>
             )}
 
-            {/* STATUS 4: FORMULÁRIO COMPACTO DE SATISFAÇÃO */}
             {statusTela === 'pesquisa' && (
                 <form onSubmit={submeterPesquisaSaida} style={{ border: '1px solid #e2e8f0', padding: '25px', borderRadius: '12px', textAlign: 'left', marginTop: '20px' }}>
                     <h3 style={{ marginTop: 0, color: '#1e3a8a' }}>Pesquisa de Satisfação</h3>
-                    <p style={{ fontSize: '13px', color: '#666' }}>Sua opinião é fundamental para avaliarmos a qualidade desta formação técnica.</p>
-                    
-                    <div style={{ marginBottom: '15px' }}>
-                        <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '5px', fontSize: '14px' }}>Como você avalia o evento?</label>
-                        <select 
-                            value={estrelas} 
-                            onChange={(e) => setEstrelas(Number(e.target.value))}
-                            style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
-                        >
-                            <option value="5">⭐⭐⭐⭐⭐ Excelência total</option>
-                            <option value="4">⭐⭐⭐⭐ Muito Bom</option>
-                            <option value="3">⭐⭐⭐ Atendeu às expectativas</option>
-                            <option value="2">⭐⭐ Regular</option>
-                            <option value="1">⭐ Precisa melhorar bastante</option>
-                        </select>
-                    </div>
-
-                    <div style={{ marginBottom: '20px' }}>
-                        <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '5px', fontSize: '14px' }}>Comentários adicionais (Opcional):</label>
-                        <textarea 
-                            rows="3"
-                            value={comentario}
-                            onChange={(e) => setComentario(e.target.value)}
-                            placeholder="Deixe aqui sugestões ou observações..."
-                            style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }}
-                        />
-                    </div>
-
-                    <button 
-                        type="submit"
-                        style={{ width: '100%', padding: '14px', borderRadius: '6px', border: 'none', backgroundColor: '#0284c7', color: '#fff', fontWeight: 'bold', fontSize: '15px', cursor: 'pointer' }}
-                    >
-                        Enviar Avaliação & Concluir Saída
-                    </button>
+                    <select value={estrelas} onChange={(e) => setEstrelas(Number(e.target.value))} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', marginBottom: '15px' }}>
+                        <option value="5">⭐⭐⭐⭐⭐ Excelência total</option>
+                        <option value="4">⭐⭐⭐⭐ Muito Bom</option>
+                        <option value="3">⭐⭐⭐ Atendeu às expectativas</option>
+                        <option value="2">⭐⭐ Regular</option>
+                        <option value="1">⭐ Precisa melhorar bastante</option>
+                    </select>
+                    <textarea rows="3" value={comentario} onChange={(e) => setComentario(e.target.value)} placeholder="Deixe aqui sugestões ou observações..." style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box', marginBottom: '15px' }} />
+                    <button type="submit" style={{ width: '100%', padding: '14px', borderRadius: '6px', border: 'none', backgroundColor: '#0284c7', color: '#fff', fontWeight: 'bold', fontSize: '15px', cursor: 'pointer' }}>Enviar Avaliação & Concluir Saída</button>
                 </form>
             )}
 
-            {/* STATUS 5: SESSÃO ENCERRADA AMIGAVELMENTE */}
             {statusTela === 'encerrado' && (
                 <div style={{ marginTop: '40px' }}>
                     <p style={{ color: '#9ca3af', fontStyle: 'italic' }}>Nenhuma operação ativa disponível no momento.</p>

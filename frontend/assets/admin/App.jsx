@@ -223,7 +223,26 @@ export default function App() {
             let url = `/api/v2/${view}`;
             const metodo = isEditando ? 'PUT' : 'POST';
             const endpoint = isEditando ? `${url}/${selecionado.id}` : url;
-            await apiFetch(endpoint, { method: metodo, body: JSON.stringify(form) });
+            
+            // CRÍTICA: Prepara os dados corretos para o envio
+            let dadosParaEnviar = { ...form };
+
+            // Se o usuário estiver salvando uma formação, busca as coordenadas do mapa na hora
+            if (view === 'eventos') {
+                const localSelecionado = locaisDisponiveis.find(l => l.id === parseInt(form.local_id));
+                dadosParaEnviar = {
+                    ...form,
+                    palestrante: form.palestrante || '',
+                    endereco: localSelecionado ? localSelecionado.endereco : '',
+                    latitude: localSelecionado ? localSelecionado.latitude : null,
+                    longitude: localSelecionado ? localSelecionado.longitude : null,
+                    local: localSelecionado ? localSelecionado.nome : '' // Preenche também a coluna "local" caso o banco use
+                };
+            }
+
+            // Envia o objeto modificado com o palestrante e geolocalização corretos
+            await apiFetch(endpoint, { method: metodo, body: JSON.stringify(dadosParaEnviar) });
+            
             setForm({});
             setIsEditando(false);
             setSelecionado(null);
@@ -385,7 +404,7 @@ export default function App() {
                                 <div style={estilos.campoGrupo}>
                                     <label style={estilos.rotulo}>Palestrante (Opcional)</label>
                                     <input type="text" style={estilos.entrada} value={form.palestrante || ''} onChange={e => setForm({...form, palestrante: e.target.value})} placeholder="Nome do palestrante" />
-                               </div>
+                                </div>
 
                                 <div style={estilos.campoGrupo}>
                                     <label style={estilos.rotulo}>Data</label>
@@ -404,20 +423,18 @@ export default function App() {
                                 </div>
 
                                 <div style={estilos.campoGrupo}>
-                                    <label style={estilos.rotulo}>Carga Horária Calculada</label>
+                                    <label style={estilos.rotulo}>Carga Horária</label>
                                     <input type="number" step="0.01" style={estilos.entrada} readOnly value={form.carga_horaria || ''} />
                                 </div>
 
                                 <div style={estilos.campoGrupo}>
-                                    <label style={estilos.rotulo}>Selecione o Local Cadastrado</label>
+                                    <label style={estilos.rotulo}>Local da Formação</label>
                                     <select 
                                         style={estilos.entrada} 
                                         value={form.local_id || ''} 
                                         onChange={e => {
                                             const idSelecionado = parseInt(e.target.value);
                                             const localEncontrado = locaisDisponiveis.find(l => l.id === idSelecionado);
-                                            
-                                            // INJEÇÃO AUTOMÁTICA EM TEMPO REAL AO SELECIONAR
                                             if (localEncontrado) {
                                                 setForm({
                                                     ...form,
@@ -432,41 +449,34 @@ export default function App() {
                                         }} 
                                         required
                                     >
-                                        <option value="">-- Escolha o Local --</option>
+                                        <option value="">-- Selecione o Local --</option>
                                         {locaisDisponiveis.map(l => <option key={l.id} value={l.id}>{l.nome}</option>)}
                                     </select>
                                 </div>
 
                                 <div style={estilos.campoGrupo}>
-                                    <option value="">-- Público-Alvo --</option>
+                                    <label style={estilos.rotulo}>Público-Alvo</label>
                                     <select style={estilos.entrada} value={form.publico_alvo_id || ''} onChange={e => setForm({...form, publico_alvo_id: e.target.value})} required>
                                         <option value="">-- Selecione o Público --</option>
                                         {publicosDisponiveis.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
                                     </select>
                                 </div>
 
-                                {/* CAMPOS DE AJUSTE GEOGRÁFICO OCULTOS / AUTO-PREENCHIDOS PARA ENVIO AO BANCO */}
-                                <input type="hidden" value={form.latitude || ''} />
-                                <input type="hidden" value={form.longitude || ''} />
-                                <input type="hidden" value={form.endereco || ''} />
-
                                 <button type="submit" style={estilos.btnPrimario}>SALVAR FORMAÇÃO</button>
                             </form>
 
-                            {/* MAPA DE PREVISÃO AMPLIADO E FOCADO EM QUEIMADOS */}
+                            {/* MAPA EXPANDIDO, CORRIGIDO E CENTRALIZADO EM QUEIMADOS */}
                             {form.latitude && form.longitude && (
                                 <div style={{ marginTop: '20px', borderRadius: '8px', overflow: 'hidden', border: '1px solid #cbd5e1' }}>
-                                    <div style={{ backgroundColor: '#f8fafc', padding: '10px', fontSize: '12px', fontWeight: 'bold', color: '#1e3a8a', textAlign: 'left', borderBottom: '1px solid #cbd5e1' }}>
-                                        📍 Coordenadas do Evento Sincronizadas
+                                    <div style={{ backgroundColor: '#f8fafc', padding: '10px', fontSize: '12px', fontWeight: 'bold', color: '#0f172a', textAlign: 'left', borderBottom: '1px solid #cbd5e1' }}>
+                                        📍 Localização Sincronizada no Painel
                                     </div>
                                     <iframe
                                         title="Mapa do Local Selecionado"
                                         width="100%"
-                                        height="320" // Mapa visivelmente maior conforme solicitado
+                                        height="350"
                                         frameBorder="0"
-                                        scrolling="no"
-                                        marginHeight="0"
-                                        marginWidth="0"
+                                        style={{ border: 0 }}
                                         src={`https://maps.google.com/maps?q=${form.latitude},${form.longitude}&z=16&output=embed`}
                                     />
                                 </div>

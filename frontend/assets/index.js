@@ -355,6 +355,9 @@ app.get('/api/v2/eventos', verificarToken, async (req, res) => {
     }
 });
 
+// ==========================================
+// ROTA POST: CADASTRO DE EVENTOS (CORRIGIDA)
+// ==========================================
 app.post('/api/v2/eventos', verificarToken, async (req, res) => {
     const { titulo, data_evento, carga_horaria, local_id, publico_alvo_id, hora_inicio, hora_fim, palestrante } = req.body;
     try {
@@ -362,7 +365,7 @@ app.post('/api/v2/eventos', verificarToken, async (req, res) => {
             return res.status(400).json({ error: 'Dados obrigatórios ausentes para agendamento.' });
         }
 
-        // Formata as horas estritamente em HH:MI para evitar qualquer rejeição do Postgres
+        // Garante formatação em HH:MI
         const limparHora = (h) => {
             if (!h) return '00:00';
             const partes = h.split(':');
@@ -372,10 +375,10 @@ app.post('/api/v2/eventos', verificarToken, async (req, res) => {
         const h_ini_limpa = limparHora(hora_inicio);
         const h_fim_limpa = limparHora(hora_fim);
 
-        // VALIDAÇÃO: Bloqueia conflito/sobreposição de horários no mesmo local e dia
+        // VALIDAÇÃO: Bloqueia conflito de horários no mesmo local e dia (Removido o campo 'ativo' inexistente)
         const conflito = await pool.query(`
             SELECT id, titulo FROM eventos 
-            WHERE local_id = $1::integer AND data_evento = $2::date AND ativo = true
+            WHERE local_id = $1::integer AND data_evento = $2::date
               AND (
                 ($3::time < hora_fim AND $4::time > hora_inicio)
               )
@@ -393,11 +396,11 @@ app.post('/api/v2/eventos', verificarToken, async (req, res) => {
             return res.status(400).json({ error: 'O local selecionado não foi encontrado no sistema.' });
         }
 
-        // Gravação garantida de todas as colunas que estavam ficando em branco
+        // Inserção estrita com as colunas reais fornecidas pelo seu \d eventos
         const result = await pool.query(`
             INSERT INTO eventos 
-            (titulo, data_evento, carga_horaria, local_id, publico_alvo_id, hora_inicio, hora_fim, palestrante, local, endereco, latitude, longitude, ativo) 
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, true) 
+            (titulo, data_evento, carga_horaria, local_id, publico_alvo_id, hora_inicio, hora_fim, palestrante, local, endereco, latitude, longitude) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) 
             RETURNING *
         `, [
             titulo, 
@@ -421,6 +424,9 @@ app.post('/api/v2/eventos', verificarToken, async (req, res) => {
     }
 });
 
+// ==========================================
+// ROTA PUT: EDIÇÃO DE EVENTOS (CORRIGIDA)
+// ==========================================
 app.put('/api/v2/eventos/:id', verificarToken, async (req, res) => {
     const { id } = req.params;
     const { titulo, data_evento, carga_horaria, local_id, publico_alvo_id, hora_inicio, hora_fim, palestrante } = req.body;
@@ -434,10 +440,10 @@ app.put('/api/v2/eventos/:id', verificarToken, async (req, res) => {
         const h_ini_limpa = limparHora(hora_inicio);
         const h_fim_limpa = limparHora(hora_fim);
 
-        // VALIDAÇÃO: Bloqueia conflitos ignorando o próprio ID que está sendo editado
+        // VALIDAÇÃO: Bloqueia conflitos ignorando o próprio ID que está sendo editado (Removido o campo 'ativo')
         const conflito = await pool.query(`
             SELECT id, titulo FROM eventos 
-            WHERE local_id = $1::integer AND data_evento = $2::date AND id <> $3::integer AND ativo = true
+            WHERE local_id = $1::integer AND data_evento = $2::date AND id <> $3::integer
               AND (
                 ($4::time < hora_fim AND $5::time > hora_inicio)
               )

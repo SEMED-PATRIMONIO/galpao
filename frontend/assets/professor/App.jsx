@@ -1,276 +1,309 @@
 import React, { useState, useEffect } from 'react';
 
-export default function App() {
-    const obterParticipanteSeguro = () => {
-        try {
-            const dadosSalvos = localStorage.getItem('prof_dados');
-            if (!dadosSalvos) return null;
-            return JSON.parse(dadosSalvos);
-        } catch (e) {
-            localStorage.removeItem('prof_dados');
-            return null;
-        }
-    };
+const API_URL = window.location.origin.includes('localhost') ? 'http://localhost:3009' : '';
 
-    const [view, setView] = useState('identificacao');
-    const [professor, setProfessor] = useState(obterParticipanteSeguro());
-    const [deviceToken, setDeviceToken] = useState(localStorage.getItem('device_token') || null);
+const calcularDistanciaCliente = (lat1, lon1, lat2, lon2) => {
+    const R = 6371e3;
+    const phi1 = lat1 * Math.PI / 180;
+    const phi2 = lat2 * Math.PI / 180;
+    const deltaPhi = (lat2 - lat1) * Math.PI / 180;
+    const deltaLambda = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
+              Math.cos(phi1) * Math.cos(phi2) *
+              Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+};
+
+export default function App() {
+    const [deviceToken, setDeviceToken] = useState(localStorage.getItem('device_token') || ''); 
+    const [statusTela, setStatusTela] = useState('carregando'); 
+    const [eventos, setEventos] = useState([]);
+    const [eventoSelecionado, setEventoSelecionado] = useState(null);
+    const [coords, setCoords] = useState({ lat: null, lng: null });
     
     const [matriculaInput, setMatriculaInput] = useState('');
     const [nomeInput, setNomeInput] = useState('');
-    
-    const [multiplosEventos, setMultiplosEventos] = useState([]);
-    const [fluxoSaida, setFluxoSaida] = useState(null);
-    const [estrelasPesquisa, setEstrelasPesquisa] = useState(5);
-    const [comentarioPesquisa, setComentarioPesquisa] = useState('');
-    
-    const [coords, setCoords] = useState({ lat: null, lng: null });
-    const [msgErro, setMsgErro] = useState('');
-    const [msgSucesso, setMsgSucesso] = useState('');
+
+    const [alerta, setAlerta] = useState({ visivel: false, msg: '', tipo: 'sucesso' });
+    const [conteudoModal, setConteudoModal] = useState(null);
+
+    const [estrelas, setEstrelas] = useState(5);
+    const [comentario, setComentario] = useState('');
+
+    const dispararAlerta8Segundos = (mensagem, tipo = 'erro', acaoPosterior = null) => {
+        setAlerta({ visivel: true, msg: mensagem, tipo });
+        setTimeout(() => {
+            setAlerta({ visivel: false, msg: '', tipo: 'sucesso' });
+            if (acaoPosterior) acaoPosterior();
+        }, 8000);
+    };
 
     useEffect(() => {
-        navigator.geolocation.getCurrentPosition(
-            (pos) => setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-            () => setMsgErro('Acesso à geolocalização negado ou indisponível.')
-        );
-        verificarStatusAparelho();
-    }, []);
+        if (!deviceToken) {
+            setStatusTela('vincular');
+            return;
+        }
+        executarInicializacao(deviceToken);
+    }, [deviceToken]);
 
-// Definição da URL oficial do seu backend para sincronização remota
-    const API_URL = 'https://qrcode.paiva.api.br';
-
-    const verificarStatusAparelho = async () => {
-        if (!deviceToken) return;
+    const executarInicializacao = async (tokenParaValidar) => {
         try {
-            const res = await fetch(`${API_URL}/api/v2/dispositivo/status?device_token=${deviceToken}`);
+            const res = await fetch(`${API_URL}/api/v2/presenca/inicializar`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ device_token: tokenParaValidar })
+            });
+
+            if (res.status === 401) {
+                localStorage.removeItem('device_token');
+                setDeviceToken('');
+                setStatusTela('vincular');
+                return;
+            }
+
             const data = await res.json();
-            if (data.atribuido) {
-                setProfessor(data.participante);
-                localStorage.setItem('prof_dados', JSON.stringify(data.participante));
-                setView('painel-presenca');
+
+            if (data.status === 'sem_eventos' || data.status === 'fora_horario') {
+                dispararAlerta8Segundos(data.mensagem, 'erro', () => setStatusTela('encerrado'));
+                return;
+            }
+
+            if (data.status === 'sucesso') {
+                setEventos(data.eventos);
+                setStatusTela('listagem');
+                obterLocalizacaoGPS();
             } else {
-                lidarComLimpezaGeral();
+                dispararAlerta8Segundos(data.error || 'Erro de conexão.', 'erro');
             }
         } catch (err) {
-            setMsgErro('Erro ao validar status do aparelho.');
+            dispararAlerta8Segundos('Não foi possível contatar o servidor.', 'erro');
         }
     };
 
-    const vincularAparelho = async (e) => {
+    const lidarComVinculoAparelho = async (e) => {
         e.preventDefault();
         try {
-            setMsgErro('');
             const res = await fetch(`${API_URL}/api/v2/dispositivo/associar`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ matricula: matriculaInput, nome: nomeInput, device_token: deviceToken })
+                body: JSON.stringify({ matricula: matriculaInput, nome: nomeInput })
             });
             const data = await res.json();
-            if (!res.ok) throw new Error(data.error);
-            
+
+            if (!res.ok) {
+                dispararAlerta8Segundos(data.error || 'Erro ao vincular.', 'erro');
+                return;
+            }
+
             localStorage.setItem('device_token', data.device_token);
-            localStorage.setItem('prof_dados', JSON.stringify(data.participante));
             setDeviceToken(data.device_token);
-            setProfessor(data.participante);
-            setView('painel-presenca');
-            setMsgSucesso('Aparelho associado com sucesso!');
-            setTimeout(() => setMsgSucesso(''), 5000);
+            dispararAlerta8Segundos('APARELHO VINCULADO COM SUCESSO!', 'sucesso');
         } catch (err) {
-            setMsgErro(err.message);
+            dispararAlerta8Segundos('Erro ao tentar associar dispositivo.', 'erro');
         }
     };
 
-    const dispararRegistroPresenca = () => {
+    const obterLocalizacaoGPS = () => {
+        navigator.geolocation.getCurrentPosition(
+            (pos) => { setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }); },
+            () => { dispararAlerta8Segundos('Ative o GPS para assinar a presença.', 'erro'); },
+            { enableHighAccuracy: true }
+        );
+    };
+
+    const selecionarEvento = async (ev) => {
         if (!coords.lat || !coords.lng) {
-            setMsgErro('Aguardando capturar sua localização exata. Tente novamente.');
+            dispararAlerta8Segundos('Aguardando localização...', 'erro');
             return;
         }
-        setMsgErro('');
-        navigator.geolocation.getCurrentPosition(async (pos) => {
+
+        try {
+            const res = await fetch(`${API_URL}/api/v2/presenca/checar-status`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    device_token: deviceToken,
+                    evento_id: ev.id,
+                    latitude: coords.lat,
+                    longitude: coords.lng
+                })
+            });
+            const data = await res.json();
+
+            if (!res.ok) {
+                dispararAlerta8Segundos(data.error || 'Erro na validação.', 'erro');
+                return;
+            }
+
+            setEventoSelecionado(ev);
+
+            if (data.status === 'completo') {
+                dispararAlerta8Segundos(`Já consta entrada e saída registrada para este evento:\n${data.titulo}\nLocal: ${data.local}`, 'sucesso');
+                return;
+            }
+
+            if (data.status === 'somente_entrada') {
+                setConteudoModal({
+                    tipo: 'pergunta_saida',
+                    texto: `Você já registrou a sua entrada nesta atividade. Confirma que está saindo da formação agora?`
+                });
+                setStatusTela('modal_pergunta');
+                return;
+            }
+
+            if (data.status === 'nenhum') {
+                setConteudoModal({
+                    tipo: 'confirmar_entrada',
+                    texto: `Deseja registrar sua entrada na formação: "${ev.titulo}"?`
+                });
+                setStatusTela('modal_pergunta');
+            }
+        } catch (err) {
+            dispararAlerta8Segundos('Erro de comunicação.', 'erro');
+        }
+    };
+
+    const processarAceiteModal = async () => {
+        if (conteudoModal.tipo === 'confirmar_entrada') {
             try {
-                const res = await fetch(`${API_URL}/api/v2/presenca/registrar`, {
+                const res = await fetch(`${API_URL}/api/v2/presenca/confirmar-entrada`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ device_token: deviceToken, latitude: pos.coords.latitude, longitude: pos.coords.longitude })
+                    body: JSON.stringify({ device_token: deviceToken, evento_id: eventoSelecionado.id })
                 });
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.error);
-
-                if (data.multiplos_eventos) {
-                    setMultiplosEventos(data.eventos);
-                    return;
+                if (res.ok) {
+                    dispararAlerta8Segundos('REGISTRO EFETUADO!', 'sucesso', () => setStatusTela('listagem'));
                 }
-                if (data.requere_confirmacao_30min) {
-                    setFluxoSaida({ tipo: 'precoce', frequencia_id: data.frequencia_id, titulo: data.evento_titulo });
-                    return;
-                }
-                if (data.requere_pesquisa) {
-                    setFluxoSaida({ tipo: 'pesquisa', frequencia_id: data.frequencia_id, evento_id: data.evento_id, titulo: data.evento_titulo, publico_alvo_id: data.publico_alvo_id });
-                    return;
-                }
-                
-                setMsgSucesso(data.mensagem);
-                setTimeout(() => setMsgSucesso(''), 5000);
-            } catch (err) {
-                setMsgErro(err.message);
+            } catch (e) {
+                dispararAlerta8Segundos('Falha ao registrar entrada.', 'erro');
             }
-        });
-    };
-
-    const registrarEventoEspecifico = async (eventoId) => {
-        try {
-            const res = await fetch(`${API_URL}/api/v2/presenca/registrar-especifico`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ device_token: deviceToken, evento_id: eventoId })
-            });
-            const data = await res.json();
-            setMultiplosEventos([]);
-            setMsgSucesso(data.mensagem);
-            setTimeout(() => setMsgSucesso(''), 5000);
-        } catch (err) {
-            setMsgErro('Erro ao registrar no evento.');
+        } else if (conteudoModal.tipo === 'pergunta_saida') {
+            setStatusTela('pesquisa'); // Redireciona corretamente para a pesquisa de satisfação
         }
     };
 
-    const processarSaidaPrecoce = async () => {
-        try {
-            const res = await fetch(`${API_URL}/api/v2/presenca/confirmar-saida-precoce`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ frequencia_id: fluxoSaida.frequencia_id, device_token: deviceToken })
-            });
-            const data = await res.json();
-            setMsgSucesso(data.mensagem);
-            setFluxoSaida(null);
-            setTimeout(() => setMsgSucesso(''), 5000);
-        } catch (err) {
-            setMsgErro(err.message);
-        }
-    };
-
-    const processarSaidaDefinitiva = async (e) => {
+    const submeterPesquisaSaida = async (e) => {
         e.preventDefault();
         try {
-            const res = await fetch(`${API_URL}/api/v2/presenca/concluir-saida`, {
+            const res = await fetch(`${API_URL}/api/v2/presenca/confirmar-saida`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ frequencia_id: fluxoSaida.frequencia_id, evento_id: fluxoSaida.evento_id, estrelas: estrelasPesquisa, comentario: comentarioPesquisa, device_token: deviceToken, publico_alvo_id: fluxoSaida.publico_alvo_id })
+                body: JSON.stringify({
+                    device_token: deviceToken,
+                    evento_id: eventoSelecionado.id,
+                    estrelas,
+                    comentario
+                })
             });
-            const data = await res.json();
-            setMsgSucesso(data.mensagem);
-            setFluxoSaida(null);
-            setComentarioPesquisa('');
-            setTimeout(() => setMsgSucesso(''), 5000);
+            if (res.ok) {
+                dispararAlerta8Segundos('REGISTRO EFETUADO!', 'sucesso', () => {
+                    setEstrelas(5);
+                    setComentario('');
+                    setStatusTela('listagem');
+                });
+            }
         } catch (err) {
-            setMsgErro(err.message);
+            dispararAlerta8Segundos('Erro ao processar sua saída.', 'erro');
         }
-    };
-
-    const lidarComLimpezaGeral = () => {
-        localStorage.removeItem('prof_dados');
-        localStorage.removeItem('device_token');
-        setProfessor(null);
-        setDeviceToken(null);
-        setView('identificacao');
-        setMultiplosEventos([]);
-        setFluxoSaida(null);
     };
 
     return (
-        <div style={estilos.containerMobile}>
-            <div style={estilos.wrapperMobile}>
-                <div style={estilos.marcaTopMobile}>qrcode.paiva.api.br</div>
-                
-                {msgErro && <div style={estilos.alertaErroMobile}>{msgErro}</div>}
-                {msgSucesso && <div style={estilos.alertaSucessoMobile}>{msgSucesso}</div>}
+        <div style={{ fontFamily: 'Arial, sans-serif', padding: '20px', maxWidth: '450px', margin: '0 auto', textAlign: 'center', color: '#333' }}>
+            {alerta.visivel && (
+                <div style={{
+                    backgroundColor: alerta.tipo === 'sucesso' ? '#d4edda' : '#f8d7da',
+                    color: alerta.tipo === 'sucesso' ? '#155724' : '#721c24',
+                    padding: '15px', borderRadius: '8px', marginBottom: '20px',
+                    fontWeight: 'bold', border: `1px solid ${alerta.tipo === 'sucesso' ? '#c3e6cb' : '#f5c6cb'}`
+                }}>
+                    {alerta.msg.split('\n').map((str, i) => <div key={i}>{str}</div>)}
+                </div>
+            )}
 
-                {view === 'identificacao' && (
-                    <form onSubmit={vinterAparelho} style={estilos.formMobile}>
-                        <h2 style={estilos.tituloSessaoMobile}>Vincular Dispositivo</h2>
-                        <p style={estilos.subtituloMobile}>Cadastre seu dispositivo para liberação de registros automáticos.</p>
-                        <input type="text" placeholder="Digite sua matrícula" style={estilos.inputMobile} value={matriculaInput} onChange={e => setMatriculaInput(e.target.value)} required />
-                        <input type="text" placeholder="Nome Completo" style={estilos.inputMobile} value={nomeInput} onChange={e => setNomeInput(e.target.value)} required />
-                        <button type="submit" style={estilos.btnAcaoMobile}>VINCULAR MEU DISPOSITIVO</button>
-                    </form>
-                )}
+            {statusTela === 'carregando' && (
+                <div style={{ padding: '30px' }}>
+                    <h3 style={{ color: '#0284c7' }}>Buscando formações agendadas...</h3>
+                </div>
+            )}
 
-                {view === 'painel-presenca' && (
-                    <div style={{ textAlign: 'center' }}>
-                        <div style={estilos.caixaInfoProfessor}>
-                            <h3 style={{ margin: 0, color: '#1e3a8a' }}>{professor?.nome_completo}</h3>
-                            <span style={{ fontSize: 13, color: '#64748b' }}>Matrícula vinculada: {professor?.matricula}</span>
-                        </div>
-
-                        {multiplosEventos.length > 0 && (
-                            <div style={estilos.caixaDilemaEventos}>
-                                <h4 style={{ margin: '0 0 10px 0', color: '#b45309' }}>Mais de um evento próximo encontrado!</h4>
-                                <p style={{ fontSize: 12, color: '#64748b' }}>Selecione abaixo em qual formação deseja registrar presença:</p>
-                                {multiplosEventos.map(ev => (
-                                    <button key={ev.id} onClick={() => registrarEventoEspecifico(ev.id)} style={estilos.btnOpcaoEvento}>
-                                        {ev.titulo}
-                                    </button>
-                                ))}
-                            </div>
-                        )}
-
-                        {!fluxoSaida ? (
-                            <div style={{ marginTop: 30 }}>
-                                <div style={estilos.circuloRadar} onClick={dispararRegistroPresenca}>
-                                    <span style={{ fontSize: 26 }}>📷</span>
-                                    <span style={{ fontSize: 11, fontWeight: 'bold', marginTop: 4 }}>BATER PRESENÇA</span>
-                                </div>
-                                <p style={{ fontSize: 12, color: '#64748b', marginTop: 15 }}>Clique no botão acima para registrar Entrada ou Saída do evento local.</p>
-                                <button onClick={lidarComLimpezaGeral} style={estilos.btnLinkDesvincular}>Desvincular Dispositivo</button>
-                            </div>
-                        ) : fluxoSaida.tipo === 'precoce' ? (
-                            <div style={estilos.modalRetencao}>
-                                <h3 style={{ color: '#b91c1c', margin: '0 0 10px 0' }}>Alerta de Permanência Mínima</h3>
-                                <p style={{ fontSize: 14, color: '#7f1d1d' }}>Você possui menos de 30 minutos registrados na atividade "{fluxoSaida.titulo}". Se sair agora, sua presença neste evento será anulada. Confirma?</p>
-                                <div style={{ display: 'flex', gap: 10, marginTop: 15 }}>
-                                    <button onClick={processarSaidaPrecoce} style={estilos.btnConfirmarSaidaPrecoce}>CONFIRMAR SAÍDA</button>
-                                    <button onClick={() => setFluxoSaida(null)} style={estilos.btnDesistirSaida}>VOLTAR AO EVENTO</button>
-                                </div>
-                            </div>
-                        ) : (
-                            <form onSubmit={processarSaidaDefinitiva} style={estilos.formMobile}>
-                                <h3 style={{ color: '#1e3a8a', margin: '0 0 10px 0' }}>Pesquisa de Opinião</h3>
-                                <p style={{ fontSize: 13, color: '#475569' }}>Avalie o evento "{fluxoSaida.titulo}" antes de concluir sua saída:</p>
-                                <select style={estilos.inputMobile} value={estrelasPesquisa} onChange={e => setEstrelasPesquisa(Number(e.target.value))}>
-                                    <option value="5">⭐⭐⭐⭐⭐ (Excelente)</option>
-                                    <option value="4">⭐⭐⭐⭐ (Muito Bom)</option>
-                                    <option value="3">⭐⭐⭐ (Regular)</option>
-                                    <option value="2">⭐⭐ (Ruim)</option>
-                                    <option value="1">⭐ (Péssimo)</option>
-                                </select>
-                                <textarea placeholder="Deixe um comentário adicional (Opcional)" rows="3" style={estilos.inputMobile} value={comentarioPesquisa} onChange={e => setComentarioPesquisa(e.target.value)}></textarea>
-                                <button type="submit" style={estilos.btnAcaoMobile}>GRAVAR SAÍDA</button>
-                            </form>
-                        )}
+            {statusTela === 'vincular' && (
+                <form onSubmit={lidarComVinculoAparelho} style={{ border: '1px solid #cbd5e1', padding: '25px', borderRadius: '12px', textAlign: 'left' }}>
+                    <h2 style={{ color: '#1e3a8a', marginTop: 0, textAlign: 'center' }}>Vincular Aparelho</h2>
+                    <div style={{ marginBottom: '15px' }}>
+                        <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '5px' }}>Matrícula:</label>
+                        <input type="text" value={matriculaInput} onChange={e => setMatriculaInput(e.target.value)} required style={{ width: '100%', padding: '11px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} />
                     </div>
-                )}
-            </div>
+                    <div style={{ marginBottom: '20px' }}>
+                        <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '5px' }}>Nome Completo:</label>
+                        <input type="text" value={nomeInput} onChange={e => setNomeInput(e.target.value)} required style={{ width: '100%', padding: '11px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} />
+                    </div>
+                    <button type="submit" style={{ width: '100%', padding: '14px', borderRadius: '6px', border: 'none', backgroundColor: '#1e3a8a', color: '#fff', fontWeight: 'bold', cursor: 'pointer' }}>VINCULAR DISPOSITIVO</button>
+                </form>
+            )}
+
+            {statusTela === 'listagem' && (
+                <div>
+                    <h2 style={{ color: '#1e3a8a', marginBottom: '5px' }}>Portal de Presença</h2>
+                    <p style={{ color: '#666', fontSize: '13px', marginBottom: '25px' }}>Selecione a formação para assinar a frequência.</p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                        {eventos.map(ev => {
+                            const distancia = coords.lat && coords.lng ? calcularDistanciaCliente(coords.lat, coords.lng, parseFloat(ev.latitude), parseFloat(ev.longitude)) : 999;
+                            const estaNoRaio = distancia <= 60;
+
+                            return (
+                                <button
+                                    key={ev.id} onClick={() => selecionarEvento(ev)} disabled={!estaNoRaio}
+                                    style={{
+                                        padding: '16px', borderRadius: '10px', border: 'none', fontWeight: 'bold', fontSize: '15px',
+                                        cursor: estaNoRaio ? 'pointer' : 'not-allowed',
+                                        backgroundColor: estaNoRaio ? '#0284c7' : '#e5e7eb',
+                                        color: estaNoRaio ? '#ffffff' : '#9ca3af'
+                                    }}
+                                >
+                                    <div style={{ textAlign: 'left' }}>
+                                        <div style={{ fontSize: '16px', marginBottom: '4px' }}>{ev.titulo}</div>
+                                        <div style={{ fontSize: '12px', opacity: 0.9 }}>📍 {ev.local}</div>
+                                        {!estaNoRaio && <div style={{ fontSize: '11px', marginTop: '6px', fontStyle: 'italic' }}>Fora do raio de alcance (60m)</div>}
+                                    </div>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
+            {statusTela === 'modal_pergunta' && conteudoModal && (
+                <div style={{ border: '1px solid #e2e8f0', padding: '25px', borderRadius: '12px', backgroundColor: '#f8fafc', marginTop: '20px' }}>
+                    <p style={{ fontSize: '16px', fontWeight: '500', marginBottom: '25px' }}>{conteudoModal.texto}</p>
+                    <div style={{ display: 'flex', gap: '15px' }}>
+                        <button onClick={processarAceiteModal} style={{ flex: 1, padding: '12px', borderRadius: '6px', border: 'none', backgroundColor: '#16a34a', color: '#fff', fontWeight: 'bold', cursor: 'pointer' }}>Sim, confirmar</button>
+                        <button onClick={() => setStatusTela('listagem')} style={{ flex: 1, padding: '12px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#fff', color: '#64748b', fontWeight: 'bold', cursor: 'pointer' }}>Não, retornar</button>
+                    </div>
+                </div>
+            )}
+
+            {statusTela === 'pesquisa' && (
+                <form onSubmit={submeterPesquisaSaida} style={{ border: '1px solid #e2e8f0', padding: '25px', borderRadius: '12px', textAlign: 'left', marginTop: '20px', backgroundColor: '#fff' }}>
+                    <h3 style={{ marginTop: 0, color: '#1e3a8a' }}>Pesquisa de Satisfação</h3>
+                    <p style={{ fontSize: '13px', color: '#666' }}>Sua opinião é fundamental.</p>
+                    <select value={estrelas} onChange={(e) => setEstrelas(Number(e.target.value))} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', marginBottom: '15px' }}>
+                        <option value="5">⭐⭐⭐⭐⭐ Excelência total</option>
+                        <option value="4">⭐⭐⭐⭐ Muito Bom</option>
+                        <option value="3">⭐⭐⭐ Atendeu às expectativas</option>
+                        <option value="2">⭐⭐ Regular</option>
+                        <option value="1">⭐ Precisa melhorar bastante</option>
+                    </select>
+                    <textarea rows="3" value={comentario} onChange={(e) => setComentario(e.target.value)} placeholder="Comentários adicionais (Opcional)..." style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box', marginBottom: '15px' }} />
+                    <button type="submit" style={{ width: '100%', padding: '14px', borderRadius: '6px', border: 'none', backgroundColor: '#0284c7', color: '#fff', fontWeight: 'bold', cursor: 'pointer' }}>Enviar Avaliação & Concluir Saída</button>
+                </form>
+            )}
+
+            {statusTela === 'encerrado' && (
+                <div style={{ marginTop: '40px' }}>
+                    <p style={{ color: '#9ca3af', fontStyle: 'italic' }}>Nenhuma operação ativa disponível no momento.</p>
+                </div>
+            )}
         </div>
     );
 }
-
-const estilos = {
-    containerMobile: { display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', backgroundColor: '#f1f5f9', padding: '15px' },
-    wrapperMobile: { backgroundColor: '#fff', width: '100%', maxWidth: '420px', borderRadius: '16px', padding: '25px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', boxSizing: 'border-box' },
-    marcaTopMobile: { fontSize: '18px', fontWeight: '800', color: '#1e3a8a', textAlign: 'center', marginBottom: '25px', letterSpacing: '-0.5px' },
-    tituloSessaoMobile: { fontSize: '18px', color: '#1e293b', margin: '0 0 5px 0', textAlign: 'center' },
-    subtituloMobile: { fontSize: '13px', color: '#64748b', textAlign: 'center', margin: '0 0 20px 0' },
-    formMobile: { display: 'flex', flexDirection: 'column', gap: '12px' },
-    inputMobile: { padding: '12px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '14px', width: '100%', boxSizing: 'border-box' },
-    btnAcaoMobile: { backgroundColor: '#1e3a8a', color: '#fff', border: 'none', padding: '14px', borderRadius: '8px', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer', transition: 'background 0.2s' },
-    alertaErroMobile: { backgroundColor: '#fef2f2', border: '1px solid #fca5a5', color: '#b91c1c', padding: '12px', borderRadius: '8px', fontSize: '13px', marginBottom: '15px', textAlign: 'center' },
-    alertaSucessoMobile: { backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', color: '#166534', padding: '12px', borderRadius: '8px', fontSize: '13px', marginBottom: '15px', textAlign: 'center' },
-    caixaInfoProfessor: { backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '15px', marginBottom: '20px' },
-    circuloRadar: { width: '140px', height: '140px', borderRadius: '50%', backgroundColor: '#e0f2fe', border: '4px solid #bae6fd', color: '#0369a1', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', margin: '30px auto 0 auto', cursor: 'pointer', boxShadow: '0 10px 15px -3px rgba(3,105,161,0.2)' },
-    btnLinkDesvincular: { background: 'none', border: 'none', color: '#94a3b8', textDecoration: 'underline', fontSize: '12px', marginTop: '30px', cursor: 'pointer' },
-    modalRetencao: { border: '1px solid #fca5a5', backgroundColor: '#fff5f5', borderRadius: '12px', padding: '15px', textAlign: 'center', marginTop: '15px' },
-    btnConfirmarSaPrecoce: { flex: 1, backgroundColor: '#dc2626', color: '#fff', border: 'none', padding: '10px', borderRadius: '6px', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer' },
-    btnDesistirSaida: { flex: 1, backgroundColor: '#64748b', color: '#fff', border: 'none', padding: '10px', borderRadius: '6px', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer' },
-    caixaDilemaEventos: { border: '1px solid #fef08a', backgroundColor: '#fefce8', padding: '15px', borderRadius: '12px', marginBottom: '20px', textAlign: 'left' },
-    btnOpcaoEvento: { width: '100%', padding: '10px', border: '1px solid #cbd5e1', backgroundColor: '#fff', borderRadius: '6px', fontSize: '13px', fontWeight: '600', color: '#1e293b', marginBottom: '6px', textAlign: 'left', cursor: 'pointer' }
-};

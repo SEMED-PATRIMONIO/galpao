@@ -362,32 +362,54 @@ app.post('/api/v2/eventos', verificarToken, async (req, res) => {
             return res.status(400).json({ error: 'Dados obrigatórios ausentes para agendamento.' });
         }
 
-        // VALIDAÇÃO BLINDADA: Adicionado conversão explícita para ::time para o PostgreSQL não rejeitar
+        // Formata as horas estritamente em HH:MI para evitar qualquer rejeição do Postgres
+        const limparHora = (h) => {
+            if (!h) return '00:00';
+            const partes = h.split(':');
+            return `${partes[0].padStart(2, '0')}:${partes[1].padStart(2, '0')}`;
+        };
+
+        const h_ini_limpa = limparHora(hora_inicio);
+        const h_fim_limpa = limparHora(hora_fim);
+
+        // VALIDAÇÃO: Bloqueia conflito/sobreposição de horários no mesmo local e dia
         const conflito = await pool.query(`
             SELECT id, titulo FROM eventos 
-            WHERE local_id = $1 AND data_evento = $2 AND ativo = true
+            WHERE local_id = $1::integer AND data_evento = $2::date AND ativo = true
               AND (
-                ($3::time <= hora_fim AND $4::time >= hora_inicio)
+                ($3::time < hora_fim AND $4::time > hora_inicio)
               )
-        `, [local_id, data_evento, hora_inicio, hora_fim]);
+        `, [parseInt(local_id), data_evento, h_ini_limpa, h_fim_limpa]);
 
         if (conflito.rows.length > 0) {
             return res.status(400).json({ error: `Conflito de Horário! O evento "${conflito.rows[0].titulo}" já está agendado neste espaço neste período.` });
         }
 
-        // Busca os dados geográficos oficiais do Local cadastrado para herdar de forma garantida
-        const resLocal = await pool.query('SELECT nome, endereco, latitude, longitude FROM locais WHERE id = $1', [local_id]);
-        const dadosLocal = resLocal.rows[0] || {};
+        // Busca os dados geográficos e endereço oficiais na tabela 'locais'
+        const resLocal = await pool.query('SELECT nome, endereco, latitude, longitude FROM locais WHERE id = $1::integer', [parseInt(local_id)]);
+        const dadosLocal = resLocal.rows[0];
 
-        // Gravação exata de todas as colunas no banco de dados
+        if (!dadosLocal) {
+            return res.status(400).json({ error: 'O local selecionado não foi encontrado no sistema.' });
+        }
+
+        // Gravação garantida de todas as colunas que estavam ficando em branco
         const result = await pool.query(`
             INSERT INTO eventos 
             (titulo, data_evento, carga_horaria, local_id, publico_alvo_id, hora_inicio, hora_fim, palestrante, local, endereco, latitude, longitude, ativo) 
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, true) 
             RETURNING *
         `, [
-            titulo, data_evento, carga_horaria, parseInt(local_id), parseInt(publico_alvo_id), hora_inicio, hora_fim,
-            palestrante || '', dadosLocal.nome || '', dadosLocal.endereco || '', 
+            titulo, 
+            data_evento, 
+            parseFloat(carga_horaria || 0), 
+            parseInt(local_id), 
+            parseInt(publico_alvo_id), 
+            h_ini_limpa, 
+            h_fim_limpa,
+            palestrante || '', 
+            dadosLocal.nome || '', 
+            dadosLocal.endereco || '', 
             dadosLocal.latitude ? parseFloat(dadosLocal.latitude) : null, 
             dadosLocal.longitude ? parseFloat(dadosLocal.longitude) : null
         ]);
@@ -395,7 +417,7 @@ app.post('/api/v2/eventos', verificarToken, async (req, res) => {
         return res.json(result.rows[0]);
     } catch (error) {
         console.error("Erro crítico ao cadastrar evento no Postgres:", error.message);
-        return res.status(500).json({ error: 'Erro interno ao salvar a formação. Verifique o fuso ou formato de hora.' });
+        return res.status(500).json({ error: `Erro interno no banco: ${error.message}` });
     }
 });
 
@@ -403,37 +425,55 @@ app.put('/api/v2/eventos/:id', verificarToken, async (req, res) => {
     const { id } = req.params;
     const { titulo, data_evento, carga_horaria, local_id, publico_alvo_id, hora_inicio, hora_fim, palestrante } = req.body;
     try {
+        const limparHora = (h) => {
+            if (!h) return '00:00';
+            const partes = h.split(':');
+            return `${partes[0].padStart(2, '0')}:${partes[1].padStart(2, '0')}`;
+        };
+
+        const h_ini_limpa = limparHora(hora_inicio);
+        const h_fim_limpa = limparHora(hora_fim);
+
+        // VALIDAÇÃO: Bloqueia conflitos ignorando o próprio ID que está sendo editado
         const conflito = await pool.query(`
             SELECT id, titulo FROM eventos 
-            WHERE local_id = $1 AND data_evento = $2 AND id <> $3 AND ativo = true
+            WHERE local_id = $1::integer AND data_evento = $2::date AND id <> $3::integer AND ativo = true
               AND (
-                ($4::time <= hora_fim AND $5::time >= hora_inicio)
+                ($4::time < hora_fim AND $5::time > hora_inicio)
               )
-        `, [local_id, data_evento, id, hora_inicio, hora_fim]);
+        `, [parseInt(local_id), data_evento, parseInt(id), h_ini_limpa, h_fim_limpa]);
 
         if (conflito.rows.length > 0) {
             return res.status(400).json({ error: `Conflito de Horário! O evento "${conflito.rows[0].titulo}" já ocupa este espaço neste período.` });
         }
 
-        const resLocal = await pool.query('SELECT nome, endereco, latitude, longitude FROM locais WHERE id = $1', [local_id]);
+        const resLocal = await pool.query('SELECT nome, endereco, latitude, longitude FROM locais WHERE id = $1::integer', [parseInt(local_id)]);
         const dadosLocal = resLocal.rows[0] || {};
 
         const result = await pool.query(`
             UPDATE eventos 
             SET titulo=$1, data_evento=$2, carga_horaria=$3, local_id=$4, publico_alvo_id=$5, 
                 hora_inicio=$6, hora_fim=$7, palestrante=$8, local=$9, endereco=$10, latitude=$11, longitude=$12
-            WHERE id=$13 RETURNING *
+            WHERE id=$13::integer RETURNING *
         `, [
-            titulo, data_evento, carga_horaria, parseInt(local_id), parseInt(publico_alvo_id), hora_inicio, hora_fim,
-            palestrante || '', dadosLocal.nome || '', dadosLocal.endereco || '', 
+            titulo, 
+            data_evento, 
+            parseFloat(carga_horaria || 0), 
+            parseInt(local_id), 
+            parseInt(publico_alvo_id), 
+            h_ini_limpa, 
+            h_fim_limpa,
+            palestrante || '', 
+            dadosLocal.nome || '', 
+            dadosLocal.endereco || '', 
             dadosLocal.latitude ? parseFloat(dadosLocal.latitude) : null, 
             dadosLocal.longitude ? parseFloat(dadosLocal.longitude) : null,
-            id
+            parseInt(id)
         ]);
         return res.json(result.rows[0]);
     } catch (error) {
         console.error("Erro crítico ao atualizar evento no Postgres:", error.message);
-        return res.status(500).json({ error: 'Erro ao atualizar o evento.' });
+        return res.status(500).json({ error: `Erro ao atualizar o evento: ${error.message}` });
     }
 });
 

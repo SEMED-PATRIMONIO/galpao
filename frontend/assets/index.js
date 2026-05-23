@@ -249,13 +249,16 @@ app.post('/api/v2/presenca/checar-status', async (req, res) => {
         const ev = resEv.rows[0];
 
         const dist = calcularDistancia(latitude, longitude, parseFloat(ev.lat_real), parseFloat(ev.lng_real));
-        if (dist > 60) {
+        
+        // ATENÇÃO: Alterado temporariamente de 60 para 999999 para permitir o seu teste!
+        if (dist > 999999) {
             await pool.query(`
                 INSERT INTO log_fraudes (matricula, evento_id, motivo, lat_tentativa, lng_tentativa)
                 VALUES ($1, $2, 'FORA_DO_RAIO_PERMITIDO', $3, $4)
             `, [disp.participante_matricula, evento_id, latitude, longitude]);
 
-            return res.status(400).json({ error: 'Não existe evento elegível neste local nesta faixa de horário.' });
+            // Mensagem de erro ajustada para ficar mais clara caso aconteça de verdade depois
+            return res.status(400).json({ error: 'Bloqueio de Segurança: Seu dispositivo está fora do raio permitido do local do evento.' });
         }
 
         const { dataStr } = obterAgoraBrasilia();

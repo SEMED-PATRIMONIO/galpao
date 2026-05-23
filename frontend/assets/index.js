@@ -370,12 +370,19 @@ app.post('/api/v2/presenca/confirmar-saida', async (req, res) => {
 // ==========================================
 // OUTRAS ROTAS DO SISTEMA (DASHBOARD / RELATÓRIOS)
 // ==========================================
-app.get('/api/v2/eventos', verificarToken, async (req, res) => {
+app.get('/api/v2/eventos', async (req, res) => {
     try {
-        const result = await pool.query('SELECT * FROM eventos ORDER BY data_evento DESC');
+        // Traz de forma limpa todas as formações agendadas para a data de hoje (CURRENT_DATE)
+        const result = await pool.query(`
+            SELECT id, titulo, local, palestrante, latitude, longitude, hora_inicio, hora_fim, data_evento 
+            FROM eventos 
+            WHERE data_evento = CURRENT_DATE
+            ORDER BY hora_inicio ASC
+        `);
         return res.json(result.rows);
     } catch (error) {
-        return res.status(500).json({ error: 'Erro.' });
+        console.error("Erro ao listar eventos do dia:", error.message);
+        return res.status(500).json({ error: 'Erro ao carregar formações disponíveis.' });
     }
 });
 

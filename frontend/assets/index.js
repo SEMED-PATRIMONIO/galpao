@@ -173,51 +173,32 @@ app.post('/api/v2/dispositivo/associar', async (req, res) => {
 app.post('/api/v2/presenca/inicializar', async (req, res) => {
     const { device_token } = req.body;
     try {
-        if (!device_token) return res.status(400).json({ error: 'Identificação do dispositivo ausente.' });
+        if (!device_token) return res.status(400).json({ error: 'Identificação ausente.' });
 
         const resDisp = await pool.query('SELECT * FROM dispositivos WHERE device_token = $1 AND ativo = true', [device_token]);
         if (resDisp.rows.length === 0) return res.status(401).json({ error: 'Aparelho não associado.' });
-        const disp = resDisp.rows[0];
 
-        const { dataStr, minutosAbsolutos } = obterAgoraBrasilia();
-
-        // Puxa as coordenadas reais do local para validar no front
+        // Traz as formações agendadas para o dia de hoje de forma limpa (CURRENT_DATE)
         const resEventos = await pool.query(`
-            SELECT e.id, e.titulo, e.local, 
+            SELECT e.id, e.titulo, e.local, e.palestrante,
                    l.nome as local_nome, l.endereco as local_endereco,
                    COALESCE(l.latitude, e.latitude) as latitude, 
-                   COALESCE(l.longitude, e.longitude) as longitude,
-                   e.hora_inicio::text as h_ini, e.hora_fim::text as h_fim 
+                   COALESCE(l.longitude, e.longitude) as longitude
             FROM eventos e
             LEFT JOIN locais l ON e.local_id = l.id
-            WHERE e.data_evento = $1
-        `, [dataStr]);
+            WHERE e.data_evento = CURRENT_DATE
+        `);
 
         if (resEventos.rows.length === 0) {
             return res.json({ status: 'sem_eventos', mensagem: 'NÃO HÁ FORMAÇÃO AGENDADA PARA HOJE' });
         }
 
-        // REGRA REAJUSTADA: 20 minutos antes do início e até 40 minutos após o fim do evento
-        const elegiveisHorario = resEventos.rows.filter(ev => {
-            const minInicio = paraMinutos(ev.h_ini);
-            const minFim = paraMinutos(ev.h_fim);
-            return minutosAbsolutos >= (minInicio - 20) && minutosAbsolutos <= (minFim + 40);
-        });
-
-        if (elegiveisHorario.length === 0) {
-            await pool.query(`
-                INSERT INTO log_fraudes (matricula, evento_id, motivo)
-                VALUES ($1, $2, 'FORA_DA_FAIXA_DE_HORARIO_PERMITIDA')
-            `, [disp.participante_matricula, resEventos.rows[0].id]);
-
-            return res.json({ status: 'fora_horario', mensagem: 'FORA DA FAIXA DE HORÁRIO PERMITIDA' });
-        }
-
         return res.json({
             status: 'sucesso',
-            eventos: elegiveisHorario.map(e => ({
+            eventos: resEventos.rows.map(e => ({
                 id: e.id,
                 titulo: e.titulo,
+                palestrante: e.palestrante || '',
                 local: e.local_nome || e.local || 'Auditório',
                 endereco: e.local_endereco || e.endereco || '',
                 latitude: e.latitude,
@@ -225,14 +206,13 @@ app.post('/api/v2/presenca/inicializar', async (req, res) => {
             }))
         });
     } catch (error) {
-        console.error("Erro em /presenca/inicializar:", error.message);
-        return res.status(500).json({ error: 'Erro interno ao inicializar verificação.' });
+        return res.status(500).json({ error: 'Erro interno ao inicializar.' });
     }
 });
 
 // 2. Checagem de Status: Valida o raio de 60 metros e busca histórico de frequências do dia
 app.post('/api/v2/presenca/checar-status', async (req, res) => {
-    const dist = calcularDistancia(latitude, longitude, parseFloat(ev.lat_real), parseFloat(ev.lng_real));
+    const { device_token, evento_id, latitude, longitude } = req.body;
     try {
         const resDisp = await pool.query('SELECT * FROM dispositivos WHERE device_token = $1 AND ativo = true', [device_token]);
         if (resDisp.rows.length === 0) return res.status(401).json({ error: 'Aparelho desvinculado.' });
@@ -248,34 +228,30 @@ app.post('/api/v2/presenca/checar-status', async (req, res) => {
         if (resEv.rows.length === 0) return res.status(404).json({ error: 'Formação não localizada.' });
         const ev = resEv.rows[0];
 
+        const dist = calcularDistancia(latitude, longitude, parseFloat(ev.lat_real), parseFloat(ev.lng_real));
+        
+        // TOLERÂNCIA GPS: 1000 metros
         if (dist > 1000) {
             await pool.query(`
                 INSERT INTO log_fraudes (matricula, evento_id, motivo, lat_tentativa, lng_tentativa)
                 VALUES ($1, $2, 'FORA_DO_RAIO_PERMITIDO', $3, $4)
             `, [disp.participante_matricula, evento_id, latitude, longitude]);
 
-            // Mensagem de erro ajustada para ficar mais clara caso aconteça de verdade depois
-            return res.status(400).json({ error: `Bloqueio: Seu dispositivo reporta estar a ${Math.round(dist)} metros de distância.  Você precisa estar no local da Formação.` });
+            return res.status(400).json({ error: 'Bloqueio de Segurança: Aproxime-se do local do evento para assinar.' });
         }
-
-        const { dataStr } = obterAgoraBrasilia();
 
         const resFreq = await pool.query(`
             SELECT *, EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - data_entrada))/60 as minutos_decorridos
             FROM frequencias
-            WHERE participante_id = $1 AND evento_id = $2 AND data_entrada::date = $3::date
-        `, [disp.participante_id, evento_id, dataStr]);
+            WHERE participante_id = $1 AND evento_id = $2 AND data_entrada::date = CURRENT_DATE
+        `, [disp.participante_id, evento_id]);
 
         if (resFreq.rows.length > 0) {
             const freq = resFreq.rows[0];
             if (freq.data_saida !== null) {
                 return res.json({ status: 'completo', titulo: ev.titulo, local: ev.local });
             } else {
-                return res.json({ 
-                    status: 'somente_entrada', 
-                    titulo: ev.titulo, 
-                    minutos: Math.floor(freq.minutos_decorridos || 0)
-                });
+                return res.json({ status: 'somente_entrada', titulo: ev.titulo, minutos: Math.floor(freq.minutos_decorridos || 0) });
             }
         }
 

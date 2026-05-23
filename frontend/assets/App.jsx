@@ -295,48 +295,66 @@ export default function App() {
 
                             return (
                                 <button
-                                    key={ev.id} onClick={() => selecionarEvento(ev)} disabled={!estaNoRaio}
+                                    key={ev.id} 
+                                    onClick={() => selecionarEvento(ev)} 
+                                    disabled={!estaNoRaio}
                                     style={{
-                                        display: 'flex', flexDirection: 'column', gap: '8px',
-                                        padding: '20px', borderRadius: '16px', border: estaNoRaio ? 'none' : '1px solid #e5e7eb',
+                                        display: 'flex', 
+                                        flexDirection: 'column', 
+                                        gap: '8px',
+                                        padding: '20px', 
+                                        borderRadius: '16px', 
+                                        border: estaNoRaio ? 'none' : '1px solid #e5e7eb',
                                         cursor: estaNoRaio ? 'pointer' : 'not-allowed',
                                         background: estaNoRaio ? 'linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)' : '#f8fafc',
                                         color: estaNoRaio ? '#ffffff' : '#9ca3af',
                                         boxShadow: estaNoRaio ? '0 10px 25px -5px rgba(2, 132, 199, 0.4)' : 'none',
-                                        width: '100%', marginBottom: '16px', transition: 'all 0.3s ease',
+                                        width: '100%', 
+                                        marginBottom: '16px', 
+                                        transition: 'all 0.3s ease',
                                         textAlign: 'left'
                                     }}
                                 >
-                                    <div style={{ fontSize: '18px', fontWeight: '800', marginBottom: '6px', lineHeight: '1.2' }}>
+                                    {/* TÍTULO DO EVENTO EM DESTAQUE */}
+                                    <div style={{ fontSize: '18px', fontWeight: '800', marginBottom: '4px', lineHeight: '1.2' }}>
                                         {ev.titulo}
                                     </div>
                                     
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', opacity: 0.95 }}>
-                                        📅 {new Date(ev.data_evento).toLocaleDateString('pt-BR')}
-                                    </div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', opacity: 0.95 }}>
-                                        ⏰ {ev.hora_inicio ? ev.hora_inicio.slice(0,5) : ''} às {ev.hora_fim ? ev.hora_fim.slice(0,5) : ''}
-                                    </div>
+                                    {/* LOCALIZAÇÃO FÍSICA DO EVENTO */}
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', opacity: 0.95 }}>
                                         📍 {ev.local}
                                     </div>
+
+                                    {/* EXIBIÇÃO CONDICIONAL DO PALESTRANTE (SE HOUVER) */}
                                     {ev.palestrante && (
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', opacity: 0.95, marginTop: '4px', backgroundColor: estaNoRaio ? 'rgba(255,255,255,0.2)' : '#e2e8f0', padding: '4px 8px', borderRadius: '6px' }}>
+                                        <div style={{ 
+                                            display: 'flex', 
+                                            alignItems: 'center', 
+                                            gap: '6px', 
+                                            fontSize: '13px', 
+                                            opacity: 0.95, 
+                                            marginTop: '4px', 
+                                            backgroundColor: estaNoRaio ? 'rgba(255,255,255,0.2)' : '#e2e8f0', 
+                                            padding: '4px 8px', 
+                                            borderRadius: '6px',
+                                            fontWeight: '600'
+                                        }}>
                                             🎤 Palestrante: {ev.palestrante}
                                         </div>
                                     )}
                                     
-                                    {/* MENSAGENS AMIGÁVEIS E DIRETAS (SEM JARGÃO TÉCNICO) */}
+                                    {/* ORIENTAÇÕES AMIGÁVEIS E DIRETAS (MANTIDAS) */}
                                     {!estaNoRaio && coords.lat && (
-                                        <div style={{ marginTop: '12px', padding: '10px', borderRadius: '8px', backgroundColor: '#fee2e2', color: '#b91c1c', fontSize: '13px', fontWeight: 'bold', textAlign: 'center' }}>
+                                        <div style={{ marginTop: '12px', padding: '10px', borderRadius: '8px', backgroundColor: '#fee2e2', color: '#b91c1c', fontSize: '13px', fontWeight: 'bold', textAlign: 'center', width: '100%', boxSizing: 'border-box' }}>
                                             🔒 Dirija-se ao local para liberar o acesso.
                                         </div>
                                     )}
                                     {!coords.lat && (
-                                        <div style={{ marginTop: '12px', fontSize: '13px', fontStyle: 'italic', opacity: 0.8, textAlign: 'center' }}>
+                                        <div style={{ marginTop: '12px', fontSize: '13px', fontStyle: 'italic', opacity: 0.8, textAlign: 'center', width: '100%' }}>
                                             📡 Buscando sinal para liberar acesso...
                                         </div>
                                     )}
+                    
                                 </button>
                             );
                         })}

@@ -105,19 +105,41 @@ export default function App() {
     };
 
     const obterLocalizacaoGPS = () => {
-        navigator.geolocation.getCurrentPosition(
-            (pos) => { 
-                setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }); 
-            },
-            () => { 
-                dispararAlerta8Segundos('Ative o GPS e dê permissão de localização para assinar a presença.', 'erro'); 
-            },
-            { 
-                enableHighAccuracy: true,
-                timeout: 10000,
-                maximumAge: 0
-            }
-        );
+        if (!navigator.geolocation) {
+            dispararAlerta8Segundos('O seu navegador não suporta GPS.', 'erro');
+            return;
+        }
+
+        // Função caso o GPS encontre a localização com sucesso
+        const sucesso = (pos) => {
+            setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        };
+
+        // Função caso o satélite falhe ou demore muito (Plano B)
+        const erroAltaPrecisao = (err) => {
+            console.warn("Falha na alta precisão, tentando precisão padrão...", err.message);
+            
+            // O Plano B: Tenta pegar a localização pelas antenas de celular e Wi-Fi, ignorando o satélite
+            navigator.geolocation.getCurrentPosition(
+                sucesso, 
+                (erroFatal) => {
+                    let msg = 'Erro ao buscar localização. ';
+                    if (erroFatal.code === 1) msg = 'Você negou a permissão de GPS no navegador.';
+                    else if (erroFatal.code === 2) msg = 'Sinal de localização totalmente indisponível.';
+                    else if (erroFatal.code === 3) msg = 'Tempo esgotado. Ligue o Wi-Fi para ajudar o GPS.';
+                    
+                    dispararAlerta8Segundos(msg, 'erro');
+                }, 
+                { enableHighAccuracy: false, timeout: 15000, maximumAge: 10000 }
+            );
+        };
+
+        // O Plano A: Tenta o satélite (alta precisão) por no máximo 8 segundos
+        navigator.geolocation.getCurrentPosition(sucesso, erroAltaPrecisao, {
+            enableHighAccuracy: true,
+            timeout: 8000,
+            maximumAge: 0
+        });
     };
 
     const selecionarEvento = async (ev) => {
@@ -204,15 +226,27 @@ export default function App() {
                     comentario
                 })
             });
-            if (res.ok) {
-                dispararAlerta8Segundos('REGISTRO EFETUADO!', 'sucesso', () => {
-                    setEstrelas(5);
-                    setComentario('');
-                    setStatusTela('listagem');
-                });
+            
+            if (!res.ok) {
+                const data = await res.json();
+                throw new Error(data.error || 'Erro ao processar sua saída.');
             }
+
+            // Ativa a tela de sucesso final e limpa os campos de avaliação
+            setEstrelas(5);
+            setComentario('');
+            setStatusTela('sucesso_final');
+
+            // ⏱️ O SEGREDO DO TÚNEL CLOUDFLARE: Aguarda 8 segundos exibindo a mensagem, 
+            // limpa as credenciais locais e desliga a conexão atualizando a página.
+            setTimeout(() => {
+                localStorage.removeItem('device_token'); 
+                setDeviceToken('');
+                window.location.reload(); 
+            }, 8000);
+
         } catch (err) {
-            dispararAlerta8Segundos('Erro ao processar sua saída.', 'erro');
+            dispararAlerta8Segundos(err.message, 'erro');
         }
     };
 
@@ -257,34 +291,52 @@ export default function App() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                         {eventos.map(ev => {
                             const distancia = coords.lat && coords.lng ? calcularDistanciaCliente(coords.lat, coords.lng, parseFloat(ev.latitude), parseFloat(ev.longitude)) : 9999;
-                            const estaNoRaio = distancia <= 250; // Novo raio realista de 250 metros para absorver o erro do GPS
+                            const estaNoRaio = distancia <= 1000;
 
                             return (
                                 <button
                                     key={ev.id} onClick={() => selecionarEvento(ev)} disabled={!estaNoRaio}
                                     style={{
-                                        padding: '16px', borderRadius: '10px', border: 'none', fontWeight: 'bold', fontSize: '15px',
+                                        display: 'flex', flexDirection: 'column', gap: '8px',
+                                        padding: '20px', borderRadius: '16px', border: estaNoRaio ? 'none' : '1px solid #e5e7eb',
                                         cursor: estaNoRaio ? 'pointer' : 'not-allowed',
-                                        backgroundColor: estaNoRaio ? '#0284c7' : '#e5e7eb',
+                                        background: estaNoRaio ? 'linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)' : '#f8fafc',
                                         color: estaNoRaio ? '#ffffff' : '#9ca3af',
-                                        width: '100%', marginBottom: '10px'
+                                        boxShadow: estaNoRaio ? '0 10px 25px -5px rgba(2, 132, 199, 0.4)' : 'none',
+                                        width: '100%', marginBottom: '16px', transition: 'all 0.3s ease',
+                                        textAlign: 'left'
                                     }}
                                 >
-                                    <div style={{ textAlign: 'left' }}>
-                                        <div style={{ fontSize: '16px', marginBottom: '4px' }}>{ev.titulo}</div>
-                                        <div style={{ fontSize: '12px', opacity: 0.9 }}>📍 {ev.local}</div>
-                                        
-                                        {/* EXIBE A DISTÂNCIA REAL PARA O PROFESSOR ENTENDER */}
-                                        <div style={{ fontSize: '11px', marginTop: '8px', fontWeight: 'normal', color: estaNoRaio ? '#bae6fd' : '#ef4444' }}>
-                                            {coords.lat ? `Seu aparelho está a aprox. ${Math.round(distancia)} metros do local.` : 'Buscando GPS...'}
-                                        </div>
-                                        
-                                        {!estaNoRaio && coords.lat && (
-                                            <div style={{ fontSize: '11px', marginTop: '4px', fontStyle: 'italic', color: '#ef4444' }}>
-                                                Aproxime-se do local (Raio exigido: 250m)
-                                            </div>
-                                        )}
+                                    <div style={{ fontSize: '18px', fontWeight: '800', marginBottom: '6px', lineHeight: '1.2' }}>
+                                        {ev.titulo}
                                     </div>
+                                    
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', opacity: 0.95 }}>
+                                        📅 {new Date(ev.data_evento).toLocaleDateString('pt-BR')}
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', opacity: 0.95 }}>
+                                        ⏰ {ev.hora_inicio ? ev.hora_inicio.slice(0,5) : ''} às {ev.hora_fim ? ev.hora_fim.slice(0,5) : ''}
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', opacity: 0.95 }}>
+                                        📍 {ev.local}
+                                    </div>
+                                    {ev.palestrante && (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', opacity: 0.95, marginTop: '4px', backgroundColor: estaNoRaio ? 'rgba(255,255,255,0.2)' : '#e2e8f0', padding: '4px 8px', borderRadius: '6px' }}>
+                                            🎤 Palestrante: {ev.palestrante}
+                                        </div>
+                                    )}
+                                    
+                                    {/* MENSAGENS AMIGÁVEIS E DIRETAS (SEM JARGÃO TÉCNICO) */}
+                                    {!estaNoRaio && coords.lat && (
+                                        <div style={{ marginTop: '12px', padding: '10px', borderRadius: '8px', backgroundColor: '#fee2e2', color: '#b91c1c', fontSize: '13px', fontWeight: 'bold', textAlign: 'center' }}>
+                                            🔒 Dirija-se ao local para liberar o acesso.
+                                        </div>
+                                    )}
+                                    {!coords.lat && (
+                                        <div style={{ marginTop: '12px', fontSize: '13px', fontStyle: 'italic', opacity: 0.8, textAlign: 'center' }}>
+                                            📡 Buscando sinal para liberar acesso...
+                                        </div>
+                                    )}
                                 </button>
                             );
                         })}
@@ -304,8 +356,8 @@ export default function App() {
 
             {statusTela === 'pesquisa' && (
                 <form onSubmit={submeterPesquisaSaida} style={{ border: '1px solid #e2e8f0', padding: '25px', borderRadius: '12px', textAlign: 'left', marginTop: '20px', backgroundColor: '#fff' }}>
-                    <h3 style={{ marginTop: 0, color: '#1e3a8a' }}>Pesquisa de Satisfação</h3>
-                    <p style={{ fontSize: '13px', color: '#666' }}>Sua opinião é fundamental.</p>
+                    <h3 style={{ marginTop: 0, color: '#1e3a8a' }}>Pesquisa de Satisfação em anonimato (seus dados não serão solicitados)</h3>
+                    <p style={{ fontSize: '13px', color: '#666' }}>Sua opinião é essencial! Escolha uma opção:</p>
                     <select value={estrelas} onChange={(e) => setEstrelas(Number(e.target.value))} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', marginBottom: '15px' }}>
                         <option value="5">⭐⭐⭐⭐⭐ Excelência total</option>
                         <option value="4">⭐⭐⭐⭐ Muito Bom</option>
@@ -323,6 +375,26 @@ export default function App() {
                     <p style={{ color: '#9ca3af', fontStyle: 'italic' }}>Nenhuma operação ativa disponível no momento.</p>
                 </div>
             )}
+            
+            {statusTela === 'sucesso_final' && (
+                <div style={{ 
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', 
+                    minHeight: '70vh', textAlign: 'center', padding: '20px' 
+                }}>
+                    <div style={{ fontSize: '70px', marginBottom: '20px', animation: 'bounce 1s ease' }}>===</div>
+                    <h2 style={{ color: '#166534', marginBottom: '15px', fontSize: '26px', fontWeight: '800' }}>Frequência Registrada!</h2>
+                    <p style={{ color: '#4b5563', fontSize: '16px', lineHeight: '1.6', maxWidth: '320px', margin: '0 auto' }}>
+                        Sua participação e avaliação foram salvas com sucesso no sistema da Subsecretaria.
+                    </p>
+                    <p style={{ color: '#0284c7', fontSize: '15px', marginTop: '20px', fontWeight: 'bold' }}>
+                        Agradecemos a sua colaboração!
+                    </p>
+                    
+                    <div style={{ marginTop: '40px', padding: '12px 20px', backgroundColor: '#f1f5f9', borderRadius: '12px', fontSize: '12px', color: '#64748b', maxWidth: '280px' }}>
+                        Desconectando com segurança para liberar recursos do servidor...
+                    </div>
+                </div>
+            )}            
         </div>
     );
 }

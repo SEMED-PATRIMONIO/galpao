@@ -248,7 +248,7 @@ app.post('/api/v2/presenca/checar-status', async (req, res) => {
         if (resEv.rows.length === 0) return res.status(404).json({ error: 'Formação não localizada.' });
         const ev = resEv.rows[0];
 
-        if (dist > 250) {
+        if (dist > 1000) {
             await pool.query(`
                 INSERT INTO log_fraudes (matricula, evento_id, motivo, lat_tentativa, lng_tentativa)
                 VALUES ($1, $2, 'FORA_DO_RAIO_PERMITIDO', $3, $4)

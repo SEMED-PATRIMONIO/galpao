@@ -256,8 +256,8 @@ export default function App() {
                     <p style={{ color: '#666', fontSize: '13px', marginBottom: '25px' }}>Selecione a formação para assinar a frequência.</p>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                         {eventos.map(ev => {
-                            const distancia = coords.lat && coords.lng ? calcularDistanciaCliente(coords.lat, coords.lng, parseFloat(ev.latitude), parseFloat(ev.longitude)) : 999;
-                            const estaNoRaio = distancia <= 250;
+                            const distancia = coords.lat && coords.lng ? calcularDistanciaCliente(coords.lat, coords.lng, parseFloat(ev.latitude), parseFloat(ev.longitude)) : 9999;
+                            const estaNoRaio = distancia <= 250; // Novo raio realista de 250 metros para absorver o erro do GPS
 
                             return (
                                 <button
@@ -266,13 +266,24 @@ export default function App() {
                                         padding: '16px', borderRadius: '10px', border: 'none', fontWeight: 'bold', fontSize: '15px',
                                         cursor: estaNoRaio ? 'pointer' : 'not-allowed',
                                         backgroundColor: estaNoRaio ? '#0284c7' : '#e5e7eb',
-                                        color: estaNoRaio ? '#ffffff' : '#9ca3af'
+                                        color: estaNoRaio ? '#ffffff' : '#9ca3af',
+                                        width: '100%', marginBottom: '10px'
                                     }}
                                 >
                                     <div style={{ textAlign: 'left' }}>
                                         <div style={{ fontSize: '16px', marginBottom: '4px' }}>{ev.titulo}</div>
                                         <div style={{ fontSize: '12px', opacity: 0.9 }}>📍 {ev.local}</div>
-                                        {!estaNoRaio && <div style={{ fontSize: '11px', marginTop: '6px', fontStyle: 'italic' }}>Fora do raio de alcance (60m)</div>}
+                                        
+                                        {/* EXIBE A DISTÂNCIA REAL PARA O PROFESSOR ENTENDER */}
+                                        <div style={{ fontSize: '11px', marginTop: '8px', fontWeight: 'normal', color: estaNoRaio ? '#bae6fd' : '#ef4444' }}>
+                                            {coords.lat ? `Seu aparelho está a aprox. ${Math.round(distancia)} metros do local.` : 'Buscando GPS...'}
+                                        </div>
+                                        
+                                        {!estaNoRaio && coords.lat && (
+                                            <div style={{ fontSize: '11px', marginTop: '4px', fontStyle: 'italic', color: '#ef4444' }}>
+                                                Aproxime-se do local (Raio exigido: 250m)
+                                            </div>
+                                        )}
                                     </div>
                                 </button>
                             );

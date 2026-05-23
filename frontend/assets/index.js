@@ -232,7 +232,7 @@ app.post('/api/v2/presenca/inicializar', async (req, res) => {
 
 // 2. Checagem de Status: Valida o raio de 60 metros e busca histórico de frequências do dia
 app.post('/api/v2/presenca/checar-status', async (req, res) => {
-    const { device_token, evento_id, latitude, longitude } = req.body;
+    const dist = calcularDistancia(latitude, longitude, parseFloat(ev.lat_real), parseFloat(ev.lng_real));
     try {
         const resDisp = await pool.query('SELECT * FROM dispositivos WHERE device_token = $1 AND ativo = true', [device_token]);
         if (resDisp.rows.length === 0) return res.status(401).json({ error: 'Aparelho desvinculado.' });
@@ -248,8 +248,6 @@ app.post('/api/v2/presenca/checar-status', async (req, res) => {
         if (resEv.rows.length === 0) return res.status(404).json({ error: 'Formação não localizada.' });
         const ev = resEv.rows[0];
 
-        const dist = calcularDistancia(latitude, longitude, parseFloat(ev.lat_real), parseFloat(ev.lng_real));
-        
         if (dist > 250) {
             await pool.query(`
                 INSERT INTO log_fraudes (matricula, evento_id, motivo, lat_tentativa, lng_tentativa)
@@ -257,7 +255,7 @@ app.post('/api/v2/presenca/checar-status', async (req, res) => {
             `, [disp.participante_matricula, evento_id, latitude, longitude]);
 
             // Mensagem de erro ajustada para ficar mais clara caso aconteça de verdade depois
-            return res.status(400).json({ error: 'Bloqueio de Segurança: Seu dispositivo está fora do local do evento.' });
+            return res.status(400).json({ error: `Bloqueio: Seu dispositivo reporta estar a ${Math.round(dist)} metros de distância.  Você precisa estar no local da Formação.` });
         }
 
         const { dataStr } = obterAgoraBrasilia();

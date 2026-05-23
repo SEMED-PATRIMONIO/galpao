@@ -307,42 +307,51 @@ app.post('/api/v2/presenca/confirmar-entrada', async (req, res) => {
     }
 });
 
-// 4. Confirmar Saída + Pesquisa de Satisfação (Mapeada para os campos reais do banco)
+// ==========================================
+// ROTA POST: CONFIRMAR SAÍDA E PESQUISA
+// ==========================================
 app.post('/api/v2/presenca/confirmar-saida', async (req, res) => {
     const { device_token, evento_id, estrelas, comentario } = req.body;
     try {
-        const resDisp = await pool.query('SELECT * FROM dispositivos WHERE device_token = $1 AND ativo = true', [device_token]);
+        // 1. Valida o dispositivo e captura o participante
+        const resDisp = await pool.query('SELECT participante_id, participante_matricula FROM dispositivos WHERE device_token = $1 AND ativo = true', [device_token]);
+        if (resDisp.rows.length === 0) return res.status(401).json({ error: 'Aparelho não associado.' });
         const disp = resDisp.rows[0];
-        const { dataStr } = obterAgoraBrasilia();
 
-        const resEv = await pool.query('SELECT * FROM eventos WHERE id = $1', [evento_id]);
-        const publicoAlvoId = resEv.rows.length > 0 ? resEv.rows[0].publico_alvo_id : null;
-
-        // Converte as estrelas numéricas no formato de texto exigido pelo CHECK constraint da sua tabela
+        // 2. Traduz a numeração das estrelas EXATAMENTE para o texto exigido pela CHECK CONSTRAINT do Postgres
         let avaliacaoTexto = 'Ótimo';
-        if (estrelas == 1) avaliacaoTexto = 'Ruim';
-        else if (estrelas == 2) avaliacaoTexto = 'Regular';
-        else if (estrelas == 3) avaliacaoTexto = 'Bom';
-        else if (estrelas == 4) avaliacaoTexto = 'Muito Bom';
+        if (estrelas === 4) avaliacaoTexto = 'Muito Bom';
+        if (estrelas === 3) avaliacaoTexto = 'Bom';
+        if (estrelas === 2) avaliacaoTexto = 'Regular';
+        if (estrelas === 1) avaliacaoTexto = 'Ruim';
 
-        // Salva a pesquisa de satisfação usando as colunas reais: avaliacao e comentarios
-        await pool.query(`
-            INSERT INTO pesquisa_satisfacao (participante_id, evento_id, publico_alvo_id, avaliacao, comentarios, criado_em)
-            VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
-        `, [disp.participante_id, evento_id, publicoAlvoId, avaliacaoTexto, comentario || '']);
+        // 3. Captura o publico_alvo_id do evento, que é necessário para a pesquisa
+        const resEv = await pool.query('SELECT publico_alvo_id FROM eventos WHERE id = $1', [evento_id]);
+        const publico_alvo_id = resEv.rows.length > 0 ? resEv.rows[0].publico_alvo_id : null;
 
-        // Atualiza a saída e calcula a permanência nativamente
+        // Inicia uma transação segura: Ou salva tudo (frequencia + pesquisa), ou cancela tudo se houver erro
+        await pool.query('BEGIN');
+
+        // 4. Registra o horário de saída e a avaliação na tabela 'frequencias'
         await pool.query(`
             UPDATE frequencias 
-            SET data_saida = CURRENT_TIMESTAMP,
-                permanencia = to_char(CURRENT_TIMESTAMP - data_entrada, 'HH24:MI:SS')
-            WHERE participante_id = $1 AND evento_id = $2 AND data_saida IS NULL AND data_entrada::date = $3::date
-        `, [disp.participante_id, evento_id, dataStr]);
+            SET data_saida = CURRENT_TIMESTAMP, avaliacao = $1
+            WHERE participante_id = $2 AND evento_id = $3 AND data_saida IS NULL
+        `, [avaliacaoTexto, disp.participante_id, evento_id]);
 
-        return res.json({ status: 'sucesso', mensagem: 'REGISTRO EFETUADO!' });
+        // 5. Salva a pesquisa detalhada na tabela 'pesquisa_satisfacao'
+        await pool.query(`
+            INSERT INTO pesquisa_satisfacao (participante_id, evento_id, publico_alvo_id, avaliacao, comentarios)
+            VALUES ($1, $2, $3, $4, $5)
+        `, [disp.participante_id, evento_id, publico_alvo_id, avaliacaoTexto, comentario || '']);
+
+        await pool.query('COMMIT');
+
+        return res.json({ status: 'sucesso', mensagem: 'Saída e avaliação registradas com sucesso!' });
     } catch (error) {
-        console.error("Erro crítico em /presenca/confirmar-saida:", error.message);
-        return res.status(500).json({ error: 'Erro ao registrar saída.' });
+        await pool.query('ROLLBACK');
+        console.error("Erro ao registrar saída e pesquisa:", error.message);
+        return res.status(500).json({ error: 'Erro interno ao registrar saída. Valide os dados da avaliação.' });
     }
 });
 

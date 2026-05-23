@@ -250,14 +250,14 @@ app.post('/api/v2/presenca/checar-status', async (req, res) => {
 
         const dist = calcularDistancia(latitude, longitude, parseFloat(ev.lat_real), parseFloat(ev.lng_real));
         
-        if (dist > 60) {
+        if (dist > 250) {
             await pool.query(`
                 INSERT INTO log_fraudes (matricula, evento_id, motivo, lat_tentativa, lng_tentativa)
                 VALUES ($1, $2, 'FORA_DO_RAIO_PERMITIDO', $3, $4)
             `, [disp.participante_matricula, evento_id, latitude, longitude]);
 
             // Mensagem de erro ajustada para ficar mais clara caso aconteça de verdade depois
-            return res.status(400).json({ error: 'Bloqueio de Segurança: Seu dispositivo está fora do raio permitido do local do evento.' });
+            return res.status(400).json({ error: 'Bloqueio de Segurança: Seu dispositivo está fora do local do evento.' });
         }
 
         const { dataStr } = obterAgoraBrasilia();
@@ -504,7 +504,7 @@ app.put('/api/v2/eventos/:id', verificarToken, async (req, res) => {
         ]);
         return res.json(result.rows[0]);
     } catch (error) {
-        console.error("Erro crítico ao atualizar evento no Postgres:", error.message);
+        console.error("Erro crítico ao atualizar evento no Banco de Dados:", error.message);
         return res.status(500).json({ error: `Erro ao atualizar o evento: ${error.message}` });
     }
 });

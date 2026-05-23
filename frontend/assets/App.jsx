@@ -147,14 +147,14 @@ export default function App() {
             setEventoSelecionado(ev);
 
             if (data.status === 'completo') {
-                dispararAlerta8Segundos(`Já consta entrada e saída registrada para este evento:\n${data.titulo}\nLocal: ${data.local}`, 'sucesso');
+                dispararAlerta8Segundos(`Já consta entrada e saída registrada para esta Formação:\n${data.titulo}\nLocal: ${data.local}`, 'sucesso');
                 return;
             }
 
             if (data.status === 'somente_entrada') {
                 setConteudoModal({
                     tipo: 'pergunta_saida',
-                    texto: `Você já registrou a sua entrada nesta atividade. Confirma que está saindo da formação agora?`
+                    texto: `Você já registrou a sua entrada nesta Formação. Confirma que está saindo dela agora?`
                 });
                 setStatusTela('modal_pergunta');
                 return;
@@ -163,7 +163,7 @@ export default function App() {
             if (data.status === 'nenhum') {
                 setConteudoModal({
                     tipo: 'confirmar_entrada',
-                    texto: `Deseja registrar sua entrada na formação: "${ev.titulo}"?`
+                    texto: `Deseja registrar sua entrada na Formação? "${ev.titulo}"?`
                 });
                 setStatusTela('modal_pergunta');
             }
@@ -257,7 +257,7 @@ export default function App() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                         {eventos.map(ev => {
                             const distancia = coords.lat && coords.lng ? calcularDistanciaCliente(coords.lat, coords.lng, parseFloat(ev.latitude), parseFloat(ev.longitude)) : 999;
-                            const estaNoRaio = distancia <= 60;
+                            const estaNoRaio = distancia <= 250;
 
                             return (
                                 <button

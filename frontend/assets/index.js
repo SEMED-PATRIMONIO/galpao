@@ -367,9 +367,6 @@ app.post('/api/v2/presenca/confirmar-saida', async (req, res) => {
     }
 });
 
-// ==========================================
-// OUTRAS ROTAS DO SISTEMA (DASHBOARD / RELATÓRIOS)
-// ==========================================
 app.get('/api/v2/eventos', async (req, res) => {
     try {
         // Traz de forma limpa todas as formações agendadas para a data de hoje (CURRENT_DATE)

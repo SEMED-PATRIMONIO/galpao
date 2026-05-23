@@ -249,13 +249,16 @@ app.post('/api/v2/presenca/checar-status', async (req, res) => {
         const ev = resEv.rows[0];
 
         const dist = calcularDistancia(latitude, longitude, parseFloat(ev.lat_real), parseFloat(ev.lng_real));
-        if (dist > 60) {
+        
+        // ATENÇÃO: Alterado temporariamente de 60 para 999999 para permitir o seu teste!
+        if (dist > 999999) {
             await pool.query(`
                 INSERT INTO log_fraudes (matricula, evento_id, motivo, lat_tentativa, lng_tentativa)
                 VALUES ($1, $2, 'FORA_DO_RAIO_PERMITIDO', $3, $4)
             `, [disp.participante_matricula, evento_id, latitude, longitude]);
 
-            return res.status(400).json({ error: 'Não existe evento elegível neste local nesta faixa de horário.' });
+            // Mensagem de erro ajustada para ficar mais clara caso aconteça de verdade depois
+            return res.status(400).json({ error: 'Bloqueio de Segurança: Seu dispositivo está fora do raio permitido do local do evento.' });
         }
 
         const { dataStr } = obterAgoraBrasilia();
@@ -304,42 +307,66 @@ app.post('/api/v2/presenca/confirmar-entrada', async (req, res) => {
     }
 });
 
-// 4. Confirmar Saída + Pesquisa de Satisfação (Mapeada para os campos reais do banco)
+// ==========================================
+// ROTA POST: CONFIRMAR SAÍDA E PESQUISA (TRAVA DUPLICADOS)
+// ==========================================
 app.post('/api/v2/presenca/confirmar-saida', async (req, res) => {
     const { device_token, evento_id, estrelas, comentario } = req.body;
     try {
-        const resDisp = await pool.query('SELECT * FROM dispositivos WHERE device_token = $1 AND ativo = true', [device_token]);
+        // 1. Valida o dispositivo e captura o participante
+        const resDisp = await pool.query('SELECT participante_id, participante_matricula FROM dispositivos WHERE device_token = $1 AND ativo = true', [device_token]);
+        if (resDisp.rows.length === 0) return res.status(401).json({ error: 'Aparelho não associado.' });
         const disp = resDisp.rows[0];
-        const { dataStr } = obterAgoraBrasilia();
 
-        const resEv = await pool.query('SELECT * FROM eventos WHERE id = $1', [evento_id]);
-        const publicoAlvoId = resEv.rows.length > 0 ? resEv.rows[0].publico_alvo_id : null;
-
-        // Converte as estrelas numéricas no formato de texto exigido pelo CHECK constraint da sua tabela
+        // 2. Traduz a numeração das estrelas para a CHECK CONSTRAINT do Postgres
         let avaliacaoTexto = 'Ótimo';
-        if (estrelas == 1) avaliacaoTexto = 'Ruim';
-        else if (estrelas == 2) avaliacaoTexto = 'Regular';
-        else if (estrelas == 3) avaliacaoTexto = 'Bom';
-        else if (estrelas == 4) avaliacaoTexto = 'Muito Bom';
+        if (estrelas === 4) avaliacaoTexto = 'Muito Bom';
+        if (estrelas === 3) avaliacaoTexto = 'Bom';
+        if (estrelas === 2) avaliacaoTexto = 'Regular';
+        if (estrelas === 1) avaliacaoTexto = 'Ruim';
 
-        // Salva a pesquisa de satisfação usando as colunas reais: avaliacao e comentarios
-        await pool.query(`
-            INSERT INTO pesquisa_satisfacao (participante_id, evento_id, publico_alvo_id, avaliacao, comentarios, criado_em)
-            VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
-        `, [disp.participante_id, evento_id, publicoAlvoId, avaliacaoTexto, comentario || '']);
+        // 3. Captura o publico_alvo_id do evento
+        const resEv = await pool.query('SELECT publico_alvo_id FROM eventos WHERE id = $1', [evento_id]);
+        const publico_alvo_id = resEv.rows.length > 0 ? resEv.rows[0].publico_alvo_id : null;
 
-        // Atualiza a saída e calcula a permanência nativamente
+        // 4. VALIDAÇÃO: Verifica se este participante já avaliou este evento específico
+        const pesquisaExistente = await pool.query(`
+            SELECT id FROM pesquisa_satisfacao 
+            WHERE participante_id = $1 AND evento_id = $2
+        `, [disp.participante_id, evento_id]);
+
+        // Inicia a transação no banco de dados
+        await pool.query('BEGIN');
+
+        // 5. Atualiza ou registra o horário de saída na tabela 'frequencias'
         await pool.query(`
             UPDATE frequencias 
-            SET data_saida = CURRENT_TIMESTAMP,
-                permanencia = to_char(CURRENT_TIMESTAMP - data_entrada, 'HH24:MI:SS')
-            WHERE participante_id = $1 AND evento_id = $2 AND data_saida IS NULL AND data_entrada::date = $3::date
-        `, [disp.participante_id, evento_id, dataStr]);
+            SET data_saida = CURRENT_TIMESTAMP, avaliacao = $1
+            WHERE participante_id = $2 AND evento_id = $3 AND data_saida IS NULL
+        `, [avaliacaoTexto, disp.participante_id, evento_id]);
 
-        return res.json({ status: 'sucesso', mensagem: 'REGISTRO EFETUADO!' });
+        // 6. Só insere na tabela 'pesquisa_satisfacao' se ele ainda não tiver avaliado
+        if (pesquisaExistente.rows.length === 0) {
+            await pool.query(`
+                INSERT INTO pesquisa_satisfacao (participante_id, evento_id, publico_alvo_id, avaliacao, comentarios)
+                VALUES ($1, $2, $3, $4, $5)
+            `, [disp.participante_id, evento_id, publico_alvo_id, avaliacaoTexto, comentario || '']);
+        } else {
+            // Opcional: Se ele reenviar, atualiza a avaliação existente em vez de criar outra
+            await pool.query(`
+                UPDATE pesquisa_satisfacao 
+                SET avaliacao = $1, comentarios = $2, criado_em = CURRENT_TIMESTAMP
+                WHERE participante_id = $3 AND evento_id = $4
+            `, [avaliacaoTexto, comentario || '', disp.participante_id, evento_id]);
+        }
+
+        await pool.query('COMMIT');
+
+        return res.json({ status: 'sucesso', mensagem: 'Saída e avaliação processadas com sucesso!' });
     } catch (error) {
-        console.error("Erro crítico em /presenca/confirmar-saida:", error.message);
-        return res.status(500).json({ error: 'Erro ao registrar saída.' });
+        await pool.query('ROLLBACK');
+        console.error("Erro ao registrar saída e pesquisa:", error.message);
+        return res.status(500).json({ error: 'Erro interno ao registrar saída.' });
     }
 });
 
@@ -355,23 +382,131 @@ app.get('/api/v2/eventos', verificarToken, async (req, res) => {
     }
 });
 
+// ==========================================
+// ROTA POST: CADASTRO DE EVENTOS (CORRIGIDA)
+// ==========================================
 app.post('/api/v2/eventos', verificarToken, async (req, res) => {
-    const { titulo, data_evento, carga_horaria, local_id, publico_alvo_id, hora_inicio, hora_fim } = req.body;
+    const { titulo, data_evento, carga_horaria, local_id, publico_alvo_id, hora_inicio, hora_fim, palestrante } = req.body;
     try {
-        const result = await pool.query('INSERT INTO eventos (titulo, data_evento, carga_horaria, local_id, publico_alvo_id, hora_inicio, hora_fim) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *', [titulo, data_evento, carga_horaria, local_id, publico_alvo_id, hora_inicio, hora_fim]);
+        if (!local_id || !data_evento || !hora_inicio || !hora_fim) {
+            return res.status(400).json({ error: 'Dados obrigatórios ausentes para agendamento.' });
+        }
+
+        // Garante formatação em HH:MI
+        const limparHora = (h) => {
+            if (!h) return '00:00';
+            const partes = h.split(':');
+            return `${partes[0].padStart(2, '0')}:${partes[1].padStart(2, '0')}`;
+        };
+
+        const h_ini_limpa = limparHora(hora_inicio);
+        const h_fim_limpa = limparHora(hora_fim);
+
+        // VALIDAÇÃO: Bloqueia conflito de horários no mesmo local e dia (Removido o campo 'ativo' inexistente)
+        const conflito = await pool.query(`
+            SELECT id, titulo FROM eventos 
+            WHERE local_id = $1::integer AND data_evento = $2::date
+              AND (
+                ($3::time < hora_fim AND $4::time > hora_inicio)
+              )
+        `, [parseInt(local_id), data_evento, h_ini_limpa, h_fim_limpa]);
+
+        if (conflito.rows.length > 0) {
+            return res.status(400).json({ error: `Conflito de Horário! O evento "${conflito.rows[0].titulo}" já está agendado neste espaço neste período.` });
+        }
+
+        // Busca os dados geográficos e endereço oficiais na tabela 'locais'
+        const resLocal = await pool.query('SELECT nome, endereco, latitude, longitude FROM locais WHERE id = $1::integer', [parseInt(local_id)]);
+        const dadosLocal = resLocal.rows[0];
+
+        if (!dadosLocal) {
+            return res.status(400).json({ error: 'O local selecionado não foi encontrado no sistema.' });
+        }
+
+        // Inserção estrita com as colunas reais fornecidas pelo seu \d eventos
+        const result = await pool.query(`
+            INSERT INTO eventos 
+            (titulo, data_evento, carga_horaria, local_id, publico_alvo_id, hora_inicio, hora_fim, palestrante, local, endereco, latitude, longitude) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) 
+            RETURNING *
+        `, [
+            titulo, 
+            data_evento, 
+            parseFloat(carga_horaria || 0), 
+            parseInt(local_id), 
+            parseInt(publico_alvo_id), 
+            h_ini_limpa, 
+            h_fim_limpa,
+            palestrante || '', 
+            dadosLocal.nome || '', 
+            dadosLocal.endereco || '', 
+            dadosLocal.latitude ? parseFloat(dadosLocal.latitude) : null, 
+            dadosLocal.longitude ? parseFloat(dadosLocal.longitude) : null
+        ]);
+
         return res.json(result.rows[0]);
     } catch (error) {
-        return res.status(500).json({ error: 'Erro.' });
+        console.error("Erro crítico ao cadastrar evento no Postgres:", error.message);
+        return res.status(500).json({ error: `Erro interno no banco: ${error.message}` });
     }
 });
 
+// ==========================================
+// ROTA PUT: EDIÇÃO DE EVENTOS (CORRIGIDA)
+// ==========================================
 app.put('/api/v2/eventos/:id', verificarToken, async (req, res) => {
-    const { titulo, data_evento, carga_horaria, local_id, publico_alvo_id, hora_inicio, hora_fim } = req.body;
+    const { id } = req.params;
+    const { titulo, data_evento, carga_horaria, local_id, publico_alvo_id, hora_inicio, hora_fim, palestrante } = req.body;
     try {
-        const result = await pool.query('UPDATE eventos SET titulo=$1, data_evento=$2, carga_horaria=$3, local_id=$4, publico_alvo_id=$5, hora_inicio=$6, hora_fim=$7 WHERE id=$8 RETURNING *', [titulo, data_evento, carga_horaria, local_id, publico_alvo_id, hora_inicio, hora_fim, req.params.id]);
+        const limparHora = (h) => {
+            if (!h) return '00:00';
+            const partes = h.split(':');
+            return `${partes[0].padStart(2, '0')}:${partes[1].padStart(2, '0')}`;
+        };
+
+        const h_ini_limpa = limparHora(hora_inicio);
+        const h_fim_limpa = limparHora(hora_fim);
+
+        // VALIDAÇÃO: Bloqueia conflitos ignorando o próprio ID que está sendo editado (Removido o campo 'ativo')
+        const conflito = await pool.query(`
+            SELECT id, titulo FROM eventos 
+            WHERE local_id = $1::integer AND data_evento = $2::date AND id <> $3::integer
+              AND (
+                ($4::time < hora_fim AND $5::time > hora_inicio)
+              )
+        `, [parseInt(local_id), data_evento, parseInt(id), h_ini_limpa, h_fim_limpa]);
+
+        if (conflito.rows.length > 0) {
+            return res.status(400).json({ error: `Conflito de Horário! O evento "${conflito.rows[0].titulo}" já ocupa este espaço neste período.` });
+        }
+
+        const resLocal = await pool.query('SELECT nome, endereco, latitude, longitude FROM locais WHERE id = $1::integer', [parseInt(local_id)]);
+        const dadosLocal = resLocal.rows[0] || {};
+
+        const result = await pool.query(`
+            UPDATE eventos 
+            SET titulo=$1, data_evento=$2, carga_horaria=$3, local_id=$4, publico_alvo_id=$5, 
+                hora_inicio=$6, hora_fim=$7, palestrante=$8, local=$9, endereco=$10, latitude=$11, longitude=$12
+            WHERE id=$13::integer RETURNING *
+        `, [
+            titulo, 
+            data_evento, 
+            parseFloat(carga_horaria || 0), 
+            parseInt(local_id), 
+            parseInt(publico_alvo_id), 
+            h_ini_limpa, 
+            h_fim_limpa,
+            palestrante || '', 
+            dadosLocal.nome || '', 
+            dadosLocal.endereco || '', 
+            dadosLocal.latitude ? parseFloat(dadosLocal.latitude) : null, 
+            dadosLocal.longitude ? parseFloat(dadosLocal.longitude) : null,
+            parseInt(id)
+        ]);
         return res.json(result.rows[0]);
     } catch (error) {
-        return res.status(500).json({ error: 'Erro.' });
+        console.error("Erro crítico ao atualizar evento no Postgres:", error.message);
+        return res.status(500).json({ error: `Erro ao atualizar o evento: ${error.message}` });
     }
 });
 

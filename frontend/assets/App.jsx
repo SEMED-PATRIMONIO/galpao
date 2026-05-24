@@ -72,7 +72,7 @@ export default function App() {
             
             if (view === 'eventos') endpoint = '/api/v2/admin/eventos';
             else if (view === 'locais') endpoint = '/api/v2/locais';
-            else if (view === 'participantes') endpoint = '//api/v2/admin/listar-participantes-view';
+            else if (view === 'participantes') endpoint = '/api/v2/admin/listar-participantes-view';
             else if (view === 'frequencias') endpoint = '/api/v2/frequencias';
             else if (view === 'log-fraudes') endpoint = '/api/v2/log-fraudes';
             else if (view === 'pesquisa-satisfacao') endpoint = '/api/v2/pesquisa-satisfacao';
@@ -222,7 +222,8 @@ export default function App() {
         e.preventDefault();
         try {
             setErro('');
-            let url = `/api/v2/${view}`;
+            const prefixoAdmin = view === 'frequencias' ? 'admin/' : '';
+            let url = `/api/v2/${prefixoAdmin}${view}`;
             const metodo = isEditando ? 'PUT' : 'POST';
             const endpoint = isEditando ? `${url}/${selecionado.id}` : url;
             
@@ -443,11 +444,19 @@ export default function App() {
                                         )}
                                         {view === 'pesquisa-satisfacao' && (
                                             <>
-                                                <th style={estilos.th}>Formação</th>
-                                                <th style={estilos.th}>Participante</th>
-                                                <th style={estilos.th}>Avaliação</th>
-                                                <th style={estilos.th}>Comentários</th>
-                                                <th style={estilos.th}>Data</th>
+                                                <td style={estilos.td}>{item.evento_titulo || '--'}</td>
+                                                <td style={estilos.td}>{item.participante_name || item.participante_nome || 'Anônimo'}</td>
+                                                
+                                                {/* Campo 1: avaliacao */}
+                                                <td style={{ ...estilos.td, fontWeight: 'bold', color: '#16a34a' }}>{item.avaliacao || '--'}</td>
+                                                
+                                                {/* Campo 2: comentarios (com "s" no final batendo com o seu select) */}
+                                                <td style={estilos.td}>{item.comentarios || '--'}</td>
+                                                
+                                                {/* Campo 3: criado_em formatado com segurança */}
+                                                <td style={estilos.td}>
+                                                    {item.criado_em ? new Date(item.criado_em).toLocaleDateString('pt-BR') : '--'}
+                                                </td>
                                             </>
                                         )}
                                         {view === 'publico-alvo' && (
@@ -581,7 +590,27 @@ export default function App() {
                                             <input type="password" placeholder="Digite a nova senha" style={estilos.entradaForm} value={novaSenha} onChange={e => setNovaSenha(e.target.value)} required />
                                         </>
                                     )}
-                                    <button type="submit" style={estilos.btnSucessoForm}>{isEditando ? 'Atualizar' : 'Salvar'}</button>
+                                    <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                                        <button type="submit" style={{ ...estilos.btnSucessoForm, flex: 1 }}>
+                                            {isEditando ? 'Atualizar' : 'Salvar'}
+                                        </button>
+                                        <button 
+                                            type="button" 
+                                            onClick={() => {
+                                                setIsEditando(false);
+                                                setSelecionado(null);
+                                                setForm({});
+                                            }} 
+                                            style={{
+                                                ...estilos.btnSucessoForm,
+                                                flex: 1,
+                                                backgroundColor: '#ef4444', 
+                                                color: '#fff'
+                                            }}
+                                        >
+                                            Cancelar
+                                        </button>
+                                    </div>
                                 </form>
                             </div>
                         )}

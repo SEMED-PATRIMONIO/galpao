@@ -786,7 +786,6 @@ app.get('/api/v2/admin/listar-participantes-view', verificarToken, async (req, r
             GROUP BY p.id, p.nome_completo, p.matricula, p.device_key, p.ativo
             ORDER BY p.id ASC;
         `;
-        
         const { rows } = await pool.query(queryText);
         return res.json(rows);
     } catch (error) {

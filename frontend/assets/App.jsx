@@ -75,7 +75,7 @@ export default function App() {
             else if (view === 'participantes') endpoint = '/api/v2/admin/listar-participantes-view';
             else if (view === 'frequencias') endpoint = '/api/v2/frequencias';
             else if (view === 'log-fraudes') endpoint = '/api/v2/log-fraudes';
-            else if (view === 'pesquisa-satisfacao') endpoint = '/api/v2/pesquisa-satisfacao';
+            else if (view === 'pesquisa-satisfacao') endpoint = '/api/v2/admin/pesquisa-satisfacao-detalhada';
             else if (view === 'publico-alvo') endpoint = '/api/v2/publico-alvo';
             else if (view === 'usuarios') endpoint = '/api/v2/usuarios';
 
@@ -444,19 +444,12 @@ export default function App() {
                                         )}
                                         {view === 'pesquisa-satisfacao' && (
                                             <>
-                                                <td style={estilos.td}>{item.evento_titulo || '--'}</td>
-                                                <td style={estilos.td}>{item.participante_name || item.participante_nome || 'Anônimo'}</td>
-                                                
-                                                {/* Campo 1: avaliacao */}
-                                                <td style={{ ...estilos.td, fontWeight: 'bold', color: '#16a34a' }}>{item.avaliacao || '--'}</td>
-                                                
-                                                {/* Campo 2: comentarios (com "s" no final batendo com o seu select) */}
-                                                <td style={estilos.td}>{item.comentarios || '--'}</td>
-                                                
-                                                {/* Campo 3: criado_em formatado com segurança */}
-                                                <td style={estilos.td}>
-                                                    {item.criado_em ? new Date(item.criado_em).toLocaleDateString('pt-BR') : '--'}
-                                                </td>
+                                                <th style={estilos.th}>Participante</th>
+                                                <th style={estilos.th}>Matrícula</th>
+                                                <th style={estilos.th}>Evento</th>
+                                                <th style={estilos.th}>Avaliação</th>
+                                                <th style={estilos.th}>Comentários</th>
+                                                <th style={estilos.th}>Data/Hora</th>
                                             </>
                                         )}
                                         {view === 'publico-alvo' && (
@@ -522,12 +515,24 @@ export default function App() {
                                             )}
                                             {view === 'pesquisa-satisfacao' && (
                                                 <>
-                                                    <td style={estilos.td}>{p.evento_titulo || '--'}</td>
-                                                    <td style={estilos.td}>{p.participante_nome || 'Anônimo'}</td>
-                                                    <td style={{ ...estilos.td, fontWeight: 'bold', color: '#16a34a' }}>{p.avaliacao || '--'}</td>
-                                                    <td style={estilos.td}>{p.comentarios || '--'}</td>
+                                                    <td style={estilos.td}>{item.participante_nome || 'Anónimos'}</td>
+                                                    <td style={estilos.td}>{item.participante_matricula || '--'}</td>
+                                                    <td style={estilos.td}>{item.evento_titulo || '--'}</td>
+                                                    <td style={{ ...estilos.td, color: '#f59e0b', fontSize: '15px', fontWeight: 'bold' }}>
+                                                        {(() => {
+                                                            switch(item.avaliacao) {
+                                                                case 'Muito Bom': return '⭐⭐⭐⭐⭐';
+                                                                case 'Bom':       return '⭐⭐⭐⭐';
+                                                                case 'Regular':   return '⭐⭐⭐';
+                                                                case 'Ruim':      return '⭐⭐';
+                                                                case 'Péssimo':   return '⭐';
+                                                                default:          return item.avaliacao || '--';
+                                                            }
+                                                        })()}
+                                                    </td>
+                                                    <td style={estilos.td}>{item.comentarios || '--'}</td>
                                                     <td style={estilos.td}>
-                                                        {p.criado_em ? new Date(p.criado_em).toLocaleDateString('pt-BR') : '--'}
+                                                        {item.criado_em ? new Date(item.criado_em).toLocaleString('pt-BR') : '--'}
                                                     </td>
                                                 </>
                                             )}

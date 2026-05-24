@@ -794,6 +794,33 @@ app.get('/api/v2/admin/listar-participantes-view', verificarToken, async (req, r
     }
 });
 
+// =====================================================================
+// ROTA NOVA E EXCLUSIVA PARA O ADMIN - EXIBIÇÃO DA PESQUISA DE OPINIÃO
+// =====================================================================
+app.get('/api/v2/admin/pesquisa-satisfacao-detalhada', verificarToken, async (req, res) => {
+    try {
+        const queryText = `
+            SELECT 
+                ps.id,
+                ps.avaliacao,
+                ps.comentarios,
+                ps.criado_em,
+                p.nome_completo AS participante_nome,
+                p.matricula AS participante_matricula,
+                e.titulo AS evento_titulo
+            FROM pesquisa_satisfacao ps
+            LEFT JOIN participantes p ON ps.participante_id = p.id
+            LEFT JOIN eventos e ON ps.evento_id = e.id
+            ORDER BY ps.criado_em DESC;
+        `;
+        const { rows } = await pool.query(queryText);
+        return res.json(rows);
+    } catch (error) {
+        console.error('Erro na nova rota de pesquisa detalhada:', error);
+        return res.status(500).json({ error: error.message });
+    }
+});
+
 app.use((req, res) => res.status(404).json({ error: 'Rota não encontrada.' }));
 app.use((err, req, res, next) => res.status(500).json({ error: 'Erro crítico interno.' }));
 

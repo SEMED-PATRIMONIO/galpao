@@ -345,9 +345,9 @@ export default function App() {
                 <div style={estilos.usuarioStatus}>Logado como: {user?.usuario}</div>
                 <div style={view === 'eventos' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('eventos'); setDadosEstatisticos(null); }}>FORMAÇÕES</div>
                 <div style={view === 'locais' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('locais'); setDadosEstatisticos(null); setMapaCarregado(false); }}>LOCAIS</div>
-                <div style={view === 'participantes' ?投estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('participantes'); setDadosEstatisticos(null); }}>PARTICIPANTES</div>
+                <div style={view === 'participantes' ?estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('participantes'); setDadosEstatisticos(null); }}>PARTICIPANTES</div>
                 <div style={view === 'frequencias' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('frequencias'); setDadosEstatisticos(null); }}>HISTÓRICO DE COMPARECIMENTO</div>
-                <div style={view === 'log-fraudes' ?投estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('log-fraudes'); setDadosEstatisticos(null); }}>OCORRÊNCIAS</div>
+                <div style={view === 'log-fraudes' ?estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('log-fraudes'); setDadosEstatisticos(null); }}>OCORRÊNCIAS</div>
                 <div style={view === 'pesquisa-satisfacao' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('pesquisa-satisfacao'); setDadosEstatisticos(null); }}>PESQUISA DE OPINIÃO</div>
                 <div style={view === 'publico-alvo' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('publico-alvo'); setDadosEstatisticos(null); }}>PÚBLICO-ALVO</div>
                 <div style={view === 'usuarios' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('usuarios'); setDadosEstatisticos(null); }}>USUÁRIOS</div>
@@ -370,7 +370,7 @@ export default function App() {
                 </div>
 
                 {erro && <div style={estilos.erroBox}>{erro}</div>}
-{view === 'eventos' && (
+                {view === 'eventos' && (
                     <div style={estilos.splitLayout}>
                         <div style={estilos.colunaEsquerdaSemForm}>
                             <table style={estilos.tabela}>
@@ -513,11 +513,13 @@ export default function App() {
                                             )}
                                             {view === 'pesquisa-satisfacao' && (
                                                 <>
-                                                    <td style={estilos.td}>{item.evento_titulo || '--'}</td>
-                                                    <td style={estilos.td}>{item.participante_nome || 'Anônimo'}</td>
-                                                    <td style={{ ...estilos.td, fontWeight: 'bold', color: '#16a34a' }}>{item.avaliacao || '--'}</td>
-                                                    <td style={estilos.td}>{item.comentarios || '--'}</td>
-                                                    <td style={estilos.td}>{new Date(item.criado_em).toLocaleDateString('pt-BR')}</td>
+                                                    <td style={estilos.td}>{p.evento_titulo || '--'}</td>
+                                                    <td style={estilos.td}>{p.participante_nome || 'Anônimo'}</td>
+                                                    <td style={{ ...estilos.td, fontWeight: 'bold', color: '#16a34a' }}>{p.avaliacao || '--'}</td>
+                                                    <td style={estilos.td}>{p.comentarios || '--'}</td>
+                                                    <td style={estilos.td}>
+                                                        {p.criado_em ? new Date(p.criado_em).toLocaleDateString('pt-BR') : '--'}
+                                                    </td>
                                                 </>
                                             )}
                                             {view === 'publico-alvo' && (

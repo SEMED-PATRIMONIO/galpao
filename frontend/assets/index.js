@@ -724,6 +724,52 @@ app.get('/api/v2/admin/eventos', async (req, res) => {
     }
 });
 
+// ==========================================
+// ROTAS EXCLUSIVAS PARA O APP-ADMIN (EVITA CONFLITOS)
+// ==========================================
+
+// Deletar Ocorrência (Fraude)
+app.delete('/api/v2/admin/log-fraudes/:id', verificarToken, async (req, res) => {
+    try {
+        await pool.query('DELETE FROM log_fraudes WHERE id = $1', [req.params.id]);
+        return res.json({ status: 'sucesso' });
+    } catch (error) {
+        return res.status(500).json({ error: error.message });
+    }
+});
+
+// Atualizar Histórico (Frequência)
+app.put('/api/v2/admin/frequencias/:id', verificarToken, async (req, res) => {
+    const { data_entrada, data_saida } = req.body;
+    try {
+        await pool.query(`
+            UPDATE frequencias 
+            SET data_entrada = $1, data_saida = $2
+            WHERE id = $3
+        `, [data_entrada, data_saida || null, req.params.id]);
+        return res.json({ status: 'sucesso' });
+    } catch (error) {
+        return res.status(500).json({ error: error.message });
+    }
+});
+
+// Rota corrigida para a Pesquisa de Opinião trazer nomes dos Participantes
+app.get('/api/v2/admin/pesquisa-satisfacao', verificarToken, async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT ps.id, ps.avaliacao, ps.comentarios, ps.criado_em,
+                   e.titulo as evento_titulo, p.nome_completo as participante_nome
+            FROM pesquisa_satisfacao ps
+            LEFT JOIN eventos e ON ps.evento_id = e.id
+            LEFT JOIN participantes p ON ps.participante_id = p.id
+            ORDER BY ps.criado_em DESC
+        `);
+        return res.json(result.rows);
+    } catch (error) {
+        return res.status(500).json({ error: error.message });
+    }
+});
+
 app.use((req, res) => res.status(404).json({ error: 'Rota não encontrada.' }));
 app.use((err, req, res, next) => res.status(500).json({ error: 'Erro crítico interno.' }));
 

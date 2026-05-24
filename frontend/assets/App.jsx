@@ -37,6 +37,7 @@ export default function App() {
     const [locaisDisponiveis, setLocaisDisponiveis] = useState([]);
     const [publicosDisponiveis, setPublicosDisponiveis] = useState([]);
     const [mapaCarregado, setMapaCarregado] = useState(false);
+    const [modalNovoEvento, setModalNovoEvento] = useState(false);
 
     useEffect(() => {
         if (token) {
@@ -239,24 +240,24 @@ export default function App() {
                 };
             }
 
+            if (view === 'usuarios' && isEditando) {
+                url = `/api/v2/usuarios/alterar-propria-senha`;
+                await apiFetch(url, { method: 'PUT', body: JSON.stringify({ novaSenha }) });
+                setNovaSenha('');
+                alert('Sua senha foi alterada com sucesso!');
+                setForm({});
+                setIsEditando(false);
+                setSelecionado(null);
+                carregarDadosPainel();
+                return;
+            }
+
             await apiFetch(endpoint, { method: metodo, body: JSON.stringify(dadosParaEnviar) });
             
             setForm({});
             setIsEditando(false);
             setSelecionado(null);
             carregarDadosPainel();
-        } catch (err) {
-            setErro(err.message);
-        }
-    };
-
-    const alterarSenhaLogado = async (e) => {
-        e.preventDefault();
-        try {
-            setErro('');
-            await apiFetch('/api/v2/usuarios/alterar-propria-senha', { method: 'PUT', body: JSON.stringify({ novaSenha }) });
-            setNovaSenha('');
-            alert('Sua senha foi alterada!');
         } catch (err) {
             setErro(err.message);
         }
@@ -277,7 +278,11 @@ export default function App() {
     const deletarRegistro = async (id) => {
         if (!confirm('Remover registro?')) return;
         try {
-            await apiFetch(`/api/v2/${view}/${id}`, { method: 'DELETE' });
+            let endpoint = `/api/v2/${view}/${id}`;
+            if (view === 'log-fraudes') {
+                endpoint = `/api/v2/admin/log-fraudes/${id}`;
+            }
+            await apiFetch(endpoint, { method: 'DELETE' });
             carregarDadosPainel();
         } catch (err) {
             setErro(err.message);
@@ -309,10 +314,7 @@ export default function App() {
         return (
             <div style={estilos.telaLogin}>
                 <div style={estilos.caixaLogin}>
-                    <img 
-                        src="/logap.png" 
-                        alt="Logo" 
-                        style={{ height: '45px', objectFit: 'contain', marginBottom: '15px', display: 'inline-block' }} />
+                    <img src="/logap.png" alt="Logo" style={{ height: '45px', objectFit: 'contain', marginBottom: '15px', display: 'inline-block' }} />
                     <h2 style={{ ...estilos.tituloLogin, fontWeight: '900', letterSpacing: '0.5px' }}>FORMAÇÕES</h2>
                     {erro && <div style={estilos.erroBox}>{erro}</div>}
                     <form onSubmit={lidarComLogin} style={estilos.formulario}>
@@ -343,9 +345,9 @@ export default function App() {
                 <div style={estilos.usuarioStatus}>Logado como: {user?.usuario}</div>
                 <div style={view === 'eventos' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('eventos'); setDadosEstatisticos(null); }}>FORMAÇÕES</div>
                 <div style={view === 'locais' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('locais'); setDadosEstatisticos(null); setMapaCarregado(false); }}>LOCAIS</div>
-                <div style={view === 'participantes' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('participantes'); setDadosEstatisticos(null); }}>PARTICIPANTES</div>
+                <div style={view === 'participantes' ?投estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('participantes'); setDadosEstatisticos(null); }}>PARTICIPANTES</div>
                 <div style={view === 'frequencias' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('frequencias'); setDadosEstatisticos(null); }}>HISTÓRICO DE COMPARECIMENTO</div>
-                <div style={view === 'log-fraudes' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('log-fraudes'); setDadosEstatisticos(null); }}>OCORRÊNCIAS</div>
+                <div style={view === 'log-fraudes' ?投estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('log-fraudes'); setDadosEstatisticos(null); }}>OCORRÊNCIAS</div>
                 <div style={view === 'pesquisa-satisfacao' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('pesquisa-satisfacao'); setDadosEstatisticos(null); }}>PESQUISA DE OPINIÃO</div>
                 <div style={view === 'publico-alvo' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('publico-alvo'); setDadosEstatisticos(null); }}>PÚBLICO-ALVO</div>
                 <div style={view === 'usuarios' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('usuarios'); setDadosEstatisticos(null); }}>USUÁRIOS</div>
@@ -354,14 +356,21 @@ export default function App() {
             </div>
 
             <div style={estilos.conteudoPrincipal}>
-                <div style={{backgroundColor: '#fff', padding: 15, borderRadius: 8, marginBottom: 20, border: '1px solid #e2e8f0'}}>
-                    <span style={{fontWeight: 'bold', textTransform: 'uppercase', fontSize: 13}}>LISTAGEM DOS REGISTROS DE: {view}</span>
-                    <span style={{float: 'right', fontWeight: 'bold', color: '#1e3a8a'}}>Total Registros: {totaisSuperior}</span>
+                <div style={{backgroundColor: '#fff', padding: 15, borderRadius: 8, marginBottom: 20, border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                    <span style={{fontWeight: 'bold', textTransform: 'uppercase', fontSize: 13}}>LISTAGEM DOS REGISTROS DE: {view === 'log-fraudes' ? 'OCORRÊNCIAS' : view}</span>
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                        {view === 'eventos' && (
+                            <button type="button" onClick={() => { setForm({}); setIsEditando(false); setModalNovoEvento(true); inicializarMapaQueimados(); }} style={{ backgroundColor: '#16a34a', color: '#fff', border: 'none', padding: '8px 20px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>NOVO</button>
+                        )}
+                        {view === 'usuarios' && (
+                            <button type="button" onClick={() => { setIsEditando(true); setSelecionado({ id: user.id }); setForm({ usuario: user.usuario }); }} style={{ backgroundColor: '#0284c7', color: '#fff', border: 'none', padding: '8px 15px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>ALTERAR MINHA SENHA</button>
+                        )}
+                    </div>
+                    <span style={{fontWeight: 'bold', color: '#1e3a8a'}}>Total Registros: {totaisSuperior}</span>
                 </div>
 
                 {erro && <div style={estilos.erroBox}>{erro}</div>}
-
-                {view === 'eventos' && (
+{view === 'eventos' && (
                     <div style={estilos.splitLayout}>
                         <div style={estilos.colunaEsquerdaSemForm}>
                             <table style={estilos.tabela}>
@@ -394,7 +403,7 @@ export default function App() {
 
                 {view !== 'eventos' && view !== 'relatorios' && (
                     <div style={estilos.splitLayout}>
-                        <div style={estilos.colunaEsquerda}>
+                        <div style={{ flex: ['locais', 'publico-alvo', 'usuarios', 'frequencias'].includes(view) ? 2 : 1, backgroundColor: '#fff', padding: '15px', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
                             <table style={estilos.tabela}>
                                 <thead>
                                     <tr style={estilos.tabelaHeader}>
@@ -421,7 +430,7 @@ export default function App() {
                                                 <th style={estilos.th}>Evento</th>
                                                 <th style={estilos.th}>Entrada</th>
                                                 <th style={estilos.th}>Saída</th>
-                                                <th style={estilos.th}>Função</th>
+                                                <th style={estilos.th}>Ações</th>
                                             </>
                                         )}
                                         {view === 'log-fraudes' && (
@@ -429,11 +438,13 @@ export default function App() {
                                                 <th style={estilos.th}>Matrícula</th>
                                                 <th style={estilos.th}>Motivo</th>
                                                 <th style={estilos.th}>Data/Hora</th>
+                                                <th style={estilos.th}>Ações</th>
                                             </>
                                         )}
                                         {view === 'pesquisa-satisfacao' && (
                                             <>
                                                 <th style={estilos.th}>Formação</th>
+                                                <th style={estilos.th}>Participante</th>
                                                 <th style={estilos.th}>Avaliação</th>
                                                 <th style={estilos.th}>Comentários</th>
                                                 <th style={estilos.th}>Data</th>
@@ -485,7 +496,9 @@ export default function App() {
                                                     <td style={estilos.td}>{item.evento_titulo || '--'}</td>
                                                     <td style={estilos.td}>{item.data_entrada ? new Date(item.data_entrada).toLocaleString('pt-BR') : '--'}</td>
                                                     <td style={estilos.td}>{item.data_saida ? new Date(item.data_saida).toLocaleString('pt-BR') : 'Em andamento'}</td>
-                                                    <td style={estilos.td}>{item.funcao || 'Ouvinte'}</td>
+                                                    <td style={estilos.td}>
+                                                        <button onClick={() => { setSelecionado(item); setIsEditando(true); setForm({ data_entrada: item.data_entrada.substring(0,16), data_saida: item.data_saida ? item.data_saida.substring(0,16) : '' }); }} style={estilos.btnLink}>Editar</button>
+                                                    </td>
                                                 </>
                                             )}
                                             {view === 'log-fraudes' && (
@@ -493,11 +506,15 @@ export default function App() {
                                                     <td style={estilos.td}>{item.matricula}</td>
                                                     <td style={estilos.td}>{item.motivo}</td>
                                                     <td style={estilos.td}>{new Date(item.data_tentativa).toLocaleString('pt-BR')}</td>
+                                                    <td style={estilos.td}>
+                                                        <button onClick={() => deletarRegistro(item.id)} style={estilos.btnLinkErro}>Excluir</button>
+                                                    </td>
                                                 </>
                                             )}
                                             {view === 'pesquisa-satisfacao' && (
                                                 <>
                                                     <td style={estilos.td}>{item.evento_titulo || '--'}</td>
+                                                    <td style={estilos.td}>{item.participante_nome || 'Anônimo'}</td>
                                                     <td style={{ ...estilos.td, fontWeight: 'bold', color: '#16a34a' }}>{item.avaliacao || '--'}</td>
                                                     <td style={estilos.td}>{item.comentarios || '--'}</td>
                                                     <td style={estilos.td}>{new Date(item.criado_em).toLocaleDateString('pt-BR')}</td>
@@ -516,7 +533,7 @@ export default function App() {
                                                 <>
                                                     <td style={estilos.td}>{item.usuario}</td>
                                                     <td style={estilos.td}>
-                                                        <button onClick={() => deletarRegistro(item.id)} style={estilos.btnLinkErro}>Excluir</button>
+                                                        <button onClick={() => deletarRegistro(item.id)} style={estilos.btnLinkErro} disabled={item.usuario === user.usuario}>Excluir</button>
                                                     </td>
                                                 </>
                                             )}
@@ -526,30 +543,46 @@ export default function App() {
                             </table>
                         </div>
 
-                        <div style={estilos.colunaDireita}>
-                            <form onSubmit={lidarComSubmissaoForm} style={estilos.formularioPainel}>
-                                <h3 style={{marginTop: 0, marginBottom: '15px'}}>{isEditando ? 'Editar Item' : 'Cadastrar Novo'}</h3>
-                                {view === 'locais' && (
-                                    <>
-                                        <input type="text" placeholder="Nome do Local" style={estilos.entradaForm} value={form.nome || ''} onChange={e => setForm({...form, nome: e.target.value})} required />
-                                        <input type="text" placeholder="Endereço" style={estilos.entradaForm} value={form.endereco || ''} onChange={e => setForm({...form, endereco: e.target.value})} required />
-                                        <input type="text" placeholder="Latitude" style={estilos.entradaForm} value={form.latitude || ''} onChange={e => setForm({...form, latitude: e.target.value})} required readOnly />
-                                        <input type="text" placeholder="Longitude" style={estilos.entradaForm} value={form.longitude || ''} onChange={e => setForm({...form, longitude: e.target.value})} required readOnly />
-                                        <div id="mapa-cadastro-local" style={{ height: '180px', borderRadius: '6px', marginBottom: '15px', backgroundColor: '#e2e8f0' }}></div>
-                                    </>
-                                )}
-                                {view === 'publico-alvo' && (
-                                    <input type="text" placeholder="Nome do Público" style={estilos.entradaForm} value={form.nome || ''} onChange={e => setForm({...form, nome: e.target.value})} required />
-                                )}
-                                {view === 'usuarios' && (
-                                    <>
-                                        <input type="text" placeholder="Nome de Usuário" style={estilos.entradaForm} value={form.usuario || ''} onChange={e => setForm({...form, usuario: e.target.value})} required />
-                                        <input type="password" placeholder="Senha" style={estilos.entradaForm} value={form.senha || ''} onChange={e => setForm({...form, senha: e.target.value})} required />
-                                    </>
-                                )}
-                                <button type="submit" style={estilos.btnSucessoForm}>{isEditando ? 'Atualizar' : 'Salvar'}</button>
-                            </form>
-                        </div>
+                        {['locais', 'publico-alvo', 'usuarios', 'frequencias'].includes(view) && (
+                            <div style={estilos.colunaDireita}>
+                                <form onSubmit={lidarComSubmissaoForm} style={estilos.formularioPainel}>
+                                    <h3 style={{marginTop: 0, marginBottom: '15px'}}>{isEditando ? 'Editar Item' : 'Cadastrar Novo'}</h3>
+                                    {view === 'locais' && (
+                                        <>
+                                            <input type="text" placeholder="Nome do Local" style={estilos.entradaForm} value={form.nome || ''} onChange={e => setForm({...form, nome: e.target.value})} required />
+                                            <input type="text" placeholder="Endereço" style={estilos.entradaForm} value={form.endereco || ''} onChange={e => setForm({...form, endereco: e.target.value})} required />
+                                            <input type="text" placeholder="Latitude" style={estilos.entradaForm} value={form.latitude || ''} onChange={e => setForm({...form, latitude: e.target.value})} required readOnly />
+                                            <input type="text" placeholder="Longitude" style={estilos.entradaForm} value={form.longitude || ''} onChange={e => setForm({...form, longitude: e.target.value})} required readOnly />
+                                            <div id="mapa-cadastro-local" style={{ height: '180px', borderRadius: '6px', marginBottom: '15px', backgroundColor: '#e2e8f0' }}></div>
+                                        </>
+                                    )}
+                                    {view === 'publico-alvo' && (
+                                        <input type="text" placeholder="Nome do Público" style={estilos.entradaForm} value={form.nome || ''} onChange={e => setForm({...form, nome: e.target.value})} required />
+                                    )}
+                                    {view === 'frequencias' && isEditando && (
+                                        <>
+                                            <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Horário de Entrada:</label>
+                                            <input type="datetime-local" style={estilos.entradaForm} value={form.data_entrada || ''} onChange={e => setForm({...form, data_entrada: e.target.value})} required />
+                                            <label style={{ fontSize: '12px', fontWeight: 'bold', marginTop: '5px' }}>Horário de Saída:</label>
+                                            <input type="datetime-local" style={estilos.entradaForm} value={form.data_saida || ''} onChange={e => setForm({...form, data_saida: e.target.value})} />
+                                        </>
+                                    )}
+                                    {view === 'usuarios' && !isEditando && (
+                                        <>
+                                            <input type="text" placeholder="Nome de Usuário" style={estilos.entradaForm} value={form.usuario || ''} onChange={e => setForm({...form, usuario: e.target.value})} required />
+                                            <input type="password" placeholder="Senha" style={estilos.entradaForm} value={form.senha || ''} onChange={e => setForm({...form, senha: e.target.value})} required />
+                                        </>
+                                    )}
+                                    {view === 'usuarios' && isEditando && (
+                                        <>
+                                            <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#0284c7' }}>Nova Senha:</label>
+                                            <input type="password" placeholder="Digite a nova senha" style={estilos.entradaForm} value={novaSenha} onChange={e => setNovaSenha(e.target.value)} required />
+                                        </>
+                                    )}
+                                    <button type="submit" style={estilos.btnSucessoForm}>{isEditando ? 'Atualizar' : 'Salvar'}</button>
+                                </form>
+                            </div>
+                        )}
                     </div>
                 )}
 
@@ -608,6 +641,54 @@ export default function App() {
                     </div>
                 )}
             </div>
+
+            {modalNovoEvento && (
+                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15,23,42,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999 }}>
+                    <div style={{ backgroundColor: '#fff', padding: '30px', borderRadius: '12px', width: '90%', maxWidth: '500px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.3)' }}>
+                        <h3 style={{ marginTop: 0, marginBottom: '20px', color: '#0f172a' }}>📐 Cadastrar Nova Formação</h3>
+                        <form onSubmit={async (e) => {
+                            e.preventDefault();
+                            try {
+                                setErro('');
+                                const localReal = locaisDisponiveis.find(l => l.id === parseInt(form.local_id));
+                                const dadosParaEnviar = {
+                                    ...form,
+                                    palestrante: form.palestrante || '',
+                                    local: localReal ? localReal.nome : '',
+                                    endereco: localReal ? localReal.endereco : '',
+                                    latitude: localReal ? parseFloat(localReal.latitude) : null,
+                                    longitude: localReal ? parseFloat(localReal.longitude) : null
+                                };
+                                await apiFetch('/api/v2/eventos', { method: 'POST', body: JSON.stringify(dadosParaEnviar) });
+                                setForm({});
+                                setModalNovoEvento(false);
+                                carregarDadosPainel();
+                            } catch(err) { setErro(err.message); }
+                        }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                <input type="text" placeholder="Título do Evento" style={estilos.entradaForm} value={form.titulo || ''} onChange={e => setForm({...form, titulo: e.target.value})} required />
+                                <input type="date" style={estilos.entradaForm} value={form.data_evento || ''} onChange={e => setForm({...form, data_evento: e.target.value})} required />
+                                <input type="time" style={estilos.entradaForm} value={form.hora_inicio || ''} onChange={e => lidarComMudancaHora('hora_inicio', e.target.value)} required />
+                                <input type="time" style={estilos.entradaForm} value={form.hora_fim || ''} onChange={e => lidarComMudancaHora('hora_fim', e.target.value)} required />
+                                <input type="number" step="0.01" placeholder="Carga Horária" style={estilos.entradaForm} value={form.carga_horaria || ''} readOnly />
+                                <input type="text" placeholder="Palestrante / Formador" style={estilos.entradaForm} value={form.palestrante || ''} onChange={e => setForm({...form, palestrante: e.target.value})} />
+                                <select value={form.local_id || ''} onChange={e => setForm({...form, local_id: e.target.value})} required style={estilos.entradaForm}>
+                                    <option value="">Selecione o Local Oficial...</option>
+                                    {locaisDisponiveis.map(l => <option key={l.id} value={l.id}>{l.nome}</option>)}
+                                </select>
+                                <select value={form.publico_alvo_id || ''} onChange={e => setForm({...form, publico_alvo_id: e.target.value})} required style={estilos.entradaForm}>
+                                    <option value="">Selecione o Público Alvo...</option>
+                                    {publicosDisponiveis.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
+                                </select>
+                            </div>
+                            <div style={{ marginTop: '25px', display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                                <button type="button" onClick={() => { setModalNovoEvento(false); setForm({}); }} style={{ padding: '10px 20px', border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer', backgroundColor: '#fff', fontWeight: 'bold' }}>VOLTAR</button>
+                                <button type="submit" style={{ padding: '10px 25px', backgroundColor: '#16a34a', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>CONFIRMAR</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
@@ -631,11 +712,11 @@ const estilos = {
     btnLogout: { marginTop: 'auto', padding: '10px 12px', borderRadius: '6px', color: '#fca5a5', cursor: 'pointer', textAlign: 'center', border: '1px dashed #f87171' },
     conteudoPrincipal: { flex: 1, padding: '30px', overflowY: 'auto' },
     splitLayout: { display: 'flex', gap: '20px', alignItems: 'flex-start' },
-    colunaEsquerda: { flex: 2, backgroundColor: '#fff', padding: '15px', borderRadius: '8px', border: '1px solid #cbd5e1' },
+    colunaEsquerda: { backgroundColor: '#fff', padding: '15px', borderRadius: '8px', border: '1px solid #cbd5e1' },
     colunaEsquerdaSemForm: { flex: 1, backgroundColor: '#fff', padding: '20px', borderRadius: '8px', border: '1px solid #cbd5e1' },
-    colunaDireita: { flex: 1, backgroundColor: '#fff', padding: '20px', borderRadius: '8px', border: '1px solid #cbd5e1' },
+    colunaDireita: { width: '320px', backgroundColor: '#fff', padding: '20px', borderRadius: '8px', border: '1px solid #cbd5e1' },
     formularioPainel: { display: 'flex', flexDirection: 'column', gap: '12px' },
-    entradaForm: { padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px', width: '100%', boxSizing: 'border-box' },
+    entradaForm: { padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px', width: '100%', boxSizing: 'border-box', backgroundColor: '#fff' },
     btnSucessoForm: { padding: '12px', borderRadius: '6px', border: 'none', backgroundColor: '#16a34a', color: '#fff', fontWeight: 'bold', cursor: 'pointer' },
     btnLink: { background: 'none', border: 'none', color: '#0284c7', cursor: 'pointer', fontWeight: '600', marginRight: '10px', padding: 0 },
     btnLinkErro: { background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontWeight: '600', padding: 0 },
@@ -643,4 +724,4 @@ const estilos = {
     tabelaHeader: { backgroundColor: '#f1f5f9' },
     th: { textAlign: 'left', padding: '10px', color: '#475569', borderBottom: '2px solid #cbd5e1', fontSize: '13px' },
     td: { padding: '10px', color: '#334155', fontSize: '13px' }
-};
+};                

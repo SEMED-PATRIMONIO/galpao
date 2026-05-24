@@ -72,7 +72,7 @@ export default function App() {
             
             if (view === 'eventos') endpoint = '/api/v2/admin/eventos';
             else if (view === 'locais') endpoint = '/api/v2/locais';
-            else if (view === 'participantes') endpoint = '/api/v2/participantes';
+            else if (view === 'participantes') endpoint = '//api/v2/admin/listar-participantes-view';
             else if (view === 'frequencias') endpoint = '/api/v2/frequencias';
             else if (view === 'log-fraudes') endpoint = '/api/v2/log-fraudes';
             else if (view === 'pesquisa-satisfacao') endpoint = '/api/v2/pesquisa-satisfacao';

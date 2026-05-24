@@ -770,6 +770,31 @@ app.get('/api/v2/admin/pesquisa-satisfacao', verificarToken, async (req, res) =>
     }
 });
 
+// NOVA ROTA: Exclusiva para a View do Admin (não interfere no app-professor)
+app.get('/api/v2/admin/listar-participantes-view', verificarToken, async (req, res) => {
+    try {
+        const queryText = `
+            SELECT 
+                p.id, 
+                p.nome_completo, 
+                p.matricula, 
+                p.device_key, 
+                p.ativo,
+                COUNT(f.id) AS total_presencas
+            FROM participantes p
+            LEFT JOIN frequencias f ON p.id = f.participante_id
+            GROUP BY p.id, p.nome_completo, p.matricula, p.device_key, p.ativo
+            ORDER BY p.id ASC;
+        `;
+        
+        const { rows } = await pool.query(queryText);
+        return res.json(rows);
+    } catch (error) {
+        console.error('Erro ao listar participantes:', error);
+        return res.status(500).json({ error: error.message });
+    }
+});
+
 app.use((req, res) => res.status(404).json({ error: 'Rota não encontrada.' }));
 app.use((err, req, res, next) => res.status(500).json({ error: 'Erro crítico interno.' }));
 

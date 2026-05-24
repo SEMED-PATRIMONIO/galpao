@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 
 export default function App() {
-    const obterUsuarioSeguro = () => {
+    const obtenerUsuarioSeguro = () => {
         try {
             const dadosSalvos = localStorage.getItem('admin_user');
             if (!dadosSalvos) return null;
@@ -68,6 +68,8 @@ export default function App() {
         try {
             setErro('');
             let endpoint = '';
+            
+            // Alterado para a sua nova rota administrativa exclusiva de eventos
             if (view === 'eventos') endpoint = '/api/v2/admin/eventos';
             else if (view === 'locais') endpoint = '/api/v2/locais';
             else if (view === 'participantes') endpoint = '/api/v2/participantes';
@@ -168,7 +170,7 @@ export default function App() {
             setErro('');
             const data = await apiFetch('/api/auth/login', {
                 method: 'POST',
-                body: JSON.stringify({ usuario: usuarioInput, senha: senhaInput })
+                body: JSON.stringify({ usuario: usuarioInput, width: '100%', senha: senhaInput })
             });
             if (data.deve_alterar_senha) {
                 setUser({ usuario: usuarioInput, deve_alterar_senha: true });
@@ -224,14 +226,10 @@ export default function App() {
             const metodo = isEditando ? 'PUT' : 'POST';
             const endpoint = isEditando ? `${url}/${selecionado.id}` : url;
             
-            // CORREÇÃO DEFINITIVA: Cria um objeto limpo para envio
             let dadosParaEnviar = { ...form };
 
-            // Se for a tela de eventos, intercepta e injeta os dados reais do local_id guardados em memória
             if (view === 'eventos') {
-                // Procura o local correspondente na lista de locais carregados no painel
                 const localReal = locaisDisponiveis.find(l => l.id === parseInt(form.local_id));
-                
                 dadosParaEnviar = {
                     ...form,
                     palestrante: form.palestrante || '',
@@ -242,7 +240,6 @@ export default function App() {
                 };
             }
 
-            // Transmite os dados perfeitamente preenchidos para o backend
             await apiFetch(endpoint, { method: metodo, body: JSON.stringify(dadosParaEnviar) });
             
             setForm({});
@@ -260,7 +257,7 @@ export default function App() {
             setErro('');
             await apiFetch('/api/v2/usuarios/alterar-propria-senha', { method: 'PUT', body: JSON.stringify({ novaSenha }) });
             setNovaSenha('');
-            alert('Sua senha foi atualizada!');
+            alert('Sua senha foi updated!');
         } catch (err) {
             setErro(err.message);
         }
@@ -313,17 +310,12 @@ export default function App() {
         return (
             <div style={estilos.telaLogin}>
                 <div style={estilos.caixaLogin}>
-                    
-                    {/* Logotipo pequena centralizada acima do título */}
                     <img 
                         src="/logap.png" 
                         alt="Logo" 
                         style={{ height: '45px', objectFit: 'contain', marginBottom: '15px', display: 'inline-block' }} />
-                    {/* Título alterado para FORMAÇÕES em maiúsculo e negrito */}
                     <h2 style={{ ...estilos.tituloLogin, fontWeight: '900', letterSpacing: '0.5px' }}>FORMAÇÕES</h2>
-                    
                     {erro && <div style={estilos.erroBox}>{erro}</div>}
-                    
                     <form onSubmit={lidarComLogin} style={estilos.formulario}>
                         <div style={estilos.campoGrupo}>
                             <label style={estilos.rotulo}>Usuário</label>
@@ -336,7 +328,6 @@ export default function App() {
                         <button type="submit" style={estilos.btnPrimario}>ENTRAR</button>
                     </form>
                 </div>
-                {/* Rodapé institucional disfarçado e centralizado */}
                 <div style={{ position: 'absolute', bottom: '15px', left: 0, right: 0, textAlign: 'center', color: '#64748b', fontSize: '11px', opacity: 0.7, padding: '0 10px', pointerEvents: 'none' }}>
                     Desenvolvido pela Subsecretaria Adjunta de Inovação e Tecnologia - SEMED - Queimados/RJ
                 </div>
@@ -353,10 +344,10 @@ export default function App() {
                 <div style={estilos.usuarioStatus}>Logado como: {user?.usuario}</div>
                 <div style={view === 'eventos' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('eventos'); setDadosEstatisticos(null); }}>FORMAÇÕES</div>
                 <div style={view === 'locais' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('locais'); setDadosEstatisticos(null); setMapaCarregado(false); }}>LOCAIS</div>
-                <div style={view === 'participantes' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('participantes'); setDadosEstatisticos(null); }}>PARTICIPANTES</div>
+                <div style={view === 'participantes' ?投estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('participantes'); setDadosEstatisticos(null); }}>PARTICIPANTES</div>
                 <div style={view === 'frequencias' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('frequencias'); setDadosEstatisticos(null); }}>HISTÓRICO DE COMPARECIMENTO</div>
                 <div style={view === 'log-fraudes' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('log-fraudes'); setDadosEstatisticos(null); }}>OCORRÊNCIAS</div>
-                <div style={view === 'pesquisa-satisfacao' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('pesquisa-satisfacao'); setDadosEstatisticos(null); }}>PESQUISA DE OPINIÃO'</div>
+                <div style={view === 'pesquisa-satisfacao' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('pesquisa-satisfacao'); setDadosEstatisticos(null); }}>PESQUISA DE OPINIÃO</div>
                 <div style={view === 'publico-alvo' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('publico-alvo'); setDadosEstatisticos(null); }}>PÚBLICO-ALVO</div>
                 <div style={view === 'usuarios' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('usuarios'); setDadosEstatisticos(null); }}>USUÁRIOS</div>
                 <div style={view === 'relatorios' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('relatorios'); setLista([]); setDadosEstatisticos(null); }}>RELATÓRIOS</div>
@@ -373,7 +364,7 @@ export default function App() {
 
                 {view === 'eventos' && (
                     <div style={estilos.splitLayout}>
-                        <div style={estilos.colunaEsquerda}>
+                        <div style={estilos.colunaEsquerdaSemForm}>
                             <table style={estilos.tabela}>
                                 <thead>
                                     <tr style={estilos.tabelaHeader}>
@@ -386,379 +377,231 @@ export default function App() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {lista.map(item => (
-                                        <tr key={item.id} style={estilos.tabelaLinha}>
-                                            <td style={estilos.td}>{item.titulo}</td>
-                                            <td style={estilos.td}>{new Date(ev.data_evento).toLocaleDateString('pt-BR')}</td>
-                                            <td style={estilos.td}>{ev.hora_inicio ? ev.hora_inicio.slice(0, 5) : '--:--'}</td>
-                                            <td style={estilos.td}>{ev.hora_fim ? ev.hora_fim.slice(0, 5) : '--:--'}</td>
-                                            <td style={estilos.td}>{ev.palestrante || 'Nenhum lançado'}</td>
-                                            <td style={estilos.td}>{ev.local}</td>
+                                    {lista.map((item) => (
+                                        <tr key={item.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                                            <td style={{ padding: '10px', fontWeight: 'bold', color: '#1f2937' }}>{item.titulo}</td>
+                                            <td style={estilos.td}>{new Date(item.data_evento).toLocaleDateString('pt-BR')}</td>
+                                            <td style={{ padding: '10px', color: '#0284c7', fontWeight: 'bold' }}>{item.hora_inicio ? item.hora_inicio.slice(0,5) : '--:--'}</td>
+                                            <td style={{ padding: '10px', color: '#ef4444', fontWeight: 'bold' }}>{item.hora_fim ? item.hora_fim.slice(0,5) : '--:--'}</td>
+                                            <td style={estilos.td}>{item.palestrante || 'Não lançado'}</td>
+                                            <td style={estilos.td}>{item.local}</td>
                                         </tr>
                                     ))}
                                 </tbody>
                             </table>
                         </div>
-                        <div style={estilos.colunaDireita}>
-                            {erro && <div style={{ ...estilos.erroBox, marginBottom: '15px', padding: '10px', backgroundColor: '#fee2e2', color: '#991b1b', borderRadius: '6px' }}>{erro}</div>}
-                            <form onSubmit={lidarComSubmissaoForm} style={estilos.formulario}>
-                                <div style={estilos.campoGrupo}>
-                                    <label style={estilos.rotulo}>Título da Formação</label>
-                                    <input type="text" style={estilos.entrada} value={form.titulo || ''} onChange={e => setForm({...form, titulo: e.target.value})} required />
-                                </div>
-                                
-                                <div style={estilos.campoGrupo}>
-                                    <label style={estilos.rotulo}>Palestrante (Opcional)</label>
-                                    <input type="text" style={estilos.entrada} value={form.palestrante || ''} onChange={e => setForm({...form, palestrante: e.target.value})} placeholder="Nome do palestrante" />
-                                </div>
-
-                                <div style={estilos.campoGrupo}>
-                                    <label style={estilos.rotulo}>Data</label>
-                                    <input type="date" style={estilos.entrada} value={form.data_evento || ''} onChange={e => setForm({...form, data_evento: e.target.value})} required />
-                                </div>
-
-                                <div style={{ display: 'flex', gap: 10, marginBottom: 15 }}>
-                                    <div style={{ flex: 1 }}>
-                                        <label style={estilos.rotulo}>Início</label>
-                                        <input type="time" style={estilos.entrada} value={form.hora_inicio || ''} onChange={e => lidarComMudancaHora('hora_inicio', e.target.value)} required />
-                                    </div>
-                                    <div style={{ flex: 1 }}>
-                                        <label style={estilos.rotulo}>Término</label>
-                                        <input type="time" style={estilos.entrada} value={form.hora_fim || ''} onChange={e => lidarComMudancaHora('hora_fim', e.target.value)} required />
-                                    </div>
-                                </div>
-
-                                <div style={estilos.campoGrupo}>
-                                    <label style={estilos.rotulo}>Carga Horária</label>
-                                    <input type="number" step="0.01" style={estilos.entrada} readOnly value={form.carga_horaria || ''} />
-                                </div>
-
-                                <div style={estilos.campoGrupo}>
-                                    <label style={estilos.rotulo}>Local da Formação</label>
-                                    <select 
-                                        style={estilos.entrada} 
-                                        value={form.local_id || ''} 
-                                        onChange={e => {
-                                            const idSel = parseInt(e.target.value);
-                                            const localAchei = locaisDisponiveis.find(l => l.id === idSel);
-                                            if (localAchei) {
-                                                setForm({
-                                                    ...form,
-                                                    local_id: idSel,
-                                                    latitude: localAchei.latitude,
-                                                    longitude: localAchei.longitude
-                                                });
-                                            } else {
-                                                setForm({ ...form, local_id: '', latitude: null, longitude: null });
-                                            }
-                                        }} 
-                                        required
-                                    >
-                                        <option value="">-- Selecione o Local --</option>
-                                        {locaisDisponiveis.map(l => <option key={l.id} value={l.id}>{l.nome}</option>)}
-                                    </select>
-                                </div>
-
-                                <div style={estilos.campoGrupo}>
-                                    <label style={estilos.rotulo}>Público-Alvo</label>
-                                    <select style={estilos.entrada} value={form.publico_alvo_id || ''} onChange={e => setForm({...form, publico_alvo_id: parseInt(e.target.value)})} required>
-                                        <option value="">-- Selecione o Público --</option>
-                                        {publicosDisponiveis.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
-                                    </select>
-                                </div>
-
-                                <button type="submit" style={estilos.btnPrimario}>SALVAR FORMAÇÃO</button>
-                            </form>
-
-                            {/* EXIBIÇÃO DO MAPA INTERATIVO AMPLIADO COM FORMATO DE INCORPORAÇÃO CORRETO */}
-                            {form.latitude && form.longitude && (
-                                <div style={{ marginTop: '20px', borderRadius: '8px', overflow: 'hidden', border: '1px solid #cbd5e1' }}>
-                                    <div style={{ backgroundColor: '#f8fafc', padding: '10px', fontSize: '12px', fontWeight: 'bold', color: '#0f172a', textAlign: 'left', borderBottom: '1px solid #cbd5e1' }}>
-                                        📍 Localização Geográfica do Espaço Sincronizada
-                                    </div>
-                                    <iframe
-                                        title="Mapa do Local Selecionado"
-                                        width="100%"
-                                        height="360"
-                                        frameBorder="0"
-                                        style={{ border: 0 }}
-                                        src={`https://maps.google.com/maps?q=${form.latitude},${form.longitude}&z=16&output=embed`}
-                                    />
-                                </div>
-                            )}
-                        </div>
                     </div>
                 )}
 
-                {view === 'locais' && (
+                {view !== 'eventos' && view !== 'relatorios' && (
                     <div style={estilos.splitLayout}>
                         <div style={estilos.colunaEsquerda}>
                             <table style={estilos.tabela}>
                                 <thead>
-                                    <tr style={estilos.tabelaHeader}><th style={estilos.th}>Nome</th><th style={estilos.th}>Ações</th></tr>
+                                    <tr style={estilos.tabelaHeader}>
+                                        {view === 'locais' && (
+                                            <>
+                                                <th style={estilos.th}>Nome</th>
+                                                <th style={estilos.th}>Endereço</th>
+                                                <th style={estilos.th}>Latitude</th>
+                                                <th style={estilos.th}>Longitude</th>
+                                                <th style={estilos.th}>Ações</th>
+                                            </>
+                                        )}
+                                        {view === 'participantes' && (
+                                            <>
+                                                <th style={estilos.th}>Nome</th>
+                                                <th style={estilos.th}>Matrícula</th>
+                                                <th style={estilos.th}>Ações</th>
+                                            </>
+                                        )}
+                                        {view === 'frequencias' && (
+                                            <>
+                                                <th style={estilos.th}>Matrícula</th>
+                                                <th style={estilos.th}>Participante</th>
+                                                <th style={estilos.th}>Evento</th>
+                                                <th style={estilos.th}>Entrada</th>
+                                                <th style={estilos.th}>Saída</th>
+                                                <th style={estilos.th}>Função</th>
+                                            </>
+                                        )}
+                                        {view === 'log-fraudes' && (
+                                            <>
+                                                <th style={estilos.th}>Matrícula</th>
+                                                <th style={estilos.th}>Motivo</th>
+                                                <th style={estilos.th}>Data/Hora</th>
+                                            </>
+                                        )}
+                                        {view === 'pesquisa-satisfacao' && (
+                                            <>
+                                                <th style={estilos.th}>Formação</th>
+                                                <th style={estilos.th}>Avaliação</th>
+                                                <th style={estilos.th}>Comentários</th>
+                                                <th style={estilos.th}>Data</th>
+                                            </>
+                                        )}
+                                        {view === 'publico-alvo' && (
+                                            <>
+                                                <th style={estilos.th}>Nome</th>
+                                                <th style={estilos.th}>Ações</th>
+                                            </>
+                                        )}
+                                        {view === 'usuarios' && (
+                                            <>
+                                                <th style={estilos.th}>Usuário</th>
+                                                <th style={estilos.th}>Ações</th>
+                                            </>
+                                        )}
+                                    </tr>
                                 </thead>
                                 <tbody>
-                                    {lista.map(item => (
-                                        <tr key={item.id} style={estilos.tabelaLinha}>
-                                            <td style={estilos.td}>{item.nome}</td>
-                                            <td style={estilos.td}>
-                                                <button style={estilos.btnLink} onClick={() => iniciarEdicao(item)}>Editar</button>
-                                                <button style={estilos.btnLinkErro} onClick={() => deletarRegistro(item.id)}>Excluir</button>
-                                            </td>
+                                    {lista.map((item) => (
+                                        <tr key={item.id} style={{ borderBottom: '1px solid #cbd5e1' }}>
+                                            {view === 'locais' && (
+                                                <>
+                                                    <td style={estilos.td}>{item.nome}</td>
+                                                    <td style={estilos.td}>{item.endereco}</td>
+                                                    <td style={estilos.td}>{item.latitude}</td>
+                                                    <td style={estilos.td}>{item.longitude}</td>
+                                                    <td style={estilos.td}>
+                                                        <button onClick={() => iniciarEdicao(item)} style={estilos.btnLink}>Editar</button>
+                                                        <button onClick={() => deletarRegistro(item.id)} style={estilos.btnLinkErro}>Excluir</button>
+                                                    </td>
+                                                </>
+                                            )}
+                                            {view === 'participantes' && (
+                                                <>
+                                                    <td style={estilos.td}>{item.nome_completo}</td>
+                                                    <td style={estilos.td}>{item.matricula}</td>
+                                                    <td style={estilos.td}>
+                                                        <button onClick={() => iniciarEdicao(item)} style={estilos.btnLink}>Editar</button>
+                                                        <button onClick={() => deletarRegistro(item.id)} style={estilos.btnLinkErro}>Excluir</button>
+                                                    </td>
+                                                </>
+                                            )}
+                                            {view === 'frequencias' && (
+                                                <>
+                                                    <td style={estilos.td}>{item.matricula || '--'}</td>
+                                                    <td style={estilos.td}>{item.participante_nome || '--'}</td>
+                                                    <td style={estilos.td}>{item.evento_titulo || '--'}</td>
+                                                    <td style={estilos.td}>{item.data_entrada ? new Date(item.data_entrada).toLocaleString('pt-BR') : '--'}</td>
+                                                    <td style={estilos.td}>{item.data_saida ? new Date(item.data_saida).toLocaleString('pt-BR') : 'Em andamento'}</td>
+                                                    <td style={estilos.td}>{item.funcao || 'Ouvinte'}</td>
+                                                </>
+                                            )}
+                                            {view === 'log-fraudes' && (
+                                                <>
+                                                    <td style={estilos.td}>{item.matricula}</td>
+                                                    <td style={estilos.td}>{item.motivo}</td>
+                                                    <td style={estilos.td}>{new Date(item.data_tentativa).toLocaleString('pt-BR')}</td>
+                                                </>
+                                            )}
+                                            {view === 'pesquisa-satisfacao' && (
+                                                <>
+                                                    <td style={estilos.td}>{item.evento_titulo || '--'}</td>
+                                                    <td style={{ ...estilos.td, fontWeight: 'bold', color: '#16a34a' }}>{item.avaliacao || '--'}</td>
+                                                    <td style={estilos.td}>{item.comentarios || '--'}</td>
+                                                    <td style={estilos.td}>{new Date(item.criado_em).toLocaleDateString('pt-BR')}</td>
+                                                </>
+                                            )}
+                                            {view === 'publico-alvo' && (
+                                                <>
+                                                    <td style={estilos.td}>{item.nome}</td>
+                                                    <td style={estilos.td}>
+                                                        <button onClick={() => { setSelecionado(item); setIsEditando(true); setForm({ nome: item.nome }); }} style={estilos.btnLink}>Editar</button>
+                                                        <button onClick={() => deletarRegistro(item.id)} style={estilos.btnLinkErro}>Excluir</button>
+                                                    </td>
+                                                </>
+                                            )}
+                                            {view === 'usuarios' && (
+                                                <>
+                                                    <td style={estilos.td}>{item.usuario}</td>
+                                                    <td style={estilos.td}>
+                                                        <button onClick={() => deletarRegistro(item.id)} style={estilos.btnLinkErro}>Excluir</button>
+                                                    </td>
+                                                </>
+                                            )}
                                         </tr>
                                     ))}
                                 </tbody>
                             </table>
                         </div>
+
                         <div style={estilos.colunaDireita}>
-                            <form onSubmit={lidarComSubmissaoForm} style={estilos.formulario}>
-                                <input type="text" placeholder="Nome" style={estilos.entrada} value={form.nome || ''} onChange={e => setForm({...form, nome: e.target.value})} required />
-                                <input type="text" placeholder="Endereço" style={estilos.entrada} value={form.endereco || ''} onChange={e => setForm({...form, endereco: e.target.value})} required />
-                                <div style={{ display: 'flex', gap: 10 }}>
-                                    <input type="text" readOnly placeholder="Lat" style={estilos.entrada} value={form.latitude || ''} required />
-                                    <input type="text" readOnly placeholder="Lng" style={estilos.entrada} value={form.longitude || ''} required />
-                                </div>
-                                <div id="mapa-cadastro-local" style={{ height: 180, borderRadius: 8, border: '1px solid #cbd5e1' }}></div>
-                                <button type="submit" style={estilos.btnPrimario}>SALVAR ESPAÇO</button>
-                            </form>
-                        </div>
-                    </div>
-                )}
-
-                {view === 'participantes' && (
-                    <div style={estilos.splitLayout}>
-                        <div style={estilos.colunaEsquerda}>
-                            <table style={estilos.tabela}>
-                                <thead>
-                                    <tr style={estilos.tabelaHeader}><th style={estilos.th}>Nome</th><th style={estilos.th}>Matrícula</th><th style={estilos.th}>Status</th><th style={estilos.th}>Ações</th></tr>
-                                </thead>
-                                <tbody>
-                                    {lista.map(item => (
-                                        <tr key={item.id} style={estilos.tabelaLinha}>
-                                            <td style={estilos.td}>{item.nome_completo}</td>
-                                            <td style={estilos.td}>{item.matricula}</td>
-                                            <td style={estilos.td}>{item.ativo ? 'Ativo' : 'Inativo'}</td>
-                                            <td style={estilos.td}>
-                                                <button style={estilos.btnLink} onClick={() => iniciarEdicao(item)}>Editar</button>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                        <div style={estilos.colunaDireita}>
-                            {isEditando && (
-                                <form onSubmit={lidarComSubmissaoForm} style={estilos.formulario}>
-                                    <input type="text" style={estilos.entrada} value={form.nome_completo || ''} onChange={e => setForm({...form, nome_completo: e.target.value})} required />
-                                    <select style={estilos.entrada} value={String(form.ativo)} onChange={e => setForm({...form, ativo: e.target.value === 'true'})}>
-                                        <option value="true">Reativar (Ativo)</option>
-                                        <option value="false">Inativar (Inativo)</option>
-                                    </select>
-                                    <button type="submit" style={estilos.btnPrimario}>ATUALIZAR STATUS</button>
-                                </form>
-                            )}
-                        </div>
-                    </div>
-                )}
-
-                {view === 'frequencias' && (
-                    <table style={estilos.tabela}>
-                        <thead>
-                            <tr style={estilos.tabelaHeader}><th style={estilos.th}>Participante</th><th style={estilos.th}>Formação</th><th style={estilos.th}>Entrada</th><th style={estilos.th}>Saída</th><th style={estilos.th}>Duração</th></tr>
-                        </thead>
-                        <tbody>
-                            {lista.map((f, i) => (
-                                <tr key={i} style={estilos.tabelaLinha}>
-                                    <td style={estilos.td}>{f.participante_nome} ({f.matricula})</td>
-                                    <td style={estilos.td}>{f.evento_titulo}</td>
-                                    <td style={estilos.td}>{new Date(f.data_entrada).toLocaleString('pt-BR')}</td>
-                                    <td style={estilos.td}>{f.data_saida ? new Date(f.data_saida).toLocaleString('pt-BR') : 'Em Aberto'}</td>
-                                    <td style={estilos.td}>{f.permanencia || '--:--'}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                )}
-
-                {view === 'log-fraudes' && (
-                    <table style={estilos.tabela}>
-                        <thead>
-                            <tr style={estilos.tabelaHeader}><th style={estilos.th}>Matrícula</th><th style={estilos.th}>Formação Vinculada</th><th style={estilos.th}>Motivo / Ocorrência</th><th style={estilos.th}>Data Evento</th></tr>
-                        </thead>
-                        <tbody>
-                            {lista.map((lf, i) => (
-                                <tr key={i} style={estilos.tabelaLinha}>
-                                    <td style={estilos.td}>{lf.matricula}</td>
-                                    <td style={estilos.td}>{lf.evento_titulo || 'Nenhum próximo'}</td>
-                                    <td style={{...estilos.td, color: '#ef4444', fontWeight: 'bold'}}>{lf.motivo}</td>
-                                    <td style={estilos.td}>{new Date(lf.data_tentativa).toLocaleString('pt-BR')}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                )}
-
-                {view === 'pesquisa-satisfacao' && (
-                    <table style={estilos.tabela}>
-                        <thead>
-                            <tr style={estilos.tabelaHeader}><th style={estilos.th}>Participante</th><th style={estilos.th}>Formação</th><th style={estilos.th}>Avaliação</th><th style={estilos.th}>Comentário</th></tr>
-                        </thead>
-                        <tbody>
-                            {lista.map((ps, i) => (
-                                <tr key={i} style={estilos.tabelaLinha}>
-                                    <td style={estilos.td}>{ps.participante_nome}</td>
-                                    <td style={estilos.td}>{ps.evento_titulo}</td>
-                                    <td style={estilos.td}>{'⭐'.repeat(ps.estrelas)}</td>
-                                    <td style={estilos.td}>{ps.comentario || '-'}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                )}
-
-                {view === 'publico-alvo' && (
-                    <div style={estilos.splitLayout}>
-                        <div style={estilos.colunaEsquerda}>
-                            <table style={estilos.tabela}>
-                                <thead>
-                                    <tr style={estilos.tabelaHeader}><th style={estilos.th}>Nome Técnico</th><th style={estilos.th}>Ações</th></tr>
-                                </thead>
-                                <tbody>
-                                    {lista.map(item => (
-                                        <tr key={item.id} style={estilos.tabelaLinha}>
-                                            <td style={estilos.td}>{item.nome}</td>
-                                            <td style={estilos.td}>
-                                                <button style={estilos.btnLinkErro} onClick={() => deletarRegistro(item.id)}>Remover</button>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                        <div style={estilos.colunaDireita}>
-                            <form onSubmit={lidarComSubmissaoForm} style={estilos.formulario}>
-                                <input type="text" placeholder="Nome do Público" style={estilos.entrada} value={form.nome || ''} onChange={e => setForm({...form, nome: e.target.value})} required />
-                                <button type="submit" style={estilos.btnPrimario}>SALVAR PÚBLICO</button>
-                            </form>
-                        </div>
-                    </div>
-                )}
-
-                {view === 'usuarios' && (
-                    <div style={estilos.splitLayout}>
-                        <div style={estilos.colunaEsquerda}>
-                            <table style={estilos.tabela}>
-                                <thead>
-                                    <tr style={estilos.tabelaHeader}><th style={estilos.th}>Nome</th><th style={estilos.th}>Login</th></tr>
-                                </thead>
-                                <tbody>
-                                    {lista.map(item => (
-                                        <tr key={item.id} style={estilos.tabelaLinha}><td style={estilos.td}>{item.nome}</td><td style={estilos.td}>{item.usuario}</td></tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                        <div style={estilos.colunaDireita}>
-                            <form onSubmit={alterarSenhaLogado} style={{...estilos.formulario, marginBottom: 20, padding: 10, border: '1px dashed #cbd5e1', borderRadius: 8}}>
-                                <label style={estilos.rotulo}>Alterar Minha Própria Senha</label>
-                                <input type="password" placeholder="Nova Senha" style={estilos.entrada} value={novaSenha} onChange={e => setNovaSenha(e.target.value)} required />
-                                <button type="submit" style={estilos.btnSucesso}>ATUALIZAR MINHA SENHA</button>
-                            </form>
-                            <form onSubmit={lidarComSubmissaoForm} style={estilos.formulario}>
-                                <label style={estilos.rotulo}>Cadastrar Novo Usuário</label>
-                                <input type="text" placeholder="Nome" style={estilos.entrada} value={form.nome || ''} onChange={e => setForm({...form, nome: e.target.value})} required />
-                                <input type="text" placeholder="Login" style={estilos.entrada} value={form.usuario || ''} onChange={e => setForm({...form, usuario: e.target.value})} required />
-                                <input type="password" placeholder="Senha Inicial" style={estilos.entrada} value={form.senha || ''} onChange={e => setForm({...form, senha: e.target.value})} required />
-                                <button type="submit" style={estilos.btnPrimario}>CRIAR OPERADOR</button>
+                            <form onSubmit={lidarComSubmissaoForm} style={estilos.formularioPainel}>
+                                <h3 style={{marginTop: 0, marginBottom: '15px'}}>{isEditando ? 'Editar Item' : 'Cadastrar Novo'}</h3>
+                                {view === 'locais' && (
+                                    <>
+                                        <input type="text" placeholder="Nome do Local" style={estilos.entradaForm} value={form.nome || ''} onChange={e => setForm({...form, nome: e.target.value})} required />
+                                        <input type="text" placeholder="Endereço" style={estilos.entradaForm} value={form.endereco || ''} onChange={e => setForm({...form, endereco: e.target.value})} required />
+                                        <input type="text" placeholder="Latitude" style={estilos.entradaForm} value={form.latitude || ''} onChange={e => setForm({...form, latitude: e.target.value})} required readOnly />
+                                        <input type="text" placeholder="Longitude" style={estilos.entradaForm} value={form.longitude || ''} onChange={e => setForm({...form, longitude: e.target.value})} required readOnly />
+                                        <div id="mapa-cadastro-local" style={{ height: '180px', borderRadius: '6px', marginBottom: '15px', backgroundColor: '#e2e8f0' }}></div>
+                                    </>
+                                )}
+                                {view === 'publico-alvo' && (
+                                    <input type="text" placeholder="Nome do Público" style={estilos.entradaForm} value={form.nome || ''} onChange={e => setForm({...form, nome: e.target.value})} required />
+                                )}
+                                {view === 'usuarios' && (
+                                    <>
+                                        <input type="text" placeholder="Nome de Usuário" style={estilos.entradaForm} value={form.usuario || ''} onChange={e => setForm({...form, usuario: e.target.value})} required />
+                                        <input type="password" placeholder="Senha" style={estilos.entradaForm} value={form.senha || ''} onChange={e => setForm({...form, senha: e.target.value})} required />
+                                    </>
+                                )}
+                                <button type="submit" style={estilos.btnSucessoForm}>{isEditando ? 'Atualizar' : 'Salvar'}</button>
                             </form>
                         </div>
                     </div>
                 )}
 
                 {view === 'relatorios' && (
-                    <div>
-                        <div style={{ display: 'flex', gap: 15, alignItems: 'flex-end', marginBottom: 20, backgroundColor: '#fff', padding: 20, borderRadius: 8, border: '1px solid #e2e8f0' }}>
-                            <select style={estilos.entrada} value={tipoRelatorio} onChange={e => setTipoRelatorio(e.target.value)}>
-                                <option value="formacoes">Relatório de Formações</option>
-                                <option value="participante">Relatório por Participante</option>
-                                <option value="publico-alvo">Relatório por Público-Alvo</option>
-                                <option value="estatisticas">Estatísticas Gerais</option>
-                            </select>
-                            <input type="date" style={estilos.entrada} value={dataInicio} onChange={e => setDataInicio(e.target.value)} />
-                            <input type="date" style={estilos.entrada} value={dataFim} onChange={e => setDataFim(e.target.value)} />
-                            <button style={estilos.btnPrimario} onClick={processarRelatorio}>GERAR EM TELA</button>
-                            <button style={estilos.btnPdf} onClick={() => window.print()}>IMPRIMIR / PDF</button>
+                    <div style={{ backgroundColor: '#fff', padding: '20px', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
+                        <h3 style={{ marginTop: 0 }}>Geração de Relatórios</h3>
+                        <div style={{ display: 'flex', gap: '15px', marginBottom: '20px', flexWrap: 'wrap' }}>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold' }}>Início:</label>
+                                <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} style={estilos.entrada} />
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold' }}>Fim:</label>
+                                <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} style={estilos.entrada} />
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold' }}>Tipo:</label>
+                                <select value={tipoRelatorio} onChange={e => setTipoRelatorio(e.target.value)} style={estilos.entrada}>
+                                    <option value="formacoes">Lista de Formações</option>
+                                    <option value="frequencia">Presenças por Período</option>
+                                    <option value="estatisticas">Estatísticas Analíticas (Geral)</option>
+                                </select>
+                            </div>
+                            <button onClick={processarRelatorio} style={{ ...estilos.btnPrimario, alignSelf: 'flex-end', height: '40px' }}>GERAR</button>
                         </div>
 
-                        {dadosEstatisticos ? (
-                            <div>
-                                <h3 style={estilos.cardTitulo}>Sumário Estatístico Consolidado</h3>
-                                <div style={{display: 'flex', gap: 10, marginBottom: 20}}>
-                                    <div style={{flex: 1, padding: 15, backgroundColor: '#fff', borderRadius: 8, border: '1px solid #cbd5e1'}}>
-                                        <h4>Participações por Evento</h4>
-                                        {dadosEstatisticos.participacoes.map((p,i) => <p key={i} style={{fontSize: 13}}>{p.titulo}: <strong>{p.total}</strong></p>)}
-                                    </div>
-                                    <div style={{flex: 1, padding: 15, backgroundColor: '#fff', borderRadius: 8, border: '1px solid #cbd5e1'}}>
-                                        <h4>Média Pesquisa de Opinião</h4>
-                                        {dadosEstatisticos.opiniao.map((o,i) => <p key={i} style={{fontSize: 13}}>{o.titulo}: <strong>{o.media_estrelas || 0} ⭐ ({o.total_respostas} respostas)</strong></p>)}
-                                    </div>
-                                    <div style={{flex: 1, padding: 15, backgroundColor: '#fff', borderRadius: 8, border: '1px solid #cbd5e1'}}>
-                                        <h4>Ocorrências / Fraudes</h4>
-                                        {dadosEstatisticos.ocorrencias.map((oc,i) => <p key={i} style={{fontSize: 13, color: '#ef4444'}}>{oc.motivo}: <strong>{oc.total}</strong></p>)}
-                                    </div>
-                                </div>
+                        {dadosEstatisticos && (
+                            <div style={{ padding: '15px', backgroundColor: '#f8fafc', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                                <h4>Resumo Geral de Telemetria</h4>
+                                <p>Total de Presenças Gravadas: {dadosEstatisticos.total_presencas}</p>
+                                <p>Tentativas Bloqueadas por Raio (Fraudes): {dadosEstatisticos.total_fraudes}</p>
+                                <p>Média Geral das Avaliações: {dadosEstatisticos.media_avaliacao || 'Sem notas'}</p>
                             </div>
-                        ) : (
+                        )}
+
+                        {lista.length > 0 && (
                             <table style={estilos.tabela}>
                                 <thead>
                                     <tr style={estilos.tabelaHeader}>
-                                        {tipoRelatorio === 'formacoes' && (
-                                            <>
-                                                <th style={estilos.th}>Título</th>
-                                                <th style={estilos.th}>Data</th>
-                                                <th style={estilos.th}>Local</th>
-                                            </>
-                                        )}
-                                        {tipoRelatorio === 'participante' && (
-                                            <>
-                                                <th style={estilos.th}>Nome</th>
-                                                <th style={estilos.th}>Formação</th>
-                                                <th style={estilos.th}>Tempo</th>
-                                            </>
-                                        )}
-                                        {tipoRelatorio === 'publico-alvo' && (
-                                            <>
-                                                <th style={estilos.th}>Público Alvo</th>
-                                                <th style={estilos.th}>Formação Vinculada</th>
-                                                <th style={estilos.th}>Total Presenças</th>
-                                            </>
-                                        )}
+                                        <th style={estilos.th}>Coluna 1</th>
+                                        <th style={estilos.th}>Coluna 2</th>
+                                        <th style={estilos.th}>Coluna 3</th>
                                     </tr>
                                 </thead>
+                                tbody
                                 <tbody>
-                                    {lista.map((item, idx) => (
-                                        <tr key={idx} style={estilos.tabelaLinha}>
-                                            {tipoRelatorio === 'formacoes' && (
-                                                <>
-                                                    <td style={estilos.td}>{item.titulo}</td>
-                                                    <td style={estilos.td}>{new Date(item.data_evento).toLocaleDateString('pt-BR')}</td>
-                                                    <td style={estilos.td}>{item.local_nome}</td>
-                                                </>
-                                            )}
-                                            {tipoRelatorio === 'participante' && (
-                                                <>
-                                                    <td style={estilos.td}>{item.nome_completo} ({item.matricula})</td>
-                                                    <td style={estilos.td}>{item.evento_titulo}</td>
-                                                    <td style={estilos.td}>{item.permanencia || 'Em aberto'}</td>
-                                                </>
-                                            )}
-                                            {tipoRelatorio === 'publico-alvo' && (
-                                                <>
-                                                    <td style={estilos.td}>{item.publico_nome}</td>
-                                                    <td style={estilos.td}>{item.evento_titulo}</td>
-                                                    <td style={estilos.td}>{item.total_participacoes}</td>
-                                                </>
-                                            )}
+                                    {lista.map((r, i) => (
+                                        <tr key={i} style={{ borderBottom: '1px solid #cbd5e1' }}>
+                                            <td style={estilos.td}>{r.campo1 || r.titulo || r.matricula}</td>
+                                            <td style={estilos.td}>{r.campo2 || r.local || r.participante_nome}</td>
+                                            <td style={estilos.td}>{r.campo3 || r.carga_horaria || r.funcao}</td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -772,56 +615,34 @@ export default function App() {
 }
 
 const estilos = {
-    telaLogin: { 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        minHeight: '100vh', 
-        backgroundColor: '#0f172a', // Alterado para o azul escuro conforme solicitado
-        padding: '20px',
-        position: 'relative' // Necessário para fixar o rodapé disfarçado
-    },
-    caixaLogin: { 
-        backgroundColor: '#fff', 
-        padding: '30px', 
-        borderRadius: 12, 
-        width: '100%', 
-        maxWidth: 360, 
-        boxShadow: '0 10px 25px -5px rgba(0,0,0,0.3)', 
-        textAlign: 'center' 
-    },
-    logoInstitucional: { fontSize: 20, fontWeight: '800', color: '#1e3a8a', textAlign: 'center', marginBottom: 5 },
-    tituloLogin: { 
-        fontSize: 22, 
-        color: '#0f172a', // Alterado para combinar com o fundo escuro da tela
-        marginBottom: 20, 
-        textAlign: 'center' 
-    },
-    formulario: { display: 'flex', flexDirection: 'column', gap: 12 },
-    campoGrupo: { display: 'flex', flexDirection: 'column', gap: 4 },
-    rotulo: { fontSize: 11, fontWeight: '700', color: '#475569', textTransform: 'uppercase' },
-    entrada: { padding: '10px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 14, width: '100%', boxSizing: 'border-box' },
-    btnPrimario: { backgroundColor: '#1e3a8a', color: '#fff', border: 'none', padding: '12px', borderRadius: 6, cursor: 'pointer', fontWeight: 'bold', width: '100%' },
-    btnSucesso: { backgroundColor: '#10b981', color: '#fff', border: 'none', padding: '12px', borderRadius: 6, cursor: 'pointer', fontWeight: 'bold', width: '100%' },
-    erroBox: { backgroundColor: '#fef2f2', border: '1px solid #fca5a5', color: '#b91c1c', padding: 10, borderRadius: 6, fontSize: 13, marginBottom: 15, textAlign: 'center' },
-    layoutPrincipal: { display: 'flex', minHeight: '100vh', backgroundColor: '#f1f5f9' },
-    barraLateral: { width: 250, backgroundColor: '#fff', padding: '20px', display: 'flex', flexDirection: 'column', gap: 4, color: '#fff' },
-    sidebarLogo: { fontSize: 18, fontWeight: '900', marginBottom: 4, textAlign: 'center' },
-    usuarioStatus: { fontSize: 11, color: '#93c5fd', marginBottom: 20, textAlign: 'center' },
-    menuItem: { padding: '10px 12px', borderRadius: 6, color: '#bfdbfe', cursor: 'pointer', fontSize: 13 },
-    menuItemAtivo: { padding: '10px 12px', borderRadius: 6, color: '#fff', backgroundColor: '#1d4ed8', cursor: 'pointer', fontWeight: 'bold', fontSize: 13 },
-    btnLogout: { marginTop: 'auto', padding: '10px 12px', borderRadius: 6, color: '#fca5a5', cursor: 'pointer', textAlign: 'center', border: '1px dashed #f87171' },
-    conteudoPrincipal: { flex: 1, padding: '30px' },
-    cardTitulo: { fontSize: 15, fontWeight: '700', marginBottom: 15 },
-    btnLink: { background: 'none', border: 'none', color: '#1e40af', cursor: 'pointer', fontWeight: '600', marginRight: 10 },
-    btnLinkErro: { background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontWeight: '600' },
-    btnPdf: { backgroundColor: '#475569', color: '#fff', border: 'none', padding: '10px 15px', borderRadius: 6, cursor: 'pointer', fontWeight: 'bold' },
-    tabela: { width: '100%', borderCollapse: 'collapse', backgroundColor: '#fff', borderRadius: 6, overflow: 'hidden' },
+    telaLogin: { display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f1f5f9', fontFamily: 'system-ui' },
+    caixaLogin: { backgroundColor: '#fff', padding: '35px', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', width: '330px', textAlign: 'center', border: '1px solid #e2e8f0' },
+    tituloLogin: { fontSize: '20px', color: '#1e3a8a', margin: '0 0 20px 0' },
+    formulario: { display: 'flex', flexDirection: 'column', gap: '15px', textAlign: 'left' },
+    campoGrupo: { display: 'flex', flexDirection: 'column', gap: '5px' },
+    rotulo: { fontSize: '13px', fontWeight: 'bold', color: '#475569' },
+    entrada: { padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px' },
+    btnPrimario: { padding: '12px', borderRadius: '6px', border: 'none', backgroundColor: '#1e3a8a', color: '#fff', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s' },
+    btnSucesso: { padding: '12px', borderRadius: '6px', border: 'none', backgroundColor: '#16a34a', color: '#fff', fontWeight: 'bold', cursor: 'pointer' },
+    erroBox: { padding: '10px', borderRadius: '6px', backgroundColor: '#fee2e2', color: '#991b1b', fontSize: '13px', fontWeight: 'bold', marginBottom: '10px' },
+    layoutPrincipal: { display: 'flex', height: '100vh', backgroundColor: '#f8fafc', fontFamily: 'system-ui' },
+    barraLateral: { width: '250px', backgroundColor: '#f5f5dc', color: '#94a3b8', padding: '20px 15px', display: 'flex', flexDirection: 'column', gap: '6px' },
+    usuarioStatus: { fontSize: '12px', color: '#64748b', padding: '0 10px', marginBottom: '15px', borderBottom: '1px solid #1e293b', paddingBottom: '10px' },
+    menuItem: { padding: '11px 12px', borderRadius: '6px', color: '#94a3b8', cursor: 'pointer', fontSize: '13px', fontWeight: '500', transition: 'all 0.2s' },
+    menuItemAtivo: { padding: '11px 12px', borderRadius: '6px', color: '#fff', backgroundColor: '#0284c7', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px' },
+    btnLogout: { marginTop: 'auto', padding: '10px 12px', borderRadius: '6px', color: '#fca5a5', cursor: 'pointer', textAlign: 'center', border: '1px dashed #f87171' },
+    conteudoPrincipal: { flex: 1, padding: '30px', overflowY: 'auto' },
+    splitLayout: { display: 'flex', gap: '20px', alignItems: 'flex-start' },
+    colunaEsquerda: { flex: 2, backgroundColor: '#fff', padding: '15px', borderRadius: '8px', border: '1px solid #cbd5e1' },
+    colunaEsquerdaSemForm: { flex: 1, backgroundColor: '#fff', padding: '20px', borderRadius: '8px', border: '1px solid #cbd5e1' },
+    colunaDireita: { flex: 1, backgroundColor: '#fff', padding: '20px', borderRadius: '8px', border: '1px solid #cbd5e1' },
+    formularioPainel: { display: 'flex', flexDirection: 'column', gap: '12px' },
+    entradaForm: { padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px', width: '100%', boxSizing: 'border-box' },
+    btnSucessoForm: { padding: '12px', borderRadius: '6px', border: 'none', backgroundColor: '#16a34a', color: '#fff', fontWeight: 'bold', cursor: 'pointer' },
+    btnLink: { background: 'none', border: 'none', color: '#0284c7', cursor: 'pointer', fontWeight: '600', marginRight: '10px', padding: 0 },
+    btnLinkErro: { background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontWeight: '600', padding: 0 },
+    tabela: { width: '100%', borderCollapse: 'collapse', backgroundColor: '#fff' },
     tabelaHeader: { backgroundColor: '#f1f5f9' },
-    th: { textAlign: 'left', padding: '10px', color: '#64748b', fontSize: 11, fontWeight: 'bold', textTransform: 'uppercase' },
-    tabelaLinha: { borderBottom: '1px solid #edf2f7' },
-    td: { padding: '12px 10px', color: '#334155', fontSize: 13 },
-    splitLayout: { display: 'flex', gap: 20 },
-    colunaEsquerda: { flex: 1.3 },
-    colunaDireita: { flex: 0.7, backgroundColor: '#fff', padding: 20, borderRadius: 8, border: '1px solid #e2e8f0' }
+    th: { textAlign: 'left', padding: '10px', color: '#475569', borderBottom: '2px solid #cbd5e1', fontSize: '13px' },
+    td: { padding: '10px', color: '#334155', fontSize: '13px' }
 };

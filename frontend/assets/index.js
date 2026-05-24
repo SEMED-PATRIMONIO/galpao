@@ -708,6 +708,22 @@ app.get('/api/v2/relatorios/:tipo', verificarToken, async (req, res) => {
     }
 });
 
+app.get('/api/v2/admin/eventos', async (req, res) => {
+    try {
+        // Traz o histórico de todas as formações (passadas e futuras) 
+        // Ordenado do mais atual para o mais antigo (DESC)
+        const result = await pool.query(`
+            SELECT id, titulo, data_evento, hora_inicio, hora_fim, palestrante, local 
+            FROM eventos 
+            ORDER BY data_evento DESC, hora_inicio DESC
+        `);
+        return res.json(result.rows);
+    } catch (error) {
+        console.error("Erro crítico na rota exclusiva do Admin:", error.message);
+        return res.status(500).json({ error: 'Erro interno ao carregar listagem global de eventos.' });
+    }
+});
+
 app.use((req, res) => res.status(404).json({ error: 'Rota não encontrada.' }));
 app.use((err, req, res, next) => res.status(500).json({ error: 'Erro crítico interno.' }));
 

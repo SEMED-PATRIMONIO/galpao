@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 
 export default function App() {
-    const obtenerUsuarioSeguro = () => {
+    const obterUsuarioSeguro = () => {
         try {
             const dadosSalvos = localStorage.getItem('admin_user');
             if (!dadosSalvos) return null;
@@ -51,7 +51,7 @@ export default function App() {
             'Content-Type': 'application/json',
             ...(token && { 'Authorization': `Bearer ${token}` })
         };
-        const API_URL = 'https://formar.paiva.api.br'; // Sua URL do backend
+        const API_URL = 'https://formar.paiva.api.br';
         const response = await fetch(`${API_URL}${endpoint}`, { ...options, headers });
         if (response.status === 401 || response.status === 403) {
             lidarComLogout();
@@ -69,7 +69,6 @@ export default function App() {
             setErro('');
             let endpoint = '';
             
-            // Alterado para a sua nova rota administrativa exclusiva de eventos
             if (view === 'eventos') endpoint = '/api/v2/admin/eventos';
             else if (view === 'locais') endpoint = '/api/v2/locais';
             else if (view === 'participantes') endpoint = '/api/v2/participantes';
@@ -170,7 +169,7 @@ export default function App() {
             setErro('');
             const data = await apiFetch('/api/auth/login', {
                 method: 'POST',
-                body: JSON.stringify({ usuario: usuarioInput, width: '100%', senha: senhaInput })
+                body: JSON.stringify({ usuario: usuarioInput, senha: senhaInput })
             });
             if (data.deve_alterar_senha) {
                 setUser({ usuario: usuarioInput, deve_alterar_senha: true });
@@ -257,7 +256,7 @@ export default function App() {
             setErro('');
             await apiFetch('/api/v2/usuarios/alterar-propria-senha', { method: 'PUT', body: JSON.stringify({ novaSenha }) });
             setNovaSenha('');
-            alert('Sua senha foi updated!');
+            alert('Sua senha foi alterada!');
         } catch (err) {
             setErro(err.message);
         }
@@ -344,7 +343,7 @@ export default function App() {
                 <div style={estilos.usuarioStatus}>Logado como: {user?.usuario}</div>
                 <div style={view === 'eventos' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('eventos'); setDadosEstatisticos(null); }}>FORMAÇÕES</div>
                 <div style={view === 'locais' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('locais'); setDadosEstatisticos(null); setMapaCarregado(false); }}>LOCAIS</div>
-                <div style={view === 'participantes' ?投estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('participantes'); setDadosEstatisticos(null); }}>PARTICIPANTES</div>
+                <div style={view === 'participantes' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('participantes'); setDadosEstatisticos(null); }}>PARTICIPANTES</div>
                 <div style={view === 'frequencias' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('frequencias'); setDadosEstatisticos(null); }}>HISTÓRICO DE COMPARECIMENTO</div>
                 <div style={view === 'log-fraudes' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('log-fraudes'); setDadosEstatisticos(null); }}>OCORRÊNCIAS</div>
                 <div style={view === 'pesquisa-satisfacao' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('pesquisa-satisfacao'); setDadosEstatisticos(null); }}>PESQUISA DE OPINIÃO</div>
@@ -595,7 +594,6 @@ export default function App() {
                                         <th style={estilos.th}>Coluna 3</th>
                                     </tr>
                                 </thead>
-                                tbody
                                 <tbody>
                                     {lista.map((r, i) => (
                                         <tr key={i} style={{ borderBottom: '1px solid #cbd5e1' }}>
@@ -626,7 +624,7 @@ const estilos = {
     btnSucesso: { padding: '12px', borderRadius: '6px', border: 'none', backgroundColor: '#16a34a', color: '#fff', fontWeight: 'bold', cursor: 'pointer' },
     erroBox: { padding: '10px', borderRadius: '6px', backgroundColor: '#fee2e2', color: '#991b1b', fontSize: '13px', fontWeight: 'bold', marginBottom: '10px' },
     layoutPrincipal: { display: 'flex', height: '100vh', backgroundColor: '#f8fafc', fontFamily: 'system-ui' },
-    barraLateral: { width: '250px', backgroundColor: '#f5f5dc', color: '#94a3b8', padding: '20px 15px', display: 'flex', flexDirection: 'column', gap: '6px' },
+    barraLateral: { width: '250px', backgroundColor: '#fff', color: '#94a3b8', padding: '20px 15px', display: 'flex', flexDirection: 'column', gap: '6px' },
     usuarioStatus: { fontSize: '12px', color: '#64748b', padding: '0 10px', marginBottom: '15px', borderBottom: '1px solid #1e293b', paddingBottom: '10px' },
     menuItem: { padding: '11px 12px', borderRadius: '6px', color: '#94a3b8', cursor: 'pointer', fontSize: '13px', fontWeight: '500', transition: 'all 0.2s' },
     menuItemAtivo: { padding: '11px 12px', borderRadius: '6px', color: '#fff', backgroundColor: '#0284c7', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px' },

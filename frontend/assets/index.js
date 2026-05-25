@@ -416,17 +416,34 @@ app.delete('/api/v2/setor/:id', verificarToken, async (req, res) => {
 });
 
 // NOVO: Endpoints CRUD para Área
-app.get('/api/v2/area', async (req, res) => {
-    try { return res.json((await pool.query('SELECT * FROM area ORDER BY nome ASC')).rows); } catch (e) { return res.status(500).json({ error: e.message }); }
+app.get(['/api/v2/area', '/api/v2/areas'], async (req, res) => {
+    try { 
+        return res.json((await pool.query('SELECT * FROM area ORDER BY nome ASC')).rows); 
+    } catch (e) { 
+        return res.status(500).json({ error: e.message }); 
+    }
 });
-app.post('/api/v2/area', verificarToken, async (req, res) => {
-    try { return res.json((await pool.query('INSERT INTO area (nome, ativo) VALUES ($1, true) RETURNING *', [req.body.nome])).rows[0]); } catch (e) { return res.status(500).json({ error: e.message }); }
+app.post(['/api/v2/area', '/api/v2/areas'], verificarToken, async (req, res) => {
+    try { 
+        return res.json((await pool.query('INSERT INTO area (nome, ativo) VALUES ($1, true) RETURNING *', [req.body.nome])).rows[0]); 
+    } catch (e) { 
+        return res.status(500).json({ error: e.message }); 
+    }
 });
-app.put('/api/v2/area/:id', verificarToken, async (req, res) => {
-    try { return res.json((await pool.query('UPDATE area SET nome = $1 WHERE id = $2 RETURNING *', [req.body.nome, req.params.id])).rows[0]); } catch (e) { return res.status(500).json({ error: e.message }); }
+app.put(['/api/v2/area/:id', '/api/v2/areas/:id'], verificarToken, async (req, res) => {
+    try { 
+        return res.json((await pool.query('UPDATE area SET nome = $1 WHERE id = $2 RETURNING *', [req.body.nome, req.params.id])).rows[0]); 
+    } catch (e) { 
+        return res.status(500).json({ error: e.message }); 
+    }
 });
-app.delete('/api/v2/area/:id', verificarToken, async (req, res) => {
-    try { await pool.query('DELETE FROM area WHERE id = $1', [req.params.id]); return res.json({ success: true }); } catch (e) { return res.status(500).json({ error: e.message }); }
+app.delete(['/api/v2/area/:id', '/api/v2/areas/:id'], verificarToken, async (req, res) => {
+    try { 
+        await pool.query('DELETE FROM area WHERE id = $1', [req.params.id]); 
+        return res.json({ success: true }); 
+    } catch (e) { 
+        return res.status(500).json({ error: e.message }); 
+    }
 });
 
 app.get('/api/v2/locais', async (req, res) => {

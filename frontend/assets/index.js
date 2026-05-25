@@ -402,17 +402,39 @@ app.delete('/api/v2/eventos/:id', verificarToken, async (req, res) => {
 // ==========================================
 // CRUD COMPLETO: SETOR & ÁREA (MODALIDADE)
 // ==========================================
-app.get('/api/v2/setor', async (req, res) => {
-    try { return res.json((await pool.query('SELECT * FROM setor ORDER BY nome ASC')).rows); } catch (e) { return res.status(500).json({ error: e.message }); }
+app.get(['/api/v2/setor', '/api/v2/setores'], async (req, res) => {
+    try { 
+        return res.json((await pool.query('SELECT * FROM setor ORDER BY nome ASC')).rows); 
+    } catch (e) { 
+        return res.status(500).json({ error: e.message }); 
+    }
 });
-app.post('/api/v2/setor', verificarToken, async (req, res) => {
-    try { return res.json((await pool.query('INSERT INTO setor (nome, ativo) VALUES ($1, true) RETURNING *', [req.body.nome])).rows[0]); } catch (e) { return res.status(500).json({ error: e.message }); }
+
+app.post(['/api/v2/setor', '/api/v2/setores'], verificarToken, async (req, res) => {
+    try { 
+        return res.json((await pool.query('INSERT INTO setor (nome, ativo) VALUES ($1, true) RETURNING *', [req.body.nome])).rows[0]); 
+    } catch (e) { 
+        return res.status(500).json({ error: e.message }); 
+    }
 });
-app.put('/api/v2/setor/:id', verificarToken, async (req, res) => {
-    try { return res.json((await pool.query('UPDATE setor SET nome = $1 WHERE id = $2 RETURNING *', [req.body.nome, req.params.id])).rows[0]); } catch (e) { return res.status(500).json({ error: e.message }); }
+
+// 3. EDITAR (PUT)
+app.put(['/api/v2/setor/:id', '/api/v2/setores/:id'], verificarToken, async (req, res) => {
+    try { 
+        return res.json((await pool.query('UPDATE setor SET nome = $1 WHERE id = $2 RETURNING *', [req.body.nome, req.params.id])).rows[0]); 
+    } catch (e) { 
+        return res.status(500).json({ error: e.message }); 
+    }
 });
-app.delete('/api/v2/setor/:id', verificarToken, async (req, res) => {
-    try { await pool.query('DELETE FROM setor WHERE id = $1', [req.params.id]); return res.json({ success: true }); } catch (e) { return res.status(500).json({ error: e.message }); }
+
+// 4. EXCLUIR (DELETE)
+app.delete(['/api/v2/setor/:id', '/api/v2/setores/:id'], verificarToken, async (req, res) => {
+    try { 
+        await pool.query('DELETE FROM setor WHERE id = $1', [req.params.id]); 
+        return res.json({ success: true }); 
+    } catch (e) { 
+        return res.status(500).json({ error: e.message }); 
+    }
 });
 
 // NOVO: Endpoints CRUD para Área

@@ -7,9 +7,7 @@ export default function App() {
             if (!dadosSalvos) return null;
             return JSON.parse(dadosSalvos);
         } catch (e) {
-            localStorage.removeItem('admin_user');
-            localStorage.removeItem('admin_token');
-            return null;
+            localStorage.removeItem('admin_user'); localStorage.removeItem('admin_token'); return null;
         }
     };
 
@@ -36,6 +34,7 @@ export default function App() {
     const [locaisDisponiveis, setLocaisDisponiveis] = useState([]);
     const [publicosDisponiveis, setPublicosDisponiveis] = useState([]);
     const [setoresDisponiveis, setSetoresDisponiveis] = useState([]);
+    const [areasDisponiveis, setAreasDisponiveis] = useState([]); // Nova lista de áreas auxiliares
     const [mapaCarregado, setMapaCarregado] = useState(false);
     const [modalNovoEvento, setModalNovoEvento] = useState(false);
 
@@ -54,14 +53,8 @@ export default function App() {
         };
         const API_URL = 'https://formar.paiva.api.br';
         const response = await fetch(`${API_URL}${endpoint}`, { ...options, headers });
-        if (response.status === 401 || response.status === 403) {
-            lidarComLogout();
-            throw new Error('Sessão expirada.');
-        }
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.error || 'Erro na requisição.');
-        }
+        if (response.status === 401 || response.status === 403) { lidarComLogout(); throw new Error('Sessão expirada.'); }
+        if (!response.ok) { const errorData = await response.json().catch(() => ({})); throw new Error(errorData.error || 'Erro.'); }
         return response.json();
     };
 
@@ -70,9 +63,11 @@ export default function App() {
             const locais = await apiFetch('/api/v2/locais');
             const publicos = await apiFetch('/api/v2/publico-alvo');
             const setores = await apiFetch('/api/v2/setor');
+            const areas = await apiFetch('/api/v2/area');
             setLocaisDisponiveis(locais || []);
             setPublicosDisponiveis(publicos || []);
             setSetoresDisponiveis(setores || []);
+            setAreasDisponiveis(areas || []);
         } catch (e) {}
     };
 
@@ -88,12 +83,12 @@ export default function App() {
             else if (view === 'pesquisa-satisfacao') endpoint = '/api/v2/admin/pesquisa-satisfacao-detalhada';
             else if (view === 'publico-alvo') endpoint = '/api/v2/publico-alvo';
             else if (view === 'setores') endpoint = '/api/v2/setor';
+            else if (view === 'areas') endpoint = '/api/v2/area';
             else if (view === 'usuarios') endpoint = '/api/v2/usuarios';
 
             if (endpoint) {
                 const dados = await apiFetch(endpoint);
-                setLista(dados);
-                setTotaisSuperior(dados.length);
+                setLista(dados); setTotaisSuperior(dados.length);
             }
         } catch (err) { setErro(err.message); }
     };
@@ -103,9 +98,7 @@ export default function App() {
         try {
             setErro('');
             const dados = await apiFetch(`/api/v2/admin/relatorio-integrado?data_inicio=${dataInicio}&data_fim=${dataFim}`);
-            setDadosEstatisticos(dados.totais);
-            setLista(dados.registros);
-            setTotaisSuperior(dados.registros.length);
+            setDadosEstatisticos(dados.totais); setLista(dados.registros); setTotaisSuperior(dados.registros.length);
         } catch (err) { setErro(err.message); }
     };
 
@@ -124,8 +117,7 @@ export default function App() {
     const renderizarMapa = (L) => {
         if (window.mapaInstancia) window.mapaInstancia.remove();
         const mapa = L.map('mapa-cadastro-local').setView([-22.7144, -43.5539], 13);
-        window.mapaInstancia = mapa;
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapa);
+        window.mapaInstancia = mapa; L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapa);
         let marcador;
         mapa.on('click', (e) => {
             if (marcador) mapa.removeLayer(marcador);
@@ -178,23 +170,18 @@ export default function App() {
         try {
             setErro('');
             const prefixoAdmin = view === 'frequencias' ? 'admin/' : '';
-            let url = `/api/v2/${prefixoAdmin}${view}`;
-            const metodo = isEditando ? 'PUT' : 'POST';
-            const endpoint = isEditando ? `${url}/${selecionado.id}` : url;
-
-            await apiFetch(endpoint, { method: metodo, body: JSON.stringify(form) });
+            await apiFetch(isEditando ? `/api/v2/${prefixoAdmin}${view}/${selecionado.id}` : `/api/v2/${prefixoAdmin}${view}`, { method: isEditando ? 'PUT' : 'POST', body: JSON.stringify(form) });
             setForm({}); setIsEditando(false); setSelecionado(null); carregarDadosPainel();
         } catch (err) { setErro(err.message); }
     };
 
     const iniciarEdicao = async (item) => {
-        setSelecionado(item);
-        setIsEditando(true);
+        setSelecionado(item); setIsEditando(true);
         if (view === 'eventos') {
             const detalhe = await apiFetch(`/api/v2/admin/eventos-detalhes/${item.id}`);
             const sIds = [detalhe.setor_id_1, detalhe.setor_id_2, detalhe.setor_id_3].filter(Boolean);
             setForm({
-                titulo: detalhe.titulo, data_evento: detalhe.data_evento.substring(0, 10), carga_horaria: detalhe.carga_horaria,
+                titulo: detalhe.titulo, area_id: detalhe.area_id || '', data_evento: detalhe.data_evento.substring(0, 10), carga_horaria: detalhe.carga_horaria,
                 local_id: detalhe.local_id, hora_inicio: detalhe.hora_inicio, hora_fim: detalhe.hora_fim, palestrante: detalhe.palestrante,
                 setores_ids: sIds, publicos_alvo_ids: detalhe.publicos_alvo_ids || []
             });
@@ -203,7 +190,7 @@ export default function App() {
             setForm({ nome: item.nome, endereco: item.endereco, latitude: item.latitude, longitude: item.longitude });
         } else if (view === 'participantes') {
             setForm({ nome_completo: item.nome_completo, ativo: item.ativo });
-        } else if (view === 'publico-alvo' || view === 'setores') {
+        } else if (['publico-alvo', 'setores', 'areas'].includes(view)) {
             setForm({ nome: item.nome });
         }
     };
@@ -211,76 +198,50 @@ export default function App() {
     const deletarRegistro = async (id) => {
         if (!confirm('Remover registro?')) return;
         try {
-            let endpoint = `/api/v2/${view}/${id}`;
-            if (view === 'log-fraudes') endpoint = `/api/v2/admin/log-fraudes/${id}`;
-            await apiFetch(endpoint, { method: 'DELETE' });
+            await apiFetch(view === 'log-fraudes' ? `/api/v2/admin/log-fraudes/${id}` : `/api/v2/${view}/${id}`, { method: 'DELETE' });
             carregarDadosPainel();
         } catch (err) { setErro(err.message); }
     };
 
     const alternarSelecaoSetor = (id) => {
         const atuais = form.setores_ids || [];
-        if (atuais.includes(id)) {
-            setForm({ ...form, setores_ids: atuais.filter(x => x !== id) });
-        } else {
-            if (atuais.length >= 3) { alert('Selecione no máximo 3 setores responsáveis.'); return; }
+        if (atuais.includes(id)) { setForm({ ...form, setores_ids: atuais.filter(x => x !== id) }); } 
+        else {
+            if (atuais.length >= 3) { alert('Selecione no máximo 3 setores.'); return; }
             setForm({ ...form, setores_ids: [...atuais, id] });
         }
     };
 
     const alternarSelecaoPublico = (id) => {
         const atuais = form.publicos_alvo_ids || [];
-        if (atuais.includes(id)) {
-            setForm({ ...form, publicos_alvo_ids: atuais.filter(x => x !== id) });
-        } else {
-            setForm({ ...form, publicos_alvo_ids: [...atuais, id] });
-        }
+        setForm({ ...form, publicos_alvo_ids: atuais.includes(id) ? atuais.filter(x => x !== id) : [...atuais, id] });
     };
 
     if (!token) {
+        // Renderização de login mantida intacta
         if (user && user.deve_alterar_senha) {
             return (
-                <div style={estilos.telaLogin}>
-                    <div style={estilos.caixaLogin}>
-                        <h2 style={estilos.tituloLogin}>Nova Senha Obrigatória</h2>
-                        {erro && <div style={estilos.erroBox}>{erro}</div>}
-                        <form onSubmit={lidarComAlteracaoSenha} style={estilos.formulario}>
-                            <div style={estilos.campoGrupo}><label style={estilos.rotulo}>Nova Senha</label><input type="password" style={estilos.entrada} value={novaSenha} onChange={e => setNovaSenha(e.target.value)} required /></div>
-                            <div style={estilos.campoGrupo}><label style={estilos.rotulo}>Confirmar Nova Senha</label><input type="password" style={estilos.entrada} value={confirmarNovaSenha} onChange={e => setConfirmarNovaSenha(e.target.value)} required /></div>
-                            <button type="submit" style={estilos.btnSucesso}>SALVAR NOVA SENHA</button>
-                        </form>
-                    </div>
-                </div>
+                <div style={estilos.telaLogin}><div style={estilos.caixaLogin}><h2 style={estilos.tituloLogin}>Nova Senha Obrigatória</h2>{erro && <div style={estilos.erroBox}>{erro}</div>}<form onSubmit={lidarComAlteracaoSenha} style={estilos.formulario}><div style={estilos.campoGrupo}><label style={estilos.rotulo}>Nova Senha</label><input type="password" style={estilos.entrada} value={novaSenha} onChange={e => setNovaSenha(e.target.value)} required /></div><div style={estilos.campoGrupo}><label style={estilos.rotulo}>Confirmar Nova Senha</label><input type="password" style={estilos.entrada} value={confirmarNovaSenha} onChange={e => setConfirmarNovaSenha(e.target.value)} required /></div><button type="submit" style={estilos.btnSucesso}>SALVAR NOVA SENHA</button></form></div></div>
             );
         }
         return (
-            <div style={estilos.telaLogin}>
-                <div style={estilos.caixaLogin}>
-                    <img src="/logap.png" alt="Logo" style={{ height: '45px', objectFit: 'contain', marginBottom: '15px', display: 'inline-block' }} />
-                    <h2 style={{ ...estilos.tituloLogin, fontWeight: '900', letterSpacing: '0.5px' }}>FORMAÇÕES</h2>
-                    {erro && <div style={estilos.erroBox}>{erro}</div>}
-                    <form onSubmit={lidarComLogin} style={estilos.formulario}>
-                        <div style={estilos.campoGrupo}><label style={estilos.rotulo}>Usuário</label><input type="text" style={estilos.entrada} value={usuarioInput} onChange={e => setUsuarioInput(e.target.value)} required /></div>
-                        <div style={estilos.campoGrupo}><label style={estilos.rotulo}>Senha</label><input type="password" style={estilos.entrada} value={senhaInput} onChange={e => setSenhaInput(e.target.value)} required /></div>
-                        <button type="submit" style={estilos.btnPrimario}>ENTRAR</button>
-                    </form>
-                </div>
-            </div>
+            <div style={estilos.telaLogin}><div style={estilos.caixaLogin}><img src="/logap.png" alt="Logo" style={{ height: '45px', marginBottom: '15px' }} /><h2 style={estilos.tituloLogin}>FORMAÇÕES</h2>{erro && <div style={estilos.erroBox}>{erro}</div>}<form onSubmit={lidarComLogin} style={estilos.formulario}><div style={estilos.campoGrupo}><label style={estilos.rotulo}>Usuário</label><input type="text" style={estilos.entrada} value={usuarioInput} onChange={e => setUsuarioInput(e.target.value)} required /></div><div style={estilos.campoGrupo}><label style={estilos.rotulo}>Senha</label><input type="password" style={estilos.entrada} value={senhaInput} onChange={e => setSenhaInput(e.target.value)} required /></div><button type="submit" style={estilos.btnPrimario}>ENTRAR</button></form></div></div>
         );
     }
 
     return (
         <div style={estilos.layoutPrincipal}>
             <div style={estilos.barraLateral}>
-                <div style={{ marginBottom: '30px', textAlign: 'center', display: 'flex', justifyContent: 'center', alignItems: 'center' }}><img src="/logap.png" alt="Logo" style={{ height: '38px' }} /></div>
+                <div style={{ marginBottom: '30px', textAlign: 'center' }}><img src="/logap.png" alt="Logo" style={{ height: '38px' }} /></div>
                 <div style={estilos.usuarioStatus}>Logado: {user?.usuario}</div>
                 <div style={view === 'eventos' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('eventos'); setDadosEstatisticos(null); setIsEditando(false); }}>FORMAÇÕES</div>
                 <div style={view === 'locais' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('locais'); setDadosEstatisticos(null); setIsEditando(false); }}>LOCAIS</div>
                 <div style={view === 'participantes' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('participantes'); setDadosEstatisticos(null); setIsEditando(false); }}>PARTICIPANTES</div>
-                <div style={view === 'frequencias' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('frequencias'); setDadosEstatisticos(null); setIsEditando(false); }}>HISTÓRICO DE COMPARECIMENTO</div>
+                <div style={view === 'frequencias' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('frequencias'); setDadosEstatisticos(null); setIsEditando(false); }}>HISTÓRICO</div>
                 <div style={view === 'log-fraudes' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('log-fraudes'); setDadosEstatisticos(null); setIsEditando(false); }}>OCORRÊNCIAS</div>
                 <div style={view === 'pesquisa-satisfacao' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('pesquisa-satisfacao'); setDadosEstatisticos(null); setIsEditando(false); }}>PESQUISA DE OPINIÃO</div>
                 <div style={view === 'setores' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('setores'); setDadosEstatisticos(null); setIsEditando(false); }}>SETORES (CRUD)</div>
+                <div style={view === 'areas' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('areas'); setDadosEstatisticos(null); setIsEditando(false); }}>ÁREAS / MODALIDADES</div>
                 <div style={view === 'publico-alvo' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('publico-alvo'); setDadosEstatisticos(null); setIsEditando(false); }}>PÚBLICO-ALVO</div>
                 <div style={view === 'usuarios' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('usuarios'); setDadosEstatisticos(null); setIsEditando(false); }}>USUÁRIOS</div>
                 <div style={view === 'relatorios' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('relatorios'); setLista([]); setDadosEstatisticos(null); setIsEditando(false); }}>RELATÓRIOS</div>
@@ -291,7 +252,7 @@ export default function App() {
                 <div style={{ backgroundColor: '#fff', padding: 15, borderRadius: 8, marginBottom: 20, border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontWeight: 'bold', textTransform: 'uppercase', fontSize: 13 }}>LISTAGEM: {view}</span>
                     <div>
-                        {view === 'eventos' && <button onClick={() => { setForm({ setores_ids: [], publicos_alvo_ids: [] }); setIsEditando(false); setModalNovoEvento(true); }} style={{ backgroundColor: '#16a34a', color: '#fff', border: 'none', padding: '8px 20px', borderRadius: 6, fontWeight: 'bold', cursor: 'pointer' }}>NOVO EVENTO</button>}
+                        {view === 'eventos' && <button onClick={() => { setForm({ setores_ids: [], publicos_alvo_ids: [], area_id: '' }); setIsEditando(false); setModalNovoEvento(true); }} style={{ backgroundColor: '#16a34a', color: '#fff', border: 'none', padding: '8px 20px', borderRadius: 6, fontWeight: 'bold', cursor: 'pointer' }}>NOVO EVENTO</button>}
                     </div>
                     <span style={{ fontWeight: 'bold', color: '#1e3a8a' }}>Registros: {totaisSuperior}</span>
                 </div>
@@ -303,13 +264,7 @@ export default function App() {
                         <table style={estilos.tabela}>
                             <thead>
                                 <tr style={estilos.tabelaHeader}>
-                                    <th style={estilos.th}>Título</th>
-                                    <th style={estilos.th}>Data</th>
-                                    <th style={estilos.th}>Início</th>
-                                    <th style={estilos.th}>Término</th>
-                                    <th style={estilos.th}>Palestrante</th>
-                                    <th style={estilos.th}>Local</th>
-                                    <th style={estilos.th}>Ações</th>
+                                    <th style={estilos.th}>Título</th><th style={estilos.th}>Data</th><th style={estilos.th}>Início</th><th style={estilos.th}>Término</th><th style={estilos.th}>Palestrante</th><th style={estilos.th}>Local</th><th style={estilos.th}>Ações</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -343,7 +298,7 @@ export default function App() {
                                         {view === 'frequencias' && <><th style={estilos.th}>Matrícula</th><th style={estilos.th}>Participante</th><th style={estilos.th}>Evento</th><th style={estilos.th}>Tempo</th><th style={estilos.th}>Ações</th></>}
                                         {view === 'log-fraudes' && <><th style={estilos.th}>Matrícula</th><th style={estilos.th}>Motivo</th><th style={estilos.th}>Data</th><th style={estilos.th}>Ações</th></>}
                                         {view === 'pesquisa-satisfacao' && <><th style={estilos.th}>Participante</th><th style={estilos.th}>Evento</th><th style={estilos.th}>Avaliação</th></>}
-                                        {['publico-alvo', 'setores'].includes(view) && <><th style={estilos.th}>Nome</th><th style={estilos.th}>Ações</th></>}
+                                        {['publico-alvo', 'setores', 'areas'].includes(view) && <><th style={estilos.th}>Nome</th><th style={estilos.th}>Ações</th></>}
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -354,19 +309,19 @@ export default function App() {
                                             {view === 'frequencias' && <><td style={estilos.td}>{item.matricula}</td><td style={estilos.td}>{item.participante_nome}</td><td style={estilos.td}>{item.evento_titulo}</td><td style={{...estilos.td, fontWeight: 'bold', color: '#16a34a'}}>{item.tempo_participacao || '--:--'}</td><td style={estilos.td}><button onClick={() => { setSelecionado(item); setIsEditando(true); setForm({ data_entrada: item.data_entrada.substring(0, 16), data_saida: item.data_saida ? item.data_saida.substring(0, 16) : '' }); }} style={estilos.btnLink}>Editar</button></td></>}
                                             {view === 'log-fraudes' && <><td style={estilos.td}>{item.matricula}</td><td style={estilos.td}>{item.motivo}</td><td style={estilos.td}>{new Date(item.data_tentativa).toLocaleString('pt-BR')}</td><td style={estilos.td}><button onClick={() => deletarRegistro(item.id)} style={estilos.btnLinkErro}>Excluir</button></td></>}
                                             {view === 'pesquisa-satisfacao' && <><td style={estilos.td}>{item.participante_nome}</td><td style={estilos.td}>{item.evento_titulo}</td><td style={{...estilos.td, color: '#f59e0b'}}>{item.avaliacao}</td></>}
-                                            {['publico-alvo', 'setores'].includes(view) && <><td style={estilos.td}>{item.nome}</td><td style={estilos.td}><button onClick={() => iniciarEdicao(item)} style={estilos.btnLink}>Editar</button><button onClick={() => deletarRegistro(item.id)} style={estilos.btnLinkErro}>Excluir</button></td></>}
+                                            {['publico-alvo', 'setores', 'areas'].includes(view) && <><td style={estilos.td}>{item.nome}</td><td style={estilos.td}><button onClick={() => iniciarEdicao(item)} style={estilos.btnLink}>Editar</button><button onClick={() => deletarRegistro(item.id)} style={estilos.btnLinkErro}>Excluir</button></td></>}
                                         </tr>
                                     ))}
                                 </tbody>
                             </table>
                         </div>
 
-                        {['locais', 'publico-alvo', 'setores', 'usuarios', 'frequencias'].includes(view) && (
+                        {['locais', 'publico-alvo', 'setores', 'areas', 'usuarios', 'frequencias'].includes(view) && (
                             <div style={estilos.colunaDireita}>
                                 <form onSubmit={lidarComSubmissaoForm} style={estilos.formularioPainel}>
                                     <h3>{isEditando ? 'Editar Registro' : 'Cadastrar Registro'}</h3>
                                     {view === 'locais' && <><input type="text" placeholder="Nome" style={estilos.entradaForm} value={form.nome || ''} onChange={e => setForm({ ...form, nome: e.target.value })} required /><input type="text" placeholder="Endereço" style={estilos.entradaForm} value={form.endereco || ''} onChange={e => setForm({ ...form, endereco: e.target.value })} required /></>}
-                                    {['publico-alvo', 'setores'].includes(view) && <input type="text" placeholder="Nome" style={estilos.entradaForm} value={form.nome || ''} onChange={e => setForm({ ...form, nome: e.target.value })} required />}
+                                    {['publico-alvo', 'setores', 'areas'].includes(view) && <input type="text" placeholder="Nome" style={estilos.entradaForm} value={form.nome || ''} onChange={e => setForm({ ...form, nome: e.target.value })} required />}
                                     {view === 'frequencias' && isEditando && <><label>Entrada:</label><input type="datetime-local" style={estilos.entradaForm} value={form.data_entrada || ''} onChange={e => setForm({ ...form, data_entrada: e.target.value })} required /><label>Saída:</label><input type="datetime-local" style={estilos.entradaForm} value={form.data_saida || ''} onChange={e => setForm({ ...form, data_saida: e.target.value })} /></>}
                                     
                                     <div style={{ display: 'flex', gap: '10px' }}>
@@ -388,13 +343,6 @@ export default function App() {
                             <button onClick={processarRelatorio} style={estilos.btnPrimario}>GERAR</button>
                             <button onClick={() => setView('eventos')} style={{ ...estilos.btnPrimario, backgroundColor: '#64748b' }}>VOLTAR</button>
                         </div>
-                        {dadosEstatisticos && (
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
-                                <div style={{ padding: '15px', backgroundColor: '#eff6ff', borderRadius: '8px', textAlign: 'center' }}><span>EVENTOS</span><br /><strong>{dadosEstatisticos.total_eventos}</strong></div>
-                                <div style={{ padding: '15px', backgroundColor: '#f0fdf4', borderRadius: '8px', textAlign: 'center' }}><span>HORAS OFERTADAS</span><br /><strong>{dadosEstatisticos.soma_horas}h</strong></div>
-                                <div style={{ padding: '15px', backgroundColor: '#fdf2f8', borderRadius: '8px', textAlign: 'center' }}><span>PRESENÇAS</span><br /><strong>{dadosEstatisticos.total_participacoes}</strong></div>
-                            </div>
-                        )}
                     </div>
                 )}
             </div>
@@ -406,13 +354,20 @@ export default function App() {
                         <form onSubmit={async (e) => {
                             e.preventDefault();
                             try {
-                                const url = isEditando ? `/api/v2/eventos/${selecionado.id}` : '/api/v2/eventos';
-                                await apiFetch(url, { method: isEditando ? 'PUT' : 'POST', body: JSON.stringify(form) });
+                                await apiFetch(isEditando ? `/api/v2/eventos/${selecionado.id}` : '/api/v2/eventos', { method: isEditando ? 'PUT' : 'POST', body: JSON.stringify(form) });
                                 setModalNovoEvento(false); setForm({}); setIsEditando(false); carregarDadosPainel();
                             } catch (err) { alert(err.message); }
                         }}>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                                 <input type="text" placeholder="Título" style={estilos.entradaForm} value={form.titulo || ''} onChange={e => setForm({ ...form, titulo: e.target.value })} required />
+                                
+                                {/* NOVO: SELEÇÃO INDIVIDUAL DE ÁREA LOGO APÓS O TÍTULO */}
+                                <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Modalidade / Área:</label>
+                                <select value={form.area_id || ''} onChange={e => setForm({ ...form, area_id: e.target.value })} required style={estilos.entradaForm}>
+                                    <option value="">Selecione a Modalidade / Área...</option>
+                                    {areasDisponiveis.map(a => <option key={a.id} value={a.id}>{a.nome}</option>)}
+                                </select>
+
                                 <input type="date" style={estilos.entradaForm} value={form.data_evento || ''} onChange={e => setForm({ ...form, data_evento: e.target.value })} required />
                                 <input type="time" style={estilos.entradaForm} value={form.hora_inicio || ''} onChange={e => lidarComMudancaHora('hora_inicio', e.target.value)} required />
                                 <input type="time" style={estilos.entradaForm} value={form.hora_fim || ''} onChange={e => lidarComMudancaHora('hora_fim', e.target.value)} required />
@@ -423,7 +378,6 @@ export default function App() {
                                     {locaisDisponiveis.map(l => <option key={l.id} value={l.id}>{l.nome}</option>)}
                                 </select>
 
-                                {/* GERENCIADOR EXCLUSIVO DE SETORES RESPONSÁVEIS (MÁXIMO 3 SELEÇÕES) */}
                                 <label style={{ fontSize: '12px', fontWeight: 'bold', marginTop: '5px' }}>Setores Responsáveis Organizadores (Até 3):</label>
                                 <div style={{ border: '1px solid #cbd5e1', padding: '10px', borderRadius: '6px', maxHeight: '110px', overflowY: 'auto' }}>
                                     {setoresDisponiveis.map(s => (
@@ -434,7 +388,6 @@ export default function App() {
                                     ))}
                                 </div>
 
-                                {/* GERENCIADOR DE MÚLTIPLOS PÚBLICOS ALVO (ILIMITADO) */}
                                 <label style={{ fontSize: '12px', fontWeight: 'bold', marginTop: '5px' }}>Públicos-Alvo Destinados (Ilimitado):</label>
                                 <div style={{ border: '1px solid #cbd5e1', padding: '10px', borderRadius: '6px', maxHeight: '110px', overflowY: 'auto' }}>
                                     {publicosDisponiveis.map(p => (

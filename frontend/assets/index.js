@@ -27,13 +27,23 @@ const inicializarBanco = async () => {
                 ativo BOOLEAN DEFAULT true
             );
         `);
+
+        // NOVO: Criar tabela area se não existir
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS area (
+                id SERIAL PRIMARY KEY,
+                nome VARCHAR(255) NOT NULL,
+                ativo BOOLEAN DEFAULT true
+            );
+        `);
         
-        // Adicionar colunas de setores em eventos se não existirem
+        // Adicionar colunas de setores e área em eventos se não existirem
         await pool.query(`
             ALTER TABLE eventos 
             ADD COLUMN IF NOT EXISTS setor_id_1 INTEGER REFERENCES setor(id) ON DELETE SET NULL,
             ADD COLUMN IF NOT EXISTS setor_id_2 INTEGER REFERENCES setor(id) ON DELETE SET NULL,
-            ADD COLUMN IF NOT EXISTS setor_id_3 INTEGER REFERENCES setor(id) ON DELETE SET NULL;
+            ADD COLUMN IF NOT EXISTS setor_id_3 INTEGER REFERENCES setor(id) ON DELETE SET NULL,
+            ADD COLUMN IF NOT EXISTS area_id INTEGER REFERENCES area(id) ON DELETE SET NULL;
         `);
 
         // Tabela associativa para múltiplos públicos-alvo por evento
@@ -210,6 +220,7 @@ app.post('/api/v2/presenca/checar-status', async (req, res) => {
 
         const dist = calcularDistancia(latitude, longitude, parseFloat(ev.lat_real), parseFloat(ev.lng_real));
         if (dist > 1000) {
+            
             await pool.query(`INSERT INTO log_fraudes (matricula, evento_id, motivo, lat_tentativa, lng_tentativa) VALUES ($1, $2, 'FORA_DO_RAIO_PERMITIDO', $3, $4)`, [disp.participante_matricula, evento_id, latitude, longitude]);
             return res.status(400).json({ error: 'Bloqueio de Segurança: Você está fora do raio permitido do local.' });
         }
@@ -223,7 +234,6 @@ app.post('/api/v2/presenca/checar-status', async (req, res) => {
             const freq = resFreq.rows[0];
             if (freq.data_saida !== null) return res.json({ status: 'completo' });
             
-            // Alterado: Se o participante tem menos de 30 minutos, devolve status para o cliente abrir o modal de consentimento
             if (freq.minutos_decorridos < 30) {
                 return res.json({ status: 'somente_entrada', exibir_aviso_precoce: true, minutos: Math.ceil(freq.minutos_decorridos) });
             }
@@ -257,9 +267,6 @@ app.post('/api/v2/presenca/confirmar-entrada', async (req, res) => {
     }
 });
 
-// ==========================================
-// CONFIRMAR SAÍDA COM REGRAS COMPLEXAS DE TEMPO E MENOS DE 30 MINUTOS
-// ==========================================
 app.post('/api/v2/presenca/confirmar-saida', async (req, res) => {
     const { device_token, evento_id, estrelas, comentario, latitude, longitude, confirmou_saida_precoce } = req.body;
     try {
@@ -289,29 +296,18 @@ app.post('/api/v2/presenca/confirmar-saida', async (req, res) => {
         const dataEntradaReal = new Date(resFreq.rows[0].data_entrada);
         const minutosPermanencia = (dataHoraReal - dataEntradaReal) / (1000 * 60);
 
-        // REGRA NOVA: Menos de 30 minutos de permanência ativa
         if (minutosPermanencia < 30) {
-            if (!confirmou_saida_precoce) {
-                return res.status(400).json({ error: 'Aviso de Permanência Mínima Requerido.' });
-            }
-            // Registrar Silenciosamente no log_fraudes
-            await pool.query(`
-                INSERT INTO log_fraudes (matricula, evento_id, motivo, lat_tentativa, lng_tentativa, data_tentativa)
-                VALUES ($1, $2, 'PERMANENCIA_MENOR_30_MIN', $3, $4, $5)
-            `, [disp.participante_matricula, evento_id, String(latitude), String(longitude), dataHoraReal]);
+            if (!confirmou_saida_precoce) return res.status(400).json({ error: 'Aviso de Permanência Mínima Requerido.' });
+            await pool.query(`INSERT INTO log_fraudes (matricula, evento_id, motivo, lat_tentativa, lng_tentativa, data_tentativa) VALUES ($1, $2, 'PERMANENCIA_MENOR_30_MIN', $3, $4, $5)`, [disp.participante_matricula, evento_id, String(latitude), String(longitude), dataHoraReal]);
         }
 
         const minutosAtraso = (dataHoraReal - dataHoraTerminoOficial) / (1000 * 60);
         let dataSaidaGravar = minutosAtraso < 0 ? dataHoraReal : dataHoraTerminoOficial;
 
         if (minutosAtraso > 40) {
-            await pool.query(`
-                INSERT INTO log_fraudes (matricula, evento_id, motivo, lat_tentativa, lng_tentativa, data_tentativa)
-                VALUES ($1, $2, 'SAIDA_APOS_40_MIN_DO_FIM', $3, $4, $5)
-            `, [disp.participante_matricula, evento_id, String(latitude), String(longitude), dataHoraReal]);
+            await pool.query(`INSERT INTO log_fraudes (matricula, evento_id, motivo, lat_tentativa, lng_tentativa, data_tentativa) VALUES ($1, $2, 'SAIDA_APOS_40_MIN_DO_FIM', $3, $4, $5)`, [disp.participante_matricula, evento_id, String(latitude), String(longitude), dataHoraReal]);
         }
 
-        // CÁLCULO DO TEMPO PARTICIPAÇÃO (FORMATO HH:MM) COM CORTES OPERACIONAIS
         let tempoFinalFormatado = "00:00";
         if (minutosPermanencia >= 30) {
             const inicioCalculo = dataEntradaReal < dataHoraInicioOficial ? dataHoraInicioOficial : dataEntradaReal;
@@ -320,26 +316,16 @@ app.post('/api/v2/presenca/confirmar-saida', async (req, res) => {
             let deltaMilissegundos = fimCalculo - inicioCalculo;
             if (deltaMilissegundos > 0) {
                 const totalMinutosCalculados = Math.floor(deltaMilissegundos / (1000 * 60));
-                const horasPart = Math.floor(totalMinutosCalculados / 60);
-                const minsPart = totalMinutosCalculados % 60;
-                tempoFinalFormatado = `${String(horasPart).padStart(2, '0')}:${String(minsPart).padStart(2, '0')}`;
+                tempoFinalFormatado = `${String(Math.floor(totalMinutosCalculados / 60)).padStart(2, '0')}:${String(totalMinutosCalculados % 60).padStart(2, '0')}`;
             }
         }
 
         await pool.query('BEGIN');
-
-        await pool.query(`
-            UPDATE frequencias 
-            SET data_saida = $1, avaliacao = $2, lat_saida = $3, lng_saida = $4, tempo_participacao = $5
-            WHERE participante_id = $6 AND evento_id = $7 AND data_saida IS NULL
-        `, [dataSaidaGravar, avaliacaoTexto, String(latitude), String(longitude), tempoFinalFormatado, disp.participante_id, evento_id]);
+        await pool.query(`UPDATE frequencias SET data_saida = $1, avaliacao = $2, lat_saida = $3, lng_saida = $4, tempo_participacao = $5 WHERE participante_id = $6 AND evento_id = $7 AND data_saida IS NULL`, [dataSaidaGravar, avaliacaoTexto, String(latitude), String(longitude), tempoFinalFormatado, disp.participante_id, evento_id]);
 
         const jaAvaliou = await pool.query(`SELECT id FROM pesquisa_satisfacao WHERE participante_id = $1 AND evento_id = $2`, [disp.participante_id, evento_id]);
         if (jaAvaliou.rows.length === 0) {
-            await pool.query(`
-                INSERT INTO pesquisa_satisfacao (participante_id, evento_id, publico_alvo_id, avaliacao, comentarios, criado_em)
-                VALUES ($1, $2, $3, $4, $5, $6)
-            `, [disp.participante_id, evento_id, ev.publico_alvo_id, avaliacaoTexto, comentario || '', dataHoraReal]);
+            await pool.query(`INSERT INTO pesquisa_satisfacao (participante_id, evento_id, publico_alvo_id, avaliacao, comentarios, criado_em) VALUES ($1, $2, $3, $4, $5, $6)`, [disp.participante_id, evento_id, ev.publico_alvo_id, avaliacaoTexto, comentario || '', dataHoraReal]);
         }
 
         await pool.query('COMMIT');
@@ -351,30 +337,18 @@ app.post('/api/v2/presenca/confirmar-saida', async (req, res) => {
 });
 
 app.get('/api/v2/eventos', async (req, res) => {
-    try {
-        const result = await pool.query(`SELECT id, titulo, local, palestrante, latitude, longitude, hora_inicio, hora_fim, data_evento FROM eventos WHERE data_evento = CURRENT_DATE ORDER BY hora_inicio ASC`);
-        return res.json(result.rows);
-    } catch (error) {
-        return res.status(500).json({ error: 'Erro ao carregar formações disponíveis.' });
-    }
+    try { return res.json((await pool.query(`SELECT id, titulo, local, palestrante, latitude, longitude, hora_inicio, hora_fim, data_evento FROM eventos WHERE data_evento = CURRENT_DATE ORDER BY hora_inicio ASC`)).rows); } catch (e) { return res.status(500).json({ error: 'Erro.' }); }
 });
 
 // ==========================================
-// ROTA POST: CADASTRO DE EVENTOS (SETORIZADO E MÚLTIPLOS PÚBLICOS)
+// POST & PUT: CADASTRO COMPLETO DE EVENTOS (SETORIZADO, MÚLTIPLOS PÚBLICOS E ÁREA)
 // ==========================================
 app.post('/api/v2/eventos', verificarToken, async (req, res) => {
-    const { titulo, data_evento, carga_horaria, local_id, publicos_alvo_ids, setores_ids, hora_inicio, hora_fim, palestrante } = req.body;
+    const { titulo, area_id, data_evento, carga_horaria, local_id, publicos_alvo_ids, setores_ids, hora_inicio, hora_fim, palestrante } = req.body;
     try {
-        if (!local_id || !data_evento || !hora_inicio || !hora_fim) {
-            return res.status(400).json({ error: 'Dados obrigatórios ausentes.' });
-        }
+        if (!local_id || !data_evento || !hora_inicio || !hora_fim) return res.status(400).json({ error: 'Dados obrigatórios ausentes.' });
 
-        const h_ini_limpa = hora_inicio.slice(0, 5);
-        const h_fim_limpa = hora_fim.slice(0, 5);
-
-        const conflito = await pool.query(`SELECT id, titulo FROM eventos WHERE local_id = $1 AND data_evento = $2 AND (($3::time < hora_fim AND $4::time > hora_inicio))`, [parseInt(local_id), data_evento, h_ini_limpa, h_fim_limpa]);
-        if (conflito.rows.length > 0) return res.status(400).json({ error: `Conflito de Horário com "${conflito.rows[0].titulo}"` });
-
+        const h_ini_limpa = hora_inicio.slice(0, 5); const h_fim_limpa = hora_fim.slice(0, 5);
         const dadosLocal = (await pool.query('SELECT nome, endereco, latitude, longitude FROM locais WHERE id = $1', [parseInt(local_id)])).rows[0];
         
         const s1 = setores_ids && setores_ids[0] ? parseInt(setores_ids[0]) : null;
@@ -384,34 +358,23 @@ app.post('/api/v2/eventos', verificarToken, async (req, res) => {
 
         const result = await pool.query(`
             INSERT INTO eventos 
-            (titulo, data_evento, carga_horaria, local_id, publico_alvo_id, hora_inicio, hora_fim, palestrante, local, endereco, latitude, longitude, setor_id_1, setor_id_2, setor_id_3) 
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING id
-        `, [titulo, data_evento, parseFloat(carga_horaria || 0), parseInt(local_id), p_id_retrocompativel, h_ini_limpa, h_fim_limpa, palestrante || '', dadosLocal.nome || '', dadosLocal.endereco || '', parseFloat(dadosLocal.latitude), parseFloat(dadosLocal.longitude), s1, s2, s3]);
+            (titulo, data_evento, carga_horaria, local_id, publico_alvo_id, hora_inicio, hora_fim, palestrante, local, endereco, latitude, longitude, setor_id_1, setor_id_2, setor_id_3, area_id) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING id
+        `, [titulo, data_evento, parseFloat(carga_horaria || 0), parseInt(local_id), p_id_retrocompativel, h_ini_limpa, h_fim_limpa, palestrante || '', dadosLocal.nome || '', dadosLocal.endereco || '', parseFloat(dadosLocal.latitude), parseFloat(dadosLocal.longitude), s1, s2, s3, area_id ? parseInt(area_id) : null]);
 
         const novoEventoId = result.rows[0].id;
-
-        // Vínculo relacional ilimitado para Público-Alvo
         if (publicos_alvo_ids && Array.isArray(publicos_alvo_ids)) {
-            for (let pId of publicos_alvo_ids) {
-                await pool.query('INSERT INTO evento_publicos (evento_id, publico_alvo_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [novoEventoId, parseInt(pId)]);
-            }
+            for (let pId of publicos_alvo_ids) await pool.query('INSERT INTO evento_publicos (evento_id, publico_alvo_id) VALUES ($1, $2)', [novoEventoId, parseInt(pId)]);
         }
-
         return res.json({ id: novoEventoId });
-    } catch (error) {
-        return res.status(500).json({ error: error.message });
-    }
+    } catch (error) { return res.status(500).json({ error: error.message }); }
 });
 
 app.put('/api/v2/eventos/:id', verificarToken, async (req, res) => {
     const { id } = req.params;
-    const { titulo, data_evento, carga_horaria, local_id, publicos_alvo_ids, setores_ids, hora_inicio, hora_fim, palestrante } = req.body;
+    const { titulo, area_id, data_evento, carga_horaria, local_id, publicos_alvo_ids, setores_ids, hora_inicio, hora_fim, palestrante } = req.body;
     try {
-        const h_ini_limpa = hora_inicio.slice(0, 5);
-        const h_fim_limpa = hora_fim.slice(0, 5);
-
         const dadosLocal = (await pool.query('SELECT nome, endereco, latitude, longitude FROM locais WHERE id = $1', [parseInt(local_id)])).rows[0] || {};
-        
         const s1 = setores_ids && setores_ids[0] ? parseInt(setores_ids[0]) : null;
         const s2 = setores_ids && setores_ids[1] ? parseInt(setores_ids[1]) : null;
         const s3 = setores_ids && setores_ids[2] ? parseInt(setores_ids[2]) : null;
@@ -421,58 +384,49 @@ app.put('/api/v2/eventos/:id', verificarToken, async (req, res) => {
             UPDATE eventos 
             SET titulo=$1, data_evento=$2, carga_horaria=$3, local_id=$4, publico_alvo_id=$5, 
                 hora_inicio=$6, hora_fim=$7, palestrante=$8, local=$9, endereco=$10, latitude=$11, longitude=$12,
-                setor_id_1=$13, setor_id_2=$14, setor_id_3=$15
-            WHERE id=$16`, 
-        [titulo, data_evento, parseFloat(carga_horaria || 0), parseInt(local_id), p_id_retrocompativel, h_ini_limpa, h_fim_limpa, palestrante || '', dadosLocal.nome || '', dadosLocal.endereco || '', parseFloat(dadosLocal.latitude), parseFloat(dadosLocal.longitude), s1, s2, s3, parseInt(id)]);
+                setor_id_1=$13, setor_id_2=$14, setor_id_3=$15, area_id=$16 WHERE id=$17`, 
+        [titulo, data_evento, parseFloat(carga_horaria || 0), parseInt(local_id), p_id_retrocompativel, hora_inicio.slice(0,5), hora_fim.slice(0,5), palestrante || '', dadosLocal.nome || '', dadosLocal.endereco || '', parseFloat(dadosLocal.latitude), parseFloat(dadosLocal.longitude), s1, s2, s3, area_id ? parseInt(area_id) : null, parseInt(id)]);
 
         await pool.query('DELETE FROM evento_publicos WHERE evento_id = $1', [parseInt(id)]);
         if (publicos_alvo_ids && Array.isArray(publicos_alvo_ids)) {
-            for (let pId of publicos_alvo_ids) {
-                await pool.query('INSERT INTO evento_publicos (evento_id, publico_alvo_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [parseInt(id), parseInt(pId)]);
-            }
+            for (let pId of publicos_alvo_ids) await pool.query('INSERT INTO evento_publicos (evento_id, publico_alvo_id) VALUES ($1, $2)', [parseInt(id), parseInt(pId)]);
         }
         return res.json({ success: true });
-    } catch (error) {
-        return res.status(500).json({ error: error.message });
-    }
+    } catch (error) { return res.status(500).json({ error: error.message }); }
 });
 
 app.delete('/api/v2/eventos/:id', verificarToken, async (req, res) => {
-    try {
-        await pool.query('DELETE FROM eventos WHERE id = $1', [req.params.id]);
-        return res.json({ success: true });
-    } catch (error) { return res.status(500).json({ error: 'Erro.' }); }
+    try { await pool.query('DELETE FROM eventos WHERE id = $1', [req.params.id]); return res.json({ success: true }); } catch (e) { return res.status(500).json({ error: 'Erro.' }); }
 });
 
 // ==========================================
-// CRUD COMPLETO DA NOVA TABELA: SETOR
+// CRUD COMPLETO: SETOR & ÁREA (MODALIDADE)
 // ==========================================
 app.get('/api/v2/setor', async (req, res) => {
-    try {
-        const result = await pool.query('SELECT * FROM setor ORDER BY nome ASC');
-        return res.json(result.rows);
-    } catch (error) { return res.status(500).json({ error: error.message }); }
+    try { return res.json((await pool.query('SELECT * FROM setor ORDER BY nome ASC')).rows); } catch (e) { return res.status(500).json({ error: e.message }); }
 });
-
 app.post('/api/v2/setor', verificarToken, async (req, res) => {
-    try {
-        const result = await pool.query('INSERT INTO setor (nome, ativo) VALUES ($1, true) RETURNING *', [req.body.nome]);
-        return res.json(result.rows[0]);
-    } catch (error) { return res.status(500).json({ error: error.message }); }
+    try { return res.json((await pool.query('INSERT INTO setor (nome, ativo) VALUES ($1, true) RETURNING *', [req.body.nome])).rows[0]); } catch (e) { return res.status(500).json({ error: e.message }); }
 });
-
 app.put('/api/v2/setor/:id', verificarToken, async (req, res) => {
-    try {
-        const result = await pool.query('UPDATE setor SET nome = $1 WHERE id = $2 RETURNING *', [req.body.nome, req.params.id]);
-        return res.json(result.rows[0]);
-    } catch (error) { return res.status(500).json({ error: error.message }); }
+    try { return res.json((await pool.query('UPDATE setor SET nome = $1 WHERE id = $2 RETURNING *', [req.body.nome, req.params.id])).rows[0]); } catch (e) { return res.status(500).json({ error: e.message }); }
+});
+app.delete('/api/v2/setor/:id', verificarToken, async (req, res) => {
+    try { await pool.query('DELETE FROM setor WHERE id = $1', [req.params.id]); return res.json({ success: true }); } catch (e) { return res.status(500).json({ error: e.message }); }
 });
 
-app.delete('/api/v2/setor/:id', verificarToken, async (req, res) => {
-    try {
-        await pool.query('DELETE FROM setor WHERE id = $1', [req.params.id]);
-        return res.json({ success: true });
-    } catch (error) { return res.status(500).json({ error: error.message }); }
+// NOVO: Endpoints CRUD para Área
+app.get('/api/v2/area', async (req, res) => {
+    try { return res.json((await pool.query('SELECT * FROM area ORDER BY nome ASC')).rows); } catch (e) { return res.status(500).json({ error: e.message }); }
+});
+app.post('/api/v2/area', verificarToken, async (req, res) => {
+    try { return res.json((await pool.query('INSERT INTO area (nome, ativo) VALUES ($1, true) RETURNING *', [req.body.nome])).rows[0]); } catch (e) { return res.status(500).json({ error: e.message }); }
+});
+app.put('/api/v2/area/:id', verificarToken, async (req, res) => {
+    try { return res.json((await pool.query('UPDATE area SET nome = $1 WHERE id = $2 RETURNING *', [req.body.nome, req.params.id])).rows[0]); } catch (e) { return res.status(500).json({ error: e.message }); }
+});
+app.delete('/api/v2/area/:id', verificarToken, async (req, res) => {
+    try { await pool.query('DELETE FROM area WHERE id = $1', [req.params.id]); return res.json({ success: true }); } catch (e) { return res.status(500).json({ error: e.message }); }
 });
 
 app.get('/api/v2/locais', async (req, res) => {
@@ -549,21 +503,13 @@ app.get('/api/v2/admin/eventos-detalhes/:id', verificarToken, async (req, res) =
     } catch (e) { return res.status(500).json({ error: e.message }); }
 });
 
-// ==========================================
-// RELATÓRIO CONSOLIDADO COMPLETO
-// ==========================================
 app.get('/api/v2/admin/relatorio-integrado', verificarToken, async (req, res) => {
     const { data_inicio, data_fim } = req.query;
     try {
         const totalEventos = await pool.query("SELECT COUNT(id) as qtd, COALESCE(SUM(carga_horaria), 0) as horas FROM eventos WHERE data_evento BETWEEN $1 AND $2", [data_inicio, data_fim]);
         const totalParticipacoes = await pool.query("SELECT COUNT(id) as qtd FROM frequencias WHERE DATE(data_entrada) BETWEEN $1 AND $2", [data_inicio, data_fim]);
         const mediaSatisfacao = await pool.query(`SELECT AVG(CASE WHEN avaliacao = 'Muito Bom' THEN 5 WHEN avaliacao = 'Bom' THEN 4 WHEN avaliacao = 'Regular' THEN 3 WHEN avaliacao = 'Ruim' THEN 2 WHEN avaliacao = 'Péssimo' THEN 1 ELSE 0 END) as media FROM pesquisa_satisfacao WHERE DATE(criado_em) BETWEEN $1 AND $2`, [data_inicio, data_fim]);
-        
-        const registros = await pool.query(`
-            SELECT f.id, f.matricula, f.tempo_participacao, p.nome_completo as participante_nome, e.titulo as evento_titulo, e.carga_horaria, f.data_entrada, f.data_saida
-            FROM frequencias f LEFT JOIN participantes p ON f.participante_id = p.id LEFT JOIN eventos e ON f.evento_id = e.id
-            WHERE DATE(f.data_entrada) BETWEEN $1 AND $2 ORDER BY f.data_entrada DESC`, [data_inicio, data_fim]);
-
+        const registros = await pool.query(`SELECT f.id, f.matricula, f.tempo_participacao, p.nome_completo as participante_nome, e.titulo as evento_titulo, e.carga_horaria, f.data_entrada, f.data_saida FROM frequencias f LEFT JOIN participantes p ON f.participante_id = p.id LEFT JOIN eventos e ON f.evento_id = e.id WHERE DATE(f.data_entrada) BETWEEN $1 AND $2 ORDER BY f.data_entrada DESC`, [data_inicio, data_fim]);
         return res.json({
             totais: { total_eventos: parseInt(totalEventos.rows[0].qtd), soma_horas: parseFloat(totalEventos.rows[0].horas).toFixed(2), total_participacoes: parseInt(totalParticipacoes.rows[0].qtd), nota_media: parseFloat(mediaSatisfacao.rows[0].media || 0).toFixed(1) },
             registros: registros.rows

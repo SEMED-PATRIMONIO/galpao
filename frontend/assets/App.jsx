@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 export default function App() {
     const obterUsuarioSeguro = () => {
@@ -34,17 +34,27 @@ export default function App() {
     const [locaisDisponiveis, setLocaisDisponiveis] = useState([]);
     const [publicosDisponiveis, setPublicosDisponiveis] = useState([]);
     const [setoresDisponiveis, setSetoresDisponiveis] = useState([]);
-    const [areasDisponiveis, setAreasDisponiveis] = useState([]); // Nova lista de áreas auxiliares
+    const [areasDisponiveis, setAreasDisponiveis] = useState([]);
     const [mapaCarregado, setMapaCarregado] = useState(false);
     const [modalNovoEvento, setModalNovoEvento] = useState(false);
+    
+    // NOVO: Estados para o Modal Vitrificado de Local
+    const [modalNovoLocal, setModalNovoLocal] = useState(false);
+    const nomeLocalRef = useRef(null);
 
     useEffect(() => {
         if (token) {
             carregarDadosPainel();
             carregarAuxiliaresGlobais();
-            if (view === 'locais') inicializarMapaQueimados();
         }
     }, [view, token]);
+
+    // Inicializa o mapa do local apenas quando o modal vitrificado abrir
+    useEffect(() => {
+        if (modalNovoLocal) {
+            inicializarMapaModal();
+        }
+    }, [modalNovoLocal]);
 
     const apiFetch = async (endpoint, options = {}) => {
         const headers = {
@@ -82,8 +92,8 @@ export default function App() {
             else if (view === 'log-fraudes') endpoint = '/api/v2/log-fraudes';
             else if (view === 'pesquisa-satisfacao') endpoint = '/api/v2/admin/pesquisa-satisfacao-detalhada';
             else if (view === 'publico-alvo') endpoint = '/api/v2/publico-alvo';
-            else if (view === 'setores') endpoint = '/api/v2/setor';
-            else if (view === 'areas') endpoint = '/api/v2/area';
+            else if (view === 'setores') endpoint = '/api/v2/setores';
+            else if (view === 'areas') endpoint = '/api/v2/areas';
             else if (view === 'usuarios') endpoint = '/api/v2/usuarios';
 
             if (endpoint) {
@@ -102,29 +112,72 @@ export default function App() {
         } catch (err) { setErro(err.message); }
     };
 
-    const inicializarMapaQueimados = () => {
+    // =====================================================================
+    // MOTOR DE MAPAS: LEAFLET COM BUSCA REVERSA AUTOMÁTICA DE ENDEREÇO
+    // =====================================================================
+    const inicializarMapaModal = () => {
         setTimeout(() => {
-            const container = document.getElementById('mapa-cadastro-local');
-            if (!container || mapaCarregado) return;
-            if (window.L) { renderizarMapa(window.L); } 
-            else {
+            const container = document.getElementById('mapa-modal-vitrificado');
+            if (!container) return;
+            
+            if (window.L) { 
+                renderizarMapaModal(window.L); 
+            } else {
                 const link = document.createElement('link'); link.rel = 'stylesheet'; link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'; document.head.appendChild(link);
-                const script = document.createElement('script'); script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'; script.onload = () => renderizarMapa(window.L); document.body.appendChild(script);
+                const script = document.createElement('script'); script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'; 
+                script.onload = () => renderizarMapaModal(window.L); document.body.appendChild(script);
             }
-        }, 100);
+        }, 200);
     };
 
-    const renderizarMapa = (L) => {
-        if (window.mapaInstancia) window.mapaInstancia.remove();
-        const mapa = L.map('mapa-cadastro-local').setView([-22.7144, -43.5539], 13);
-        window.mapaInstancia = mapa; L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapa);
+    const renderizarMapaModal = (L) => {
+        if (window.mapaModalInstancia) window.mapaModalInstancia.remove();
+        
+        // Coordenadas Centrais Fiel de Queimados/RJ
+        const centroQueimados = [-22.7144, -43.5539];
+        const mapa = L.map('mapa-modal-vitrificado').setView(centroQueimados, 14);
+        window.mapaModalInstancia = mapa;
+        
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapa);
+        
         let marcador;
-        mapa.on('click', (e) => {
+
+        // Se estiver editando, já coloca o marcador no local salvo
+        if (isEditando && form.latitude && form.longitude) {
+            const coordSalva = [parseFloat(form.latitude), parseFloat(form.longitude)];
+            marcador = L.marker(coordSalva).addTo(mapa);
+            mapa.setView(coordSalva, 16);
+        }
+
+        mapa.on('click', async (e) => {
+            const { lat, lng } = e.latlng;
             if (marcador) mapa.removeLayer(marcador);
-            marcador = L.marker([e.latlng.lat, e.latlng.lng]).addTo(mapa);
-            setForm(prev => ({ ...prev, latitude: e.latlng.lat.toFixed(6), longitude: e.latlng.lng.toFixed(6) }));
+            marcador = L.marker([lat, lng]).addTo(mapa);
+            
+            let enderecoDetectado = "Carregando endereço...";
+            setForm(prev => ({ ...prev, latitude: lat.toFixed(6), longitude: lng.toFixed(6), endereco: enderecoDetectado }));
+
+            // Requisição inteligente ao OpenStreetMap (Nominatim API) para preenchimento automático
+            try {
+                const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`);
+                const dadosGeo = await res.json();
+                if (dadosGeo && dadosGeo.display_name) {
+                    // Limpa a string removendo o excesso de informações como o país
+                    enderecoDetectado = dadosGeo.display_name.split(', Brasil')[0];
+                } else {
+                    enderecoDetectado = `Marcado na Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`;
+                }
+            } catch (err) {
+                enderecoDetectado = `Diretriz na Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`;
+            }
+
+            setForm(prev => ({ ...prev, endereco: enderecoDetectado }));
+            
+            // Joga o cursor do teclado automaticamente no campo nome
+            if (nomeLocalRef.current) {
+                nomeLocalRef.current.focus();
+            }
         });
-        setMapaCarregado(true);
     };
 
     const lidarComMudancaHora = (campo, valor) => {
@@ -171,8 +224,20 @@ export default function App() {
             setErro('');
             const prefixoAdmin = view === 'frequencias' ? 'admin/' : '';
             await apiFetch(isEditando ? `/api/v2/${prefixoAdmin}${view}/${selecionado.id}` : `/api/v2/${prefixoAdmin}${view}`, { method: isEditando ? 'PUT' : 'POST', body: JSON.stringify(form) });
-            setForm({}); setIsEditando(false); setSelecionado(null); carregarDadosPainel();
+            fecharModalLocal();
+            carregarDadosPainel();
         } catch (err) { setErro(err.message); }
+    };
+
+    const fecharModalLocal = () => {
+        setForm({});
+        setIsEditando(false);
+        setSelecionado(null);
+        setModalNovoLocal(false);
+        if (window.mapaModalInstancia) {
+            window.mapaModalInstancia.remove();
+            window.mapaModalInstancia = null;
+        }
     };
 
     const iniciarEdicao = async (item) => {
@@ -188,6 +253,7 @@ export default function App() {
             setModalNovoEvento(true);
         } else if (view === 'locais') {
             setForm({ nome: item.nome, endereco: item.endereco, latitude: item.latitude, longitude: item.longitude });
+            setModalNovoLocal(true); // Abre o modal vitrificado para edição
         } else if (view === 'participantes') {
             setForm({ nome_completo: item.nome_completo, ativo: item.ativo });
         } else if (['publico-alvo', 'setores', 'areas'].includes(view)) {
@@ -218,7 +284,6 @@ export default function App() {
     };
 
     if (!token) {
-        // Renderização de login mantida intacta
         if (user && user.deve_alterar_senha) {
             return (
                 <div style={estilos.telaLogin}><div style={estilos.caixaLogin}><h2 style={estilos.tituloLogin}>Nova Senha Obrigatória</h2>{erro && <div style={estilos.erroBox}>{erro}</div>}<form onSubmit={lidarComAlteracaoSenha} style={estilos.formulario}><div style={estilos.campoGrupo}><label style={estilos.rotulo}>Nova Senha</label><input type="password" style={estilos.entrada} value={novaSenha} onChange={e => setNovaSenha(e.target.value)} required /></div><div style={estilos.campoGrupo}><label style={estilos.rotulo}>Confirmar Nova Senha</label><input type="password" style={estilos.entrada} value={confirmarNovaSenha} onChange={e => setConfirmarNovaSenha(e.target.value)} required /></div><button type="submit" style={estilos.btnSucesso}>SALVAR NOVA SENHA</button></form></div></div>
@@ -253,6 +318,8 @@ export default function App() {
                     <span style={{ fontWeight: 'bold', textTransform: 'uppercase', fontSize: 13 }}>LISTAGEM: {view}</span>
                     <div>
                         {view === 'eventos' && <button onClick={() => { setForm({ setores_ids: [], publicos_alvo_ids: [], area_id: '' }); setIsEditando(false); setModalNovoEvento(true); }} style={{ backgroundColor: '#16a34a', color: '#fff', border: 'none', padding: '8px 20px', borderRadius: 6, fontWeight: 'bold', cursor: 'pointer' }}>NOVO EVENTO</button>}
+                        {/* NOVO: EXCEÇÃO EXIGIDA PARA CADASTRO DE LOCAIS */}
+                        {view === 'locais' && <button onClick={() => { setForm({}); setIsEditando(false); setModalNovoLocal(true); }} style={{ backgroundColor: '#1e3a8a', color: '#fff', border: 'none', padding: '10px 22px', borderRadius: 6, fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(30,58,138,0.3)' }}>ADICIONAR NOVO LOCAL</button>}
                     </div>
                     <span style={{ fontWeight: 'bold', color: '#1e3a8a' }}>Registros: {totaisSuperior}</span>
                 </div>
@@ -289,11 +356,12 @@ export default function App() {
 
                 {view !== 'eventos' && view !== 'relatorios' && (
                     <div style={estilos.splitLayout}>
-                        <div style={{ flex: 2, backgroundColor: '#fff', padding: '15px', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
+                        {/* Se for a view de locais, a tabela agora ocupa 100% da largura, pois o form foi pro Modal Glass */}
+                        <div style={{ flex: view === 'locais' ? 'none' : 2, width: view === 'locais' ? '100%' : 'auto', backgroundColor: '#fff', padding: '15px', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
                             <table style={estilos.tabela}>
                                 <thead>
                                     <tr style={estilos.tabelaHeader}>
-                                        {view === 'locais' && <><th style={estilos.th}>Nome</th><th style={estilos.th}>Endereço</th><th style={estilos.th}>Ações</th></>}
+                                        {view === 'locais' && <><th style={estilos.th}>Nome do Espaço</th><th style={estilos.th}>Endereço Completo</th><th style={estilos.th}>Coordenadas (Lat / Lng)</th><th style={estilos.th}>Ações</th></>}
                                         {view === 'participantes' && <><th style={estilos.th}>Nome</th><th style={estilos.th}>Matrícula</th><th style={estilos.th}>Ações</th></>}
                                         {view === 'frequencias' && <><th style={estilos.th}>Matrícula</th><th style={estilos.th}>Participante</th><th style={estilos.th}>Evento</th><th style={estilos.th}>Tempo</th><th style={estilos.th}>Ações</th></>}
                                         {view === 'log-fraudes' && <><th style={estilos.th}>Matrícula</th><th style={estilos.th}>Motivo</th><th style={estilos.th}>Data</th><th style={estilos.th}>Ações</th></>}
@@ -304,7 +372,7 @@ export default function App() {
                                 <tbody>
                                     {lista.map((item) => (
                                         <tr key={item.id} style={{ borderBottom: '1px solid #cbd5e1' }}>
-                                            {view === 'locais' && <><td style={estilos.td}>{item.nome}</td><td style={estilos.td}>{item.endereco}</td><td style={estilos.td}><button onClick={() => iniciarEdicao(item)} style={estilos.btnLink}>Editar</button><button onClick={() => deletarRegistro(item.id)} style={estilos.btnLinkErro}>Excluir</button></td></>}
+                                            {view === 'locais' && <><td style={{...estilos.td, fontWeight: 'bold'}}>{item.nome}</td><td style={estilos.td}>{item.endereco}</td><td style={{...estilos.td, color: '#64748b', fontSize: '12px'}}>{item.latitude} , {item.longitude}</td><td style={estilos.td}><button onClick={() => iniciarEdicao(item)} style={estilos.btnLink}>Editar</button><button onClick={() => deletarRegistro(item.id)} style={estilos.btnLinkErro}>Excluir</button></td></>}
                                             {view === 'participantes' && <><td style={estilos.td}>{item.nome_completo}</td><td style={estilos.td}>{item.matricula}</td><td style={estilos.td}><button onClick={() => iniciarEdicao(item)} style={estilos.btnLink}>Editar</button></td></>}
                                             {view === 'frequencias' && <><td style={estilos.td}>{item.matricula}</td><td style={estilos.td}>{item.participante_nome}</td><td style={estilos.td}>{item.evento_titulo}</td><td style={{...estilos.td, fontWeight: 'bold', color: '#16a34a'}}>{item.tempo_participacao || '--:--'}</td><td style={estilos.td}><button onClick={() => { setSelecionado(item); setIsEditando(true); setForm({ data_entrada: item.data_entrada.substring(0, 16), data_saida: item.data_saida ? item.data_saida.substring(0, 16) : '' }); }} style={estilos.btnLink}>Editar</button></td></>}
                                             {view === 'log-fraudes' && <><td style={estilos.td}>{item.matricula}</td><td style={estilos.td}>{item.motivo}</td><td style={estilos.td}>{new Date(item.data_tentativa).toLocaleString('pt-BR')}</td><td style={estilos.td}><button onClick={() => deletarRegistro(item.id)} style={estilos.btnLinkErro}>Excluir</button></td></>}
@@ -316,11 +384,11 @@ export default function App() {
                             </table>
                         </div>
 
-                        {['locais', 'publico-alvo', 'setores', 'areas', 'usuarios', 'frequencias'].includes(view) && (
+                        {/* O formulário de locais não entra mais aqui, apenas as outras tabelas normais */}
+                        {['publico-alvo', 'setores', 'areas', 'usuarios', 'frequencias'].includes(view) && (
                             <div style={estilos.colunaDireita}>
                                 <form onSubmit={lidarComSubmissaoForm} style={estilos.formularioPainel}>
                                     <h3>{isEditando ? 'Editar Registro' : 'Cadastrar Registro'}</h3>
-                                    {view === 'locais' && <><input type="text" placeholder="Nome" style={estilos.entradaForm} value={form.nome || ''} onChange={e => setForm({ ...form, nome: e.target.value })} required /><input type="text" placeholder="Endereço" style={estilos.entradaForm} value={form.endereco || ''} onChange={e => setForm({ ...form, endereco: e.target.value })} required /></>}
                                     {['publico-alvo', 'setores', 'areas'].includes(view) && <input type="text" placeholder="Nome" style={estilos.entradaForm} value={form.nome || ''} onChange={e => setForm({ ...form, nome: e.target.value })} required />}
                                     {view === 'frequencias' && isEditando && <><label>Entrada:</label><input type="datetime-local" style={estilos.entradaForm} value={form.data_entrada || ''} onChange={e => setForm({ ...form, data_entrada: e.target.value })} required /><label>Saída:</label><input type="datetime-local" style={estilos.entradaForm} value={form.data_saida || ''} onChange={e => setForm({ ...form, data_saida: e.target.value })} /></>}
                                     
@@ -347,6 +415,87 @@ export default function App() {
                 )}
             </div>
 
+            {/* =====================================================================
+                NOVO: MODAL TOTALMENTE VITRIFICADO (GLASSMORPHISM) PARA CADASTRO DE LOCAL
+                ===================================================================== */}
+            {modalNovoLocal && (
+                <div style={estilos.backdropVitrificado}>
+                    <div style={estilos.containerGlass}>
+                        
+                        {/* Lado Esquerdo: O Mapa Ampliado */}
+                        <div style={estilos.blocoMapaModal}>
+                            <div id="mapa-modal-vitrificado" style={{ width: '100%', height: '100%', borderRadius: '12px 0 0 12px' }}></div>
+                        </div>
+
+                        {/* Lado Direito: O Formulário de Dados com Foco Inteligente */}
+                        <div style={estilos.blocoFormModal}>
+                            <h3 style={{ marginTop: 0, color: '#0f172a', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px' }}>
+                                {isEditando ? '✏️ Ajustar Local Existente' : '📍 Mapear Novo Espaço'}
+                            </h3>
+                            <p style={{ fontSize: '12px', color: '#64748b', marginTop: '-5px', marginBottom: '15px' }}>
+                                Clique em qualquer ponto do mapa à esquerda para ler as coordenadas e o endereço automaticamente.
+                            </p>
+
+                            <form onSubmit={lidarComSubmissaoForm} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                                <div>
+                                    <label style={estilos.labelFixo}>Nome do Espaço / Prédio:</label>
+                                    <input 
+                                        type="text" 
+                                        ref={nomeLocalRef}
+                                        placeholder="Ex: Auditório Central, Escola Polo..." 
+                                        style={estilos.entradaForm} 
+                                        value={form.nome || ''} 
+                                        onChange={e => setForm({ ...form, nome: e.target.value })} 
+                                        required 
+                                    />
+                                </div>
+
+                                <div>
+                                    <label style={estilos.labelFixo}>Diretriz de Endereço:</label>
+                                    <input 
+                                        type="text" 
+                                        placeholder="Selecione no mapa ou digite aqui..." 
+                                        style={estilos.entradaForm} 
+                                        value={form.endereco || ''} 
+                                        onChange={e => setForm({ ...form, endereco: e.target.value })} 
+                                        required 
+                                    />
+                                </div>
+
+                                <div style={{ display: 'flex', gap: '10px' }}>
+                                    <div style={{ flex: 1 }}>
+                                        <label style={estilos.labelFixo}>Latitude:</label>
+                                        <input type="text" style={{...estilos.entradaForm, backgroundColor: '#f8fafc'}} value={form.latitude || ''} onChange={e => setForm({ ...form, latitude: e.target.value })} required />
+                                    </div>
+                                    <div style={{ flex: 1 }}>
+                                        <label style={estilos.labelFixo}>Longitude:</label>
+                                        <input type="text" style={{...estilos.entradaForm, backgroundColor: '#f8fafc'}} value={form.longitude || ''} onChange={e => setForm({ ...form, longitude: e.target.value })} required />
+                                    </div>
+                                </div>
+
+                                {/* Botões de Ação idênticos à solicitação */}
+                                <div style={{ marginTop: '20px', display: 'flex', gap: '12px' }}>
+                                    <button 
+                                        type="button" 
+                                        onClick={fecharModalLocal} 
+                                        style={{ ...estilos.btnFormModal, backgroundColor: '#64748b' }}
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button 
+                                        type="submit" 
+                                        style={{ ...estilos.btnFormModal, backgroundColor: '#16a34a' }}
+                                    >
+                                        Salvar
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+
+                    </div>
+                </div>
+            )}
+
             {modalNovoEvento && (
                 <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15,23,42,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999 }}>
                     <div style={{ backgroundColor: '#fff', padding: '25px', borderRadius: '12px', width: '90%', maxWidth: '520px', maxHeight: '85vh', overflowY: 'auto' }}>
@@ -360,24 +509,19 @@ export default function App() {
                         }}>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                                 <input type="text" placeholder="Título" style={estilos.entradaForm} value={form.titulo || ''} onChange={e => setForm({ ...form, titulo: e.target.value })} required />
-                                
-                                {/* NOVO: SELEÇÃO INDIVIDUAL DE ÁREA LOGO APÓS O TÍTULO */}
                                 <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Modalidade / Área:</label>
                                 <select value={form.area_id || ''} onChange={e => setForm({ ...form, area_id: e.target.value })} required style={estilos.entradaForm}>
                                     <option value="">Selecione a Modalidade / Área...</option>
                                     {areasDisponiveis.map(a => <option key={a.id} value={a.id}>{a.nome}</option>)}
                                 </select>
-
                                 <input type="date" style={estilos.entradaForm} value={form.data_evento || ''} onChange={e => setForm({ ...form, data_evento: e.target.value })} required />
                                 <input type="time" style={estilos.entradaForm} value={form.hora_inicio || ''} onChange={e => lidarComMudancaHora('hora_inicio', e.target.value)} required />
                                 <input type="time" style={estilos.entradaForm} value={form.hora_fim || ''} onChange={e => lidarComMudancaHora('hora_fim', e.target.value)} required />
                                 <input type="text" placeholder="Palestrante / Formador" style={estilos.entradaForm} value={form.palestrante || ''} onChange={e => setForm({ ...form, palestrante: e.target.value })} />
-                                
                                 <select value={form.local_id || ''} onChange={e => setForm({ ...form, local_id: e.target.value })} required style={estilos.entradaForm}>
                                     <option value="">Selecione o Local...</option>
                                     {locaisDisponiveis.map(l => <option key={l.id} value={l.id}>{l.nome}</option>)}
                                 </select>
-
                                 <label style={{ fontSize: '12px', fontWeight: 'bold', marginTop: '5px' }}>Setores Responsáveis Organizadores (Até 3):</label>
                                 <div style={{ border: '1px solid #cbd5e1', padding: '10px', borderRadius: '6px', maxHeight: '110px', overflowY: 'auto' }}>
                                     {setoresDisponiveis.map(s => (
@@ -387,7 +531,6 @@ export default function App() {
                                         </label>
                                     ))}
                                 </div>
-
                                 <label style={{ fontSize: '12px', fontWeight: 'bold', marginTop: '5px' }}>Públicos-Alvo Destinados (Ilimitado):</label>
                                 <div style={{ border: '1px solid #cbd5e1', padding: '10px', borderRadius: '6px', maxHeight: '110px', overflowY: 'auto' }}>
                                     {publicosDisponiveis.map(p => (
@@ -411,6 +554,27 @@ export default function App() {
 }
 
 const estilos = {
+    // ESTILOS AVANÇADOS DE VITRIFICAÇÃO (GLASSMORPHISM) SOLICITADOS
+    backdropVitrificado: {
+        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+        backgroundColor: 'rgba(15, 23, 42, 0.4)',
+        backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999999
+    },
+    containerGlass: {
+        backgroundColor: 'rgba(255, 255, 255, 0.85)',
+        backdropFilter: 'blur(20px)',
+        borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.6)',
+        boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
+        width: '94%', maxWidth: '950px', height: '80vh',
+        display: 'flex', overflow: 'hidden'
+    },
+    blocoMapaModal: { flex: 1.3, height: '100%', backgroundColor: '#e2e8f0' },
+    blocoFormModal: { flex: 1, padding: '30px', display: 'flex', flexDirection: 'column', overflowY: 'auto' },
+    labelFixo: { display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#334155', marginBottom: '4px' },
+    btnFormModal: { flex: 1, padding: '12px', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' },
+    
+    // Estilos padrão do sistema preservados
     telaLogin: { display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f1f5f9', fontFamily: 'system-ui' },
     caixaLogin: { backgroundColor: '#fff', padding: '35px', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', width: '330px', textAlign: 'center', border: '1px solid #e2e8f0' },
     tituloLogin: { fontSize: '20px', color: '#1e3a8a', margin: '0 0 20px 0' },

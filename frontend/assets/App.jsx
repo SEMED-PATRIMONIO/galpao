@@ -96,14 +96,13 @@ export default function App() {
         }
         try {
             setErro('');
-            const dados = await apiFetch(`/api/v2/relatorios/${tipoRelatorio}?data_inicio=${dataInicio}&data_fim=${dataFim}`);
-            if (tipoRelatorio === 'estatisticas') {
-                setDadosEstatisticos(dados);
-                setLista([]);
-            } else {
-                setLista(dados);
-                setDadosEstatisticos(null);
-            }
+            // Chama a nova API exclusiva passando o período
+            const dados = await apiFetch(`/api/v2/admin/relatorio-integrado?data_inicio=${dataInicio}&data_fim=${dataFim}`);
+            
+            // Armazena os blocos de dados recebidos
+            setDadosEstatisticos(dados.totais);
+            setLista(dados.registros);
+            setTotaisSuperior(dados.registros.length);
         } catch (err) {
             setErro(err.message);
         }
@@ -624,55 +623,88 @@ export default function App() {
 
                 {view === 'relatorios' && (
                     <div style={{ backgroundColor: '#fff', padding: '20px', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
-                        <h3 style={{ marginTop: 0 }}>Geração de Relatórios</h3>
-                        <div style={{ display: 'flex', gap: '15px', marginBottom: '20px', flexWrap: 'wrap' }}>
+                        <h3 style={{ marginTop: 0, marginBottom: '15px', color: '#1e3a8a' }}>Geração de Relatórios Consolidados</h3>
+                        
+                        {/* Filtros de Escopo */}
+                        <div style={{ display: 'flex', gap: '15px', marginBottom: '25px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
                             <div>
-                                <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold' }}>Início:</label>
+                                <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Início:</label>
                                 <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} style={estilos.entrada} />
                             </div>
                             <div>
-                                <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold' }}>Fim:</label>
+                                <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>Fim:</label>
                                 <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} style={estilos.entrada} />
                             </div>
-                            <div>
-                                <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold' }}>Tipo:</label>
-                                <select value={tipoRelatorio} onChange={e => setTipoRelatorio(e.target.value)} style={estilos.entrada}>
-                                    <option value="formacoes">Lista de Formações</option>
-                                    <option value="frequencia">Presenças por Período</option>
-                                    <option value="estatisticas">Estatísticas Analíticas (Geral)</option>
-                                </select>
+                            <div style={{ display: 'flex', gap: '10px' }}>
+                                <button onClick={processarRelatorio} style={{ ...estilos.btnPrimario, height: '40px', padding: '0 25px' }}>GERAR RELATÓRIO</button>
+                                
+                                {/* BOTÃO VOLTAR SOLICITADO */}
+                                <button 
+                                    onClick={() => {
+                                        setLista([]);
+                                        setDadosEstatisticos(null);
+                                        setDataInicio('');
+                                        setDataFim('');
+                                        setView('eventos'); // Retorna para a tela principal
+                                    }} 
+                                    style={{ ...estilos.btnPrimario, height: '40px', padding: '0 20px', backgroundColor: '#64748b', color: '#fff' }}
+                                >
+                                    VOLTAR
+                                </button>
                             </div>
-                            <button onClick={processarRelatorio} style={{ ...estilos.btnPrimario, alignSelf: 'flex-end', height: '40px' }}>GERAR</button>
                         </div>
 
+                        {/* Cartões com Indicadores de Totais (Só exibe se o relatório foi gerado) */}
                         {dadosEstatisticos && (
-                            <div style={{ padding: '15px', backgroundColor: '#f8fafc', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
-                                <h4>Resumo Geral de Telemetria</h4>
-                                <p>Total de Presenças Gravadas: {dadosEstatisticos.total_presencas}</p>
-                                <p>Tentativas Bloqueadas por Raio (Fraudes): {dadosEstatisticos.total_fraudes}</p>
-                                <p>Média Geral das Avaliações: {dadosEstatisticos.media_avaliacao || 'Sem notas'}</p>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', marginBottom: '25px' }}>
+                                <div style={{ padding: '15px', backgroundColor: '#eff6ff', borderRadius: '8px', border: '1px solid #bfdbfe', textAlign: 'center' }}>
+                                    <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#1e40af', display: 'block', marginBottom: '5px' }}>EVENTOS NO PERÍODO</span>
+                                    <strong style={{ fontSize: '22px', color: '#1d4ed8' }}>{dadosEstatisticos.total_eventos}</strong>
+                                </div>
+                                <div style={{ padding: '15px', backgroundColor: '#f0fdf4', borderRadius: '8px', border: '1px solid #bbf7d0', textAlign: 'center' }}>
+                                    <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#166534', display: 'block', marginBottom: '5px' }}>TOTAL HORAS OFERTADAS</span>
+                                    <strong style={{ fontSize: '22px', color: '#16a34a' }}>{dadosEstatisticos.soma_horas}h</strong>
+                                </div>
+                                <div style={{ padding: '15px', backgroundColor: '#fdf2f8', borderRadius: '8px', border: '1px solid #fbcfe8', textAlign: 'center' }}>
+                                    <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#9d174d', display: 'block', marginBottom: '5px' }}>REGISTROS DE PRESENÇA</span>
+                                    <strong style={{ fontSize: '22px', color: '#db2777' }}>{dadosEstatisticos.total_participacoes}</strong>
+                                </div>
+                                <div style={{ padding: '15px', backgroundColor: '#fffbeb', borderRadius: '8px', border: '1px solid #fef3c7', textAlign: 'center' }}>
+                                    <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#92400e', display: 'block', marginBottom: '5px' }}>NOTA MÉDIA SATISFAÇÃO</span>
+                                    <strong style={{ fontSize: '22px', color: '#d97706' }}>{dadosEstatisticos.nota_media} / 5.0</strong>
+                                </div>
                             </div>
                         )}
 
+                        {/* Listagem dos Registros do Relatório */}
                         {lista.length > 0 && (
-                            <table style={estilos.tabela}>
-                                <thead>
-                                    <tr style={estilos.tabelaHeader}>
-                                        <th style={estilos.th}>Coluna 1</th>
-                                        <th style={estilos.th}>Coluna 2</th>
-                                        <th style={estilos.th}>Coluna 3</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {lista.map((r, i) => (
-                                        <tr key={i} style={{ borderBottom: '1px solid #cbd5e1' }}>
-                                            <td style={estilos.td}>{r.campo1 || r.titulo || r.matricula}</td>
-                                            <td style={estilos.td}>{r.campo2 || r.local || r.participante_nome}</td>
-                                            <td style={estilos.td}>{r.campo3 || r.carga_horaria || r.funcao}</td>
+                            <div>
+                                <h4 style={{ marginBottom: '10px', color: '#334155' }}>Registros Encontrados no Escopo</h4>
+                                <table style={estilos.tabela}>
+                                    <thead>
+                                        <tr style={estilos.tabelaHeader}>
+                                            <th style={estilos.th}>Matrícula</th>
+                                            <th style={estilos.th}>Participante</th>
+                                            <th style={estilos.th}>Formação / Evento</th>
+                                            <th style={estilos.th}>Carga Horária</th>
+                                            <th style={estilos.th}>Entrada</th>
+                                            <th style={estilos.th}>Saída</th>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody>
+                                        {lista.map((r) => (
+                                            <tr key={r.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                                                <td style={estilos.td}>{r.matricula || '--'}</td>
+                                                <td style={estilos.td}>{r.participante_name || r.participante_nome || '--'}</td>
+                                                <td style={{ ...estilos.td, fontWeight: 'bold' }}>{r.evento_titulo}</td>
+                                                <td style={estilos.td}>{r.carga_horaria ? `${r.carga_horaria}h` : '--'}</td>
+                                                <td style={estilos.td}>{r.data_entrada ? new Date(r.data_entrada).toLocaleString('pt-BR') : '--'}</td>
+                                                <td style={estilos.td}>{r.data_saida ? new Date(r.data_saida).toLocaleString('pt-BR') : 'Em aberto'}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
                         )}
                     </div>
                 )}

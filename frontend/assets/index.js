@@ -306,53 +306,66 @@ app.post('/api/v2/presenca/confirmar-saida', async (req, res) => {
         if (resDisp.rows.length === 0) return res.status(401).json({ error: 'Dispositivo inválido.' });
         const disp = resDisp.rows[0];
 
-        const resEv = await pool.query('SELECT hora_fim, publico_alvo_id FROM eventos WHERE id = $1', [evento_id]);
+        const resEv = await pool.query('SELECT data_evento, hora_fim, publico_alvo_id FROM eventos WHERE id = $1', [evento_id]);
         const ev = resEv.rows[0];
 
-        // Tradução estrita da avaliação textual exigida pela CHECK CONSTRAINT
-        let avaliacaoTexto = 'Ótimo';
-        if (estrelas === 4) avaliacaoTexto = 'Muito Bom';
-        if (estrelas === 3) avaliacaoTexto = 'Bom';
-        if (estrelas === 2) avaliacaoTexto = 'Regular';
-        if (estrelas === 1) avaliacaoTexto = 'Ruim';
+        // CORREÇÃO DA AVALIAÇÃO: Alinhando estritamente com os dados reais do seu banco
+        let avaliacaoTexto = 'Muito Bom'; // 5 estrelas
+        if (estrelas === 4) avaliacaoTexto = 'Bom';
+        if (estrelas === 3) avaliacaoTexto = 'Regular';
+        if (estrelas === 2) avaliacaoTexto = 'Ruim';
+        if (estrelas === 1) avaliacaoTexto = 'Péssimo';
 
-        // Calcula atraso do fim do evento em minutos
-        const resTempo = await pool.query(`SELECT EXTRACT(EPOCH FROM (CURRENT_TIME - $1::time))/60 as minutos_atraso`, [ev.hora_fim]);
-        const minutosAtraso = resTempo.rows[0].minutos_atraso || 0;
+        // OBTENÇÃO DO HORÁRIO REAL (Fuso Horário de São Paulo)
+        const agoraTexto = new Date().toLocaleString("sv-SE", { timeZone: "America/Sao_Paulo" });
+        const dataHoraReal = new Date(agoraTexto);
 
-        let horarioSaidaFinal = 'CURRENT_TIMESTAMP';
-        let parametrosSaida = [avaliacaoTexto, String(latitude), String(longitude), disp.participante_id, evento_id];
+        // OBTENÇÃO DO HORÁRIO DE TÉRMINO OFICIAL DO EVENTO
+        // ev.data_evento vem no formato YYYY-MM-DD. Juntamos com a hora_fim (HH:MM:SS)
+        const dataEventoFormatada = new Date(ev.data_evento).toISOString().split('T')[0];
+        const dataHoraTerminoOficial = new Date(`${dataEventoFormatada}T${ev.hora_fim}`);
 
-        // Regra 4: Se passou mais de 40 minutos do encerramento oficial
-        if (minutosAtraso > 40) {
-            // Salva na tabela log_fraudes a tentativa irregular
-            await pool.query(`
-                INSERT INTO log_fraudes (matricula, evento_id, motivo, lat_tentativa, lng_tentativa)
-                VALUES ($1, $2, 'SAIDA_APOS_40_MIN_DO_FIM', $3, $4)
-            `, [disp.participante_matricula, evento_id, String(latitude), String(longitude)]);
+        // Diferença em minutos entre a batida de saída real e o término oficial
+        const minutosAtraso = (dataHoraReal - dataHoraTerminoOficial) / (1000 * 60);
 
-            // Retroage o horário de saída na tabela frequencias para a hora exata do fim do evento
-            horarioSaidaFinal = `(CURRENT_DATE + $6::time)`;
-            parametrosSaida.push(ev.hora_fim);
+        let dataSaidaGravar;
+
+        // REGRA 1: Se a pessoa está saindo ANTES do horário previsto para o término
+        if (minutosAtraso < 0) {
+            dataSaidaGravar = dataHoraReal; // Grava o horário real exato
+        } 
+        // REGRA 2 e 3: Se já passou do horário de término
+        else {
+            // Em ambos os casos (até 40 min ou mais de 40 min), grava o horário oficial de término
+            dataSaidaGravar = dataHoraTerminoOficial;
+
+            // REGRA 3: Se já tiver se passado MAIS de 40 minutos do término previsto
+            if (minutosAtraso > 40) {
+                // Grava a ocorrência de fraude
+                await pool.query(`
+                    INSERT INTO log_fraudes (matricula, evento_id, motivo, lat_tentativa, lng_tentativa, data_tentativa)
+                    VALUES ($1, $2, 'SAIDA_APOS_40_MIN_DO_FIM', $3, $4, $5)
+                `, [disp.participante_matricula, evento_id, String(latitude), String(longitude), dataHoraReal]);
+            }
         }
 
-        // Executa a transação garantindo a integridade relacional
+        // Executa a transação garantindo integridade
         await pool.query('BEGIN');
 
-        // Regra 7: Atualiza frequencias inserindo lat_saida, lng_saida e avaliacao
+        // Atualiza a tabela frequencias com a data de saída definida pelas regras
         await pool.query(`
             UPDATE frequencias 
-            SET data_saida = ${horarioSaidaFinal}, avaliacao = $1, lat_saida = $2, lng_saida = $3
-            WHERE participante_id = $4 AND evento_id = $5 AND data_saida IS NULL
-        `, parametrosSaida);
+            SET data_saida = $1, avaliacao = $2, lat_saida = $3, lng_saida = $4
+            WHERE participante_id = $5 AND evento_id = $6 AND data_saida IS NULL
+        `, [dataSaidaGravar, avaliacaoTexto, String(latitude), String(longitude), disp.participante_id, evento_id]);
 
-        // Insere a avaliação na tabela pesquisa_satisfacao
+        // Insere a avaliação na tabela pesquisa_satisfacao (evitando duplicidade)
         const jaAvaliou = await pool.query(`SELECT id FROM pesquisa_satisfacao WHERE participante_id = $1 AND evento_id = $2`, [disp.participante_id, evento_id]);
         if (jaAvaliou.rows.length === 0) {
             await pool.query(`
-                INSERT INTO pesquisa_satisfacao (participante_id, evento_id, publico_alvo_id, avaliacao, comentarios)
-                VALUES ($1, $2, $3, $4, $5)
-            `, [disp.participante_id, evento_id, ev.publico_alvo_id, avaliacaoTexto, comentario || '']);
+                INSERT INTO pesquisa_satisfacao (participante_id, evento_id, publico_alvo_id, avaliacao, comentarios, criado_em)
+                VALUES ($1, $2, $3, $4, $5, $6)
+            `, [disp.participante_id, evento_id, ev.publico_alvo_id, avaliacaoTexto, comentario || '', dataHoraReal]);
         }
 
         await pool.query('COMMIT');
@@ -817,6 +830,75 @@ app.get('/api/v2/admin/pesquisa-satisfacao-detalhada', verificarToken, async (re
         return res.json(rows);
     } catch (error) {
         console.error('Erro na nova rota de pesquisa detalhada:', error);
+        return res.status(500).json({ error: error.message });
+    }
+});
+
+app.get('/api/v2/admin/relatorio-integrado', verificarToken, async (req, res) => {
+    const { data_inicio, data_fim } = req.query;
+    
+    if (!data_inicio || !data_fim) {
+        return res.status(400).json({ error: 'Período inicial e final são obrigatórios.' });
+    }
+
+    try {
+        // 1. Totais do Período
+        const totalEventosQuery = await pool.query(
+            "SELECT COUNT(id) as qtd, COALESCE(SUM(carga_horaria), 0) as horas FROM eventos WHERE data_evento BETWEEN $1 AND $2",
+            [data_inicio, data_fim]
+        );
+
+        const totalParticipacoesQuery = await pool.query(
+            "SELECT COUNT(id) as qtd FROM frequencias WHERE DATE(data_entrada) BETWEEN $1 AND $2",
+            [data_inicio, data_fim]
+        );
+
+        const mediaSatisfacaoQuery = await pool.query(
+            `SELECT 
+                AVG(CASE 
+                    WHEN avaliacao = 'Ótimo' THEN 5
+                    WHEN avaliacao = 'Muito Bom' THEN 4
+                    WHEN avaliacao = 'Bom' THEN 3
+                    WHEN avaliacao = 'Regular' THEN 2
+                    WHEN avaliacao = 'Ruim' THEN 1
+                    ELSE 0 
+                END) as media 
+             FROM pesquisa_satisfacao 
+             WHERE DATE(criado_em) BETWEEN $1 AND $2 AND avaliacao IS NOT NULL`,
+            [data_inicio, data_fim]
+        );
+
+        // 2. Listagem Unificada / Detalhada do Relatório (Exemplo unindo frequências, eventos e participantes)
+        const registrosQuery = await pool.query(
+            `SELECT 
+                f.id,
+                f.matricula,
+                p.nome_completo as participante_nome,
+                e.titulo as evento_titulo,
+                e.carga_horaria,
+                f.data_entrada,
+                f.data_saida,
+                f.funcao
+             FROM frequencias f
+             LEFT JOIN participantes p ON f.participante_id = p.id
+             LEFT JOIN eventos e ON f.evento_id = e.id
+             WHERE DATE(f.data_entrada) BETWEEN $1 AND $2
+             ORDER BY f.data_entrada DESC`,
+            [data_inicio, data_fim]
+        );
+
+        return res.json({
+            totais: {
+                total_eventos: parseInt(totalEventosQuery.rows[0].qtd),
+                soma_horas: parseFloat(totalEventosQuery.rows[0].horas).toFixed(2),
+                total_participacoes: parseInt(totalParticipacoesQuery.rows[0].qtd),
+                nota_media: parseFloat(mediaSatisfacaoQuery.rows[0].media || 0).toFixed(1)
+            },
+            registros: registrosQuery.rows
+        });
+
+    } catch (error) {
+        console.error('Erro ao gerar relatório integrado:', error);
         return res.status(500).json({ error: error.message });
     }
 });

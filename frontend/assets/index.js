@@ -106,11 +106,20 @@ app.post('/api/auth/login', async (req, res) => {
     try {
         const result = await pool.query('SELECT * FROM usuarios WHERE usuario = $1', [usuario]);
         if (result.rows.length === 0) return res.status(401).json({ error: 'Credenciais inválidas.' });
+        
         const user = result.rows[0];
         if (!user.ativo) return res.status(403).json({ error: 'Usuário inativo.' });
-        if (user.senha !== senha) return res.status(401).json({ error: 'Credenciais inválidas.' });
+        
+        // CORREÇÃO: Encripta a senha recebida para comparar com o banco ou aceita texto puro se for legado
+        const senhaCriptografada = hashSenha(senha);
+        
+        if (user.senha !== senha && user.senha !== senhaCriptografada) {
+            return res.status(401).json({ error: 'Credenciais inválidas.' });
+        }
+        
         const token = jwt.sign({ id: user.id, usuario: user.usuario }, JWT_SECRET, { expiresIn: '8h' });
-        delete user.senha;
+        delete user.senha; // Segurança: remove a senha do objeto de resposta
+        
         return res.json({ token, user });
     } catch (error) {
         return res.status(500).json({ error: 'Erro interno no servidor.' });

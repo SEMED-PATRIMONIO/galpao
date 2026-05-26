@@ -476,14 +476,100 @@ export default function App() {
                     )}
 
                     {view === 'relatorios' && (
-                        <div style={{ backgroundColor: '#fff', padding: '20px', borderRadius: '8px', border: '1px solid #cbd5e1', height: '100%', overflowY: 'auto' }}>
-                            <h3>Relatórios Consolidados</h3>
-                            <div style={{ display: 'flex', gap: '15px', marginBottom: '25px', alignItems: 'flex-end' }}>
-                                <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} style={estilos.entrada} />
-                                <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} style={estilos.entrada} />
-                                <button onClick={processarRelatorio} style={estilos.btnPrimario}>GERAR</button>
-                                <button onClick={() => setView('eventos')} style={{ ...estilos.btnPrimario, backgroundColor: '#64748b' }}>VOLTAR</button>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', height: '100%', overflow: 'hidden' }}>
+                            
+                            {/* PAINEL DE FILTROS AVANÇADOS */}
+                            <div style={{ backgroundColor: '#fff', padding: '18px', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
+                                <h3 style={{ margin: '0 0 15px 0', fontSize: '15px', color: '#1e3a8a' }}>🔍 Parâmetros e Filtros do Relatório</h3>
+                                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                                    <div style={{ flex: 1, minWidth: '140px' }}>
+                                        <label style={estilos.labelFixo}>Data Inicial:</label>
+                                        <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} style={estilos.entradaForm} />
+                                    </div>
+                                    <div style={{ flex: 1, minWidth: '140px' }}>
+                                        <label style={estilos.labelFixo}>Data Final:</label>
+                                        <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} style={estilos.entradaForm} />
+                                    </div>
+                                    <div style={{ flex: 1.2, minWidth: '180px' }}>
+                                        <label style={estilos.labelFixo}>Filtrar por Área/Modalidade:</label>
+                                        <select value={filtroArea} onChange={e => setFiltroArea(e.target.value)} style={estilos.entradaForm}>
+                                            <option value="">Todas as Áreas</option>
+                                            {areasDisponiveis.map(a => <option key={a.id} value={a.id}>{a.nome}</option>)}
+                                        </select>
+                                    </div>
+                                    <div style={{ flex: 1.2, minWidth: '180px' }}>
+                                        <label style={estilos.labelFixo}>Filtrar por Setor Organizador:</label>
+                                        <select value={filtroSetor} onChange={e => setFiltroSetor(e.target.value)} style={estilos.entradaForm}>
+                                            <option value="">Todos os Setores</option>
+                                            {setoresDisponiveis.map(s => <option key={s.id} value={s.id}>{s.nome}</option>)}
+                                        </select>
+                                    </div>
+                                    <div style={{ flex: 1.2, minWidth: '180px' }}>
+                                        <label style={estilos.labelFixo}>Filtrar por Público-Alvo:</label>
+                                        <select value={filtroPublico} onChange={e => setFiltroPublico(e.target.value)} style={estilos.entradaForm}>
+                                            <option value="">Todos os Públicos</option>
+                                            {publicosDisponiveis.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
+                                        </select>
+                                    </div>
+                                    <button onClick={processarRelatorio} style={{ ...estilos.btnPrimario, height: '38px', padding: '0 25px' }}>GERAR RELATÓRIO</button>
+                                </div>
                             </div>
+
+                            {/* SEÇÃO DE LINKS INDICADORES (SÓ EXIBE SE HOUVER DADOS ESTATÍSTICOS) */}
+                            {dadosEstatisticos && (
+                                <div style={{ display: 'flex', gap: '20px' }}>
+                                    <div style={{ flex: 1, backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', padding: '15px 20px', borderRadius: '10px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+                                        <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#1e40af', textTransform: 'uppercase' }}>Formações / Eventos no Período</span>
+                                        <h2 style={{ margin: '5px 0 0 0', fontSize: '28px', color: '#1d4ed8' }}>{dadosEstatisticos.total_eventos}</h2>
+                                    </div>
+                                    <div style={{ flex: 1, backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', padding: '15px 20px', borderRadius: '10px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+                                        <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#166534', textTransform: 'uppercase' }}>Total de Frequências Computadas</span>
+                                        <h2 style={{ margin: '5px 0 0 0', fontSize: '28px', color: '#15803d' }}>{dadosEstatisticos.total_frequencias}</h2>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* TABELA DE DADOS RESULTANTES EM ROLAGEM ISOLADA */}
+                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                                <div style={estilos.wrapperRolagemTabela}>
+                                    <table style={estilos.tabela}>
+                                        <thead>
+                                            <tr style={estilos.tabelaHeader}>
+                                                <th style={estilos.th}>Data Evento</th>
+                                                <th style={estilos.th}>Matrícula</th>
+                                                <th style={estilos.th}>Participante / Professor</th>
+                                                <th style={estilos.th}>Formação / Evento</th>
+                                                <th style={estilos.th}>Carga</th>
+                                                <th style={estilos.th}>Entrada Real</th>
+                                                <th style={estilos.th}>Saída Real</th>
+                                                <th style={estilos.th}>Tempo Efetivo</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {lista.map((item) => (
+                                                <tr key={item.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                                                    <td style={{ ...estilos.td, fontWeight: 'bold' }}>{item.data_evento ? new Date(item.data_evento).toLocaleDateString('pt-BR') : '--'}</td>
+                                                    <td style={estilos.td}>{item.matricula}</td>
+                                                    <td style={estilos.td}>{item.participante_nome}</td>
+                                                    <td style={estilos.td}>{item.evento_titulo}</td>
+                                                    <td style={estilos.td}>{item.carga_horaria ? `${item.carga_horaria}h` : '--'}</td>
+                                                    <td style={estilos.td}>{item.data_entrada ? new Date(item.data_entrada).toLocaleTimeString('pt-BR') : '--'}</td>
+                                                    <td style={estilos.td}>{item.data_saida ? new Date(item.data_saida).toLocaleTimeString('pt-BR') : 'Em aberto'}</td>
+                                                    <td style={{ ...estilos.td, fontWeight: 'bold', color: '#16a34a' }}>{item.tempo_participacao || '--:--'}</td>
+                                                </tr>
+                                            ))}
+                                            {dadosEstatisticos && lista.length === 0 && (
+                                                <tr>
+                                                    <td colSpan="8" style={{ textAlign: 'center', padding: '30px', color: '#64748b', fontWeight: '500' }}>
+                                                        Nenhum registro de frequência encontrado para os filtros selecionados.
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
                         </div>
                     )}
                 </div>

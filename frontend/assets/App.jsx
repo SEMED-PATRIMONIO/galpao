@@ -15,6 +15,7 @@ const calcularDistanciaCliente = (lat1, lon1, lat2, lon2) => {
     return R * c;
 };
 
+// Função auxiliar para converter string de horário "HH:MM" em objeto de data comparável
 const obterDataComHorarioString = (horarioStr) => {
     if (!horarioStr) return new Date();
     const agora = new Date();
@@ -29,6 +30,7 @@ export default function App() {
     const [eventoSelecionado, setEventoSelecionado] = useState(null);
     const [coords, setCoords] = useState({ lat: null, lng: null });
     
+    // Estados do fluxo original preservados
     const [temEventoAtivo, setTemEventoAtivo] = useState(false);
     const [eventoAtivoId, setEventoAtivoId] = useState(null);
     
@@ -57,7 +59,7 @@ export default function App() {
         executarInicializacao(deviceToken);
     }, [deviceToken]);
 
-    const ejecutarInicializacao = async (tokenParaValidar) => {
+    const executarInicializacao = async (tokenParaValidar) => {
         try {
             const res = await fetch(`${API_URL}/api/v2/presenca/inicializar`, {
                 method: 'POST',
@@ -84,6 +86,7 @@ export default function App() {
                 setTemEventoAtivo(data.tem_evento_ativo || false);
                 setEventoAtivoId(data.evento_ativo_id || null);
                 
+                // Redirecionamento inteligente baseado no status do banco de dados
                 if (data.tem_evento_ativo) {
                     setStatusTela('aguardando_janela_saida');
                 } else {
@@ -104,7 +107,7 @@ export default function App() {
             const res = await fetch(`${API_URL}/api/v2/dispositivo/associar`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ matricula: matriculaInput, nome: nomeInput, device_token: deviceToken })
+                body: JSON.stringify({ matricula: matriculaInput, nome: nomeInput })
             });
             const data = await res.json();
 
@@ -126,19 +129,27 @@ export default function App() {
             dispararAlerta8Segundos('O seu navegador não suporta GPS.', 'erro');
             return;
         }
+
         const sucesso = (pos) => {
             setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
         };
+
         const erroAltaPrecisao = (err) => {
+            console.warn("Falha na alta precisão, tentando precisão padrão...", err.message);
             navigator.geolocation.getCurrentPosition(
                 sucesso, 
                 (erroFatal) => {
-                    let msg = 'Erro ao buscar localização. Permita o acesso ao GPS.';
+                    let msg = 'Erro ao buscar localização. ';
+                    if (erroFatal.code === 1) msg = 'Você negou a permissão de GPS no navegador.';
+                    else if (erroFatal.code === 2) msg = 'Sinal de localização totalmente indisponível.';
+                    else if (erroFatal.code === 3) msg = 'Tempo esgotado. Ligue o Wi-Fi para ajudar o GPS.';
+                    
                     dispararAlerta8Segundos(msg, 'erro');
                 }, 
                 { enableHighAccuracy: false, timeout: 15000, maximumAge: 10000 }
             );
         };
+
         navigator.geolocation.getCurrentPosition(sucesso, erroAltaPrecisao, {
             enableHighAccuracy: true,
             timeout: 8000,
@@ -177,7 +188,7 @@ export default function App() {
             const data = await res.json();
 
             if (!res.ok) {
-                dispararAlerta8Segundos(data.error || 'Horário não permitido.', 'erro');
+                dispararAlerta8Segundos(data.error || 'Não foi possível validar seu acesso neste horário.', 'erro');
                 return;
             }
 
@@ -213,7 +224,7 @@ export default function App() {
             setStatusTela('modal_pergunta');
 
         } catch (err) {
-            dispararAlerta8Segundos('Erro de comunicação. Tente novamente.', 'erro');
+            dispararAlerta8Segundos('Sinal instável. Tente clicar novamente para conectar ao servidor.', 'erro');
         }
     };
 
@@ -221,7 +232,6 @@ export default function App() {
         if (conteudoModal.tipo === 'confirmar_entrada') {
             setStatusTela('gravando_presenca');
             try {
-                // CORREÇÃO CRÍTICA DO SEU CORE: Injetados latitude e longitude obrigatoriamente
                 const res = await fetch(`${API_URL}/api/v2/presenca/confirmar-entrada`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -241,9 +251,8 @@ export default function App() {
                         setStatusTela('aguardando_janela_saida');
                     }, 8000);
                 } else {
-                    const d = await res.json();
                     setStatusTela('listagem');
-                    dispararAlerta8Segundos(d.error || 'Erro ao salvar entrada.', 'erro');
+                    dispararAlerta8Segundos('Erro ao salvar entrada.', 'erro');
                 }
             } catch (e) {
                 setStatusTela('listagem');
@@ -282,7 +291,7 @@ export default function App() {
             setTimeout(() => {
                 setTemEventoAtivo(false);
                 setEventoAtivoId(null);
-                ejecutarInicializacao(deviceToken);
+                executarInicializacao(deviceToken);
             }, 8000);
 
         } catch (err) {
@@ -293,6 +302,7 @@ export default function App() {
     return (
         <div style={{ fontFamily: 'Arial, sans-serif', padding: '20px', maxWidth: '450px', margin: '0 auto', textAlign: 'center', color: '#333', minHeight: '100vh', display: 'flex', flexDirection: 'column', boxSizing: 'border-box', position: 'relative' }}>
             
+            {/* LOGOTIPO NO TOPO DA TELA DO CELULAR */}
             <div style={{ width: '100%', display: 'flex', justifyContent: 'center', marginBottom: '15px' }}>
                 <img src="/logap.png" alt="Logap" style={{ height: '32px', objectFit: 'contain' }} />
             </div>
@@ -345,19 +355,50 @@ export default function App() {
 
                                     return (
                                         <button
-                                            key={ev.id} onClick={() => selecionarEvento(ev)} disabled={!estaNoRaio}
+                                            key={ev.id} 
+                                            onClick={() => selecionarEvento(ev)} 
+                                            disabled={!estaNoRaio}
                                             style={{
-                                                display: 'flex', flexDirection: 'column', gap: '8px', padding: '20px', borderRadius: '16px', 
-                                                border: estaNoRaio ? 'none' : '1px solid #e5e7eb', cursor: estaNoRaio ? 'pointer' : 'not-allowed',
+                                                display: 'flex', 
+                                                flexDirection: 'column', 
+                                                gap: '8px',
+                                                padding: '20px', 
+                                                borderRadius: '16px', 
+                                                border: estaNoRaio ? 'none' : '1px solid #e5e7eb',
+                                                cursor: estaNoRaio ? 'pointer' : 'not-allowed',
                                                 background: souOAtivo ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)' : (estaNoRaio ? 'linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)' : '#f8fafc'),
-                                                color: estaNoRaio ? '#ffffff' : '#9ca3af', width: '100%', marginBottom: '16px', textAlign: 'left'
+                                                color: estaNoRaio ? '#ffffff' : '#9ca3af',
+                                                boxShadow: estaNoRaio ? `0 10px 25px -5px ${souOAtivo ? 'rgba(217, 119, 6, 0.4)' : 'rgba(2, 132, 199, 0.4)'}` : 'none',
+                                                width: '100%', 
+                                                marginBottom: '16px', 
+                                                transition: 'all 0.3s ease',
+                                                textAlign: 'left'
                                             }}
                                         >
                                             <div style={{ fontSize: '18px', fontWeight: '800', marginBottom: '4px', lineHeight: '1.2' }}>
                                                 {souOAtivo ? `⏳ EM ANDAMENTO: ${ev.titulo}` : ev.titulo}
                                             </div>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', opacity: 0.95 }}>📍 {ev.local}</div>
-                                            {ev.palestrante && <div style={{ fontSize: '13px', opacity: 0.95, marginTop: '4px' }}>🎤 Palestrante: {ev.palestrante}</div>}
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', opacity: 0.95 }}>
+                                                📍 {ev.local}
+                                            </div>
+                                            {ev.palestrante && (
+                                                <div style={{ 
+                                                    display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', opacity: 0.95, marginTop: '4px', 
+                                                    backgroundColor: estaNoRaio ? 'rgba(255,255,255,0.2)' : '#e2e8f0', padding: '4px 8px', borderRadius: '6px', fontWeight: '600'
+                                                }}>
+                                                    🎤 Palestrante: {ev.palestrante}
+                                                </div>
+                                            )}
+                                            {!estaNoRaio && coords.lat && (
+                                                <div style={{ marginTop: '12px', padding: '10px', borderRadius: '8px', backgroundColor: '#fee2e2', color: '#b91c1c', fontSize: '13px', fontWeight: 'bold', textAlign: 'center', width: '100%', boxSizing: 'border-box' }}>
+                                                    🔒 Dirija-se ao local para liberar o acesso.
+                                                </div>
+                                            )}
+                                            {!coords.lat && (
+                                                <div style={{ marginTop: '12px', fontSize: '13px', fontStyle: 'italic', opacity: 0.8, textAlign: 'center', width: '100%' }}>
+                                                    📡 Buscando sinal para liberar acesso...
+                                                </div>
+                                            )}
                                         </button>
                                     );
                                 })}
@@ -365,6 +406,7 @@ export default function App() {
                     </div>
                 )}
 
+                {/* MODO DE REPOUSO DA TELA (AMARRAÇÃO MANTIDA E REQUISIÇÕES CONGELADAS PARA FECHAR O TÚNEL) */}
                 {statusTela === 'aguardando_janela_saida' && (
                     <div style={{ padding: '30px', borderRadius: '16px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0' }}>
                         <div style={{ fontSize: '50px', marginBottom: '15px' }}>✍️</div>
@@ -375,17 +417,17 @@ export default function App() {
                         <div style={{ marginTop: '20px', fontSize: '12px', color: '#0284c7', fontWeight: 'bold' }}>
                             🔒 Este aparelho está vinculado à sua matrícula.
                         </div>
-                        <button onClick={() => ejecutarInicializacao(deviceToken)} style={{ marginTop: '25px', padding: '10px 20px', borderRadius: '8px', border: 'none', backgroundColor: '#e2e8f0', color: '#475569', fontWeight: 'bold', fontSize: '13px', cursor: 'pointer' }}>🔄 Atualizar / Liberar Saída</button>
+                        <button onClick={() => executarInicializacao(deviceToken)} style={{ marginTop: '25px', padding: '10px 20px', borderRadius: '8px', border: 'none', backgroundColor: '#e2e8f0', color: '#475569', fontWeight: 'bold', fontSize: '13px', cursor: 'pointer' }}>🔄 Atualizar / Liberar Saída</button>
                     </div>
                 )}
 
                 {statusTela === 'modal_pergunta' && conteudoModal && (
-                    <div style={{ border: '1px solid #cbd5e1', padding: '25px', borderRadius: '16px', backgroundColor: '#f8fafc' }}>
+                    <div style={{ border: '1px solid #cbd5e1', padding: '25px', borderRadius: '16px', backgroundColor: '#f8fafc', boxShadow: '0 10px 25px rgba(0,0,0,0.05)' }}>
                         <div style={{ fontSize: '40px', marginBottom: '10px' }}>⚡</div>
-                        <p style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '25px', color: '#1e293b' }}>{conteudoModal.texto}</p>
+                        <p style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '25px', color: '#1e293b', lineHeight: '1.5' }}>{conteudoModal.texto}</p>
                         <div style={{ display: 'flex', gap: '15px' }}>
-                            <button onClick={() => setStatusTela('listagem')} style={{ flex: 1, padding: '14px', borderRadius: '8px', border: '1px solid #cbd5e1', backgroundColor: '#fff', color: '#64748b', fontWeight: 'bold', cursor: 'pointer' }}>VOLTAR</button>
-                            <button onClick={processarAceiteModal} style={{ flex: 1, padding: '14px', borderRadius: '8px', border: 'none', backgroundColor: '#16a34a', color: '#fff', fontWeight: 'bold', cursor: 'pointer' }}>CONFIRMAR</button>
+                            <button onClick={() => setStatusTela('listagem')} style={{ flex: 1, padding: '14px', borderRadius: '8px', border: '1px solid #cbd5e1', backgroundColor: '#fff', color: '#64748b', fontWeight: 'bold', cursor: 'pointer', fontSize: '14px' }}>VOLTAR</button>
+                            <button onClick={processarAceiteModal} style={{ flex: 1, padding: '14px', borderRadius: '8px', border: 'none', backgroundColor: '#16a34a', color: '#fff', fontWeight: 'bold', cursor: 'pointer', fontSize: '14px' }}>CONFIRMAR</button>
                         </div>
                     </div>
                 )}
@@ -396,6 +438,7 @@ export default function App() {
                         <h3 style={{ color: '#1e3a8a', fontSize: '18px', fontWeight: '800', margin: 0 }}>
                             Aguarde enquanto registramos sua presença...
                         </h3>
+                        <p style={{ fontSize: '12px', color: '#64748b', marginTop: '8px' }}>Salvando transação criptografada na base de dados.</p>
                     </div>
                 )}
 
@@ -403,13 +446,14 @@ export default function App() {
                     <div style={{ padding: '35px', borderRadius: '16px', backgroundColor: '#f0fdf4', border: '2px dashed #22c55e' }}>
                         <div style={{ fontSize: '60px', marginBottom: '15px' }}>🏆</div>
                         <h2 style={{ color: '#15803d', fontSize: '24px', fontWeight: '900', margin: '0 0 10px 0' }}>PRESENÇA REGISTRADA!</h2>
-                        <p style={{ color: '#166534', fontSize: '14px', margin: 0 }}>Frequência salva. Entrando em modo estático de economia de banda...</p>
+                        <p style={{ color: '#166534', fontSize: '14px', margin: 0, lineHeight: '1.4' }}>Frequência salva. Entrando em modo estático de economia de banda...</p>
                     </div>
                 )}
 
                 {statusTela === 'pesquisa' && (
                     <form onSubmit={submeterPesquisaSaida} style={{ border: '1px solid #e2e8f0', padding: '25px', borderRadius: '12px', textAlign: 'left', backgroundColor: '#fff' }}>
                         <h3 style={{ marginTop: 0, color: '#1e3a8a', fontSize: '15px' }}>Pesquisa de Satisfação em anonimato (seus dados não serão solicitados)</h3>
+                        <p style={{ fontSize: '13px', color: '#666' }}>Sua opinião é essencial! Escolha uma opção:</p>
                         <select value={estrelas} onChange={(e) => setEstrelas(Number(e.target.value))} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', marginBottom: '15px' }}>
                             <option value="5">⭐⭐⭐⭐⭐ Excelência total</option>
                             <option value="4">⭐⭐⭐⭐ Muito Bom</option>
@@ -424,7 +468,7 @@ export default function App() {
 
                 {statusTela === 'encerrado' && (
                     <div style={{ marginTop: '40px' }}>
-                        <p style={{ color: '#9ca3af', fontStyle: 'italic' }}>Nenhuma operação activa disponível no momento.</p>
+                        <p style={{ color: '#9ca3af', fontStyle: 'italic' }}>Nenhuma operação ativa disponível no momento.</p>
                     </div>
                 )}
                 
@@ -432,11 +476,17 @@ export default function App() {
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '20px' }}>
                         <div style={{ fontSize: '70px', marginBottom: '20px' }}>✅</div>
                         <h2 style={{ color: '#166534', marginBottom: '15px', fontSize: '26px', fontWeight: '800' }}>Saída Registrada!</h2>
-                        <p style={{ color: '#4b5563', fontSize: '16px' }}>Sua participação e avaliação foram salvas com sucesso no sistema.</p>
+                        <p style={{ color: '#4b5563', fontSize: '16px', lineHeight: '1.6', maxWidth: '320px', margin: '0 auto' }}>
+                            Sua participação e avaliação foram salvas com sucesso no sistema da Subsecretaria.
+                        </p>
+                        <p style={{ color: '#0284c7', fontSize: '15px', marginTop: '20px', fontWeight: 'bold' }}>
+                            Agradecemos a sua colaboração!
+                        </p>
                     </div>
                 )}                  
             </div>
 
+            {/* RODAPÉ INSTITUCIONAL FIXADO */}
             <div style={{ width: '100%', fontSize: '10px', color: '#94a3b8', textAlign: 'center', padding: '10px 0', borderTop: '1px solid #f1f5f9', position: 'absolute', bottom: 0, left: 0, right: 0 }}>
                 Desenvolvido pela Subsecretaria Adjunta de Inovação e Tecnologia
             </div>

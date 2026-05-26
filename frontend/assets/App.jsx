@@ -191,7 +191,8 @@ export default function App() {
         e.preventDefault();
         try {
             setErro('');
-            // CORREÇÃO EXCLUSIVA: Validação de mudança de senha própria do operador logado
+            
+            // 1. Desvio para redefinição de senha própria
             if (view === 'usuarios' && isEditando && selecionado && selecionado.id === null) {
                 if (!novaSenha) throw new Error("A senha não pode estar em branco.");
                 await apiFetch('/api/v2/usuarios/alterar-propria-senha', { method: 'PUT', body: JSON.stringify({ novaSenha }) });
@@ -200,7 +201,25 @@ export default function App() {
                 return;
             }
 
-            await apiFetch(isEditando ? `/api/v2/usuarios/${selecionado.id}` : `/api/v2/usuarios`, { method: isEditando ? 'PUT' : 'POST', body: JSON.stringify(form) });
+            // 2. CORREÇÃO CIRÚRGICA: Desvio isolado para cadastros simples (Público-alvo, Setores e Áreas)
+            if (['publico-alvo', 'setores', 'areas'].includes(view)) {
+                let urlSimples = `/api/v2/${view}`;
+                await apiFetch(isEditando ? `${urlSimples}/${selecionado.id}` : urlSimples, { 
+                    method: isEditando ? 'PUT' : 'POST', 
+                    body: JSON.stringify({ nome: form.nome }) // Envia estritamente o nome esperado
+                });
+                fecharModalLocal();
+                carregarDadosPainel();
+                return;
+            }
+
+            // 3. Fluxo regular para as demais tabelas complexas do sistema
+            const prefixoAdmin = view === 'frequencias' ? 'admin/' : '';
+            await apiFetch(isEditando ? `/api/v2/${prefixoAdmin}${view}/${selecionado.id}` : `/api/v2/${prefixoAdmin}${view}`, { 
+                method: isEditando ? 'PUT' : 'POST', 
+                body: JSON.stringify(form) 
+            });
+            
             fecharModalLocal();
             carregarDadosPainel();
         } catch (err) { setErro(err.message); }

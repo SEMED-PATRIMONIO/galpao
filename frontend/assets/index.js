@@ -366,8 +366,23 @@ app.delete('/api/v2/locais/:id', verificarToken, async (req, res) => {
     try { await pool.query('DELETE FROM locais WHERE id = $1', [req.params.id]); return res.json({ success: true }); } catch (e) { return res.status(500).json({ error: 'Erro.' }); }
 });
 
-app.get('/api/v2/publico-alvo', async (req, res) => {
-    try { return res.json((await pool.query('SELECT * FROM publicoalvo ORDER BY nome ASC')).rows); } catch (e) { return res.status(500).json({ error: 'Erro.' }); }
+app.post('/api/v2/publico-alvo', verificarToken, async (req, res) => {
+    const { nome } = req.body;
+    try {
+        if (!nome) {
+            return res.status(400).json({ error: 'O nome do público-alvo é obrigatório.' });
+        }
+        
+        // Executa a inserção limpa, sem passar por nenhuma lógica de criptografia de senha
+        const queryResult = await pool.query(
+            'INSERT INTO publicoalvo (nome, ativo) VALUES ($1, true) RETURNING *', 
+            [nome]
+        );
+        
+        return res.json(queryResult.rows[0]);
+    } catch (e) { 
+        return res.status(500).json({ error: 'Erro ao cadastrar público-alvo: ' + e.message }); 
+    }
 });
 app.post('/api/v2/publico-alvo', verificarToken, async (req, res) => {
     try { return res.json((await pool.query('INSERT INTO publicoalvo (nome, ativo) VALUES ($1, true) RETURNING *', [req.body.nome])).rows[0]); } catch (e) { return res.status(500).json({ error: 'Erro.' }); }

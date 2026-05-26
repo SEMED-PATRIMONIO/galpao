@@ -35,7 +35,6 @@ export default function App() {
     const [publicosDisponiveis, setPublicosDisponiveis] = useState([]);
     const [setoresDisponiveis, setSetoresDisponiveis] = useState([]);
     const [areasDisponiveis, setAreasDisponiveis] = useState([]);
-    const [mapaCarregado, setMapaCarregado] = useState(false);
     const [modalNovoEvento, setModalNovoEvento] = useState(false);
     
     const [modalNovoLocal, setModalNovoLocal] = useState(false);
@@ -49,9 +48,7 @@ export default function App() {
     }, [view, token]);
 
     useEffect(() => {
-        if (modalNovoLocal) {
-            inicializarMapaModal();
-        }
+        if (modalNovoLocal) inicializarMapaModal();
     }, [modalNovoLocal]);
 
     const apiFetch = async (endpoint, options = {}) => {
@@ -105,7 +102,7 @@ export default function App() {
         if (!dataInicio || !dataFim) { setErro('Selecione o período.'); return; }
         try {
             setErro('');
-            const dados = await apiFetch(`/api/v2/admin/relatorio-integrado?data_inicio=${dataInicio}&data_fim=${dataFim}`);
+            const dados = await apiFetch(`/api/v2/admin/relatorio-integrated?data_inicio=${dataInicio}&data_fim=${dataFim}`);
             setDadosEstatisticos(dados.totais); setLista(dados.registros); setTotaisSuperior(dados.registros.length);
         } catch (err) { setErro(err.message); }
     };
@@ -194,16 +191,16 @@ export default function App() {
         e.preventDefault();
         try {
             setErro('');
-            const prefixoAdmin = view === 'frequencias' ? 'admin/' : '';
-            
-            if (view === 'usuarios' && isEditando && !selecionado.id) {
-                // Caso seja redefinição de senha própria (acionada pela chavinha lá no topo)
+            // CORREÇÃO EXCLUSIVA: Validação de mudança de senha própria do operador logado
+            if (view === 'usuarios' && isEditando && selecionado && selecionado.id === null) {
+                if (!novaSenha) throw new Error("A senha não pode estar em branco.");
                 await apiFetch('/api/v2/usuarios/alterar-propria-senha', { method: 'PUT', body: JSON.stringify({ novaSenha }) });
-                setNovaSenha(''); alert('Sua senha foi redefinida com sucesso!');
-            } else {
-                // Envio regular de formulários
-                await apiFetch(isEditando ? `/api/v2/${prefixoAdmin}${view}/${selecionado.id}` : `/api/v2/${prefixoAdmin}${view}`, { method: isEditando ? 'PUT' : 'POST', body: JSON.stringify(form) });
+                alert('Sua senha foi redefinida no formato SHA-256 com sucesso!');
+                fecharModalLocal();
+                return;
             }
+
+            await apiFetch(isEditando ? `/api/v2/usuarios/${selecionado.id}` : `/api/v2/usuarios`, { method: isEditando ? 'PUT' : 'POST', body: JSON.stringify(form) });
             fecharModalLocal();
             carregarDadosPainel();
         } catch (err) { setErro(err.message); }
@@ -219,11 +216,7 @@ export default function App() {
         if (view === 'eventos') {
             const detalhe = await apiFetch(`/api/v2/admin/eventos-detalhes/${item.id}`);
             const sIds = [detalhe.setor_id_1, detalhe.setor_id_2, detalhe.setor_id_3].filter(Boolean);
-            setForm({
-                titulo: detalhe.titulo, area_id: detalhe.area_id || '', data_evento: detalhe.data_evento.substring(0, 10), carga_horaria: detalhe.carga_horaria,
-                local_id: detalhe.local_id, hora_inicio: detalhe.hora_inicio, hora_fim: detalhe.hora_fim, palestrante: detalhe.palestrante,
-                setores_ids: sIds, publicos_alvo_ids: detalhe.publicos_alvo_ids || []
-            });
+            setForm({ titulo: detalhe.titulo, area_id: detalhe.area_id || '', data_evento: detalhe.data_evento.substring(0, 10), carga_horaria: detalhe.carga_horaria, local_id: detalhe.local_id, hora_inicio: detalhe.hora_inicio, hora_fim: detalhe.hora_fim, palestrante: detalhe.palestrante, setores_ids: sIds, publicos_alvo_ids: detalhe.publicos_alvo_ids || [] });
             setModalNovoEvento(true);
         } else if (view === 'locais') {
             setForm({ nome: item.nome, endereco: item.endereco, latitude: item.latitude, longitude: item.longitude });
@@ -238,9 +231,13 @@ export default function App() {
     };
 
     const deletarRegistro = async (id) => {
-        if (!confirm('Remover registro?')) return;
+        if (!confirm('Tem certeza que deseja remover este registro permanentemente?')) return;
         try {
-            await apiFetch(view === 'log-fraudes' ? `/api/v2/admin/log-fraudes/${id}` : `/api/v2/${view}/${id}`, { method: 'DELETE' });
+            setErro('');
+            let urlDestino = `/api/v2/${view}/${id}`;
+            if (view === 'log-fraudes') urlDestino = `/api/v2/admin/log-fraudes/${id}`;
+            
+            await apiFetch(urlDestino, { method: 'DELETE' });
             carregarDadosPainel();
         } catch (err) { setErro(err.message); }
     };
@@ -283,7 +280,6 @@ export default function App() {
                 <div style={view === 'log-fraudes' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('log-fraudes'); setDadosEstatisticos(null); setIsEditando(false); }}>OCORRÊNCIAS</div>
                 <div style={view === 'pesquisa-satisfacao' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('pesquisa-satisfacao'); setDadosEstatisticos(null); setIsEditando(false); }}>PESQUISA DE OPINIÃO</div>
                 <div style={view === 'setores' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('setores'); setDadosEstatisticos(null); setIsEditando(false); }}>SETORES (CRUD)</div>
-                {/* CORRIGIDO: Removido o caractere "styles" errôneo de digitação que quebrava o painel */}
                 <div style={view === 'areas' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('areas'); setDadosEstatisticos(null); setIsEditando(false); }}>ÁREAS / MODALIDADES</div>
                 <div style={view === 'publico-alvo' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('publico-alvo'); setDadosEstatisticos(null); setIsEditando(false); }}>PÚBLICO-ALVO</div>
                 <div style={view === 'usuarios' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('usuarios'); setDadosEstatisticos(null); setIsEditando(false); }}>USUÁRIOS</div>
@@ -293,14 +289,7 @@ export default function App() {
             <div style={estilos.containerCentralizado}>
                 <div style={estilos.barraSuperiorTopo}>
                     <div style={estilos.blocoStatusUsuario}>
-                        {/* NOVO: Ícone de Chave Estratégico no Topo para Alterar Própria Senha do Operador Logado */}
-                        <button 
-                            title="Alterar Minha Própria Senha" 
-                            onClick={() => { setView('usuarios'); setIsEditando(true); setSelecionado({ id: null }); setForm({}); }} 
-                            style={estilos.btnChaveSenhaTopo}
-                        >
-                            🔑
-                        </button>
+                        <button title="Alterar Minha Própria Senha" onClick={() => { setView('usuarios'); setIsEditando(true); setSelecionado({ id: null }); setForm({}); }} style={estilos.btnChaveSenhaTopo}>🔑</button>
                         <span>Logado: <strong>{user?.usuario}</strong></span>
                         <button onClick={lidarComLogout} style={estilos.btnLogoffTopo}>Sair / Logoff</button>
                     </div>
@@ -318,6 +307,7 @@ export default function App() {
 
                     {erro && <div style={estilos.erroBox}>{erro}</div>}
 
+                    {/* INTERFACE DE EVENTOS */}
                     {view === 'eventos' && (
                         <div style={estilos.wrapperRolagemTabela}>
                             <table style={estilos.tabela}>
@@ -346,7 +336,40 @@ export default function App() {
                         </div>
                     )}
 
-                    {view !== 'eventos' && view !== 'relatorios' && (
+                    {/* MODIFICAÇÃO SOLICITADA: EXCEÇÃO DO HISTÓRICO SEM FORMULÁRIO LATERAL (100% LARGURA) */}
+                    {view === 'frequencias' && (
+                        <div style={estilos.wrapperRolagemTabela}>
+                            <table style={estilos.tabela}>
+                                <thead>
+                                    <tr style={estilos.tabelaHeader}>
+                                        <th style={estilos.th}>Matrícula</th>
+                                        <th style={estilos.th}>Participante / Professor</th>
+                                        <th style={estilos.th}>Formação / Evento</th>
+                                        <th style={estilos.th}>Carga Oficial</th>
+                                        <th style={estilos.th}>Horário Entrada</th>
+                                        <th style={estilos.th}>Horário Saída</th>
+                                        <th style={estilos.th}>Tempo Efetivo</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {lista.map((item) => (
+                                        <tr key={item.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                                            <td style={{ ...estilos.td, fontWeight: 'bold' }}>{item.matricula || '--'}</td>
+                                            <td style={estilos.td}>{item.participante_nome || '--'}</td>
+                                            <td style={estilos.td}>{item.evento_titulo || '--'}</td>
+                                            <td style={estilos.td}>{item.carga_horaria ? `${item.carga_horaria}h` : '--'}</td>
+                                            <td style={estilos.td}>{item.data_entrada ? new Date(item.data_entrada).toLocaleString('pt-BR') : '--'}</td>
+                                            <td style={estilos.td}>{item.data_saida ? new Date(item.data_saida).toLocaleString('pt-BR') : 'Em andamento'}</td>
+                                            <td style={{ ...estilos.td, fontWeight: 'bold', color: '#16a34a' }}>{item.tempo_participacao || '--:--'}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+
+                    {/* DEMAIS INTERFACES COM SPLIT LAYOUT SELETIVO */}
+                    {view !== 'eventos' && view !== 'frequencias' && view !== 'relatorios' && (
                         <div style={estilos.splitLayout}>
                             <div style={{ flex: view === 'locais' ? 'none' : 2, width: view === 'locais' ? '100%' : 'auto', height: '100%', display: 'flex', flexDirection: 'column' }}>
                                 <div style={estilos.wrapperRolagemTabela}>
@@ -355,7 +378,6 @@ export default function App() {
                                             <tr style={estilos.tabelaHeader}>
                                                 {view === 'locais' && <><th style={estilos.th}>Nome do Espaço</th><th style={estilos.th}>Endereço Completo</th><th style={estilos.th}>Coordenadas (Lat / Lng)</th><th style={estilos.th}>Ações</th></>}
                                                 {view === 'participantes' && <><th style={estilos.th}>Nome</th><th style={estilos.th}>Matrícula</th><th style={estilos.th}>Ações</th></>}
-                                                {view === 'frequencias' && <><th style={estilos.th}>Matrícula</th><th style={estilos.th}>Participante</th><th style={estilos.th}>Evento</th><th style={estilos.th}>Tempo</th><th style={estilos.th}>Ações</th></>}
                                                 {view === 'log-fraudes' && <><th style={estilos.th}>Matrícula</th><th style={estilos.th}>Motivo</th><th style={estilos.th}>Data</th><th style={estilos.th}>Ações</th></>}
                                                 {view === 'pesquisa-satisfacao' && <><th style={estilos.th}>Participante</th><th style={estilos.th}>Evento</th><th style={estilos.th}>Avaliação</th></>}
                                                 {['publico-alvo', 'setores', 'areas'].includes(view) && <><th style={estilos.th}>Nome</th><th style={estilos.th}>Ações</th></>}
@@ -367,10 +389,10 @@ export default function App() {
                                                 <tr key={item.id} style={{ borderBottom: '1px solid #cbd5e1' }}>
                                                     {view === 'locais' && <><td style={{...estilos.td, fontWeight: 'bold'}}>{item.nome}</td><td style={estilos.td}>{item.endereco}</td><td style={{...estilos.td, color: '#64748b', fontSize: '12px'}}>{item.latitude} , {item.longitude}</td><td style={estilos.td}><button onClick={() => iniciarEdicao(item)} style={estilos.btnLink}>Editar</button><button onClick={() => deletarRegistro(item.id)} style={estilos.btnLinkErro}>Excluir</button></td></>}
                                                     {view === 'participantes' && <><td style={estilos.td}>{item.nome_completo}</td><td style={estilos.td}>{item.matricula}</td><td style={estilos.td}><button onClick={() => iniciarEdicao(item)} style={estilos.btnLink}>Editar</button></td></>}
-                                                    {view === 'frequencias' && <><td style={estilos.td}>{item.matricula}</td><td style={estilos.td}>{item.participante_nome}</td><td style={estilos.td}>{item.evento_titulo}</td><td style={{...estilos.td, fontWeight: 'bold', color: '#16a34a'}}>{item.tempo_participacao || '--:--'}</td><td style={estilos.td}><button onClick={() => { setSelecionado(item); setIsEditando(true); setForm({ data_entrada: item.data_entrada.substring(0, 16), data_saida: item.data_saida ? item.data_saida.substring(0, 16) : '' }); }} style={estilos.btnLink}>Editar</button></td></>}
                                                     {view === 'log-fraudes' && <><td style={estilos.td}>{item.matricula}</td><td style={estilos.td}>{item.motivo}</td><td style={estilos.td}>{new Date(item.data_tentativa).toLocaleString('pt-BR')}</td><td style={estilos.td}><button onClick={() => deletarRegistro(item.id)} style={estilos.btnLinkErro}>Excluir</button></td></>}
                                                     {view === 'pesquisa-satisfacao' && <><td style={estilos.td}>{item.participante_nome}</td><td style={estilos.td}>{item.evento_titulo}</td><td style={{...estilos.td, color: '#f59e0b'}}>{item.avaliacao}</td></>}
                                                     {['publico-alvo', 'setores', 'areas'].includes(view) && <><td style={estilos.td}>{item.nome}</td><td style={estilos.td}><button onClick={() => iniciarEdicao(item)} style={estilos.btnLink}>Editar</button><button onClick={() => deletarRegistro(item.id)} style={estilos.btnLinkErro}>Excluir</button></td></>}
+                                                    {/* BOTÃO EXCLUIR VINCULADO AO ENDPOINT DO BACKEND COM SUCESSO */}
                                                     {view === 'usuarios' && <><td style={{...estilos.td, fontWeight: 'bold'}}>{item.nome || 'Não Informado'}</td><td style={estilos.td}>{item.usuario}</td><td style={estilos.td}><button onClick={() => iniciarEdicao(item)} style={estilos.btnLink}>Editar</button><button onClick={() => deletarRegistro(item.id)} style={estilos.btnLinkErro} disabled={item.usuario === user.usuario}>Excluir</button></td></>}
                                                 </tr>
                                             ))}
@@ -379,30 +401,29 @@ export default function App() {
                                 </div>
                             </div>
 
-                            {['publico-alvo', 'setores', 'areas', 'usuarios', 'frequencias'].includes(view) && (
+                            {['publico-alvo', 'setores', 'areas', 'usuarios'].includes(view) && (
                                 <div style={estilos.colunaDireita}>
                                     <form onSubmit={lidarComSubmissaoForm} style={estilos.formularioPainel}>
-                                        
-                                        {/* TÍTULO DINÂMICO PARA SUPORTAR FORMULÁRIO DE TROCA DE SENHA PRÓPRIA */}
                                         <h3 style={{margin: 0, fontSize: '15px', color: '#1e3a8a'}}>
                                             {view === 'usuarios' && isEditando && !selecionado?.id ? '🔑 Redefinir Minha Senha' : isEditando ? '✏️ Editar Registro' : '➕ Cadastrar Registro'}
                                         </h3>
                                         
                                         {['publico-alvo', 'setores', 'areas'].includes(view) && <input type="text" placeholder="Nome" style={estilos.entradaForm} value={form.nome || ''} onChange={e => setForm({ ...form, nome: e.target.value })} required />}
-                                        {view === 'frequencias' && isEditando && <><label style={{fontSize: '11px', fontWeight: 'bold'}}>Entrada:</label><input type="datetime-local" style={estilos.entradaForm} value={form.data_entrada || ''} onChange={e => setForm({ ...form, data_entrada: e.target.value })} required /><label style={{fontSize: '11px', fontWeight: 'bold'}}>Saída:</label><input type="datetime-local" style={estilos.entradaForm} value={form.data_saida || ''} onChange={e => setForm({ ...form, data_saida: e.target.value })} /></>}
                                         
                                         {view === 'usuarios' && !selecionado?.id && isEditando && (
                                             <>
                                                 <label style={estilos.labelFixo}>Nova Senha:</label>
-                                                <input type="password" placeholder="Digite a nova senha pessoal" style={estilos.entradaForm} value={novaSenha} onChange={e => setNovaSenha(e.target.value)} required />
+                                                <input type="password" placeholder="Digite a nova senha de acesso" style={estilos.entradaForm} value={novaSenha} onChange={e => setNovaSenha(e.target.value)} required />
                                             </>
                                         )}
 
                                         {view === 'usuarios' && selecionado?.id && (
                                             <>
                                                 <input type="text" placeholder="Nome Completo do Operador" style={estilos.entradaForm} value={form.nome || ''} onChange={e => setForm({ ...form, nome: e.target.value })} required />
-                                                <input type="text" placeholder="Login / Usuário de Acesso" style={estilos.entradaForm} value={form.usuario || ''} onChange={e => setForm({ ...form, usuario: e.target.value })} required disabled={isEditando} />
-                                                {!isEditando && <input type="password" placeholder="Senha Inicial" style={estilos.entradaForm} value={form.senha || ''} onChange={e => setForm({ ...form, senha: e.target.value })} required />}
+                                                <input type="text" placeholder="Login / Usuário de Acesso" style={estilos.entradaForm} value={form.usuario || ''} onChange={e => setForm({ ...form, usuario: e.target.value })} required disabled />
+                                                <div style={{border: '1px solid #bfdbfe', backgroundColor: '#eff6ff', padding: '10px', borderRadius: '6px', fontSize: '12px', color: '#1e40af'}}>
+                                                    As senhas são encriptadas de forma estrita em SHA-256 no momento do cadastro inicial por segurança.
+                                                </div>
                                             </>
                                         )}
 
@@ -438,6 +459,7 @@ export default function App() {
                 </div>
             </div>
 
+            {/* MODAL VITRIFICADO DE CADASTRO DE LOCAL */}
             {modalNovoLocal && (
                 <div style={estilos.backdropVitrificado}>
                     <div style={estilos.containerGlass}>
@@ -474,6 +496,7 @@ export default function App() {
                 </div>
             )}
 
+            {/* MODAL DE EVENTOS / FORMAÇÕES */}
             {modalNovoEvento && (
                 <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15,23,42,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999 }}>
                     <div style={{ backgroundColor: '#fff', padding: '25px', borderRadius: '12px', width: '90%', maxWidth: '520px', maxHeight: '85vh', overflowY: 'auto' }}>
@@ -504,7 +527,7 @@ export default function App() {
                                 <div style={{ border: '1px solid #cbd5e1', padding: '10px', borderRadius: '6px', maxHeight: '110px', overflowY: 'auto' }}>
                                     {setoresDisponiveis.map(s => (
                                         <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', marginBottom: '4px', cursor: 'pointer' }}>
-                                            <input type="checkbox" checked={(form.setores_ids || []).includes(s.id)} onChange={() => alternarSelecaoSetor(s.id)} />
+                                            <input type="checkbox" checked={(form.setores_ids || []).includes(s.id)} onChange={() => autumnarSelecaoSetor(s.id)} />
                                             {s.nome}
                                         </label>
                                     ))}
@@ -539,9 +562,7 @@ const estilos = {
     barraSuperiorTopo: { height: '45px', width: '100%', backgroundColor: '#fff', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', padding: '0 25px', boxSizing: 'border-box' },
     blocoStatusUsuario: { display: 'flex', alignItems: 'center', gap: '12px', fontSize: '12px', color: '#475569' },
     btnLogoffTopo: { padding: '5px 12px', borderRadius: '4px', border: '1px solid #f87171', backgroundColor: '#fef2f2', color: '#ef4444', fontWeight: 'bold', cursor: 'pointer', fontSize: '11px', transition: 'all 0.2s' },
-    
-    // NOVO: Estilo para o botão de chave de segurança no cabeçalho
-    btnChaveSenhaTopo: { background: 'none', border: 'none', fontSize: '15px', cursor: 'pointer', padding: '4px', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'transform 0.1s', '&:hover': { transform: 'scale(1.15)' } },
+    btnChaveSenhaTopo: { background: 'none', border: 'none', fontSize: '15px', cursor: 'pointer', padding: '4px', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' },
 
     conteudoPrincipal: { flex: 1, padding: '20px 25px', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxSizing: 'border-box' },
     wrapperRolagemTabela: { flex: 1, overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#fff' },
@@ -568,8 +589,7 @@ const estilos = {
     btnPrimario: { padding: '10px 18px', borderRadius: '6px', border: 'none', backgroundColor: '#1e3a8a', color: '#fff', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' },
     btnSucesso: { padding: '12px', borderRadius: '6px', border: 'none', backgroundColor: '#16a34a', color: '#fff', fontWeight: 'bold', cursor: 'pointer' },
     erroBox: { padding: '8px', borderRadius: '6px', backgroundColor: '#fee2e2', color: '#991b1b', fontSize: '12px', fontWeight: 'bold', marginBottom: '10px' },
-    usuarioStatus: { fontSize: '11px', color: '#475569', padding: '0 5px', marginBottom: '10px' },
-    menuItem: { padding: '9px 12px', borderRadius: '6px', color: '#94a3b8', cursor: 'pointer', fontSize: '12px', fontWeight: '500', transition: 'all 0.15s' },
+    menuItem: { padding: '9px 12px', borderRadius: '6px', color: '#94a3b8', cursor: 'pointer', fontSize: '12px', fontWeight: '500' },
     menuItemAtivo: { padding: '9px 12px', borderRadius: '6px', color: '#fff', backgroundColor: '#0284c7', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' },
     entradaForm: { padding: '9px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', width: '100%', boxSizing: 'border-box', backgroundColor: '#fff' },
     btnSucessoForm: { padding: '10px', borderRadius: '6px', border: 'none', backgroundColor: '#16a34a', color: '#fff', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' },

@@ -19,7 +19,7 @@ const obterDataComHorarioString = (horarioStr) => {
     if (!horarioStr) return new Date();
     const agora = new Date();
     const [horas, minutos] = horarioStr.split(':').map(Number);
-    return new Date(agora.getFullYear(), agora.getMonth(), agora.getDate(), hours, minutos, 0);
+    return new Date(agora.getFullYear(), agora.getMonth(), agora.getDate(), horas, minutos, 0);
 };
 
 export default function App() {
@@ -57,7 +57,7 @@ export default function App() {
         executarInicializacao(deviceToken);
     }, [deviceToken]);
 
-    const executarInicializacao = async (tokenParaValidar) => {
+    const ejecutarInicializacao = async (tokenParaValidar) => {
         try {
             const res = await fetch(`${API_URL}/api/v2/presenca/inicializar`, {
                 method: 'POST',
@@ -84,7 +84,6 @@ export default function App() {
                 setTemEventoAtivo(data.tem_evento_ativo || false);
                 setEventoAtivoId(data.evento_ativo_id || null);
                 
-                // Se ele já marcou entrada, cai direto na tela estática de repouso sem gastar banda do túnel
                 if (data.tem_evento_ativo) {
                     setStatusTela('aguardando_janela_saida');
                 } else {
@@ -222,6 +221,7 @@ export default function App() {
         if (conteudoModal.tipo === 'confirmar_entrada') {
             setStatusTela('gravando_presenca');
             try {
+                // CORREÇÃO CRÍTICA DO SEU CORE: Injetados latitude e longitude obrigatoriamente
                 const res = await fetch(`${API_URL}/api/v2/presenca/confirmar-entrada`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -235,15 +235,15 @@ export default function App() {
                 if (res.ok) {
                     setStatusTela('presenca_confirmada_sucesso');
                     
-                    // CORREÇÃO MÁXIMA: Mantém o token salvo (proteção permanente) e entra em repouso após 8s
                     setTimeout(() => {
                         setTemEventoAtivo(true);
                         setEventoAtivoId(eventoSelecionado.id);
                         setStatusTela('aguardando_janela_saida');
                     }, 8000);
                 } else {
+                    const d = await res.json();
                     setStatusTela('listagem');
-                    dispararAlerta8Segundos('Erro ao salvar entrada.', 'erro');
+                    dispararAlerta8Segundos(d.error || 'Erro ao salvar entrada.', 'erro');
                 }
             } catch (e) {
                 setStatusTela('listagem');
@@ -279,11 +279,10 @@ export default function App() {
             setComentario('');
             setStatusTela('sucesso_final');
 
-            // Após a saída concluída no fim do dia, mantemos o token para que o celular continue amarrado a ele amanhã
             setTimeout(() => {
                 setTemEventoAtivo(false);
                 setEventoAtivoId(null);
-                executarInicializacao(deviceToken);
+                ejecutarInicializacao(deviceToken);
             }, 8000);
 
         } catch (err) {
@@ -366,7 +365,6 @@ export default function App() {
                     </div>
                 )}
 
-                {/* CORREÇÃO CIRÚRGICA DE REPOUSO: O CELULAR ENTRA EM SILÊNCIO COMPLETO AQUI E O CLOUDFLARE FECHA A CONEXÃO SOZINHO POR INATIVIDADE */}
                 {statusTela === 'aguardando_janela_saida' && (
                     <div style={{ padding: '30px', borderRadius: '16px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0' }}>
                         <div style={{ fontSize: '50px', marginBottom: '15px' }}>✍️</div>
@@ -377,7 +375,7 @@ export default function App() {
                         <div style={{ marginTop: '20px', fontSize: '12px', color: '#0284c7', fontWeight: 'bold' }}>
                             🔒 Este aparelho está vinculado à sua matrícula.
                         </div>
-                        <button onClick={() => executarInicializacao(deviceToken)} style={{ marginTop: '25px', padding: '10px 20px', borderRadius: '8px', border: 'none', backgroundColor: '#e2e8f0', color: '#475569', fontWeight: 'bold', fontSize: '13px', cursor: 'pointer' }}>🔄 Atualizar / Liberar Saída</button>
+                        <button onClick={() => ejecutarInicializacao(deviceToken)} style={{ marginTop: '25px', padding: '10px 20px', borderRadius: '8px', border: 'none', backgroundColor: '#e2e8f0', color: '#475569', fontWeight: 'bold', fontSize: '13px', cursor: 'pointer' }}>🔄 Atualizar / Liberar Saída</button>
                     </div>
                 )}
 
@@ -426,7 +424,7 @@ export default function App() {
 
                 {statusTela === 'encerrado' && (
                     <div style={{ marginTop: '40px' }}>
-                        <p style={{ color: '#9ca3af', fontStyle: 'italic' }}>Nenhuma operação ativa disponível no momento.</p>
+                        <p style={{ color: '#9ca3af', fontStyle: 'italic' }}>Nenhuma operação activa disponível no momento.</p>
                     </div>
                 )}
                 

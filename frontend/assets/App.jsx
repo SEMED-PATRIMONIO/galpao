@@ -643,7 +643,7 @@ export default function App() {
                                 <div style={{ border: '1px solid #cbd5e1', padding: '10px', borderRadius: '6px', maxHeight: '110px', overflowY: 'auto' }}>
                                     {setoresDisponiveis.map(s => (
                                         <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', marginBottom: '4px', cursor: 'pointer' }}>
-                                            <input type="checkbox" checked={(form.setores_ids || []).includes(s.id)} onChange={() => autumnarSelecaoSetor(s.id)} />
+                                            <input type="checkbox" checked={(form.setores_ids || []).includes(s.id)} onChange={() => alternarSelecaoSetor(s.id)} />
                                             {s.nome}
                                         </label>
                                     ))}

@@ -196,11 +196,12 @@ export default function App() {
             setErro('');
             const prefixoAdmin = view === 'frequencias' ? 'admin/' : '';
             
-            // Tratamento especial para envio do campo de alteração de senha de usuário logado
-            if (view === 'usuarios' && isEditando && novaSenha) {
+            if (view === 'usuarios' && isEditando && !selecionado.id) {
+                // Caso seja redefinição de senha própria (acionada pela chavinha lá no topo)
                 await apiFetch('/api/v2/usuarios/alterar-propria-senha', { method: 'PUT', body: JSON.stringify({ novaSenha }) });
-                setNovaSenha(''); alert('Senha do administrador atualizada com sucesso!');
+                setNovaSenha(''); alert('Sua senha foi redefinida com sucesso!');
             } else {
+                // Envio regular de formulários
                 await apiFetch(isEditando ? `/api/v2/${prefixoAdmin}${view}/${selecionado.id}` : `/api/v2/${prefixoAdmin}${view}`, { method: isEditando ? 'PUT' : 'POST', body: JSON.stringify(form) });
             }
             fecharModalLocal();
@@ -209,7 +210,7 @@ export default function App() {
     };
 
     const fecharModalLocal = () => {
-        setForm({}); setIsEditando(false); setSelecionado(null); setModalNovoLocal(false);
+        setForm({}); setIsEditando(false); setSelecionado(null); setModalNovoLocal(false); setNovaSenha(''); setConfirmarNovaSenha('');
         if (window.mapaModalInstancia) { window.mapaModalInstancia.remove(); window.mapaModalInstancia = null; }
     };
 
@@ -271,8 +272,6 @@ export default function App() {
 
     return (
         <div style={estilos.layoutPrincipal}>
-            
-            {/* BARRA LATERAL ULTRA COMPACTA (SEM ROLAGEM) */}
             <div style={estilos.barraLateral}>
                 <div style={{ marginBottom: '20px', textAlign: 'center', paddingBottom: '10px', borderBottom: '1px solid #1e293b' }}>
                     <img src="/logap.png" alt="Logo" style={{ height: '34px' }} />
@@ -284,18 +283,24 @@ export default function App() {
                 <div style={view === 'log-fraudes' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('log-fraudes'); setDadosEstatisticos(null); setIsEditando(false); }}>OCORRÊNCIAS</div>
                 <div style={view === 'pesquisa-satisfacao' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('pesquisa-satisfacao'); setDadosEstatisticos(null); setIsEditando(false); }}>PESQUISA DE OPINIÃO</div>
                 <div style={view === 'setores' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('setores'); setDadosEstatisticos(null); setIsEditando(false); }}>SETORES (CRUD)</div>
-                <div style={view === 'areas' ? styles.menuItemAtivo : estilos.menuItem} onClick={() => { setView('areas'); setDadosEstatisticos(null); setIsEditando(false); }}>ÁREAS / MODALIDADES</div>
+                {/* CORRIGIDO: Removido o caractere "styles" errôneo de digitação que quebrava o painel */}
+                <div style={view === 'areas' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('areas'); setDadosEstatisticos(null); setIsEditando(false); }}>ÁREAS / MODALIDADES</div>
                 <div style={view === 'publico-alvo' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('publico-alvo'); setDadosEstatisticos(null); setIsEditando(false); }}>PÚBLICO-ALVO</div>
                 <div style={view === 'usuarios' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('usuarios'); setDadosEstatisticos(null); setIsEditando(false); }}>USUÁRIOS</div>
                 <div style={view === 'relatorios' ? estilos.menuItemAtivo : estilos.menuItem} onClick={() => { setView('relatorios'); setLista([]); setDadosEstatisticos(null); setIsEditando(false); }}>RELATÓRIOS</div>
             </div>
 
-            {/* CONTAINER CENTRAL DE CONTEÚDO */}
             <div style={estilos.containerCentralizado}>
-                
-                {/* NOVO: CABEÇALHO SUPERIOR DE STATUS (MUDADO PARA O TOPO DIREITO) */}
                 <div style={estilos.barraSuperiorTopo}>
                     <div style={estilos.blocoStatusUsuario}>
+                        {/* NOVO: Ícone de Chave Estratégico no Topo para Alterar Própria Senha do Operador Logado */}
+                        <button 
+                            title="Alterar Minha Própria Senha" 
+                            onClick={() => { setView('usuarios'); setIsEditando(true); setSelecionado({ id: null }); setForm({}); }} 
+                            style={estilos.btnChaveSenhaTopo}
+                        >
+                            🔑
+                        </button>
                         <span>Logado: <strong>{user?.usuario}</strong></span>
                         <button onClick={lidarComLogout} style={estilos.btnLogoffTopo}>Sair / Logoff</button>
                     </div>
@@ -303,7 +308,7 @@ export default function App() {
 
                 <div style={estilos.conteudoPrincipal}>
                     <div style={{ backgroundColor: '#fff', padding: '12px 15px', borderRadius: 8, marginBottom: 15, border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontWeight: 'bold', textTransform: 'uppercase', fontSize: 13, color: '#334155' }}>LISTAGEM: {view}</span>
+                        <span style={{ fontWeight: 'bold', textTransform: 'uppercase', fontSize: 13, color: '#334155' }}>LISTAGEM: {view === 'areas' ? 'ÁREAS / MODALIDADES' : view}</span>
                         <div>
                             {view === 'eventos' && <button onClick={() => { setForm({ setores_ids: [], publicos_alvo_ids: [], area_id: '' }); setIsEditando(false); setModalNovoEvento(true); }} style={{ backgroundColor: '#16a34a', color: '#fff', border: 'none', padding: '8px 20px', borderRadius: 6, fontWeight: 'bold', cursor: 'pointer' }}>NOVO EVENTO</button>}
                             {view === 'locais' && <button onClick={() => { setForm({}); setIsEditando(false); setModalNovoLocal(true); }} style={{ backgroundColor: '#1e3a8a', color: '#fff', border: 'none', padding: '10px 22px', borderRadius: 6, fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(30,58,138,0.3)' }}>ADICIONAR NOVO LOCAL</button>}
@@ -354,7 +359,6 @@ export default function App() {
                                                 {view === 'log-fraudes' && <><th style={estilos.th}>Matrícula</th><th style={estilos.th}>Motivo</th><th style={estilos.th}>Data</th><th style={estilos.th}>Ações</th></>}
                                                 {view === 'pesquisa-satisfacao' && <><th style={estilos.th}>Participante</th><th style={estilos.th}>Evento</th><th style={estilos.th}>Avaliação</th></>}
                                                 {['publico-alvo', 'setores', 'areas'].includes(view) && <><th style={estilos.th}>Nome</th><th style={estilos.th}>Ações</th></>}
-                                                {/* CORRIGIDO: Propriedade correta para exibir o nome cadastrado do operador */}
                                                 {view === 'usuarios' && <><th style={estilos.th}>Nome do Operador</th><th style={estilos.th}>Login / Usuário</th><th style={estilos.th}>Ações</th></>}
                                             </tr>
                                         </thead>
@@ -367,41 +371,52 @@ export default function App() {
                                                     {view === 'log-fraudes' && <><td style={estilos.td}>{item.matricula}</td><td style={estilos.td}>{item.motivo}</td><td style={estilos.td}>{new Date(item.data_tentativa).toLocaleString('pt-BR')}</td><td style={estilos.td}><button onClick={() => deletarRegistro(item.id)} style={estilos.btnLinkErro}>Excluir</button></td></>}
                                                     {view === 'pesquisa-satisfacao' && <><td style={estilos.td}>{item.participante_nome}</td><td style={estilos.td}>{item.evento_titulo}</td><td style={{...estilos.td, color: '#f59e0b'}}>{item.avaliacao}</td></>}
                                                     {['publico-alvo', 'setores', 'areas'].includes(view) && <><td style={estilos.td}>{item.nome}</td><td style={estilos.td}><button onClick={() => iniciarEdicao(item)} style={estilos.btnLink}>Editar</button><button onClick={() => deletarRegistro(item.id)} style={estilos.btnLinkErro}>Excluir</button></td></>}
-                                                    {/* CORRIGIDO: Exibição explícita do Nome e Login cadastrados */}
                                                     {view === 'usuarios' && <><td style={{...estilos.td, fontWeight: 'bold'}}>{item.nome || 'Não Informado'}</td><td style={estilos.td}>{item.usuario}</td><td style={estilos.td}><button onClick={() => iniciarEdicao(item)} style={estilos.btnLink}>Editar</button><button onClick={() => deletarRegistro(item.id)} style={estilos.btnLinkErro} disabled={item.usuario === user.usuario}>Excluir</button></td></>}
                                                 </tr>
-                                    ))}
+                                            ))}
                                         </tbody>
                                     </table>
                                 </div>
                             </div>
 
-                            {/* PAINEL LATERAL DIREITO DE REGISTRO (CRIADO SUPORTE ADICIONAL PARA OPERADORES DE USUÁRIOS) */}
                             {['publico-alvo', 'setores', 'areas', 'usuarios', 'frequencias'].includes(view) && (
                                 <div style={estilos.colunaDireita}>
                                     <form onSubmit={lidarComSubmissaoForm} style={estilos.formularioPainel}>
-                                        <h3 style={{margin: 0, fontSize: '15px', color: '#1e3a8a'}}>{isEditando ? '✏️ Editar Registro' : '➕ Cadastrar Registro'}</h3>
+                                        
+                                        {/* TÍTULO DINÂMICO PARA SUPORTAR FORMULÁRIO DE TROCA DE SENHA PRÓPRIA */}
+                                        <h3 style={{margin: 0, fontSize: '15px', color: '#1e3a8a'}}>
+                                            {view === 'usuarios' && isEditando && !selecionado?.id ? '🔑 Redefinir Minha Senha' : isEditando ? '✏️ Editar Registro' : '➕ Cadastrar Registro'}
+                                        </h3>
+                                        
                                         {['publico-alvo', 'setores', 'areas'].includes(view) && <input type="text" placeholder="Nome" style={estilos.entradaForm} value={form.nome || ''} onChange={e => setForm({ ...form, nome: e.target.value })} required />}
                                         {view === 'frequencias' && isEditando && <><label style={{fontSize: '11px', fontWeight: 'bold'}}>Entrada:</label><input type="datetime-local" style={estilos.entradaForm} value={form.data_entrada || ''} onChange={e => setForm({ ...form, data_entrada: e.target.value })} required /><label style={{fontSize: '11px', fontWeight: 'bold'}}>Saída:</label><input type="datetime-local" style={estilos.entradaForm} value={form.data_saida || ''} onChange={e => setForm({ ...form, data_saida: e.target.value })} /></>}
                                         
-                                        {/* CORRIGIDO: Inputs completos para o gerenciamento de Usuários do Sistema */}
-                                        {view === 'usuarios' && (
+                                        {view === 'usuarios' && !selecionado?.id && isEditando && (
+                                            <>
+                                                <label style={estilos.labelFixo}>Nova Senha:</label>
+                                                <input type="password" placeholder="Digite a nova senha pessoal" style={estilos.entradaForm} value={novaSenha} onChange={e => setNovaSenha(e.target.value)} required />
+                                            </>
+                                        )}
+
+                                        {view === 'usuarios' && selecionado?.id && (
                                             <>
                                                 <input type="text" placeholder="Nome Completo do Operador" style={estilos.entradaForm} value={form.nome || ''} onChange={e => setForm({ ...form, nome: e.target.value })} required />
                                                 <input type="text" placeholder="Login / Usuário de Acesso" style={estilos.entradaForm} value={form.usuario || ''} onChange={e => setForm({ ...form, usuario: e.target.value })} required disabled={isEditando} />
-                                                {!isEditando ? (
-                                                    <input type="password" placeholder="Senha Inicial do Usuário" style={estilos.entradaForm} value={form.senha || ''} onChange={e => setForm({ ...form, senha: e.target.value })} required />
-                                                ) : (
-                                                    <div style={{border: '1px solid #bfdbfe', backgroundColor: '#eff6ff', padding: '10px', borderRadius: '6px', fontSize: '12px', color: '#1e40af'}}>
-                                                        Para mudar a senha deste usuário, use o formulário de Redefinição Administrativa.
-                                                    </div>
-                                                )}
+                                                {!isEditando && <input type="password" placeholder="Senha Inicial" style={estilos.entradaForm} value={form.senha || ''} onChange={e => setForm({ ...form, senha: e.target.value })} required />}
+                                            </>
+                                        )}
+
+                                        {view === 'usuarios' && !isEditando && (
+                                            <>
+                                                <input type="text" placeholder="Nome Completo do Operador" style={estilos.entradaForm} value={form.nome || ''} onChange={e => setForm({ ...form, nome: e.target.value })} required />
+                                                <input type="text" placeholder="Login / Usuário de Acesso" style={estilos.entradaForm} value={form.usuario || ''} onChange={e => setForm({ ...form, usuario: e.target.value })} required />
+                                                <input type="password" placeholder="Senha Inicial" style={estilos.entradaForm} value={form.senha || ''} onChange={e => setForm({ ...form, senha: e.target.value })} required />
                                             </>
                                         )}
 
                                         <div style={{ display: 'flex', gap: '10px', marginTop: '5px' }}>
                                             <button type="submit" style={{ ...estilos.btnSucessoForm, flex: 1 }}>Salvar</button>
-                                            <button type="button" onClick={() => { setIsEditando(false); setForm({}); setSelecionado(null); }} style={{ ...estilos.btnSucessoForm, flex: 1, backgroundColor: '#ef4444' }}>Cancelar</button>
+                                            <button type="button" onClick={fecharModalLocal} style={{ ...estilos.btnSucessoForm, flex: 1, backgroundColor: '#ef4444' }}>Cancelar</button>
                                         </div>
                                     </form>
                                 </div>
@@ -423,7 +438,6 @@ export default function App() {
                 </div>
             </div>
 
-            {/* MODAL VITRIFICADO DE LOCAL COORDENADO */}
             {modalNovoLocal && (
                 <div style={estilos.backdropVitrificado}>
                     <div style={estilos.containerGlass}>
@@ -460,7 +474,6 @@ export default function App() {
                 </div>
             )}
 
-            {/* MODAL DE EVENTOS / FORMAÇÕES */}
             {modalNovoEvento && (
                 <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15,23,42,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999 }}>
                     <div style={{ backgroundColor: '#fff', padding: '25px', borderRadius: '12px', width: '90%', maxWidth: '520px', maxHeight: '85vh', overflowY: 'auto' }}>
@@ -480,8 +493,8 @@ export default function App() {
                                     {areasDisponiveis.map(a => <option key={a.id} value={a.id}>{a.nome}</option>)}
                                 </select>
                                 <input type="date" style={estilos.entradaForm} value={form.data_evento || ''} onChange={e => setForm({ ...form, data_evento: e.target.value })} required />
-                                <input type="time" style={estilos.entradaForm} value={form.hour_inicio || form.hora_inicio || ''} onChange={e => lidarComMudancaHora('hora_inicio', e.target.value)} required />
-                                <input type="time" style={estilos.entradaForm} value={form.hour_fim || form.hora_fim || ''} onChange={e => lidarComMudancaHora('hora_fim', e.target.value)} required />
+                                <input type="time" style={estilos.entradaForm} value={form.hora_inicio || ''} onChange={e => lidarComMudancaHora('hora_inicio', e.target.value)} required />
+                                <input type="time" style={estilos.entradaForm} value={form.hora_fim || ''} onChange={e => lidarComMudancaHora('hora_fim', e.target.value)} required />
                                 <input type="text" placeholder="Palestrante / Formador" style={estilos.entradaForm} value={form.palestrante || ''} onChange={e => setForm({ ...form, palestrante: e.target.value })} />
                                 <select value={form.local_id || ''} onChange={e => setForm({ ...form, local_id: e.target.value })} required style={estilos.entradaForm}>
                                     <option value="">Selecione o Local...</option>
@@ -519,27 +532,25 @@ export default function App() {
 }
 
 const estilos = {
-    // MODIFICAÇÕES CRÍTICAS DE ESTRUTURA PARA PREVENÇÃO ABSOLUTA DE SCROLL GERAL
     layoutPrincipal: { display: 'flex', height: '100vh', width: '100vw', backgroundColor: '#f8fafc', fontFamily: 'system-ui', overflow: 'hidden' },
     barraLateral: { width: '240px', minWidth: '240px', backgroundColor: '#0f172a', color: '#94a3b8', padding: '15px 12px', display: 'flex', flexDirection: 'column', gap: '5px', height: '100vh', boxSizing: 'border-box' },
     containerCentralizado: { flex: 1, display: 'flex', flexDirection: 'column', height: '100vh', width: 'calc(100vw - 240px)', overflow: 'hidden' },
     
-    // CABEÇALHO SUPERIOR PARA LOGOFF E INFOS LOGADO
     barraSuperiorTopo: { height: '45px', width: '100%', backgroundColor: '#fff', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', padding: '0 25px', boxSizing: 'border-box' },
-    blocoStatusUsuario: { display: 'flex', alignItems: 'center', gap: '15px', fontSize: '12px', color: '#475569' },
+    blocoStatusUsuario: { display: 'flex', alignItems: 'center', gap: '12px', fontSize: '12px', color: '#475569' },
     btnLogoffTopo: { padding: '5px 12px', borderRadius: '4px', border: '1px solid #f87171', backgroundColor: '#fef2f2', color: '#ef4444', fontWeight: 'bold', cursor: 'pointer', fontSize: '11px', transition: 'all 0.2s' },
     
-    // CONTAINER DE CONTEÚDO DINÂMICO INTERNO
+    // NOVO: Estilo para o botão de chave de segurança no cabeçalho
+    btnChaveSenhaTopo: { background: 'none', border: 'none', fontSize: '15px', cursor: 'pointer', padding: '4px', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'transform 0.1s', '&:hover': { transform: 'scale(1.15)' } },
+
     conteudoPrincipal: { flex: 1, padding: '20px 25px', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxSizing: 'border-box' },
     wrapperRolagemTabela: { flex: 1, overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#fff' },
 
-    // ELEMENTOS DE GRID DE FORMULÁRIOS
     splitLayout: { display: 'flex', gap: '20px', alignItems: 'flex-start', flex: 1, overflow: 'hidden', height: '100%' },
     colunaEsquerdaSemForm: { flex: 1, backgroundColor: '#fff', padding: '15px', borderRadius: '8px', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', overflow: 'hidden' },
     colunaDireita: { width: '310px', backgroundColor: '#fff', padding: '15px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box' },
     formularioPainel: { display: 'flex', flexDirection: 'column', gap: '10px' },
 
-    // ESTILOS DE VITRIFICAÇÃO (GLASSMORPHISM) DO MODAL DE LOCAL
     backdropVitrificado: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.35)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999999 },
     containerGlass: { backgroundColor: 'rgba(255, 255, 255, 0.88)', backdropFilter: 'blur(20px)', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.5)', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.22)', width: '92%', maxWidth: '920px', height: '78vh', display: 'flex', overflow: 'hidden' },
     blocoMapaModal: { flex: 1.2, height: '100%', backgroundColor: '#e2e8f0' },
@@ -547,7 +558,6 @@ const estilos = {
     labelFixo: { display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#475569', marginBottom: '3px' },
     btnFormModal: { flex: 1, padding: '11px', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', fontSize: '13px', cursor: 'pointer' },
 
-    // PROPRIEDADES DE INPUTS, BOTÕES E COMPONENTES GERAIS PRESERVADOS
     telaLogin: { display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f1f5f9', fontFamily: 'system-ui' },
     caixaLogin: { backgroundColor: '#fff', padding: '35px', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', width: '330px', textAlign: 'center', border: '1px solid #e2e8f0' },
     tituloLogin: { fontSize: '20px', color: '#1e3a8a', margin: '0 0 20px 0' },

@@ -366,29 +366,39 @@ app.delete('/api/v2/locais/:id', verificarToken, async (req, res) => {
     try { await pool.query('DELETE FROM locais WHERE id = $1', [req.params.id]); return res.json({ success: true }); } catch (e) { return res.status(500).json({ error: 'Erro.' }); }
 });
 
-app.post('/api/v2/publico-alvo', verificarToken, async (req, res) => {
+// ==========================================
+// CRUD CORRIGIDO: PÚBLICO-ALVO (ACEITA PLURAL E SINGULAR)
+// ==========================================
+
+// 1. LISTAR (GET) - Corrigido para aceitar /publico-alvo ou /publico-alvos
+app.get(['/api/v2/publico-alvo', '/api/v2/publico-alvos'], async (req, res) => {
+    try { 
+        return res.json((await pool.query('SELECT * FROM publicoalvo ORDER BY nome ASC')).rows); 
+    } catch (e) { 
+        return res.status(500).json({ error: 'Erro ao listar público-alvo: ' + e.message }); 
+    }
+});
+
+// 2. CADASTRAR (POST) - Mantido isolado de senhas e aceitando ambas as rotas
+app.post(['/api/v2/publico-alvo', '/api/v2/publico-alvos'], verificarToken, async (req, res) => {
     const { nome } = req.body;
     try {
-        if (!nome) {
-            return res.status(400).json({ error: 'O nome do público-alvo é obrigatório.' });
-        }
-        
-        // Executa a inserção limpa, sem passar por nenhuma lógica de criptografia de senha
-        const queryResult = await pool.query(
-            'INSERT INTO publicoalvo (nome, ativo) VALUES ($1, true) RETURNING *', 
-            [nome]
-        );
-        
+        if (!nome) return res.status(400).json({ error: 'O nome do público-alvo é obrigatório.' });
+        const queryResult = await pool.query('INSERT INTO publicoalvo (nome, ativo) VALUES ($1, true) RETURNING *', [nome]);
         return res.json(queryResult.rows[0]);
     } catch (e) { 
         return res.status(500).json({ error: 'Erro ao cadastrar público-alvo: ' + e.message }); 
     }
 });
-app.post('/api/v2/publico-alvo', verificarToken, async (req, res) => {
-    try { return res.json((await pool.query('INSERT INTO publicoalvo (nome, ativo) VALUES ($1, true) RETURNING *', [req.body.nome])).rows[0]); } catch (e) { return res.status(500).json({ error: 'Erro.' }); }
-});
-app.delete('/api/v2/publico-alvo/:id', verificarToken, async (req, res) => {
-    try { await pool.query('DELETE FROM publicoalvo WHERE id = $1', [req.params.id]); return res.json({ success: true }); } catch (e) { return res.status(500).json({ error: 'Erro.' }); }
+
+// 3. EXCLUIR (DELETE) - Corrigido para aceitar ambas as rotas com ID
+app.delete(['/api/v2/publico-alvo/:id', '/api/v2/publico-alvos/:id'], verificarToken, async (req, res) => {
+    try { 
+        await pool.query('DELETE FROM publicoalvo WHERE id = $1', [parseInt(req.params.id)]); 
+        return res.json({ success: true }); 
+    } catch (e) { 
+        return res.status(500).json({ error: 'Erro ao deletar público-alvo: ' + e.message }); 
+    }
 });
 
 app.get('/api/v2/participantes', verificarToken, async (req, res) => {
@@ -451,14 +461,82 @@ app.get('/api/v2/admin/eventos-detalhes/:id', verificarToken, async (req, res) =
     } catch (e) { return res.status(500).json({ error: e.message }); }
 });
 app.get('/api/v2/admin/relatorio-integrado', verificarToken, async (req, res) => {
-    const { data_inicio, data_fim } = req.query;
+    const { data_inicio, data_fim, area_id, setor_id, publico_alvo_id } = req.query;
+    
     try {
-        const totalEventos = await pool.query("SELECT COUNT(id) as qtd, COALESCE(SUM(carga_horaria), 0) as horas FROM eventos WHERE data_evento BETWEEN $1 AND $2", [data_inicio, data_fim]);
-        const totalParticipacoes = await pool.query("SELECT COUNT(id) as qtd FROM frequencias WHERE DATE(data_entrada) BETWEEN $1 AND $2", [data_inicio, data_fim]);
-        const mediaSatisfacao = await pool.query(`SELECT AVG(CASE WHEN avaliacao = 'Muito Bom' THEN 5 WHEN avaliacao = 'Bom' THEN 4 WHEN avaliacao = 'Regular' THEN 3 WHEN avaliacao = 'Ruim' THEN 2 WHEN avaliacao = 'Péssimo' THEN 1 ELSE 0 END) as media FROM pesquisa_satisfacao WHERE DATE(criado_em) BETWEEN $1 AND $2`, [data_inicio, data_fim]);
-        const registros = await pool.query(`SELECT f.id, f.matricula, f.tempo_participacao, p.nome_completo as participante_nome, e.titulo as evento_titulo, e.carga_horaria, f.data_entrada, f.data_saida FROM frequencias f LEFT JOIN participantes p ON f.participante_id = p.id LEFT JOIN eventos e ON f.evento_id = e.id WHERE DATE(f.data_entrada) BETWEEN $1 AND $2 ORDER BY f.data_entrada DESC`, [data_inicio, data_fim]);
-        return res.json({ totais: { total_eventos: parseInt(totalEventos.rows[0].qtd), soma_horas: parseFloat(totalEventos.rows[0].horas).toFixed(2), total_participacoes: parseInt(totalParticipacoes.rows[0].qtd), nota_media: parseFloat(mediaSatisfacao.rows[0].media || 0).toFixed(1) }, registros: registros.rows });
-    } catch (error) { return res.status(500).json({ error: error.message }); }
+        if (!data_inicio || !data_fim) {
+            return res.status(400).json({ error: 'As datas de início e fim são obrigatórias.' });
+        }
+
+        // Construção dinâmica de filtros SQL para evitar conflitos
+        let filtrosSQL = `WHERE e.data_evento BETWEEN $1 AND $2`;
+        let parametros = [data_inicio, data_fim];
+        let contadorParam = 3;
+
+        if (area_id) {
+            filtrosSQL += ` AND e.area_id = $${contadorParam}`;
+            parametros.push(parseInt(area_id));
+            contadorParam++;
+        }
+
+        if (setor_id) {
+            const sId = parseInt(setor_id);
+            filtrosSQL += ` AND (e.setor_id_1 = $${contadorParam} OR e.setor_id_2 = $${contadorParam} OR e.setor_id_3 = $${contadorParam})`;
+            parametros.push(sId);
+            contadorParam++;
+        }
+
+        if (publico_alvo_id) {
+            filtrosSQL += ` AND EXISTS (
+                SELECT 1 FROM evento_publicos ep 
+                WHERE ep.evento_id = e.id AND ep.publico_alvo_id = $${contadorParam}
+            )`;
+            parametros.push(parseInt(publico_alvo_id));
+            contadorParam++;
+        }
+
+        // 1. QUERY DE TOTAIS (Mapeando quantidade de formações e presenças no período filtrado)
+        const queryTotais = `
+            SELECT 
+                COUNT(DISTINCT e.id) as total_eventos,
+                COUNT(f.id) as total_frequencias
+            FROM eventos e
+            LEFT JOIN frequencias f ON f.evento_id = e.id
+            ${filtrosSQL}
+        `;
+        const resultadoTotais = await pool.query(queryTotais, parametros);
+
+        // 2. QUERY DE REGISTROS (Ordem estritamente decrescente: do mais atual para o mais antigo)
+        const queryRegistros = `
+            SELECT 
+                f.id,
+                f.matricula,
+                f.tempo_participacao,
+                p.nome_completo as participante_nome,
+                e.titulo as evento_titulo,
+                e.carga_horaria,
+                e.data_evento,
+                f.data_entrada,
+                f.data_saida
+            FROM frequencias f
+            INNER JOIN eventos e ON f.evento_id = e.id
+            INNER JOIN participantes p ON f.participante_id = p.id
+            ${filtrosSQL}
+            ORDER BY e.data_evento DESC, f.data_entrada DESC
+        `;
+        const resultadoRegistros = await pool.query(queryRegistros, parametros);
+
+        return res.json({
+            totais: {
+                total_eventos: parseInt(resultadoTotais.rows[0].total_eventos || 0),
+                total_frequencias: parseInt(resultadoTotais.rows[0].total_frequencias || 0)
+            },
+            registros: resultadoRegistros.rows
+        });
+
+    } catch (error) { 
+        return res.status(500).json({ error: 'Erro ao processar relatório dinâmico: ' + error.message }); 
+    }
 });
 
 app.use((req, res) => res.status(404).json({ error: 'Rota não encontrada.' }));

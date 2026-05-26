@@ -36,6 +36,10 @@ export default function App() {
     const [setoresDisponiveis, setSetoresDisponiveis] = useState([]);
     const [areasDisponiveis, setAreasDisponiveis] = useState([]);
     const [modalNovoEvento, setModalNovoEvento] = useState(false);
+
+    const [filtroArea, setFiltroArea] = useState('');
+    const [filtroSetor, setFiltroSetor] = useState('');
+    const [filtroPublico, setFiltroPublico] = useState('');    
     
     const [modalNovoLocal, setModalNovoLocal] = useState(false);
     const nomeLocalRef = useRef(null);
@@ -99,11 +103,18 @@ export default function App() {
     };
 
     const processarRelatorio = async () => {
-        if (!dataInicio || !dataFim) { setErro('Selecione o período.'); return; }
+        if (!dataInicio || !dataFim) { setErro('Selecione o período de abrangência (Data Inicial e Final).'); return; }
         try {
             setErro('');
-            const dados = await apiFetch(`/api/v2/admin/relatorio-integrated?data_inicio=${dataInicio}&data_fim=${dataFim}`);
-            setDadosEstatisticos(dados.totais); setLista(dados.registros); setTotaisSuperior(dados.registros.length);
+            let url = `/api/v2/admin/relatorio-integrado?data_inicio=${dataInicio}&data_fim=${dataFim}`;
+            if (filtroArea) url += `&area_id=${filtroArea}`;
+            if (filtroSetor) url += `&setor_id=${filtroSetor}`;
+            if (filtroPublico) url += `&publico_alvo_id=${filtroPublico}`;
+            
+            const dados = await apiFetch(url);
+            setDadosEstatisticos(dados.totais); 
+            setLista(dados.registros); 
+            setTotaisSuperior(dados.registros.length);
         } catch (err) { setErro(err.message); }
     };
 

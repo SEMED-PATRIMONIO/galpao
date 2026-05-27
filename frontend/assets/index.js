@@ -593,7 +593,10 @@ app.get('/api/v2/admin/relatorio-integrado', verificarToken, async (req, res) =>
 // ========================================================
 // ROTA ADMIN: REGISTRO DE SAÍDA MANUAL POR ESQUECIMENTO
 // ========================================================
-app.post('/api/v2/admin/frequencias/saida-manual', async (req, res) => {
+// ========================================================
+// ROTA ADMIN: REGISTRO DE SAÍDA MANUAL (INSERIR NO SEU ARQUIVO ORIGINAL)
+// ========================================================
+app.post('/api/v2/admin/frequencias/saida-manual', verificarToken, async (req, res) => {
     const { frequencia_id, hora_saida } = req.body;
 
     try {
@@ -615,9 +618,9 @@ app.post('/api/v2/admin/frequencias/saida-manual', async (req, res) => {
         // Cálculos estritos de horário
         const dataEventoFormatada = new Date(freq.data_evento).toISOString().split('T')[0];
         
-        const dataHoraEntrada = new Date(freq.data_entrada); // Ex: 2026-05-27 08:00
-        const dataHoraSaidaManual = new Date(`${dataEventoFormatada}T${hora_saida}`); // Ex: 2026-05-27 12:00
-        const dataHoraFimPrevista = new Date(`${dataEventoFormatada}T${freq.hora_fim}`); // Ex: 2026-05-27 12:30
+        const dataHoraEntrada = new Date(freq.data_entrada); 
+        const dataHoraSaidaManual = new Date(`${dataEventoFormatada}T${hora_saida}`); 
+        const dataHoraFimPrevista = new Date(`${dataEventoFormatada}T${freq.hora_fim}`); 
 
         const entradaStr = dataHoraEntrada.toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'});
 
@@ -638,6 +641,7 @@ app.post('/api/v2/admin/frequencias/saida-manual', async (req, res) => {
 
         return res.json({ status: 'sucesso', message: 'Saída manual registrada e professor liberado!' });
     } catch (error) {
+        console.error('Erro ao registrar saída manual:', error);
         return res.status(500).json({ error: 'Erro ao registrar saída manual.' });
     }
 });

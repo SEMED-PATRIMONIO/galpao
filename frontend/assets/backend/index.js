@@ -14,6 +14,55 @@ const hashSenha = (senha) => crypto.createHash('sha256').update(senha).digest('h
 app.use(cors());
 app.use(express.json());
 
+// ==========================================
+// BANCO DE DADOS: MIGRAÇÕES AUTOMÁTICAS
+// ==========================================
+const inicializarBanco = async () => {
+    try {
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS setor (
+                id SERIAL PRIMARY KEY,
+                nome VARCHAR(255) NOT NULL,
+                ativo BOOLEAN DEFAULT true
+            );
+        `);
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS area (
+                id SERIAL PRIMARY KEY,
+                nome VARCHAR(255) NOT NULL,
+                ativo BOOLEAN DEFAULT true
+            );
+        `);
+        await pool.query(`
+            ALTER TABLE eventos 
+            ADD COLUMN IF NOT EXISTS setor_id_1 INTEGER REFERENCES setor(id) ON DELETE SET NULL,
+            ADD COLUMN IF NOT EXISTS setor_id_2 INTEGER REFERENCES setor(id) ON DELETE SET NULL,
+            ADD COLUMN IF NOT EXISTS setor_id_3 INTEGER REFERENCES setor(id) ON DELETE SET NULL,
+            ADD COLUMN IF NOT EXISTS area_id INTEGER REFERENCES area(id) ON DELETE SET NULL;
+        `);
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS evento_publicos (
+                evento_id INTEGER REFERENCES eventos(id) ON DELETE CASCADE,
+                publico_alvo_id INTEGER REFERENCES publicoalvo(id) ON DELETE CASCADE,
+                PRIMARY KEY (evento_id, publico_alvo_id)
+            );
+        `);
+        await pool.query(`
+            ALTER TABLE frequencias 
+            ADD COLUMN IF NOT EXISTS tempo_participacao VARCHAR(10);
+        `);
+        await pool.query(`
+            ALTER TABLE log_fraudes 
+            ADD COLUMN IF NOT EXISTS data_tentativa TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            ADD COLUMN IF NOT EXISTS lat_tentativa VARCHAR(50),
+            ADD COLUMN IF NOT EXISTS lng_tentativa VARCHAR(50);
+        `);
+    } catch (err) {
+        console.error("Erro nas migrações do banco:", err.message);
+    }
+};
+inicializarBanco();
+
 const verificarToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
@@ -27,39 +76,12 @@ const verificarToken = (req, res, next) => {
 
 const calcularDistancia = (lat1, lon1, lat2, lon2) => {
     const R = 6371e3;
-    const phi1 = lat1 * Math.PI / 180;
-    const phi2 = lat2 * Math.PI / 180;
+    const phi1 = lat1 * Math.PI / 180; const phi2 = lat2 * Math.PI / 180;
     const deltaPhi = (lat2 - lat1) * Math.PI / 180;
     const deltaLambda = (lon2 - lon1) * Math.PI / 180;
     const a = Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
-              Math.cos(phi1) * Math.cos(phi2) *
-              Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
-};
-
-// ==========================================
-// FUNÇÕES AUXILIARES DE DATA, HORA E FUSO
-// ==========================================
-const obterAgoraBrasilia = () => {
-    const d = new Date();
-    const utc = d.getTime() + (d.getTimezoneOffset() * 60000);
-    const dataBrasilia = new Date(utc + (3600000 * -3)); // Fuso -03:00
-    
-    const ano = dataBrasilia.getFullYear();
-    const mes = String(dataBrasilia.getMonth() + 1).padStart(2, '0');
-    const dia = String(dataBrasilia.getDate()).padStart(2, '0');
-    
-    return {
-        dataStr: `${ano}-${mes}-${dia}`,
-        minutosAbsolutos: (dataBrasilia.getHours() * 60) + dataBrasilia.getMinutes()
-    };
-};
-
-const paraMinutos = (timeStr) => {
-    if (!timeStr) return 0;
-    const partes = timeStr.split(':');
-    return (parseInt(partes[0], 10) * 60) + parseInt(partes[1], 10);
+              Math.cos(phi1) * Math.cos(phi2) * Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
+    return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 };
 
 // ==========================================
@@ -69,25 +91,20 @@ app.post('/api/auth/login', async (req, res) => {
     const { usuario, senha } = req.body;
     try {
         const result = await pool.query('SELECT * FROM usuarios WHERE usuario = $1', [usuario]);
-        if (result.rows.length === 0) {
-            return res.status(401).json({ error: 'Credenciais inválidas.' });
-        }
+        if (result.rows.length === 0) return res.status(401).json({ error: 'Credenciais inválidas.' });
+        
         const user = result.rows[0];
-        if (!user.ativo) {
-            return res.status(403).json({ error: 'Usuário inativo.' });
-        }
-        if (user.senha !== senha) {
+        if (!user.ativo) return res.status(403).json({ error: 'Usuário inativo.' });
+        
+        const senhaCriptografada = hashSenha(senha);
+        if (user.senha !== senha && user.senha !== senhaCriptografada) {
             return res.status(401).json({ error: 'Credenciais inválidas.' });
         }
-        const token = jwt.sign(
-            { id: user.id, usuario: user.usuario }, 
-            JWT_SECRET, 
-            { expiresIn: '8h' }
-        );
+        
+        const token = jwt.sign({ id: user.id, usuario: user.usuario }, JWT_SECRET, { expiresIn: '8h' });
         delete user.senha;
         return res.json({ token, user });
     } catch (error) {
-        console.error("Erro interno no login:", error);
         return res.status(500).json({ error: 'Erro interno no servidor.' });
     }
 });
@@ -104,7 +121,7 @@ app.post('/api/auth/alterar-senha', async (req, res) => {
 });
 
 // ==========================================
-// ROTAS DE GERENCIAMENTO DE DISPOSITIVOS
+// ROTAS DO PORTAL DO PROFESSOR / DISPOSITIVOS
 // ==========================================
 app.get('/api/v2/dispositivo/status', async (req, res) => {
     const { device_token } = req.query;
@@ -115,602 +132,463 @@ app.get('/api/v2/dispositivo/status', async (req, res) => {
         const disp = resDisp.rows[0];
         const resPart = await pool.query('SELECT * FROM participantes WHERE id = $1', [disp.participante_id]);
         return res.json({ atribuido: true, participante: resPart.rows[0] });
-    } catch (error) {
-        console.error("Erro na rota /dispositivo/status:", error.message);
-        return res.status(500).json({ error: 'Erro interno.' });
-    }
+    } catch (error) { return res.status(500).json({ error: 'Erro interno.' }); }
 });
 
+// ========================================================
+// ROTA COMPLETA: ASSOCIAÇÃO DE DISPOSITIVO COM ESCUDO ANTI-ANÔNIMO
+// ========================================================
 app.post('/api/v2/dispositivo/associar', async (req, res) => {
-    const { matricula, nome, device_token, token } = req.body;
+    // Recebemos a matrícula, o nome e a assinatura física inviolável da GPU/Ecrã
+    const { matricula, nome, hardware_id } = req.body;
+
     try {
-        const tokenDispositivo = device_token || token || uuidv4();
-        const resVerif = await pool.query('SELECT * FROM dispositivos WHERE device_token = $1 AND ativo = true', [tokenDispositivo]);
-        if (resVerif.rows.length > 0) {
-            const vinculo = resVerif.rows[0];
-            const partDono = await pool.query('SELECT * FROM participantes WHERE id = $1', [vinculo.participante_id]);
-            if (partDono.rows.length > 0 && partDono.rows[0].matricula !== matricula) {
-                return res.status(400).json({ error: 'Este dispositivo já está associado a outro participante.' });
-            }
+        // Validação básica de segurança para garantir o preenchimento dos campos
+        if (!matricula || !nome) {
+            return res.status(400).json({ error: 'A matrícula e o nome completo são obrigatórios.' });
         }
 
-        let resPart = await pool.query('SELECT * FROM participantes WHERE matricula = $1', [matricula]);
-        let participanteId;
-        if (resPart.rows.length === 0) {
-            const novoPart = await pool.query(
-                'INSERT INTO participantes (nome_completo, matricula, ativo) VALUES ($1, $2, true) RETURNING id', 
-                [nome, matricula]
-            );
-            participanteId = novoPart.rows[0].id;
-        } else {
-            participanteId = resPart.rows[0].id;
-        }
+        // 1. ESCUDO PROTOCOLO ANTI-ABA ANÔNIMA
+        if (hardware_id) {
+            // Cria a coluna de impressão digital silenciosamente caso ela não exista na tabela
+            await pool.query(`ALTER TABLE dispositivos ADD COLUMN IF NOT EXISTS hardware_fingerprint VARCHAR(255)`).catch(() => {});
 
-        await pool.query(`
-            INSERT INTO dispositivos (device_token, participante_id, participante_matricula, ativo) 
-            VALUES ($1, $2, $3, true) 
-            ON CONFLICT (device_token) 
-            DO UPDATE SET participante_id = $2, participante_matricula = $3, ativo = true
-        `, [tokenDispositivo, participanteId, matricula]);
+            // Regra Básica de Física: Proíbe que este mesmo aparelho físico (hardware_id)
+            // esteja ativo para QUALQUER OUTRA matrícula diferente da atual
+            const checkHardware = await pool.query(`
+                SELECT * FROM dispositivos 
+                WHERE hardware_fingerprint = $1 
+                AND participante_matricula != $2 
+                AND ativo = true
+            `, [hardware_id, matricula]);
 
-        const partFinal = await pool.query('SELECT * FROM participantes WHERE id = $1', [participanteId]);
-        return res.json({ 
-            device_token: tokenDispositivo, 
-            token: tokenDispositivo, 
-            participante: partFinal.rows[0] 
-        });
-    } catch (error) {
-        console.error("Erro crítico na rota /dispositivo/associar:", error.message);
-        return res.status(500).json({ error: 'Erro interno ao associar dispositivo.' });
-    }
-});
+            if (checkHardware.rows.length > 0) {
+                // Captura e registra a tentativa de fraude instantaneamente para auditoria
+                await pool.query(`
+                    INSERT INTO log_fraudes (matricula, motivo) 
+                    VALUES ($1, 'TENTATIVA_VINCULO_MULTIPLO_NO_MESMO_APARELHO_FISICO')
+                `).catch(() => {});
 
-// ====================================================
-// FLUXO DE PRESENÇA REESTRUTURADO (NOVA ESTRATÉGIA V2)
-// ====================================================
-
-// 1. Inicialização: Verifica eventos no dia e horários permitidos (Sem exigir GPS imediato)
-app.post('/api/v2/presenca/inicializar', async (req, res) => {
-    const { device_token } = req.body;
-    try {
-        if (!device_token) return res.status(400).json({ error: 'Identificação do dispositivo ausente.' });
-
-        const resDisp = await pool.query('SELECT * FROM dispositivos WHERE device_token = $1 AND ativo = true', [device_token]);
-        if (resDisp.rows.length === 0) return res.status(401).json({ error: 'Aparelho não associado.' });
-        const disp = resDisp.rows[0];
-
-        const { dataStr, minutosAbsolutos } = obterAgoraBrasilia();
-
-        // Puxa as coordenadas reais do local para validar no front
-        const resEventos = await pool.query(`
-            SELECT e.id, e.titulo, e.local, 
-                   l.nome as local_nome, l.endereco as local_endereco,
-                   COALESCE(l.latitude, e.latitude) as latitude, 
-                   COALESCE(l.longitude, e.longitude) as longitude,
-                   e.hora_inicio::text as h_ini, e.hora_fim::text as h_fim 
-            FROM eventos e
-            LEFT JOIN locais l ON e.local_id = l.id
-            WHERE e.data_evento = $1
-        `, [dataStr]);
-
-        if (resEventos.rows.length === 0) {
-            return res.json({ status: 'sem_eventos', mensagem: 'NÃO HÁ FORMAÇÃO AGENDADA PARA HOJE' });
-        }
-
-        // REGRA REAJUSTADA: 20 minutos antes do início e até 40 minutos após o fim do evento
-        const elegiveisHorario = resEventos.rows.filter(ev => {
-            const minInicio = paraMinutos(ev.h_ini);
-            const minFim = paraMinutos(ev.h_fim);
-            return minutosAbsolutos >= (minInicio - 20) && minutosAbsolutos <= (minFim + 40);
-        });
-
-        if (elegiveisHorario.length === 0) {
-            await pool.query(`
-                INSERT INTO log_fraudes (matricula, evento_id, motivo)
-                VALUES ($1, $2, 'FORA_DA_FAIXA_DE_HORARIO_PERMITIDA')
-            `, [disp.participante_matricula, resEventos.rows[0].id]);
-
-            return res.json({ status: 'fora_horario', mensagem: 'FORA DA FAIXA DE HORÁRIO PERMITIDA' });
-        }
-
-        return res.json({
-            status: 'sucesso',
-            eventos: elegiveisHorario.map(e => ({
-                id: e.id,
-                titulo: e.titulo,
-                local: e.local_nome || e.local || 'Auditório',
-                endereco: e.local_endereco || e.endereco || '',
-                latitude: e.latitude,
-                longitude: e.longitude
-            }))
-        });
-    } catch (error) {
-        console.error("Erro em /presenca/inicializar:", error.message);
-        return res.status(500).json({ error: 'Erro interno ao inicializar verificação.' });
-    }
-});
-
-// 2. Checagem de Status: Valida o raio de 60 metros e busca histórico de frequências do dia
-app.post('/api/v2/presenca/checar-status', async (req, res) => {
-    const { device_token, evento_id, latitude, longitude } = req.body;
-    try {
-        const resDisp = await pool.query('SELECT * FROM dispositivos WHERE device_token = $1 AND ativo = true', [device_token]);
-        if (resDisp.rows.length === 0) return res.status(401).json({ error: 'Aparelho desvinculado.' });
-        const disp = resDisp.rows[0];
-
-        const resEv = await pool.query(`
-            SELECT e.*, COALESCE(l.latitude, e.latitude) as lat_real, COALESCE(l.longitude, e.longitude) as lng_real
-            FROM eventos e
-            LEFT JOIN locais l ON e.local_id = l.id
-            WHERE e.id = $1
-        `, [evento_id]);
-
-        if (resEv.rows.length === 0) return res.status(404).json({ error: 'Formação não localizada.' });
-        const ev = resEv.rows[0];
-
-        const dist = calcularDistancia(latitude, longitude, parseFloat(ev.lat_real), parseFloat(ev.lng_real));
-        
-        // ATENÇÃO: Alterado temporariamente de 60 para 999999 para permitir o seu teste!
-        if (dist > 999999) {
-            await pool.query(`
-                INSERT INTO log_fraudes (matricula, evento_id, motivo, lat_tentativa, lng_tentativa)
-                VALUES ($1, $2, 'FORA_DO_RAIO_PERMITIDO', $3, $4)
-            `, [disp.participante_matricula, evento_id, latitude, longitude]);
-
-            // Mensagem de erro ajustada para ficar mais clara caso aconteça de verdade depois
-            return res.status(400).json({ error: 'Bloqueio de Segurança: Seu dispositivo está fora do raio permitido do local do evento.' });
-        }
-
-        const { dataStr } = obterAgoraBrasilia();
-
-        const resFreq = await pool.query(`
-            SELECT *, EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - data_entrada))/60 as minutos_decorridos
-            FROM frequencias
-            WHERE participante_id = $1 AND evento_id = $2 AND data_entrada::date = $3::date
-        `, [disp.participante_id, evento_id, dataStr]);
-
-        if (resFreq.rows.length > 0) {
-            const freq = resFreq.rows[0];
-            if (freq.data_saida !== null) {
-                return res.json({ status: 'completo', titulo: ev.titulo, local: ev.local });
-            } else {
-                return res.json({ 
-                    status: 'somente_entrada', 
-                    titulo: ev.titulo, 
-                    minutos: Math.floor(freq.minutos_decorridos || 0)
+                return res.status(403).json({ 
+                    error: 'Bloqueio de Segurança: Detectamos que este aparelho físico (celular/computador) já foi utilizado para vincular a matrícula de outro professor. O uso deste portal é estritamente pessoal e intransferível.' 
                 });
             }
         }
 
-        return res.json({ status: 'nenhum', titulo: ev.titulo });
+        // 2. REGRA DE EXCLUSIVIDADE POR MATRÍCULA
+        // Se este mesmo professor já tinha um dispositivo associado anteriormente, 
+        // desativamos o antigo para que apenas o novo acesso passe a ser válido (Evita clones de conta)
+        await pool.query(`
+            UPDATE dispositivos 
+            SET ativo = false 
+            WHERE participante_matricula = $1 AND ativo = true
+        `, [matricula]);
+
+        // 3. GERAÇÃO DE NOVO TOKEN EXCLUSIVO DE SESSÃO
+        // Geramos um UUID seguro de 32 bits para servir como o novo device_token deste aparelho
+        const novoDeviceToken = crypto.randomUUID();
+
+        // 4. GRAVAÇÃO DO COMPROMISSO NA BASE DE DADOS (CORRIGIDO PARA A SUA TABELA)
+        // Inserimos estritamente os campos que existem na sua tabela 'dispositivos'
+        await pool.query(`
+            INSERT INTO dispositivos (participante_matricula, device_token, ativo, hardware_fingerprint)
+            VALUES ($1, $2, true, $3)
+        `, [matricula, novoDeviceToken, hardware_id || null]);
+
+        // 5. RETORNO DE CONFIANÇA PARA O PORTAL DO PROFESSOR
+        // Devolvemos o token gerado para que o frontend o armazene no localStorage do navegador
+        return res.json({
+            status: 'sucesso',
+            device_token: novoDeviceToken
+        });
+
     } catch (error) {
-        return res.status(500).json({ error: 'Erro ao checar status de presença.' });
+        console.error('Erro crítico na rota /api/v2/dispositivo/associar:', error);
+        return res.status(500).json({ error: 'Erro interno no servidor ao tentar processar o vínculo do dispositivo.' });
     }
 });
 
-// 3. Confirmar Entrada Limpa
-app.post('/api/v2/presenca/confirmar-entrada', async (req, res) => {
-    const { device_token, evento_id } = req.body;
+app.post('/api/v2/presenca/inicializar', async (req, res) => {
+    const { device_token } = req.body;
+    try {
+        if (!device_token) return res.status(400).json({ error: 'Identificação ausente.' });
+        const resDisp = await pool.query('SELECT * FROM dispositivos WHERE device_token = $1 AND ativo = true', [device_token]);
+        if (resDisp.rows.length === 0) return res.status(401).json({ error: 'Aparelho não associado ou desativado.' });
+        const disp = resDisp.rows[0];
+
+        const resEventos = await pool.query(`SELECT e.id, e.titulo, e.local, e.palestrante, e.hora_inicio, e.hora_fim, l.nome as local_nome, l.endereco as local_endereco, COALESCE(l.latitude, e.latitude) as latitude, COALESCE(l.longitude, e.longitude) as longitude FROM eventos e LEFT JOIN locais l ON e.local_id = l.id WHERE e.data_evento = CURRENT_DATE::date AND e.hora_fim >= CURRENT_TIME ORDER BY e.hora_inicio ASC`);
+        const freqAtiva = await pool.query(`SELECT * FROM frequencias WHERE participante_id = $1 AND data_entrada::date = CURRENT_DATE::date AND data_saida IS NULL LIMIT 1`, [disp.participante_id]);
+        return res.json({
+            status: 'sucesso', tem_evento_ativo: freqAtiva.rows.length > 0, evento_ativo_id: freqAtiva.rows.length > 0 ? freqAtiva.rows[0].evento_id : null,
+            eventos: resEventos.rows.map(e => ({ id: e.id, titulo: e.titulo, palestrante: e.palestrante || '', local: e.local_nome || e.local || 'Auditório', endereco: e.local_endereco || e.endereco || '', latitude: e.latitude, longitude: e.longitude, hora_inicio: e.hora_inicio, hora_fim: e.hora_fim }))
+        });
+    } catch (error) { return res.status(500).json({ error: 'Erro interno ao inicializar o Portal.' }); }
+});
+
+app.post('/api/v2/presenca/checar-status', async (req, res) => {
+    const { device_token, evento_id, latitude, longitude } = req.body;
     try {
         const resDisp = await pool.query('SELECT * FROM dispositivos WHERE device_token = $1 AND ativo = true', [device_token]);
+        if (resDisp.rows.length === 0) return res.status(401).json({ error: 'Dispositivo inválido.' });
         const disp = resDisp.rows[0];
 
-        await pool.query(`
-            INSERT INTO frequencias (participante_id, evento_id, data_entrada)
-            VALUES ($1, $2, CURRENT_TIMESTAMP)
-        `, [disp.participante_id, evento_id]);
+        const resEv = await pool.query(`SELECT e.*, COALESCE(l.latitude, e.latitude) as lat_real, COALESCE(l.longitude, e.longitude) as lng_real FROM eventos e LEFT JOIN locais l ON e.local_id = l.id WHERE e.id = $1`, [evento_id]);
+        if (resEv.rows.length === 0) return res.status(404).json({ error: 'Formação não localizada.' });
+        const ev = resEv.rows[0];
 
-        return res.json({ status: 'sucesso', mensagem: 'REGISTRO EFETUADO!' });
-    } catch (error) {
-        console.error("Erro crítico em /presenca/confirmar-entrada:", error.message);
-        return res.status(500).json({ error: 'Erro ao registrar entrada.' });
-    }
-});
-
-// ==========================================
-// ROTA POST: CONFIRMAR SAÍDA E PESQUISA (TRAVA DUPLICADOS)
-// ==========================================
-app.post('/api/v2/presenca/confirmar-saida', async (req, res) => {
-    const { device_token, evento_id, estrelas, comentario } = req.body;
-    try {
-        // 1. Valida o dispositivo e captura o participante
-        const resDisp = await pool.query('SELECT participante_id, participante_matricula FROM dispositivos WHERE device_token = $1 AND ativo = true', [device_token]);
-        if (resDisp.rows.length === 0) return res.status(401).json({ error: 'Aparelho não associado.' });
-        const disp = resDisp.rows[0];
-
-        // 2. Traduz a numeração das estrelas para a CHECK CONSTRAINT do Postgres
-        let avaliacaoTexto = 'Ótimo';
-        if (estrelas === 4) avaliacaoTexto = 'Muito Bom';
-        if (estrelas === 3) avaliacaoTexto = 'Bom';
-        if (estrelas === 2) avaliacaoTexto = 'Regular';
-        if (estrelas === 1) avaliacaoTexto = 'Ruim';
-
-        // 3. Captura o publico_alvo_id do evento
-        const resEv = await pool.query('SELECT publico_alvo_id FROM eventos WHERE id = $1', [evento_id]);
-        const publico_alvo_id = resEv.rows.length > 0 ? resEv.rows[0].publico_alvo_id : null;
-
-        // 4. VALIDAÇÃO: Verifica se este participante já avaliou este evento específico
-        const pesquisaExistente = await pool.query(`
-            SELECT id FROM pesquisa_satisfacao 
-            WHERE participante_id = $1 AND evento_id = $2
-        `, [disp.participante_id, evento_id]);
-
-        // Inicia a transação no banco de dados
-        await pool.query('BEGIN');
-
-        // 5. Atualiza ou registra o horário de saída na tabela 'frequencias'
-        await pool.query(`
-            UPDATE frequencias 
-            SET data_saida = CURRENT_TIMESTAMP, avaliacao = $1
-            WHERE participante_id = $2 AND evento_id = $3 AND data_saida IS NULL
-        `, [avaliacaoTexto, disp.participante_id, evento_id]);
-
-        // 6. Só insere na tabela 'pesquisa_satisfacao' se ele ainda não tiver avaliado
-        if (pesquisaExistente.rows.length === 0) {
-            await pool.query(`
-                INSERT INTO pesquisa_satisfacao (participante_id, evento_id, publico_alvo_id, avaliacao, comentarios)
-                VALUES ($1, $2, $3, $4, $5)
-            `, [disp.participante_id, evento_id, publico_alvo_id, avaliacaoTexto, comentario || '']);
-        } else {
-            // Opcional: Se ele reenviar, atualiza a avaliação existente em vez de criar outra
-            await pool.query(`
-                UPDATE pesquisa_satisfacao 
-                SET avaliacao = $1, comentarios = $2, criado_em = CURRENT_TIMESTAMP
-                WHERE participante_id = $3 AND evento_id = $4
-            `, [avaliacaoTexto, comentario || '', disp.participante_id, evento_id]);
+        if (calcularDistancia(latitude, longitude, parseFloat(ev.lat_real), parseFloat(ev.lng_real)) > 1000) {
+            await pool.query(`INSERT INTO log_fraudes (matricula, evento_id, motivo, lat_tentativa, lng_tentativa) VALUES ($1, $2, 'FORA_DO_RAIO_PERMITIDO', $3, $4)`, [disp.participante_matricula, evento_id, latitude, longitude]);
+            return res.status(400).json({ error: 'Bloqueio de Segurança: Você está fora do raio permitido do local.' });
         }
 
-        await pool.query('COMMIT');
-
-        return res.json({ status: 'sucesso', mensagem: 'Saída e avaliação processadas com sucesso!' });
-    } catch (error) {
-        await pool.query('ROLLBACK');
-        console.error("Erro ao registrar saída e pesquisa:", error.message);
-        return res.status(500).json({ error: 'Erro interno ao registrar saída.' });
-    }
+        const resFreq = await pool.query(`SELECT *, EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - data_entrada))/60 as minutos_decorridos FROM frequencias WHERE participante_id = $1 AND evento_id = $2 AND data_entrada::date = CURRENT_DATE::date`, [disp.participante_id, evento_id]);
+        if (resFreq.rows.length > 0) {
+            const freq = resFreq.rows[0];
+            if (freq.data_saida !== null) return res.json({ status: 'completo' });
+            if (freq.minutos_decorridos < 30) return res.json({ status: 'somente_entrada', exibir_aviso_precoce: true, minutos: Math.ceil(freq.minutos_decorridos) });
+            return res.json({ status: 'somente_entrada' });
+        }
+        if ((await pool.query(`SELECT id FROM frequencias WHERE participante_id = $1 AND data_entrada::date = CURRENT_DATE::date AND data_saida IS NULL`, [disp.participante_id])).rows.length > 0) {
+            return res.status(400).json({ error: 'Você já possui uma frequência em andamento.' });
+        }
+        return res.json({ status: 'nenhum' });
+    } catch (error) { return res.status(500).json({ error: 'Erro ao analisar status de presença.' }); }
 });
 
-// ==========================================
-// OUTRAS ROTAS DO SISTEMA (DASHBOARD / RELATÓRIOS)
-// ==========================================
-app.get('/api/v2/eventos', verificarToken, async (req, res) => {
+app.post('/api/v2/presenca/confirmar-entrada', async (req, res) => {
+    const { device_token, evento_id, latitude, longitude } = req.body;
     try {
-        const result = await pool.query('SELECT * FROM eventos ORDER BY data_evento DESC');
-        return res.json(result.rows);
-    } catch (error) {
-        return res.status(500).json({ error: 'Erro.' });
-    }
+        const resDisp = await pool.query('SELECT * FROM dispositivos WHERE device_token = $1 AND ativo = true', [device_token]);
+        if (resDisp.rows.length === 0) return res.status(401).json({ error: 'Dispositivo inválido.' });
+        await pool.query(`INSERT INTO frequencias (participante_id, evento_id, lat_entrada, lng_entrada, device_key, matricula, funcao, data_entrada) VALUES ($1, $2, $3, $4, $5, $6, 'Ouvinte', CURRENT_TIMESTAMP)`, [resDisp.rows[0].participante_id, evento_id, String(latitude), String(longitude), device_token, resDisp.rows[0].participante_matricula]);
+        return res.json({ status: 'sucesso' });
+    } catch (error) { return res.status(500).json({ error: 'Erro interno ao salvar frequência.' }); }
+});
+
+app.post('/api/v2/presenca/confirmar-saida', async (req, res) => {
+    const { device_token, evento_id, estrelas, comentario, latitude, longitude, confirmou_saida_precoce } = req.body;
+    try {
+        const resDisp = await pool.query('SELECT * FROM dispositivos WHERE device_token = $1 AND ativo = true', [device_token]);
+        if (resDisp.rows.length === 0) return res.status(401).json({ error: 'Dispositivo inválido.' });
+        const disp = resDisp.rows[0];
+
+        const ev = (await pool.query('SELECT data_evento, hora_inicio, hora_fim, publico_alvo_id FROM eventos WHERE id = $1', [evento_id])).rows[0];
+        let avaliacaoTexto = estrelas === 5 ? 'Excelência total' : estrelas === 4 ? 'Muito Bom' : estrelas === 3 ? 'Atendeu às expectativas' : estrelas === 2 ? 'Regular' : 'Precisa melhorar bastante';
+
+        const agoraTexto = new Date().toLocaleString("sv-SE", { timeZone: "America/Sao_Paulo" });
+        const dataHoraReal = new Date(agoraTexto);
+        const dataEventoFormatada = new Date(ev.data_evento).toISOString().split('T')[0];
+        const dataHoraInicioOficial = new Date(`${dataEventoFormatada}T${ev.hora_inicio}`);
+        const dataHoraTerminoOficial = new Date(`${dataEventoFormatada}T${ev.hora_fim}`);
+
+        const resFreq = await pool.query(`SELECT data_entrada FROM frequencias WHERE participante_id = $1 AND evento_id = $2 AND data_saida IS NULL`, [disp.participante_id, evento_id]);
+        if (resFreq.rows.length === 0) return res.status(400).json({ error: 'Registro de entrada ativa não localizado.' });
+        
+        const dataEntradaReal = new Date(resFreq.rows[0].data_entrada);
+        const minutosPermanencia = (dataHoraReal - dataEntradaReal) / (1000 * 60);
+
+        if (minutosPermanencia < 30) {
+            if (!confirmou_saida_precoce) return res.status(400).json({ error: 'Aviso de Permanência Mínima Requerido.' });
+            await pool.query(`INSERT INTO log_fraudes (matricula, evento_id, motivo, lat_tentativa, lng_tentativa, data_tentativa) VALUES ($1, $2, 'PERMANENCIA_MENOR_30_MIN', $3, $4, $5)`, [disp.participante_matricula, evento_id, String(latitude), String(longitude), dataHoraReal]);
+        }
+
+        const minutosAtraso = (dataHoraReal - dataHoraTerminoOficial) / (1000 * 60);
+        let dataSaidaGravar = minutosAtraso < 0 ? dataHoraReal : dataHoraTerminoOficial;
+        if (minutosAtraso > 40) {
+            await pool.query(`INSERT INTO log_fraudes (matricula, evento_id, motivo, lat_tentativa, lng_tentativa, data_tentativa) VALUES ($1, $2, 'SAIDA_APOS_40_MIN_DO_FIM', $3, $4, $5)`, [disp.participante_matricula, evento_id, String(latitude), String(longitude), dataHoraReal]);
+        }
+
+        let tempoFinalFormatado = "00:00";
+        if (minutosPermanencia >= 30) {
+            const inicioCalculo = dataEntradaReal < dataHoraInicioOficial ? dataHoraInicioOficial : dataEntradaReal;
+            const fimCalculo = dataHoraReal > dataHoraTerminoOficial ? dataHoraTerminoOficial : dataHoraReal;
+            let deltaMilissegundos = fimCalculo - inicioCalculo;
+            if (deltaMilissegundos > 0) {
+                const totalMinutosCalculados = Math.floor(deltaMilissegundos / (1000 * 60));
+                tempoFinalFormatado = `${String(Math.floor(totalMinutosCalculados / 60)).padStart(2, '0')}:${String(totalMinutosCalculados % 60).padStart(2, '0')}`;
+            }
+        }
+
+        await pool.query('BEGIN');
+        await pool.query(`UPDATE frequencias SET data_saida = $1, avaliacao = $2, lat_saida = $3, lng_saida = $4, tempo_participacao = $5 WHERE participante_id = $6 AND evento_id = $7 AND data_saida IS NULL`, [dataSaidaGravar, avaliacaoTexto, String(latitude), String(longitude), tempoFinalFormatado, disp.participante_id, evento_id]);
+        if ((await pool.query(`SELECT id FROM pesquisa_satisfacao WHERE participante_id = $1 AND evento_id = $2`, [disp.participante_id, evento_id])).rows.length === 0) {
+            await pool.query(`INSERT INTO pesquisa_satisfacao (participante_id, evento_id, publico_alvo_id, avaliacao, comentarios, criado_em) VALUES ($1, $2, $3, $4, $5, $6)`, [disp.participante_id, evento_id, ev.publico_alvo_id, avaliacaoTexto, comentario || '', dataHoraReal]);
+        }
+        await pool.query('COMMIT');
+        return res.json({ status: 'sucesso', tempo_gravado: tempoFinalFormatado });
+    } catch (error) { await pool.query('ROLLBACK'); return res.status(500).json({ error: 'Erro interno ao processar saída.' }); }
+});
+
+app.get('/api/v2/eventos', async (req, res) => {
+    try { return res.json((await pool.query(`SELECT id, titulo, local, palestrante, latitude, longitude, hora_inicio, hora_fim, data_evento FROM eventos WHERE data_evento = CURRENT_DATE ORDER BY hora_inicio ASC`)).rows); } catch (e) { return res.status(500).json({ error: 'Erro.' }); }
 });
 
 // ==========================================
-// ROTA POST: CADASTRO DE EVENTOS (CORRIGIDA)
+// OPERAÇÃO CENTRAL: EVENTOS / FORMAÇÕES
 // ==========================================
 app.post('/api/v2/eventos', verificarToken, async (req, res) => {
-    const { titulo, data_evento, carga_horaria, local_id, publico_alvo_id, hora_inicio, hora_fim, palestrante } = req.body;
+    const { titulo, area_id, data_evento, carga_horaria, local_id, publicos_alvo_ids, setores_ids, hora_inicio, hora_fim, palestrante } = req.body;
     try {
-        if (!local_id || !data_evento || !hora_inicio || !hora_fim) {
-            return res.status(400).json({ error: 'Dados obrigatórios ausentes para agendamento.' });
+        if (!local_id || !data_evento || !hora_inicio || !hora_fim) return res.status(400).json({ error: 'Dados obrigatórios ausentes.' });
+        const dadosLocal = (await pool.query('SELECT nome, endereco, latitude, longitude FROM locais WHERE id = $1', [parseInt(local_id)])).rows[0];
+        const s1 = setores_ids && setores_ids[0] ? parseInt(setores_ids[0]) : null;
+        const s2 = setores_ids && setores_ids[1] ? parseInt(setores_ids[1]) : null;
+        const s3 = setores_ids && setores_ids[2] ? parseInt(setores_ids[2]) : null;
+        const p_id_retrocompativel = publicos_alvo_ids && publicos_alvo_ids[0] ? parseInt(publicos_alvo_ids[0]) : null;
+
+        const result = await pool.query(`INSERT INTO eventos (titulo, data_evento, carga_horaria, local_id, publico_alvo_id, hora_inicio, hora_fim, palestrante, local, endereco, latitude, longitude, setor_id_1, setor_id_2, setor_id_3, area_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING id`, 
+        [titulo, data_evento, parseFloat(carga_horaria || 0), parseInt(local_id), p_id_retrocompativel, hora_inicio.slice(0,5), hora_fim.slice(0,5), palestrante || '', dadosLocal.nome, dadosLocal.endereco, parseFloat(dadosLocal.latitude), parseFloat(dadosLocal.longitude), s1, s2, s3, area_id ? parseInt(area_id) : null]);
+
+        const novoEventoId = result.rows[0].id;
+        if (publicos_alvo_ids && Array.isArray(publicos_alvo_ids)) {
+            for (let pId of publicos_alvo_ids) await pool.query('INSERT INTO evento_publicos (evento_id, publico_alvo_id) VALUES ($1, $2)', [novoEventoId, parseInt(pId)]);
         }
-
-        // Garante formatação em HH:MI
-        const limparHora = (h) => {
-            if (!h) return '00:00';
-            const partes = h.split(':');
-            return `${partes[0].padStart(2, '0')}:${partes[1].padStart(2, '0')}`;
-        };
-
-        const h_ini_limpa = limparHora(hora_inicio);
-        const h_fim_limpa = limparHora(hora_fim);
-
-        // VALIDAÇÃO: Bloqueia conflito de horários no mesmo local e dia (Removido o campo 'ativo' inexistente)
-        const conflito = await pool.query(`
-            SELECT id, titulo FROM eventos 
-            WHERE local_id = $1::integer AND data_evento = $2::date
-              AND (
-                ($3::time < hora_fim AND $4::time > hora_inicio)
-              )
-        `, [parseInt(local_id), data_evento, h_ini_limpa, h_fim_limpa]);
-
-        if (conflito.rows.length > 0) {
-            return res.status(400).json({ error: `Conflito de Horário! O evento "${conflito.rows[0].titulo}" já está agendado neste espaço neste período.` });
-        }
-
-        // Busca os dados geográficos e endereço oficiais na tabela 'locais'
-        const resLocal = await pool.query('SELECT nome, endereco, latitude, longitude FROM locais WHERE id = $1::integer', [parseInt(local_id)]);
-        const dadosLocal = resLocal.rows[0];
-
-        if (!dadosLocal) {
-            return res.status(400).json({ error: 'O local selecionado não foi encontrado no sistema.' });
-        }
-
-        // Inserção estrita com as colunas reais fornecidas pelo seu \d eventos
-        const result = await pool.query(`
-            INSERT INTO eventos 
-            (titulo, data_evento, carga_horaria, local_id, publico_alvo_id, hora_inicio, hora_fim, palestrante, local, endereco, latitude, longitude) 
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) 
-            RETURNING *
-        `, [
-            titulo, 
-            data_evento, 
-            parseFloat(carga_horaria || 0), 
-            parseInt(local_id), 
-            parseInt(publico_alvo_id), 
-            h_ini_limpa, 
-            h_fim_limpa,
-            palestrante || '', 
-            dadosLocal.nome || '', 
-            dadosLocal.endereco || '', 
-            dadosLocal.latitude ? parseFloat(dadosLocal.latitude) : null, 
-            dadosLocal.longitude ? parseFloat(dadosLocal.longitude) : null
-        ]);
-
-        return res.json(result.rows[0]);
-    } catch (error) {
-        console.error("Erro crítico ao cadastrar evento no Postgres:", error.message);
-        return res.status(500).json({ error: `Erro interno no banco: ${error.message}` });
-    }
+        return res.json({ id: novoEventoId });
+    } catch (error) { return res.status(500).json({ error: error.message }); }
 });
 
-// ==========================================
-// ROTA PUT: EDIÇÃO DE EVENTOS (CORRIGIDA)
-// ==========================================
 app.put('/api/v2/eventos/:id', verificarToken, async (req, res) => {
     const { id } = req.params;
-    const { titulo, data_evento, carga_horaria, local_id, publico_alvo_id, hora_inicio, hora_fim, palestrante } = req.body;
+    const { titulo, area_id, data_evento, carga_horaria, local_id, publicos_alvo_ids, setores_ids, hora_inicio, hora_fim, palestrante } = req.body;
     try {
-        const limparHora = (h) => {
-            if (!h) return '00:00';
-            const partes = h.split(':');
-            return `${partes[0].padStart(2, '0')}:${partes[1].padStart(2, '0')}`;
-        };
+        const dadosLocal = (await pool.query('SELECT nome, endereco, latitude, longitude FROM locais WHERE id = $1', [parseInt(local_id)])).rows[0] || {};
+        const s1 = setores_ids && setores_ids[0] ? parseInt(setores_ids[0]) : null;
+        const s2 = setores_ids && setores_ids[1] ? parseInt(setores_ids[1]) : null;
+        const s3 = setores_ids && setores_ids[2] ? parseInt(setores_ids[2]) : null;
+        const p_id_retrocompativel = publicos_alvo_ids && publicos_alvo_ids[0] ? parseInt(publicos_alvo_ids[0]) : null;
 
-        const h_ini_limpa = limparHora(hora_inicio);
-        const h_fim_limpa = limparHora(hora_fim);
+        await pool.query(`UPDATE eventos SET titulo=$1, data_evento=$2, carga_horaria=$3, local_id=$4, publico_alvo_id=$5, hora_inicio=$6, hora_fim=$7, palestrante=$8, local=$9, endereco=$10, latitude=$11, longitude=$12, setor_id_1=$13, setor_id_2=$14, setor_id_3=$15, area_id=$16 WHERE id=$17`, 
+        [titulo, data_evento, parseFloat(carga_horaria || 0), parseInt(local_id), p_id_retrocompativel, hora_inicio.slice(0,5), hora_fim.slice(0,5), palestrante || '', dadosLocal.nome || '', dadosLocal.endereco || '', parseFloat(dadosLocal.latitude), parseFloat(dadosLocal.longitude), s1, s2, s3, area_id ? parseInt(area_id) : null, parseInt(id)]);
 
-        // VALIDAÇÃO: Bloqueia conflitos ignorando o próprio ID que está sendo editado (Removido o campo 'ativo')
-        const conflito = await pool.query(`
-            SELECT id, titulo FROM eventos 
-            WHERE local_id = $1::integer AND data_evento = $2::date AND id <> $3::integer
-              AND (
-                ($4::time < hora_fim AND $5::time > hora_inicio)
-              )
-        `, [parseInt(local_id), data_evento, parseInt(id), h_ini_limpa, h_fim_limpa]);
-
-        if (conflito.rows.length > 0) {
-            return res.status(400).json({ error: `Conflito de Horário! O evento "${conflito.rows[0].titulo}" já ocupa este espaço neste período.` });
+        await pool.query('DELETE FROM evento_publicos WHERE evento_id = $1', [parseInt(id)]);
+        if (publicos_alvo_ids && Array.isArray(publicos_alvo_ids)) {
+            for (let pId of publicos_alvo_ids) await pool.query('INSERT INTO evento_publicos (evento_id, publico_alvo_id) VALUES ($1, $2)', [parseInt(id), parseInt(pId)]);
         }
-
-        const resLocal = await pool.query('SELECT nome, endereco, latitude, longitude FROM locais WHERE id = $1::integer', [parseInt(local_id)]);
-        const dadosLocal = resLocal.rows[0] || {};
-
-        const result = await pool.query(`
-            UPDATE eventos 
-            SET titulo=$1, data_evento=$2, carga_horaria=$3, local_id=$4, publico_alvo_id=$5, 
-                hora_inicio=$6, hora_fim=$7, palestrante=$8, local=$9, endereco=$10, latitude=$11, longitude=$12
-            WHERE id=$13::integer RETURNING *
-        `, [
-            titulo, 
-            data_evento, 
-            parseFloat(carga_horaria || 0), 
-            parseInt(local_id), 
-            parseInt(publico_alvo_id), 
-            h_ini_limpa, 
-            h_fim_limpa,
-            palestrante || '', 
-            dadosLocal.nome || '', 
-            dadosLocal.endereco || '', 
-            dadosLocal.latitude ? parseFloat(dadosLocal.latitude) : null, 
-            dadosLocal.longitude ? parseFloat(dadosLocal.longitude) : null,
-            parseInt(id)
-        ]);
-        return res.json(result.rows[0]);
-    } catch (error) {
-        console.error("Erro crítico ao atualizar evento no Postgres:", error.message);
-        return res.status(500).json({ error: `Erro ao atualizar o evento: ${error.message}` });
-    }
+        return res.json({ success: true });
+    } catch (error) { return res.status(500).json({ error: error.message }); }
 });
 
 app.delete('/api/v2/eventos/:id', verificarToken, async (req, res) => {
-    try {
-        await pool.query('DELETE FROM eventos WHERE id = $1', [req.params.id]);
-        return res.json({ success: true });
-    } catch (error) {
-        return res.status(500).json({ error: 'Erro.' });
-    }
+    try { await pool.query('DELETE FROM eventos WHERE id = $1', [req.params.id]); return res.json({ success: true }); } catch (e) { return res.status(500).json({ error: 'Erro.' }); }
 });
 
+// ==========================================
+// CRUD PLURAL / SINGULAR: SETOR & ÁREA
+// ==========================================
+app.get(['/api/v2/setor', '/api/v2/setores'], async (req, res) => {
+    try { return res.json((await pool.query('SELECT * FROM setor ORDER BY nome ASC')).rows); } catch (e) { return res.status(500).json({ error: e.message }); }
+});
+app.post(['/api/v2/setor', '/api/v2/setores'], verificarToken, async (req, res) => {
+    try { return res.json((await pool.query('INSERT INTO setor (nome, ativo) VALUES ($1, true) RETURNING *', [req.body.nome])).rows[0]); } catch (e) { return res.status(500).json({ error: e.message }); }
+});
+app.put(['/api/v2/setor/:id', '/api/v2/setores/:id'], verificarToken, async (req, res) => {
+    try { return res.json((await pool.query('UPDATE setor SET nome = $1 WHERE id = $2 RETURNING *', [req.body.nome, req.params.id])).rows[0]); } catch (e) { return res.status(500).json({ error: e.message }); }
+});
+app.delete(['/api/v2/setor/:id', '/api/v2/setores/:id'], verificarToken, async (req, res) => {
+    try { await pool.query('DELETE FROM setor WHERE id = $1', [req.params.id]); return res.json({ success: true }); } catch (e) { return res.status(500).json({ error: e.message }); }
+});
+
+app.get(['/api/v2/area', '/api/v2/areas'], async (req, res) => {
+    try { return res.json((await pool.query('SELECT * FROM area ORDER BY nome ASC')).rows); } catch (e) { return res.status(500).json({ error: e.message }); }
+});
+app.post(['/api/v2/area', '/api/v2/areas'], verificarToken, async (req, res) => {
+    try { return res.json((await pool.query('INSERT INTO area (nome, ativo) VALUES ($1, true) RETURNING *', [req.body.nome])).rows[0]); } catch (e) { return res.status(500).json({ error: e.message }); }
+});
+app.put(['/api/v2/area/:id', '/api/v2/areas/:id'], verificarToken, async (req, res) => {
+    try { return res.json((await pool.query('UPDATE area SET nome = $1 WHERE id = $2 RETURNING *', [req.body.nome, req.params.id])).rows[0]); } catch (e) { return res.status(500).json({ error: e.message }); }
+});
+app.delete(['/api/v2/area/:id', '/api/v2/areas/:id'], verificarToken, async (req, res) => {
+    try { await pool.query('DELETE FROM area WHERE id = $1', [req.params.id]); return res.json({ success: true }); } catch (e) { return res.status(500).json({ error: e.message }); }
+});
+
+// ==========================================
+// AUXILIARES ADICIONAIS DO PAINEL
+// ==========================================
 app.get('/api/v2/locais', async (req, res) => {
-    try {
-        const result = await pool.query('SELECT * FROM locais ORDER BY nome ASC');
-        return res.json(result.rows);
-    } catch (error) {
-        return res.status(500).json({ error: 'Erro.' });
-    }
+    try { return res.json((await pool.query('SELECT * FROM locais ORDER BY nome ASC')).rows); } catch (e) { return res.status(500).json({ error: 'Erro.' }); }
 });
-
 app.post('/api/v2/locais', verificarToken, async (req, res) => {
-    const { nome, endereco, latitude, longitude } = req.body;
-    try {
-        const result = await pool.query('INSERT INTO locais (nome, endereco, latitude, longitude) VALUES ($1, $2, $3, $4) RETURNING *', [nome, endereco, latitude, longitude]);
-        return res.json(result.rows[0]);
-    } catch (error) {
-        return res.status(500).json({ error: 'Erro.' });
-    }
+    try { return res.json((await pool.query('INSERT INTO locais (nome, endereco, latitude, longitude) VALUES ($1, $2, $3, $4) RETURNING *', [req.body.nome, req.body.endereco, req.body.latitude, req.body.longitude])).rows[0]); } catch (e) { return res.status(500).json({ error: 'Erro.' }); }
 });
-
 app.put('/api/v2/locais/:id', verificarToken, async (req, res) => {
-    const { nome, endereco, latitude, longitude } = req.body;
-    try {
-        const result = await pool.query('UPDATE locais SET nome=$1, endereco=$2, latitude=$3, longitude=$4 WHERE id=$5 RETURNING *', [nome, endereco, latitude, longitude, req.params.id]);
-        return res.json(result.rows[0]);
-    } catch (error) {
-        return res.status(500).json({ error: 'Erro.' });
+    try { return res.json((await pool.query('UPDATE locais SET nome=$1, endereco=$2, latitude=$3, longitude=$4 WHERE id=$5 RETURNING *', [req.body.nome, req.body.endereco, req.body.latitude, req.body.longitude, req.params.id])).rows[0]); } catch (e) { return res.status(500).json({ error: 'Erro.' }); }
+});
+app.delete('/api/v2/locais/:id', verificarToken, async (req, res) => {
+    try { await pool.query('DELETE FROM locais WHERE id = $1', [req.params.id]); return res.json({ success: true }); } catch (e) { return res.status(500).json({ error: 'Erro.' }); }
+});
+
+// ==========================================
+// CRUD CORRIGIDO: PÚBLICO-ALVO (ACEITA PLURAL E SINGULAR)
+// ==========================================
+
+// 1. LISTAR (GET) - Corrigido para aceitar /publico-alvo ou /publico-alvos
+app.get(['/api/v2/publico-alvo', '/api/v2/publico-alvos'], async (req, res) => {
+    try { 
+        return res.json((await pool.query('SELECT * FROM publicoalvo ORDER BY nome ASC')).rows); 
+    } catch (e) { 
+        return res.status(500).json({ error: 'Erro ao listar público-alvo: ' + e.message }); 
     }
 });
 
-app.delete('/api/v2/locais/:id', verificarToken, async (req, res) => {
+// 2. CADASTRAR (POST) - Mantido isolado de senhas e aceitando ambas as rotas
+app.post(['/api/v2/publico-alvo', '/api/v2/publico-alvos'], verificarToken, async (req, res) => {
+    const { nome } = req.body;
     try {
-        await pool.query('DELETE FROM locais WHERE id = $1', [req.params.id]);
-        return res.json({ success: true });
-    } catch (error) {
-        return res.status(500).json({ error: 'Erro.' });
+        if (!nome) return res.status(400).json({ error: 'O nome do público-alvo é obrigatório.' });
+        const queryResult = await pool.query('INSERT INTO publicoalvo (nome, ativo) VALUES ($1, true) RETURNING *', [nome]);
+        return res.json(queryResult.rows[0]);
+    } catch (e) { 
+        return res.status(500).json({ error: 'Erro ao cadastrar público-alvo: ' + e.message }); 
+    }
+});
+
+// 3. EXCLUIR (DELETE) - Corrigido para aceitar ambas as rotas com ID
+app.delete(['/api/v2/publico-alvo/:id', '/api/v2/publico-alvos/:id'], verificarToken, async (req, res) => {
+    try { 
+        await pool.query('DELETE FROM publicoalvo WHERE id = $1', [parseInt(req.params.id)]); 
+        return res.json({ success: true }); 
+    } catch (e) { 
+        return res.status(500).json({ error: 'Erro ao deletar público-alvo: ' + e.message }); 
     }
 });
 
 app.get('/api/v2/participantes', verificarToken, async (req, res) => {
-    try {
-        const result = await pool.query('SELECT * FROM participantes ORDER BY nome_completo ASC');
-        return res.json(result.rows);
-    } catch (error) {
-        return res.status(500).json({ error: 'Erro.' });
-    }
+    try { return res.json((await pool.query('SELECT * FROM participantes ORDER BY nome_completo ASC')).rows); } catch (e) { return res.status(500).json({ error: 'Erro.' }); }
 });
-
-app.put('/api/v2/participantes/:id', verificarToken, async (req, res) => {
-    const { nome_completo, ativo } = req.body;
-    try {
-        const result = await pool.query('UPDATE participantes SET nome_completo=$1, ativo=$2 WHERE id=$3 RETURNING *', [nome_completo, ativo, req.params.id]);
-        return res.json(result.rows[0]);
-    } catch (error) {
-        return res.status(500).json({ error: 'Erro.' });
-    }
-});
-
 app.get('/api/v2/frequencias', verificarToken, async (req, res) => {
-    try {
-        const result = await pool.query(`
-            SELECT f.*, p.nome_completo as participante_nome, p.matricula, e.titulo as evento_titulo 
-            FROM frequencias f
-            JOIN participantes p ON f.participante_id = p.id
-            JOIN eventos e ON f.evento_id = e.id
-            ORDER BY f.data_entrada DESC
-        `);
-        return res.json(result.rows);
-    } catch (error) {
-        return res.status(500).json({ error: 'Erro.' });
-    }
+    try { return res.json((await pool.query(`SELECT f.*, p.nome_completo as participante_nome, e.titulo as evento_titulo, e.carga_horaria FROM frequencias f JOIN participantes p ON f.participante_id = p.id JOIN eventos e ON f.evento_id = e.id ORDER BY f.data_entrada DESC`)).rows); } catch (e) { return res.status(500).json({ error: 'Erro.' }); }
 });
-
 app.get('/api/v2/log-fraudes', verificarToken, async (req, res) => {
-    try {
-        const result = await pool.query(`
-            SELECT lf.*, e.titulo as evento_titulo 
-            FROM log_fraudes lf
-            LEFT JOIN eventos e ON lf.evento_id = e.id
-            ORDER BY lf.data_tentativa DESC
-        `);
-        return res.json(result.rows);
-    } catch (error) {
-        return res.status(500).json({ error: 'Erro.' });
-    }
+    try { return res.json((await pool.query(`SELECT lf.*, e.titulo as evento_titulo FROM log_fraudes lf LEFT JOIN eventos e ON lf.evento_id = e.id ORDER BY lf.data_tentativa DESC`)).rows); } catch (e) { return res.status(500).json({ error: 'Erro.' }); }
 });
 
-app.get('/api/v2/pesquisa-satisfacao', verificarToken, async (req, res) => {
-    try {
-        const result = await pool.query(`
-            SELECT 
-                ps.id,
-                ps.avaliacao as estrelas,
-                ps.comentarios as comentario,
-                ps.criado_em as data_resposta,
-                p.nome_completo as participante_nome,
-                e.titulo as evento_titulo
-            FROM pesquisa_satisfacao ps
-            LEFT JOIN participantes p ON ps.participante_id = p.id
-            LEFT JOIN eventos e ON ps.evento_id = e.id
-            ORDER BY ps.criado_em DESC
-        `);
-        return res.json(result.rows);
-    } catch (error) {
-        console.error("Erro detalhado no Postgres (Pesquisa):", error.message);
-        return res.status(500).json({ error: 'Erro interno ao recuperar pesquisas de satisfação.' });
-    }
-});
-
-app.get('/api/v2/publico-alvo', async (req, res) => {
-    try {
-        const result = await pool.query('SELECT * FROM publicoalvo ORDER BY nome ASC');
-        return res.json(result.rows);
-    } catch (error) {
-        return res.status(500).json({ error: 'Erro.' });
-    }
-});
-
-app.post('/api/v2/publico-alvo', verificarToken, async (req, res) => {
-    const { nome } = req.body;
-    try {
-        const result = await pool.query('INSERT INTO publicoalvo (nome, ativo) VALUES ($1, true) RETURNING *', [nome]);
-        return res.json(result.rows[0]);
-    } catch (error) {
-        return res.status(500).json({ error: 'Erro.' });
-    }
-});
-
-app.delete('/api/v2/publico-alvo/:id', verificarToken, async (req, res) => {
-    try {
-        await pool.query('DELETE FROM publicoalvo WHERE id = $1', [req.params.id]);
-        return res.json({ success: true });
-    } catch (error) {
-        return res.status(500).json({ error: 'Erro.' });
-    }
-});
-
+// ==========================================
+// NOVO: CRUD 100% CORRIGIDO DE USUÁRIOS (COM DELETE)
+// ==========================================
 app.get('/api/v2/usuarios', verificarToken, async (req, res) => {
-    try {
-        const result = await pool.query('SELECT id, nome, usuario, ativo, deve_alterar_senha FROM usuarios ORDER BY nome ASC');
-        return res.json(result.rows);
-    } catch (error) {
-        return res.status(500).json({ error: 'Erro.' });
-    }
+    try { return res.json((await pool.query('SELECT id, nome, usuario, ativo, deve_alterar_senha FROM usuarios ORDER BY nome ASC')).rows); } catch (e) { return res.status(500).json({ error: 'Erro.' }); }
 });
 
 app.post('/api/v2/usuarios', verificarToken, async (req, res) => {
-    const { nome, usuario, senha } = req.body;
-    try {
-        const hash = hashSenha(senha);
-        const result = await pool.query('INSERT INTO usuarios (nome, usuario, senha, ativo, deve_alterar_senha) VALUES ($1, $2, $3, true, true) RETURNING id, nome, usuario, ativo', [nome, usuario, hash]);
-        return res.json(result.rows[0]);
-    } catch (error) {
-        return res.status(500).json({ error: 'Erro.' });
-    }
+    try { 
+        const hash = hashSenha(req.body.senha);
+        return res.json((await pool.query('INSERT INTO usuarios (nome, usuario, senha, ativo, deve_alterar_senha) VALUES ($1, $2, $3, true, false) RETURNING id, nome, usuario, ativo', [req.body.nome, req.body.usuario, hash])).rows[0]); 
+    } catch (e) { return res.status(500).json({ error: e.message }); }
 });
 
 app.put('/api/v2/usuarios/alterar-propria-senha', verificarToken, async (req, res) => {
-    const { novaSenha } = req.body;
-    try {
-        const hash = hashSenha(novaSenha);
-        await pool.query('UPDATE usuarios SET senha = $1 WHERE id = $2', [hash, req.user.id]);
-        return res.json({ success: true });
-    } catch (error) {
-        return res.status(500).json({ error: 'Erro.' });
-    }
+    try { 
+        const hash = hashSenha(req.body.novaSenha);
+        await pool.query('UPDATE usuarios SET senha = $1 WHERE id = $2', [hash, req.user.id]); 
+        return res.json({ success: true }); 
+    } catch (e) { return res.status(500).json({ error: 'Erro ao redefinir a própria senha.' }); }
 });
 
-app.get('/api/v2/relatorios/:tipo', verificarToken, async (req, res) => {
-    const { tipo } = req.params;
-    const { data_inicio, data_fim } = req.query;
+// NOVO ENDPOINT ADICIONADO PARA DELETAR OPERADORES
+app.delete('/api/v2/usuarios/:id', verificarToken, async (req, res) => {
     try {
-        let query = '';
-        if (tipo === 'formacoes') {
-            query = `SELECT e.*, l.nome as local_nome, pa.nome as publico_nome FROM eventos e LEFT JOIN locais l ON e.local_id = l.id LEFT JOIN publicoalvo pa ON e.publico_alvo_id = pa.id WHERE e.data_evento BETWEEN $1 AND $2 ORDER BY e.data_evento DESC`;
-        } else if (tipo === 'participante') {
-            query = `SELECT p.nome_completo, p.matricula, e.titulo as evento_titulo, f.data_entrada, f.data_saida, f.permanencia FROM frequencias f JOIN participantes p ON f.participante_id = p.id JOIN eventos e ON f.evento_id = e.id WHERE e.data_evento BETWEEN $1 AND $2 ORDER BY p.nome_completo ASC`;
-        } else if (tipo === 'publico-alvo') {
-            query = `SELECT pa.nome as publico_nome, e.titulo as evento_titulo, COUNT(f.id) as total_participacoes FROM eventos e JOIN publicoalvo pa ON e.publico_alvo_id = pa.id LEFT JOIN frequencias f ON f.evento_id = e.id WHERE e.data_evento BETWEEN $1 AND $2 GROUP BY pa.nome, e.titulo ORDER BY pa.nome ASC`;
-        } else if (tipo === 'estatisticas') {
-            const tPart = await pool.query(`SELECT e.titulo, COUNT(f.id) as total FROM eventos e LEFT JOIN frequencias f ON f.evento_id = e.id WHERE e.data_evento BETWEEN $1 AND $2 GROUP BY e.titulo`);
-            const tPesq = await pool.query(`SELECT e.titulo, AVG(ps.estrelas)::numeric(10,2) as media_estrelas, COUNT(ps.id) as total_respostas FROM eventos e LEFT JOIN pesquisa_satisfacao ps ON ps.evento_id = e.id WHERE e.data_evento BETWEEN $1 AND $2 GROUP BY e.titulo`);
-            const tOcor = await pool.query(`SELECT motivo, COUNT(id) as total FROM log_fraudes WHERE data_tentativa BETWEEN $1::date AND ($2::date + integer '1') GROUP BY motivo`);
-            return res.json({ participacoes: tPart.rows, opiniao: tPesq.rows, ocorrencias: tOcor.rows });
+        await pool.query('DELETE FROM usuarios WHERE id = $1', [parseInt(req.params.id)]);
+        return res.json({ success: true });
+    } catch (e) { return res.status(500).json({ error: 'Erro ao remover operador.' }); }
+});
+
+app.delete('/api/v2/admin/log-fraudes/:id', verificarToken, async (req, res) => {
+    try { await pool.query('DELETE FROM log_fraudes WHERE id = $1', [req.params.id]); return res.json({ status: 'sucesso' }); } catch (e) { return res.status(500).json({ error: e.message }); }
+});
+app.get('/api/v2/admin/listar-participantes-view', verificarToken, async (req, res) => {
+    try { return res.json((await pool.query(`SELECT p.id, p.nome_completo, p.matricula, p.device_key, p.ativo, COUNT(f.id) AS total_presencas FROM participantes p LEFT JOIN frequencias f ON p.id = f.participante_id GROUP BY p.id, p.nome_completo, p.matricula, p.device_key, p.ativo ORDER BY p.id ASC`)).rows); } catch (e) { return res.status(500).json({ error: e.message }); }
+});
+app.get('/api/v2/admin/pesquisa-satisfacao-detalhada', verificarToken, async (req, res) => {
+    try { return res.json((await pool.query(`SELECT ps.id, ps.avaliacao, ps.comentarios, ps.criado_em, p.nome_completo AS participante_nome, p.matricula AS participante_matricula, e.titulo AS evento_titulo FROM pesquisa_satisfacao ps LEFT JOIN participantes p ON ps.participante_id = p.id LEFT JOIN eventos e ON ps.evento_id = e.id ORDER BY ps.criado_em DESC`)).rows); } catch (e) { return res.status(500).json({ error: e.message }); }
+});
+app.get('/api/v2/admin/eventos', async (req, res) => {
+    try { return res.json((await pool.query(`SELECT id, titulo, data_evento, hora_inicio, hora_fim, palestrante, local FROM eventos ORDER BY data_evento DESC, hora_inicio DESC`)).rows); } catch (e) { return res.status(500).json({ error: e.message }); }
+});
+app.get('/api/v2/admin/eventos-detalhes/:id', verificarToken, async (req, res) => {
+    try {
+        const ev = (await pool.query('SELECT * FROM eventos WHERE id = $1', [req.params.id])).rows[0];
+        const pub = (await pool.query('SELECT publico_alvo_id FROM evento_publicos WHERE evento_id = $1', [req.params.id])).rows.map(r => r.publico_alvo_id);
+        return res.json({ ...ev, publicos_alvo_ids: pub });
+    } catch (e) { return res.status(500).json({ error: e.message }); }
+});
+app.get('/api/v2/admin/relatorio-integrado', verificarToken, async (req, res) => {
+    const { data_inicio, data_fim, area_id, setor_id, publico_alvo_id } = req.query;
+    
+    try {
+        if (!data_inicio || !data_fim) {
+            return res.status(400).json({ error: 'As datas de início e fim são obrigatórias.' });
         }
-        const result = await pool.query(query, [data_inicio, data_fim]);
-        return res.json(result.rows);
-    } catch (error) {
-        return res.status(500).json({ error: 'Erro.' });
+
+        // Construção dinâmica de filtros SQL para evitar conflitos
+        let filtrosSQL = `WHERE e.data_evento BETWEEN $1 AND $2`;
+        let parametros = [data_inicio, data_fim];
+        let contadorParam = 3;
+
+        if (area_id) {
+            filtrosSQL += ` AND e.area_id = $${contadorParam}`;
+            parametros.push(parseInt(area_id));
+            contadorParam++;
+        }
+
+        if (setor_id) {
+            const sId = parseInt(setor_id);
+            filtrosSQL += ` AND (e.setor_id_1 = $${contadorParam} OR e.setor_id_2 = $${contadorParam} OR e.setor_id_3 = $${contadorParam})`;
+            parametros.push(sId);
+            contadorParam++;
+        }
+
+        if (publico_alvo_id) {
+            filtrosSQL += ` AND EXISTS (
+                SELECT 1 FROM evento_publicos ep 
+                WHERE ep.evento_id = e.id AND ep.publico_alvo_id = $${contadorParam}
+            )`;
+            parametros.push(parseInt(publico_alvo_id));
+            contadorParam++;
+        }
+
+        // 1. QUERY DE TOTAIS (Mapeando quantidade de formações e presenças no período filtrado)
+        const queryTotais = `
+            SELECT 
+                COUNT(DISTINCT e.id) as total_eventos,
+                COUNT(f.id) as total_frequencias
+            FROM eventos e
+            LEFT JOIN frequencias f ON f.evento_id = e.id
+            ${filtrosSQL}
+        `;
+        const resultadoTotais = await pool.query(queryTotais, parametros);
+
+        // 2. QUERY DE REGISTROS (Ordem estritamente decrescente: do mais atual para o mais antigo)
+        const queryRegistros = `
+            SELECT 
+                f.id,
+                f.matricula,
+                f.tempo_participacao,
+                p.nome_completo as participante_nome,
+                e.titulo as evento_titulo,
+                e.carga_horaria,
+                e.data_evento,
+                f.data_entrada,
+                f.data_saida
+            FROM frequencias f
+            INNER JOIN eventos e ON f.evento_id = e.id
+            INNER JOIN participantes p ON f.participante_id = p.id
+            ${filtrosSQL}
+            ORDER BY e.data_evento DESC, f.data_entrada DESC
+        `;
+        const resultadoRegistros = await pool.query(queryRegistros, parametros);
+
+        return res.json({
+            totais: {
+                total_eventos: parseInt(resultadoTotais.rows[0].total_eventos || 0),
+                total_frequencias: parseInt(resultadoTotais.rows[0].total_frequencias || 0)
+            },
+            registros: resultadoRegistros.rows
+        });
+
+    } catch (error) { 
+        return res.status(500).json({ error: 'Erro ao processar relatório dinâmico: ' + error.message }); 
     }
 });
 
 app.use((req, res) => res.status(404).json({ error: 'Rota não encontrada.' }));
-app.use((err, req, res, next) => res.status(500).json({ error: 'Erro crítico interno.' }));
-
-app.listen(PORT, () => {});
+app.listen(PORT, () => console.log(`Servidor ativado na porta ${PORT}`));

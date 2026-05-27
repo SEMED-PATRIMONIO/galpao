@@ -12,6 +12,30 @@ const calcularDistanciaCliente = (lat1, lon1, lat2, lon2) => {
               Math.cos(phi1) * Math.cos(phi2) *
               Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    const obterImpressaoDigitalHardware = () => {
+        try {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            ctx.textBaseline = 'top';
+            ctx.font = '14px Arial';
+            ctx.fillStyle = '#f60';
+            ctx.fillRect(125, 1, 62, 20);
+            ctx.fillStyle = '#069';
+            ctx.fillText('Fingerprint Logap', 2, 15);
+            ctx.fillStyle = 'rgba(102, 204, 0, 0.7)';
+            ctx.fillText('Fingerprint Logap', 4, 17);
+            const dataURL = canvas.toDataURL();
+            let hash = 0;
+            for (let i = 0; i < dataURL.length; i++) {
+                hash = ((hash << 5) - hash) + dataURL.charCodeAt(i);
+                hash = hash & hash; // Converte para inteiro de 32 bits
+            }
+            // Retorna o hash da GPU + Resolução Real da Tela
+            return `HW-${Math.abs(hash)}-${window.screen.width}x${window.screen.height}`;
+        } catch (e) {
+            return `HW-GENERIC-${Math.random()}`; 
+        }
+    };
     return R * c;
 };
 
@@ -163,15 +187,19 @@ export default function App() {
     const lidarComVinculoAparelho = async (e) => {
         e.preventDefault();
         try {
+            // CAPTURA A IMPRESSÃO DIGITAL FÍSICA NO EXATO MOMENTO DO CLIQUE
+            const hardware_id = obterImpressaoDigitalHardware();
+
             const res = await fetch(`${API_URL}/api/v2/dispositivo/associar`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ matricula: matriculaInput, nome: nomeInput })
+                // INCLUI O HARDWARE_ID INVIOLÁVEL NO ENVIO
+                body: JSON.stringify({ matricula: matriculaInput, nome: nomeInput, hardware_id })
             });
             const data = await res.json();
 
             if (!res.ok) {
-                dispararAlerta8Segundos(data.error || 'Erro ao vincular.', 'erro');
+                dispararAlerta8Segundos(data.error || 'Erro ao vincular aparelho.', 'erro');
                 return;
             }
 
@@ -179,7 +207,7 @@ export default function App() {
             setDeviceToken(data.device_token);
             dispararAlerta8Segundos('APARELHO VINCULADO COM SUCESSO!', 'sucesso');
         } catch (err) {
-            dispararAlerta8Segundos('Erro ao tentar associar dispositivo.', 'erro');
+            dispararAlerta8Segundos('Erro de conexão ao tentar associar dispositivo.', 'erro');
         }
     };
 

@@ -135,26 +135,84 @@ app.get('/api/v2/dispositivo/status', async (req, res) => {
     } catch (error) { return res.status(500).json({ error: 'Erro interno.' }); }
 });
 
+const crypto = require('crypto'); // Certifique-se de que o módulo nativo crypto está importado no topo do index.js
+
+// ========================================================
+// ROTA COMPLETA: ASSOCIAÇÃO DE DISPOSITIVO COM ESCUDO ANTI-ANÓNIMO
+// ========================================================
+const crypto = require('crypto');
+
+// ========================================================
+// ROTA COMPLETA: ASSOCIAÇÃO DE DISPOSITIVO COM ESCUDO ANTI-ANÔNIMO
+// ========================================================
 app.post('/api/v2/dispositivo/associar', async (req, res) => {
-    const { matricula, nome, device_token, token } = req.body;
+    // Recebemos a matrícula, o nome e a assinatura física inviolável da GPU/Ecrã
+    const { matricula, nome, hardware_id } = req.body;
+
     try {
-        const tokenDispositivo = device_token || token || uuidv4();
-        const resVerif = await pool.query('SELECT * FROM dispositivos WHERE device_token = $1 AND ativo = true', [tokenDispositivo]);
-        if (resVerif.rows.length > 0) {
-            const vinculo = resVerif.rows[0];
-            const partDono = await pool.query('SELECT * FROM participantes WHERE id = $1', [vinculo.participante_id]);
-            if (partDono.rows.length > 0 && partDono.rows[0].matricula !== matricula) {
-                return res.status(400).json({ error: 'Este dispositivo já está associado a outro participante.' });
+        // Validação básica de segurança para garantir o preenchimento dos campos
+        if (!matricula || !nome) {
+            return res.status(400).json({ error: 'A matrícula e o nome completo são obrigatórios.' });
+        }
+
+        // 1. ESCUDO PROTOCOLO ANTI-ABA ANÔNIMA
+        if (hardware_id) {
+            // Cria a coluna de impressão digital silenciosamente caso ela não exista na tabela
+            await pool.query(`ALTER TABLE dispositivos ADD COLUMN IF NOT EXISTS hardware_fingerprint VARCHAR(255)`).catch(() => {});
+
+            // Regra Básica de Física: Proíbe que este mesmo aparelho físico (hardware_id)
+            // esteja ativo para QUALQUER OUTRA matrícula diferente da atual
+            const checkHardware = await pool.query(`
+                SELECT * FROM dispositivos 
+                WHERE hardware_fingerprint = $1 
+                AND participante_matricula != $2 
+                AND ativo = true
+            `, [hardware_id, matricula]);
+
+            if (checkHardware.rows.length > 0) {
+                // Captura e registra a tentativa de fraude instantaneamente para auditoria
+                await pool.query(`
+                    INSERT INTO log_fraudes (matricula, motivo) 
+                    VALUES ($1, 'TENTATIVA_VINCULO_MULTIPLO_NO_MESMO_APARELHO_FISICO')
+                `).catch(() => {});
+
+                return res.status(403).json({ 
+                    error: 'Bloqueio de Segurança: Detectamos que este aparelho físico (celular/computador) já foi utilizado para vincular a matrícula de outro professor. O uso deste portal é estritamente pessoal e intransferível.' 
+                });
             }
         }
-        let resPart = await pool.query('SELECT * FROM participantes WHERE matricula = $1', [matricula]);
-        let participanteId = resPart.rows.length === 0 ? 
-            (await pool.query('INSERT INTO participantes (nome_completo, matricula, ativo) VALUES ($1, $2, true) RETURNING id', [nome, matricula])).rows[0].id : 
-            resPart.rows[0].id;
 
-        await pool.query(`INSERT INTO dispositivos (device_token, participante_id, participante_matricula, ativo) VALUES ($1, $2, $3, true) ON CONFLICT (device_token) DO UPDATE SET participante_id = $2, participante_matricula = $3, ativo = true`, [tokenDispositivo, participanteId, matricula]);
-        return res.json({ device_token: tokenDispositivo, token: tokenDispositivo, participante: (await pool.query('SELECT * FROM participantes WHERE id = $1', [participanteId])).rows[0] });
-    } catch (error) { return res.status(500).json({ error: 'Erro interno ao associar dispositivo.' }); }
+        // 2. REGRA DE EXCLUSIVIDADE POR MATRÍCULA
+        // Se este mesmo professor já tinha um dispositivo associado anteriormente, 
+        // desativamos o antigo para que apenas o novo acesso passe a ser válido (Evita clones de conta)
+        await pool.query(`
+            UPDATE dispositivos 
+            SET ativo = false 
+            WHERE participante_matricula = $1 AND ativo = true
+        `, [matricula]);
+
+        // 3. GERAÇÃO DE NOVO TOKEN EXCLUSIVO DE SESSÃO
+        // Geramos um UUID seguro de 32 bits para servir como o novo device_token deste aparelho
+        const novoDeviceToken = crypto.randomUUID();
+
+        // 4. GRAVAÇÃO DO COMPROMISSO NA BASE DE DADOS (CORRIGIDO PARA A SUA TABELA)
+        // Inserimos estritamente os campos que existem na sua tabela 'dispositivos'
+        await pool.query(`
+            INSERT INTO dispositivos (participante_matricula, device_token, ativo, hardware_fingerprint)
+            VALUES ($1, $2, true, $3)
+        `, [matricula, novoDeviceToken, hardware_id || null]);
+
+        // 5. RETORNO DE CONFIANÇA PARA O PORTAL DO PROFESSOR
+        // Devolvemos o token gerado para que o frontend o armazene no localStorage do navegador
+        return res.json({
+            status: 'sucesso',
+            device_token: novoDeviceToken
+        });
+
+    } catch (error) {
+        console.error('Erro crítico na rota /api/v2/dispositivo/associar:', error);
+        return res.status(500).json({ error: 'Erro interno no servidor ao tentar processar o vínculo do dispositivo.' });
+    }
 });
 
 app.post('/api/v2/presenca/inicializar', async (req, res) => {
@@ -222,7 +280,7 @@ app.post('/api/v2/presenca/confirmar-saida', async (req, res) => {
         const disp = resDisp.rows[0];
 
         const ev = (await pool.query('SELECT data_evento, hora_inicio, hora_fim, publico_alvo_id FROM eventos WHERE id = $1', [evento_id])).rows[0];
-        let avaliacaoTexto = estrelas === 5 ? 'Muito Bom' : estrelas === 4 ? 'Bom' : estrelas === 3 ? 'Regular' : estrelas === 2 ? 'Ruim' : 'Péssimo';
+        let avaliacaoTexto = estrelas === 5 ? 'Excelência total' : estrelas === 4 ? 'Muito Bom' : estrelas === 3 ? 'Atendeu às expectativas' : estrelas === 2 ? 'Regular' : 'Precisa melhorar bastante';
 
         const agoraTexto = new Date().toLocaleString("sv-SE", { timeZone: "America/Sao_Paulo" });
         const dataHoraReal = new Date(agoraTexto);

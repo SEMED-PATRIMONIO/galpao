@@ -646,5 +646,55 @@ app.post('/api/v2/admin/frequencias/saida-manual', verificarToken, async (req, r
     }
 });
 
+app.post('/api/v2/admin/frequencias/saida-manual', verificarToken, async (req, res) => {
+    const { frequencia_id, hora_saida } = req.body;
+
+    try {
+        if (!frequencia_id || !hora_saida) return res.status(400).json({ error: 'Dados incompletos.' });
+
+        // Busca a frequência e as regras do evento
+        const resFreq = await pool.query(`
+            SELECT f.*, e.data_evento, e.hora_fim 
+            FROM frequencias f 
+            JOIN eventos e ON f.evento_id = e.id 
+            WHERE f.id = $1
+        `, [frequencia_id]);
+
+        if (resFreq.rows.length === 0) return res.status(404).json({ error: 'Frequência não localizada.' });
+        const freq = resFreq.rows[0];
+
+        if (freq.data_saida !== null) return res.status(400).json({ error: 'Esta frequência já possui saída registrada.' });
+
+        // Cálculos estritos de horário
+        const dataEventoFormatada = new Date(freq.data_evento).toISOString().split('T')[0];
+        
+        const dataHoraEntrada = new Date(freq.data_entrada); 
+        const dataHoraSaidaManual = new Date(`${dataEventoFormatada}T${hora_saida}`); 
+        const dataHoraFimPrevista = new Date(`${dataEventoFormatada}T${freq.hora_fim}`); 
+
+        const entradaStr = dataHoraEntrada.toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'});
+
+        // REGRAS RIGOROSAS
+        if (dataHoraSaidaManual <= dataHoraEntrada) {
+            return res.status(400).json({ error: `A saída não pode ser anterior ou igual à hora de entrada (${entradaStr}).` });
+        }
+        if (dataHoraSaidaManual > dataHoraFimPrevista) {
+            return res.status(400).json({ error: `A saída manual não pode ultrapassar a hora de término prevista do evento (${freq.hora_fim.slice(0,5)}).` });
+        }
+
+        // Salva a saída no banco de dados
+        await pool.query(`
+            UPDATE frequencias 
+            SET data_saida = $1 
+            WHERE id = $2
+        `, [dataHoraSaidaManual, frequencia_id]);
+
+        return res.json({ status: 'sucesso', message: 'Saída manual registrada e professor liberado!' });
+    } catch (error) {
+        console.error('Erro ao registrar saída manual:', error);
+        return res.status(500).json({ error: 'Erro ao registrar saída manual.' });
+    }
+});
+
 app.use((req, res) => res.status(404).json({ error: 'Rota não encontrada.' }));
 app.listen(PORT, () => console.log(`Servidor ativado na porta ${PORT}`));

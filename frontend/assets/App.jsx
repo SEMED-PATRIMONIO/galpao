@@ -15,13 +15,12 @@ const calcularDistanciaCliente = (lat1, lon1, lat2, lon2) => {
     return R * c;
 };
 
-// Obtém o momento atual cravado no fuso horário oficial de São Paulo
+// Força o fuso horário estrito de São Paulo, Brasil
 const obterAgoraSaoPaulo = () => {
     const dataTexto = new Date().toLocaleString("sv-SE", { timeZone: "America/Sao_Paulo" });
     return new Date(dataTexto);
 };
 
-// Converte a string "HH:MM" vinda do banco em um objeto Date no fuso de São Paulo
 const obterDataComHorarioString = (horarioStr) => {
     if (!horarioStr) return obterAgoraSaoPaulo();
     const agora = obterAgoraSaoPaulo();
@@ -48,8 +47,11 @@ export default function App() {
     const [estrelas, setEstrelas] = useState(5);
     const [comentario, setComentario] = useState('');
 
+    // Estado inteligente para guardar o resultado da auditoria preventiva de cada evento de forma isolada
+    const [auditoriaEventos, setAuditoriaEventos] = useState({});
+
     const dispararAlerta8Segundos = (mensagem, tipo = 'erro', acaoPosterior = null) => {
-        setAlerta({ visivel: true, msg: mensagem, tipo });
+        setAlerta({ visivel: true, msg: message || mensagem, tipo });
         setTimeout(() => {
             setAlerta({ visivel: false, msg: '', tipo: 'sucesso' });
             if (acaoPosterior) acaoPosterior();
@@ -63,6 +65,13 @@ export default function App() {
         }
         executarInicializacao(deviceToken);
     }, [deviceToken]);
+
+    // Dispara a reavaliação de regras preventivas sempre que as coordenadas do GPS ou a lista de eventos mudarem
+    useEffect(() => {
+        if (eventos.length > 0 && coords.lat && coords.lng) {
+            processarAuditoriaPreventiva();
+        }
+    }, [coords, eventos, temEventoAtivo, eventoAtivoId]);
 
     const executarInicializacao = async (tokenParaValidar) => {
         try {
@@ -90,19 +99,68 @@ export default function App() {
                 setEventos(data.eventos);
                 setTemEventoAtivo(data.tem_evento_ativo || false);
                 setEventoAtivoId(data.evento_ativo_id || null);
-                
-                if (data.tem_evento_ativo) {
-                    setStatusTela('aguardando_janela_saida');
-                } else {
-                    setStatusTela('listagem');
-                    obterLocalizacaoGPS();
-                }
+                setStatusTela('listagem');
+                obterLocalizacaoGPS();
             } else {
                 dispararAlerta8Segundos(data.error || 'Erro de conexão.', 'erro');
             }
         } catch (err) {
             dispararAlerta8Segundos('Não foi possível contatar o servidor.', 'erro');
         }
+    };
+
+    const processarAuditoriaPreventiva = async () => {
+        const novoEstadoAuditoria = { ...auditoriaEventos };
+        const agora = obterAgoraSaoPaulo();
+
+        for (let ev of eventos) {
+            // Inicializa o card em estado de processamento visual
+            if (!novoEstadoAuditoria[ev.id]) {
+                novoEstadoAuditoria[ev.id] = { carregando: true, liberado: false, motivo: 'Analisando regras...', acao: 'entrada' };
+            }
+
+            const dataInicioOficial = obterDataComHorarioString(ev.hora_inicio);
+            const dataTerminoOficial = obterDataComHorarioString(ev.hora_fim);
+
+            const limiteEntradaInicio = new Date(dataInicioOficial.getTime() - 30 * 60000);
+            const limiteEntradaFim = new Date(dataTerminoOficial.getTime() - 30 * 60000);
+
+            const limiteSaidaInicio = new Date(dataTerminoOficial.getTime() - 30 * 60000);
+            const limiteSaidaFim = new Date(dataTerminoOficial.getTime() + 30 * 60000);
+
+            const distancia = calcularDistanciaCliente(coords.lat, coords.lng, parseFloat(ev.latitude), parseFloat(ev.longitude));
+            const estaNoRaio = distancia <= 1000;
+
+            // 1. CHECAGEM RÍGIDA DE DUPLICIDADE FÍSICA NO ANDAMENTO DO DIA
+            if (temEventoAtivo && ev.id !== eventoAtivoId) {
+                novoEstadoAuditoria[ev.id] = { carregando: false, liberado: false, motivo: `Bloqueio: Você já possui uma frequência ativa no evento de ID ${eventoAtivoId}.`, acao: 'bloqueado' };
+                continue;
+            }
+
+            // 2. CHECAGEM DE PROXIMIDADE GEOGRÁFICA
+            if (!estaNoRaio) {
+                novoEstadoAuditoria[ev.id] = { carregando: false, liberado: false, motivo: `Bloqueio: Fora do raio permitido. Distância atual: ${(distancia/1000).toFixed(1)}km.`, acao: 'bloqueado' };
+                continue;
+            }
+
+            // 3. DETERMINAÇÃO DINÂMICA SE É ENTRADA OU SAÍDA BASEADO NO CORE DO PROJETO
+            if (temEventoAtivo && ev.id === eventoAtivoId) {
+                // O professor já está dentro deste evento específico. Validando regra de saída.
+                if (agora < limiteSaidaInicio || agora > limiteSaidaFim) {
+                    novoEstadoAuditoria[ev.id] = { carregando: false, liberado: false, motivo: `Bloqueio: Saída permitida apenas entre ${limiteSaidaInicio.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})} e ${limiteSaidaFim.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})}.`, acao: 'saida_travada' };
+                } else {
+                    novoEstadoAuditoria[ev.id] = { carregando: false, liberado: true, motivo: '', acao: 'saida' };
+                }
+            } else {
+                // Caso padrão: Validando regra para nova entrada
+                if (agora < limiteEntradaInicio || agora > limiteEntradaFim) {
+                    novoEstadoAuditoria[ev.id] = { carregando: false, liberado: false, motivo: `Bloqueio: Entrada permitida apenas entre ${limiteEntradaInicio.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})} e ${limiteEntradaFim.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})}.`, acao: 'entrada_travada' };
+                } else {
+                    novoEstadoAuditoria[ev.id] = { carregando: false, liberado: true, motivo: '', acao: 'entrada' };
+                }
+            }
+        }
+        setAuditoriaEventos(novoEstadoAuditoria);
     };
 
     const lidarComVinculoAparelho = async (e) => {
@@ -133,23 +191,18 @@ export default function App() {
             dispararAlerta8Segundos('O seu navegador não suporta GPS.', 'erro');
             return;
         }
-
         const sucesso = (pos) => {
             setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
         };
-
         const erroAltaPrecisao = (err) => {
-            console.warn("Falha na alta precisão, tentando precisão padrão...", err.message);
             navigator.geolocation.getCurrentPosition(
                 sucesso, 
                 (erroFatal) => {
-                    let msg = 'Erro ao buscar localização. Ative seu GPS físico.';
-                    dispararAlerta8Segundos(msg, 'erro');
+                    dispararAlerta8Segundos('Erro ao buscar localização. Ative seu GPS físico.', 'erro');
                 }, 
                 { enableHighAccuracy: false, timeout: 15000, maximumAge: 10000 }
             );
         };
-
         navigator.geolocation.getCurrentPosition(sucesso, erroAltaPrecisao, {
             enableHighAccuracy: true,
             timeout: 8000,
@@ -157,93 +210,28 @@ export default function App() {
         });
     };
 
-    const selecionarEvento = async (ev) => {
-        // Validação imediata de sinal do GPS
-        if (!coords.lat || !coords.lng) {
-            dispararAlerta8Segundos('Bloqueio: Aguardando sinal estável do seu posicionamento GPS.', 'erro');
-            return;
-        }
-
-        // CÁLCULO DAS REGRAS EM TEMPO REAL (FUSO SÃO PAULO)
-        const agora = obterAgoraSaoPaulo();
-        const dataInicioOficial = obterDataComHorarioString(ev.hora_inicio);
-        const dataTerminoOficial = obterDataComHorarioString(ev.hora_fim);
-
-        const limiteEntradaInicio = new Date(dataInicioOficial.getTime() - 30 * 60000);
-        const limiteEntradaFim = new Date(dataTerminoOficial.getTime() - 30 * 60000);
-
-        const limiteSaidaInicio = new Date(dataTerminoOficial.getTime() - 30 * 60000);
-        const limiteSaidaFim = new Date(dataTerminoOficial.getTime() + 30 * 60000);
-
-        const distancia = calcularDistanciaCliente(coords.lat, coords.lng, parseFloat(ev.latitude), parseFloat(ev.longitude));
-        const estaNoRaio = distancia <= 1000;
-        const dentroHorarioEntrada = agora >= limiteEntradaInicio && agora <= limiteEntradaFim;
-
-        // --- REGRA DE OURO: NOTIFICAÇÃO EXPLICATIVA EM CASO DE BOTÃO BRANCO ---
-        if (temEventoAtivo && ev.id !== eventoAtivoId) {
-            dispararAlerta8Segundos(`Regra Física Violada: Você já possui uma frequência em andamento no evento de ID ${eventoAtivoId}. Não é permitido estar em duas formações simultaneamente.`, 'erro');
-            return;
-        }
-
-        if (!estaNoRaio) {
-            dispararAlerta8Segundos(`Regra de Proximidade Violada: Você está a ${(distancia/1000).toFixed(1)}km do local. O registro só é liberado em um raio de até 1km do espaço físico oficial.`, 'erro');
-            return;
-        }
-
-        try {
-            const res = await fetch(`${API_URL}/api/v2/presenca/checar-status`, {
+    const acionarBotaoFormacao = (ev, statusAuditoria) => {
+        // Se o botão foi clicado estando bloqueado por regra de negócio, dispara log de infração preventivo
+        if (!statusAuditoria || !statusAuditoria.liberado) {
+            dispararAlerta8Segundos(statusAuditoria?.motivo || "Ação bloqueada pelas regras de validação.", "erro");
+            
+            // Grava a tentativa inválida silenciosamente na tabela log_fraudes do backend
+            fetch(`${API_URL}/api/v2/presenca/checar-status`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    device_token: deviceToken,
-                    evento_id: ev.id,
-                    latitude: coords.lat,
-                    longitude: coords.lng
-                })
-            });
-            
-            const data = await res.json();
+                body: JSON.stringify({ device_token: deviceToken, evento_id: ev.id, latitude: coords.lat, longitude: coords.lng })
+            }).catch(() => {});
+            return;
+        }
 
-            if (!res.ok) {
-                dispararAlerta8Segundos(data.error || 'Horário de acesso inválido.', 'erro');
-                return;
-            }
-
-            setEventoSelecionado(ev);
-
-            if (data.status === 'completo') {
-                dispararAlerta8Segundos(`Operação Concluída: Sua presença de entrada e saída já foram salvas hoje para:\n${ev.titulo}`, 'sucesso');
-                return;
-            }
-
-            if (data.status === 'somente_entrada' || data.status === 'saida_pendente') {
-                // Valida horário de saída
-                if (agora < limiteSaidaInicio || agora > limiteSaidaFim) {
-                    dispararAlerta8Segundos(`Regra de Horário Violada: O botão de saída só ficará ativo entre ${ev.hora_fim ? new Date(dataTerminoOficial.getTime() - 30*60000).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}) : '--'} e ${ev.hora_fim ? new Date(dataTerminoOficial.getTime() + 30*60000).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}) : '--'}.`, 'erro');
-                    return;
-                }
-                setConteudoModal({
-                    tipo: 'pergunta_saida',
-                    texto: `Identificamos sua entrada anterior. Deseja realizar a avaliação e confirmar sua saída da formação "${ev.titulo}" agora?`
-                });
-                setStatusTela('modal_pergunta');
-                return;
-            }
-
-            // Valida horário de entrada
-            if (!dentroHorarioEntrada) {
-                dispararAlerta8Segundos(`Regra de Horário Violada: A entrada para este evento só é permitida de ${new Date(limiteEntradaInicio).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} até às ${new Date(limiteEntradaFim).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}.`, 'erro');
-                return;
-            }
-
-            setConteudoModal({
-                tipo: 'confirmar_entrada',
-                texto: `Confirmar presença na formação: "${ev.titulo}"?`
-            });
+        setEventoSelecionado(ev);
+        
+        if (statusAuditoria.acao === 'saida') {
+            setConteudoModal({ tipo: 'pergunta_saida', texto: `Confirma a realização da avaliação e encerramento da sua presença no evento "${ev.titulo}"?` });
             setStatusTela('modal_pergunta');
-
-        } catch (err) {
-            dispararAlerta8Segundos('Conexão instável com o Cloudflare Tunnel. Tente novamente.', 'erro');
+        } else {
+            setConteudoModal({ tipo: 'confirmar_entrada', texto: `Confirmar presença na formação: "${ev.titulo}"?` });
+            setStatusTela('modal_pergunta');
         }
     };
 
@@ -266,7 +254,7 @@ export default function App() {
                     setTimeout(() => {
                         setTemEventoAtivo(true);
                         setEventoAtivoId(eventoSelecionado.id);
-                        setStatusTela('aguardando_janela_saida');
+                        executarInicializacao(deviceToken); // Recarrega o status do ecossistema mantendo o token amarrado
                     }, 8000);
                 } else {
                     setStatusTela('listagem');
@@ -275,7 +263,7 @@ export default function App() {
                 }
             } catch (e) {
                 setStatusTela('listagem');
-                dispararAlerta8Segundos('Erro fatal ao conectar no banco.', 'erro');
+                dispararAlerta8Segundos('Erro de comunicação com o servidor.', 'erro');
             }
         } else if (conteudoModal.tipo === 'pergunta_saida') {
             setStatusTela('pesquisa');
@@ -363,62 +351,62 @@ export default function App() {
                 {statusTela === 'listagem' && (
                     <div>
                         <h2 style={{ color: '#1e3a8a', marginBottom: '5px' }}>Portal de Presença</h2>
-                        <p style={{ color: '#666', fontSize: '13px', marginBottom: '25px' }}>Selecione a formação para assinar a frequência.</p>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                            {eventos
-                                .filter(ev => !temEventoAtivo || ev.id === eventoAtivoId)
-                                .map(ev => {
-                                    const distancia = coords.lat && coords.lng ? calcularDistanciaCliente(coords.lat, coords.lng, parseFloat(ev.latitude), parseFloat(ev.longitude)) : 9999;
-                                    const estaNoRaio = distancia <= 1000;
-                                    
-                                    const horaInicioObj = obterDataComHorarioString(ev.hora_inicio);
-                                    const horaFimObj = obterDataComHorarioString(ev.hora_fim);
-                                    const agoraSP = obterAgoraSaoPaulo();
-                                    
-                                    const dentroHorarioEntrada = agoraSP >= new Date(horaInicioObj.getTime() - 30 * 60000) && agoraSP <= new Date(horaFimObj.getTime() - 30 * 60000);
-                                    
-                                    // REGRA ESTREITA: Só fica AZUL se estiver no local E no horário certo de entrada
-                                    const botaoDeveFicarAzul = estaNoRaio && dentroHorarioEntrada;
+                        <p style={{ color: '#666', fontSize: '13px', marginBottom: '25px' }}>Frequências e eventos monitorados em tempo real.</p>
+                        
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                            {eventos.map(ev => {
+                                const aud = auditoriaEventos[ev.id] || { carregando: true, liberado: false, motivo: 'Aguardando GPS...', acao: 'entrada' };
+                                
+                                // Determinação da cor estrita do botão conforme as regras analisadas
+                                let corBotao = '#e2e8f0'; // Cor padrão cinza neutro (Aguarde/Bloqueado)
+                                let textoBotao = 'Aguarde...';
+                                let corTextoBotao = '#64748b';
 
-                                    return (
+                                if (!aud.carregando) {
+                                    if (aud.liberado) {
+                                        if (aud.acao === 'saida') {
+                                            corBotao = 'linear-gradient(135deg, #f59e0b 0%, #ea580c 100%)'; // Laranja Vibrante de Saída
+                                            textoBotao = 'AVALIAR E REGISTRAR SAÍDA';
+                                            corTextoBotao = '#ffffff';
+                                        } else {
+                                            corBotao = 'linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)'; // Azul de Presença ativa
+                                            textoBotao = 'MARCAR ENTRADA';
+                                            corTextoBotao = '#ffffff';
+                                        }
+                                    } else {
+                                        corBotao = '#ffffff'; // Transparente/Branco conforme solicitado para travas
+                                        textoBotao = aud.acao === 'saida_travada' ? 'SAÍDA BLOQUEADA' : 'ENTRADA BLOQUEADA';
+                                        corTextoBotao = '#94a3b8';
+                                    }
+                                }
+
+                                return (
+                                    <div key={ev.id} style={{ border: '1px solid #cbd5e1', padding: '18px', borderRadius: '16px', backgroundColor: '#fff', textAlign: 'left', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)' }}>
+                                        <div style={{ fontSize: '17px', fontWeight: '800', marginBottom: '6px', color: '#1e293b', lineHeight: '1.2' }}>{ev.titulo}</div>
+                                        <div style={{ fontSize: '13px', color: '#475569', marginBottom: '4px' }}>📍 Local: <strong>{ev.local}</strong></div>
+                                        <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '12px' }}>⏰ Agenda: {ev.hora_inicio ? ev.hora_inicio.slice(0,5) : '--'} às {ev.hora_fim ? ev.hora_fim.slice(0,5) : '--'}</div>
+                                        
+                                        {/* BOTÃO INTELIGENTE: NUNCA FICA DISABLED, PERMITINDO O DISPARO DO MENSAGEM DO PORQUÊ DA TRAVA */}
                                         <button
-                                            key={ev.id} 
-                                            onClick={() => selecionarEvento(ev)} 
+                                            onClick={() => acionarBotaoFormacao(ev, aud)}
                                             style={{
-                                                display: 'flex', 
-                                                flexDirection: 'column', 
-                                                gap: '8px',
-                                                padding: '20px', 
-                                                borderRadius: '16px', 
-                                                cursor: 'pointer',
-                                                // MODIFICAÇÃO SOLICITADA: Nunca desativa o botão, mas altera a cor (azul ou branco/transparente)
-                                                border: botaoDeveFicarAzul ? 'none' : '1px solid #cbd5e1',
-                                                background: botaoDeveFicarAzul ? 'linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)' : '#ffffff',
-                                                color: botaoDeveFicarAzul ? '#ffffff' : '#334155',
-                                                boxShadow: botaoDeveFicarAzul ? '0 10px 25px -5px rgba(2, 132, 199, 0.4)' : 'none',
-                                                width: '100%', 
-                                                marginBottom: '16px', 
-                                                transition: 'all 0.25s ease',
-                                                textAlign: 'left'
+                                                width: '100%', padding: '12px', borderRadius: '8px', border: aud.liberado ? 'none' : '1px solid #cbd5e1',
+                                                background: corBotao, color: corTextoBotao, fontWeight: 'bold', fontSize: '13px', cursor: 'pointer',
+                                                transition: 'all 0.2s ease', boxShadow: aud.liberado ? '0 4px 12px rgba(2, 132, 199, 0.2)' : 'none'
                                             }}
                                         >
-                                            <div style={{ fontSize: '18px', fontWeight: '800', marginBottom: '4px', lineHeight: '1.2' }}>
-                                                {ev.titulo}
-                                            </div>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', opacity: 0.95 }}>
-                                                📍 {ev.local}
-                                            </div>
-                                            {ev.palestrante && (
-                                                <div style={{ 
-                                                    display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', opacity: 0.95, marginTop: '4px', 
-                                                    backgroundColor: botaoDeveFicarAzul ? 'rgba(255,255,255,0.2)' : '#f1f5f9', padding: '4px 8px', borderRadius: '6px', fontWeight: '600'
-                                                }}>
-                                                    🎤 Palestrante: {ev.palestrante}
-                                                </div>
-                                            )}
+                                            {textoBotao}
                                         </button>
-                                    );
-                                })}
+
+                                        {/* TEXTO INFORMATIVO DE ERRO LOGO ABAIXO DO BOTÃO EM CASO DE BLOQUEIO */}
+                                        {!aud.liberado && (
+                                            <div style={{ marginTop: '8px', fontSize: '11px', color: '#ef4444', fontWeight: '600', lineHeight: '1.3' }}>
+                                                ⚠️ {aud.motivo}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
                             {eventos.length === 0 && (
                                 <p style={{ color: '#94a3b8', fontStyle: 'italic', padding: '20px' }}>Nenhuma formação agendada para este horário.</p>
                             )}
@@ -431,12 +419,12 @@ export default function App() {
                         <div style={{ fontSize: '50px', marginBottom: '15px' }}>✍️</div>
                         <h3 style={{ color: '#1e3a8a', fontSize: '18px', fontWeight: '800', margin: '0 0 10px 0' }}>Sua presença foi salva!</h3>
                         <p style={{ fontSize: '14px', color: '#475569', lineHeight: '1.5', margin: 0 }}>
-                            Você está confirmado neste evento. Permaneça na formação. O aplicativo entrou em modo de repouso ecológico e encerrou o consumo de dados da rede local. 
+                            Você está confirmado neste evento. Permaneça na formação. O aplicativo entrou em modo de repouso ecológico e encerrou o consumo de dados da rede local para poupar o servidor.
                         </p>
                         <div style={{ marginTop: '20px', fontSize: '12px', color: '#0284c7', fontWeight: 'bold' }}>
                             🔒 Este aparelho está vinculado à sua matrícula.
                         </div>
-                        <button onClick={() => executarInicializacao(deviceToken)} style={{ marginTop: '25px', padding: '10px 20px', borderRadius: '8px', border: 'none', backgroundColor: '#e2e8f0', color: '#475569', fontWeight: 'bold', fontSize: '13px', cursor: 'pointer' }}>🔄 Atualizar / Liberar Saída</button>
+                        <button onClick={() => setStatusTela('listagem')} style={{ marginTop: '25px', padding: '10px 20px', borderRadius: '8px', border: 'none', backgroundColor: '#0284c7', color: '#fff', fontWeight: 'bold', fontSize: '13px', cursor: 'pointer' }}>👁️ VER STATUS DOS BOTÕES</button>
                     </div>
                 )}
 
@@ -465,7 +453,7 @@ export default function App() {
                     <div style={{ padding: '35px', borderRadius: '16px', backgroundColor: '#f0fdf4', border: '2px dashed #22c55e' }}>
                         <div style={{ fontSize: '60px', marginBottom: '15px' }}>🏆</div>
                         <h2 style={{ color: '#15803d', fontSize: '24px', fontWeight: '900', margin: '0 0 10px 0' }}>PRESENÇA REGISTRADA!</h2>
-                        <p style={{ color: '#166534', fontSize: '14px', margin: 0, lineHeight: '1.4' }}>Frequência salva. Entrando em modo estático de economia de banda...</p>
+                        <p style={{ color: '#166534', fontSize: '14px', margin: 0, lineHeight: '1.4' }}>Frequência salva com sucesso no banco de dados.</p>
                     </div>
                 )}
 
@@ -481,7 +469,7 @@ export default function App() {
                             <option value="1">⭐ Precisa melhorar bastante</option>
                         </select>
                         <textarea rows="3" value={comentario} onChange={(e) => setComentario(e.target.value)} placeholder="Comentários adicionais (Opcional)..." style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box', marginBottom: '15px' }} />
-                        <button type="submit" style={{ width: '100%', padding: '14px', borderRadius: '6px', border: 'none', backgroundColor: '#0284c7', color: '#fff', fontWeight: 'bold', cursor: 'pointer' }}>Enviar Avaliação & Concluir Saída</button>
+                        <button type="submit" style={{ width: '100%', padding: '14px', borderRadius: '6px', border: 'none', backgroundColor: '#ea580c', color: '#fff', fontWeight: 'bold', cursor: 'pointer' }}>Enviar Avaliação & Concluir Saída</button>
                     </form>
                 )}
 
@@ -495,9 +483,7 @@ export default function App() {
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '20px' }}>
                         <div style={{ fontSize: '70px', marginBottom: '20px' }}>✅</div>
                         <h2 style={{ color: '#166534', marginBottom: '15px', fontSize: '26px', fontWeight: '800' }}>Saída Registrada!</h2>
-                        <p style={{ color: '#4b5563', fontSize: '16px', lineHeight: '1.6', maxWidth: '320px', margin: '0 auto' }}>
-                            Sua participação e avaliação foram salvas com sucesso no sistema da Subsecretaria.
-                        </p>
+                        <p style={{ color: '#4b5563', fontSize: '16px' }}>Sua participação e avaliação foram salvas com sucesso no sistema.</p>
                     </div>
                 )}                  
             </div>

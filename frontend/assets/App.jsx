@@ -15,10 +15,16 @@ const calcularDistanciaCliente = (lat1, lon1, lat2, lon2) => {
     return R * c;
 };
 
-// Função auxiliar para converter string de horário "HH:MM" em objeto de data comparável
+// Obtém o momento atual cravado no fuso horário oficial de São Paulo
+const obterAgoraSaoPaulo = () => {
+    const dataTexto = new Date().toLocaleString("sv-SE", { timeZone: "America/Sao_Paulo" });
+    return new Date(dataTexto);
+};
+
+// Converte a string "HH:MM" vinda do banco em um objeto Date no fuso de São Paulo
 const obterDataComHorarioString = (horarioStr) => {
-    if (!horarioStr) return new Date();
-    const agora = new Date();
+    if (!horarioStr) return obterAgoraSaoPaulo();
+    const agora = obterAgoraSaoPaulo();
     const [horas, minutos] = horarioStr.split(':').map(Number);
     return new Date(agora.getFullYear(), agora.getMonth(), agora.getDate(), horas, minutos, 0);
 };
@@ -30,7 +36,6 @@ export default function App() {
     const [eventoSelecionado, setEventoSelecionado] = useState(null);
     const [coords, setCoords] = useState({ lat: null, lng: null });
     
-    // Estados do fluxo original preservados
     const [temEventoAtivo, setTemEventoAtivo] = useState(false);
     const [eventoAtivoId, setEventoAtivoId] = useState(null);
     
@@ -86,7 +91,6 @@ export default function App() {
                 setTemEventoAtivo(data.tem_evento_ativo || false);
                 setEventoAtivoId(data.evento_ativo_id || null);
                 
-                // Redirecionamento inteligente baseado no status do banco de dados
                 if (data.tem_evento_ativo) {
                     setStatusTela('aguardando_janela_saida');
                 } else {
@@ -139,11 +143,7 @@ export default function App() {
             navigator.geolocation.getCurrentPosition(
                 sucesso, 
                 (erroFatal) => {
-                    let msg = 'Erro ao buscar localização. ';
-                    if (erroFatal.code === 1) msg = 'Você negou a permissão de GPS no navegador.';
-                    else if (erroFatal.code === 2) msg = 'Sinal de localização totalmente indisponível.';
-                    else if (erroFatal.code === 3) msg = 'Tempo esgotado. Ligue o Wi-Fi para ajudar o GPS.';
-                    
+                    let msg = 'Erro ao buscar localização. Ative seu GPS físico.';
                     dispararAlerta8Segundos(msg, 'erro');
                 }, 
                 { enableHighAccuracy: false, timeout: 15000, maximumAge: 10000 }
@@ -158,12 +158,14 @@ export default function App() {
     };
 
     const selecionarEvento = async (ev) => {
+        // Validação imediata de sinal do GPS
         if (!coords.lat || !coords.lng) {
-            dispararAlerta8Segundos('Aguardando sinal de localização para liberar o acesso.', 'erro');
+            dispararAlerta8Segundos('Bloqueio: Aguardando sinal estável do seu posicionamento GPS.', 'erro');
             return;
         }
 
-        const agora = new Date();
+        // CÁLCULO DAS REGRAS EM TEMPO REAL (FUSO SÃO PAULO)
+        const agora = obterAgoraSaoPaulo();
         const dataInicioOficial = obterDataComHorarioString(ev.hora_inicio);
         const dataTerminoOficial = obterDataComHorarioString(ev.hora_fim);
 
@@ -172,6 +174,21 @@ export default function App() {
 
         const limiteSaidaInicio = new Date(dataTerminoOficial.getTime() - 30 * 60000);
         const limiteSaidaFim = new Date(dataTerminoOficial.getTime() + 30 * 60000);
+
+        const distancia = calcularDistanciaCliente(coords.lat, coords.lng, parseFloat(ev.latitude), parseFloat(ev.longitude));
+        const estaNoRaio = distancia <= 1000;
+        const dentroHorarioEntrada = agora >= limiteEntradaInicio && agora <= limiteEntradaFim;
+
+        // --- REGRA DE OURO: NOTIFICAÇÃO EXPLICATIVA EM CASO DE BOTÃO BRANCO ---
+        if (temEventoAtivo && ev.id !== eventoAtivoId) {
+            dispararAlerta8Segundos(`Regra Física Violada: Você já possui uma frequência em andamento no evento de ID ${eventoAtivoId}. Não é permitido estar em duas formações simultaneamente.`, 'erro');
+            return;
+        }
+
+        if (!estaNoRaio) {
+            dispararAlerta8Segundos(`Regra de Proximidade Violada: Você está a ${(distancia/1000).toFixed(1)}km do local. O registro só é liberado em um raio de até 1km do espaço físico oficial.`, 'erro');
+            return;
+        }
 
         try {
             const res = await fetch(`${API_URL}/api/v2/presenca/checar-status`, {
@@ -188,20 +205,21 @@ export default function App() {
             const data = await res.json();
 
             if (!res.ok) {
-                dispararAlerta8Segundos(data.error || 'Não foi possível validar seu acesso neste horário.', 'erro');
+                dispararAlerta8Segundos(data.error || 'Horário de acesso inválido.', 'erro');
                 return;
             }
 
             setEventoSelecionado(ev);
 
             if (data.status === 'completo') {
-                dispararAlerta8Segundos(`Frequência já concluída para esta formação:\n${ev.titulo}`, 'sucesso');
+                dispararAlerta8Segundos(`Operação Concluída: Sua presença de entrada e saída já foram salvas hoje para:\n${ev.titulo}`, 'sucesso');
                 return;
             }
 
             if (data.status === 'somente_entrada' || data.status === 'saida_pendente') {
+                // Valida horário de saída
                 if (agora < limiteSaidaInicio || agora > limiteSaidaFim) {
-                    dispararAlerta8Segundos('Acesso bloqueado: O registro de saída só é permitido entre 30 minutos antes e 30 minutos após o término previsto da formação.', 'erro');
+                    dispararAlerta8Segundos(`Regra de Horário Violada: O botão de saída só ficará ativo entre ${ev.hora_fim ? new Date(dataTerminoOficial.getTime() - 30*60000).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}) : '--'} e ${ev.hora_fim ? new Date(dataTerminoOficial.getTime() + 30*60000).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}) : '--'}.`, 'erro');
                     return;
                 }
                 setConteudoModal({
@@ -212,8 +230,9 @@ export default function App() {
                 return;
             }
 
-            if (agora < limiteEntradaInicio || agora > limiteEntradaFim) {
-                dispararAlerta8Segundos('Acesso bloqueado: A entrada só é permitida entre 30 minutos antes do início e até 30 minutos antes do término previsto.', 'erro');
+            // Valida horário de entrada
+            if (!dentroHorarioEntrada) {
+                dispararAlerta8Segundos(`Regra de Horário Violada: A entrada para este evento só é permitida de ${new Date(limiteEntradaInicio).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} até às ${new Date(limiteEntradaFim).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}.`, 'erro');
                 return;
             }
 
@@ -224,7 +243,7 @@ export default function App() {
             setStatusTela('modal_pergunta');
 
         } catch (err) {
-            dispararAlerta8Segundos('Sinal instável. Tente clicar novamente para conectar ao servidor.', 'erro');
+            dispararAlerta8Segundos('Conexão instável com o Cloudflare Tunnel. Tente novamente.', 'erro');
         }
     };
 
@@ -244,7 +263,6 @@ export default function App() {
                 });
                 if (res.ok) {
                     setStatusTela('presenca_confirmada_sucesso');
-                    
                     setTimeout(() => {
                         setTemEventoAtivo(true);
                         setEventoAtivoId(eventoSelecionado.id);
@@ -252,11 +270,12 @@ export default function App() {
                     }, 8000);
                 } else {
                     setStatusTela('listagem');
-                    dispararAlerta8Segundos('Erro ao salvar entrada.', 'erro');
+                    const d = await res.json();
+                    dispararAlerta8Segundos(d.error || 'Erro ao registrar frequência.', 'erro');
                 }
             } catch (e) {
                 setStatusTela('listagem');
-                dispararAlerta8Segundos('Falha ao registrar entrada.', 'erro');
+                dispararAlerta8Segundos('Erro fatal ao conectar no banco.', 'erro');
             }
         } else if (conteudoModal.tipo === 'pergunta_saida') {
             setStatusTela('pesquisa');
@@ -302,7 +321,6 @@ export default function App() {
     return (
         <div style={{ fontFamily: 'Arial, sans-serif', padding: '20px', maxWidth: '450px', margin: '0 auto', textAlign: 'center', color: '#333', minHeight: '100vh', display: 'flex', flexDirection: 'column', boxSizing: 'border-box', position: 'relative' }}>
             
-            {/* LOGOTIPO NO TOPO DA TELA DO CELULAR */}
             <div style={{ width: '100%', display: 'flex', justifyContent: 'center', marginBottom: '15px' }}>
                 <img src="/logap.png" alt="Logap" style={{ height: '32px', objectFit: 'contain' }} />
             </div>
@@ -312,7 +330,8 @@ export default function App() {
                     backgroundColor: alerta.tipo === 'sucesso' ? '#d4edda' : '#f8d7da',
                     color: alerta.tipo === 'sucesso' ? '#155724' : '#721c24',
                     padding: '15px', borderRadius: '8px', marginBottom: '20px',
-                    fontWeight: 'bold', border: `1px solid ${alerta.tipo === 'sucesso' ? '#c3e6cb' : '#f5c6cb'}`
+                    fontWeight: 'bold', border: `1px solid ${alerta.tipo === 'sucesso' ? '#c3e6cb' : '#f5c6cb'}`,
+                    fontSize: '13px', textAlign: 'left', lineHeight: '1.4'
                 }}>
                     {alerta.msg.split('\n').map((str, i) => <div key={i}>{str}</div>)}
                 </div>
@@ -351,32 +370,40 @@ export default function App() {
                                 .map(ev => {
                                     const distancia = coords.lat && coords.lng ? calcularDistanciaCliente(coords.lat, coords.lng, parseFloat(ev.latitude), parseFloat(ev.longitude)) : 9999;
                                     const estaNoRaio = distancia <= 1000;
-                                    const souOAtivo = temEventoAtivo && ev.id === eventoAtivoId;
+                                    
+                                    const horaInicioObj = obterDataComHorarioString(ev.hora_inicio);
+                                    const horaFimObj = obterDataComHorarioString(ev.hora_fim);
+                                    const agoraSP = obterAgoraSaoPaulo();
+                                    
+                                    const dentroHorarioEntrada = agoraSP >= new Date(horaInicioObj.getTime() - 30 * 60000) && agoraSP <= new Date(horaFimObj.getTime() - 30 * 60000);
+                                    
+                                    // REGRA ESTREITA: Só fica AZUL se estiver no local E no horário certo de entrada
+                                    const botaoDeveFicarAzul = estaNoRaio && dentroHorarioEntrada;
 
                                     return (
                                         <button
                                             key={ev.id} 
                                             onClick={() => selecionarEvento(ev)} 
-                                            disabled={!estaNoRaio}
                                             style={{
                                                 display: 'flex', 
                                                 flexDirection: 'column', 
                                                 gap: '8px',
                                                 padding: '20px', 
                                                 borderRadius: '16px', 
-                                                border: estaNoRaio ? 'none' : '1px solid #e5e7eb',
-                                                cursor: estaNoRaio ? 'pointer' : 'not-allowed',
-                                                background: souOAtivo ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)' : (estaNoRaio ? 'linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)' : '#f8fafc'),
-                                                color: estaNoRaio ? '#ffffff' : '#9ca3af',
-                                                boxShadow: estaNoRaio ? `0 10px 25px -5px ${souOAtivo ? 'rgba(217, 119, 6, 0.4)' : 'rgba(2, 132, 199, 0.4)'}` : 'none',
+                                                cursor: 'pointer',
+                                                // MODIFICAÇÃO SOLICITADA: Nunca desativa o botão, mas altera a cor (azul ou branco/transparente)
+                                                border: botaoDeveFicarAzul ? 'none' : '1px solid #cbd5e1',
+                                                background: botaoDeveFicarAzul ? 'linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)' : '#ffffff',
+                                                color: botaoDeveFicarAzul ? '#ffffff' : '#334155',
+                                                boxShadow: botaoDeveFicarAzul ? '0 10px 25px -5px rgba(2, 132, 199, 0.4)' : 'none',
                                                 width: '100%', 
                                                 marginBottom: '16px', 
-                                                transition: 'all 0.3s ease',
+                                                transition: 'all 0.25s ease',
                                                 textAlign: 'left'
                                             }}
                                         >
                                             <div style={{ fontSize: '18px', fontWeight: '800', marginBottom: '4px', lineHeight: '1.2' }}>
-                                                {souOAtivo ? `⏳ EM ANDAMENTO: ${ev.titulo}` : ev.titulo}
+                                                {ev.titulo}
                                             </div>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', opacity: 0.95 }}>
                                                 📍 {ev.local}
@@ -384,29 +411,21 @@ export default function App() {
                                             {ev.palestrante && (
                                                 <div style={{ 
                                                     display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', opacity: 0.95, marginTop: '4px', 
-                                                    backgroundColor: estaNoRaio ? 'rgba(255,255,255,0.2)' : '#e2e8f0', padding: '4px 8px', borderRadius: '6px', fontWeight: '600'
+                                                    backgroundColor: botaoDeveFicarAzul ? 'rgba(255,255,255,0.2)' : '#f1f5f9', padding: '4px 8px', borderRadius: '6px', fontWeight: '600'
                                                 }}>
                                                     🎤 Palestrante: {ev.palestrante}
-                                                </div>
-                                            )}
-                                            {!estaNoRaio && coords.lat && (
-                                                <div style={{ marginTop: '12px', padding: '10px', borderRadius: '8px', backgroundColor: '#fee2e2', color: '#b91c1c', fontSize: '13px', fontWeight: 'bold', textAlign: 'center', width: '100%', boxSizing: 'border-box' }}>
-                                                    🔒 Dirija-se ao local para liberar o acesso.
-                                                </div>
-                                            )}
-                                            {!coords.lat && (
-                                                <div style={{ marginTop: '12px', fontSize: '13px', fontStyle: 'italic', opacity: 0.8, textAlign: 'center', width: '100%' }}>
-                                                    📡 Buscando sinal para liberar acesso...
                                                 </div>
                                             )}
                                         </button>
                                     );
                                 })}
+                            {eventos.length === 0 && (
+                                <p style={{ color: '#94a3b8', fontStyle: 'italic', padding: '20px' }}>Nenhuma formação agendada para este horário.</p>
+                            )}
                         </div>
                     </div>
                 )}
 
-                {/* MODO DE REPOUSO DA TELA (AMARRAÇÃO MANTIDA E REQUISIÇÕES CONGELADAS PARA FECHAR O TÚNEL) */}
                 {statusTela === 'aguardando_janela_saida' && (
                     <div style={{ padding: '30px', borderRadius: '16px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0' }}>
                         <div style={{ fontSize: '50px', marginBottom: '15px' }}>✍️</div>
@@ -479,14 +498,10 @@ export default function App() {
                         <p style={{ color: '#4b5563', fontSize: '16px', lineHeight: '1.6', maxWidth: '320px', margin: '0 auto' }}>
                             Sua participação e avaliação foram salvas com sucesso no sistema da Subsecretaria.
                         </p>
-                        <p style={{ color: '#0284c7', fontSize: '15px', marginTop: '20px', fontWeight: 'bold' }}>
-                            Agradecemos a sua colaboração!
-                        </p>
                     </div>
                 )}                  
             </div>
 
-            {/* RODAPÉ INSTITUCIONAL FIXADO */}
             <div style={{ width: '100%', fontSize: '10px', color: '#94a3b8', textAlign: 'center', padding: '10px 0', borderTop: '1px solid #f1f5f9', position: 'absolute', bottom: 0, left: 0, right: 0 }}>
                 Desenvolvido pela Subsecretaria Adjunta de Inovação e Tecnologia
             </div>

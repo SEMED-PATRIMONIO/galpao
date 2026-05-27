@@ -139,7 +139,7 @@ export default function App() {
             }
 
             if (!estaNoRaio) {
-                novoEstadoAuditoria[ev.id] = { carregando: false, liberado: false, motivo: `Bloqueio: Fora do raio permitido. Distância atual: ${(distancia/1000).toFixed(1)}km.`, acao: 'bloqueado' };
+                novoEstadoAuditoria[ev.id] = { carregando: false, liberado: false, motivo: `Bloqueio: Precisa estar no local. Distância atual: ${(distancia/1000).toFixed(1)}km.`, acao: 'bloqueado' };
                 continue;
             }
 

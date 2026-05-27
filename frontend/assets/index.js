@@ -143,14 +143,18 @@ app.post('/api/v2/dispositivo/associar', async (req, res) => {
     const { matricula, nome, hardware_id } = req.body;
 
     try {
-        // Validação básica de segurança para garantir o preenchimento dos campos
+        // Validação básica de segurança
         if (!matricula || !nome) {
             return res.status(400).json({ error: 'A matrícula e o nome completo são obrigatórios.' });
         }
 
+        // CORREÇÃO: Buscamos o ID do participante para preencher a coluna corretamente
+        const resPart = await pool.query('SELECT id FROM participantes WHERE matricula = $1', [matricula]);
+        const pId = resPart.rows.length > 0 ? resPart.rows[0].id : null;
+
         // 1. ESCUDO PROTOCOLO ANTI-ABA ANÔNIMA
         if (hardware_id) {
-            // Cria a coluna de impressão digital silenciosamente caso ela não exista na tabela
+            // Cria a coluna de impressão digital silenciosamente caso ela não exista
             await pool.query(`ALTER TABLE dispositivos ADD COLUMN IF NOT EXISTS hardware_fingerprint VARCHAR(255)`).catch(() => {});
 
             // Regra Básica de Física: Proíbe que este mesmo aparelho físico (hardware_id)
@@ -167,17 +171,15 @@ app.post('/api/v2/dispositivo/associar', async (req, res) => {
                 await pool.query(`
                     INSERT INTO log_fraudes (matricula, motivo) 
                     VALUES ($1, 'TENTATIVA_VINCULO_MULTIPLO_NO_MESMO_APARELHO_FISICO')
-                `).catch(() => {});
+                `, [matricula]).catch(() => {});
 
                 return res.status(403).json({ 
-                    error: 'Bloqueio de Segurança: Detectamos que este aparelho físico (celular/computador) já foi utilizado para vincular a matrícula de outro professor. O uso deste portal é estritamente pessoal e intransferível.' 
+                    error: 'Bloqueio de Segurança: Detectamos que este aparelho físico (celular/computador) já foi utilizado para vincular a matrícula de outro professor.' 
                 });
             }
         }
 
         // 2. REGRA DE EXCLUSIVIDADE POR MATRÍCULA
-        // Se este mesmo professor já tinha um dispositivo associado anteriormente, 
-        // desativamos o antigo para que apenas o novo acesso passe a ser válido (Evita clones de conta)
         await pool.query(`
             UPDATE dispositivos 
             SET ativo = false 
@@ -185,18 +187,15 @@ app.post('/api/v2/dispositivo/associar', async (req, res) => {
         `, [matricula]);
 
         // 3. GERAÇÃO DE NOVO TOKEN EXCLUSIVO DE SESSÃO
-        // Geramos um UUID seguro de 32 bits para servir como o novo device_token deste aparelho
         const novoDeviceToken = crypto.randomUUID();
 
-        // 4. GRAVAÇÃO DO COMPROMISSO NA BASE DE DADOS (CORRIGIDO PARA A SUA TABELA)
-        // Inserimos estritamente os campos que existem na sua tabela 'dispositivos'
+        // 4. GRAVAÇÃO DO COMPROMISSO (COM PARTICIPANTE_ID CORRIGIDO)
         await pool.query(`
-            INSERT INTO dispositivos (participante_matricula, device_token, ativo, hardware_fingerprint)
-            VALUES ($1, $2, true, $3)
-        `, [matricula, novoDeviceToken, hardware_id || null]);
+            INSERT INTO dispositivos (participante_id, participante_matricula, device_token, ativo, hardware_fingerprint)
+            VALUES ($1, $2, $3, true, $4)
+        `, [pId, matricula, novoDeviceToken, hardware_id || null]);
 
-        // 5. RETORNO DE CONFIANÇA PARA O PORTAL DO PROFESSOR
-        // Devolvemos o token gerado para que o frontend o armazene no localStorage do navegador
+        // 5. RETORNO DE CONFIANÇA
         return res.json({
             status: 'sucesso',
             device_token: novoDeviceToken

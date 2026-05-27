@@ -15,15 +15,20 @@ const calcularDistanciaCliente = (lat1, lon1, lat2, lon2) => {
     return R * c;
 };
 
-// Força o fuso horário estrito de São Paulo, Brasil
+// CORREÇÃO CRÍTICA 1: Formatação blindada para não gerar "Invalid Date" em iPhones/Safari
 const obterAgoraSaoPaulo = () => {
-    const dataTexto = new Date().toLocaleString("sv-SE", { timeZone: "America/Sao_Paulo" });
-    return new Date(dataTexto);
+    try {
+        const dataTexto = new Date().toLocaleString("sv-SE", { timeZone: "America/Sao_Paulo" }).replace(' ', 'T');
+        const data = new Date(dataTexto);
+        return isNaN(data.getTime()) ? new Date() : data;
+    } catch (e) {
+        return new Date();
+    }
 };
 
 const obterDataComHorarioString = (horarioStr) => {
-    if (!horarioStr) return obterAgoraSaoPaulo();
     const agora = obterAgoraSaoPaulo();
+    if (!horarioStr) return agora;
     const [horas, minutos] = horarioStr.split(':').map(Number);
     return new Date(agora.getFullYear(), agora.getMonth(), agora.getDate(), horas, minutos, 0);
 };
@@ -46,12 +51,11 @@ export default function App() {
 
     const [estrelas, setEstrelas] = useState(5);
     const [comentario, setComentario] = useState('');
-
-    // Estado inteligente para guardar o resultado da auditoria preventiva de cada evento de forma isolada
     const [auditoriaEventos, setAuditoriaEventos] = useState({});
 
+    // CORREÇÃO CRÍTICA 2: Removido o erro de digitação que causava crash silencioso (ReferenceError)
     const dispararAlerta8Segundos = (mensagem, tipo = 'erro', acaoPosterior = null) => {
-        setAlerta({ visivel: true, msg: message || mensagem, tipo });
+        setAlerta({ visivel: true, msg: mensagem, tipo });
         setTimeout(() => {
             setAlerta({ visivel: false, msg: '', tipo: 'sucesso' });
             if (acaoPosterior) acaoPosterior();
@@ -66,7 +70,6 @@ export default function App() {
         executarInicializacao(deviceToken);
     }, [deviceToken]);
 
-    // Dispara a reavaliação de regras preventivas sempre que as coordenadas do GPS ou a lista de eventos mudarem
     useEffect(() => {
         if (eventos.length > 0 && coords.lat && coords.lng) {
             processarAuditoriaPreventiva();
@@ -114,7 +117,6 @@ export default function App() {
         const agora = obterAgoraSaoPaulo();
 
         for (let ev of eventos) {
-            // Inicializa o card em estado de processamento visual
             if (!novoEstadoAuditoria[ev.id]) {
                 novoEstadoAuditoria[ev.id] = { carregando: true, liberado: false, motivo: 'Analisando regras...', acao: 'entrada' };
             }
@@ -131,28 +133,23 @@ export default function App() {
             const distancia = calcularDistanciaCliente(coords.lat, coords.lng, parseFloat(ev.latitude), parseFloat(ev.longitude));
             const estaNoRaio = distancia <= 1000;
 
-            // 1. CHECAGEM RÍGIDA DE DUPLICIDADE FÍSICA NO ANDAMENTO DO DIA
             if (temEventoAtivo && ev.id !== eventoAtivoId) {
                 novoEstadoAuditoria[ev.id] = { carregando: false, liberado: false, motivo: `Bloqueio: Você já possui uma frequência ativa no evento de ID ${eventoAtivoId}.`, acao: 'bloqueado' };
                 continue;
             }
 
-            // 2. CHECAGEM DE PROXIMIDADE GEOGRÁFICA
             if (!estaNoRaio) {
                 novoEstadoAuditoria[ev.id] = { carregando: false, liberado: false, motivo: `Bloqueio: Fora do raio permitido. Distância atual: ${(distancia/1000).toFixed(1)}km.`, acao: 'bloqueado' };
                 continue;
             }
 
-            // 3. DETERMINAÇÃO DINÂMICA SE É ENTRADA OU SAÍDA BASEADO NO CORE DO PROJETO
             if (temEventoAtivo && ev.id === eventoAtivoId) {
-                // O professor já está dentro deste evento específico. Validando regra de saída.
                 if (agora < limiteSaidaInicio || agora > limiteSaidaFim) {
                     novoEstadoAuditoria[ev.id] = { carregando: false, liberado: false, motivo: `Bloqueio: Saída permitida apenas entre ${limiteSaidaInicio.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})} e ${limiteSaidaFim.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})}.`, acao: 'saida_travada' };
                 } else {
                     novoEstadoAuditoria[ev.id] = { carregando: false, liberado: true, motivo: '', acao: 'saida' };
                 }
             } else {
-                // Caso padrão: Validando regra para nova entrada
                 if (agora < limiteEntradaInicio || agora > limiteEntradaFim) {
                     novoEstadoAuditoria[ev.id] = { carregando: false, liberado: false, motivo: `Bloqueio: Entrada permitida apenas entre ${limiteEntradaInicio.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})} e ${limiteEntradaFim.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})}.`, acao: 'entrada_travada' };
                 } else {
@@ -211,27 +208,32 @@ export default function App() {
     };
 
     const acionarBotaoFormacao = (ev, statusAuditoria) => {
-        // Se o botão foi clicado estando bloqueado por regra de negócio, dispara log de infração preventivo
-        if (!statusAuditoria || !statusAuditoria.liberado) {
-            dispararAlerta8Segundos(statusAuditoria?.motivo || "Ação bloqueada pelas regras de validação.", "erro");
-            
-            // Grava a tentativa inválida silenciosamente na tabela log_fraudes do backend
-            fetch(`${API_URL}/api/v2/presenca/checar-status`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ device_token: deviceToken, evento_id: ev.id, latitude: coords.lat, longitude: coords.lng })
-            }).catch(() => {});
-            return;
-        }
+        try {
+            // Se o botão for tocado estando bloqueado, dispara o alerta preventivo
+            if (!statusAuditoria || !statusAuditoria.liberado) {
+                dispararAlerta8Segundos(statusAuditoria?.motivo || "Ação bloqueada pelas regras de validação.", "erro");
+                
+                // Grava infração silenciosamente
+                fetch(`${API_URL}/api/v2/presenca/checar-status`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ device_token: deviceToken, evento_id: ev.id, latitude: coords.lat, longitude: coords.lng })
+                }).catch(() => {});
+                return;
+            }
 
-        setEventoSelecionado(ev);
-        
-        if (statusAuditoria.acao === 'saida') {
-            setConteudoModal({ tipo: 'pergunta_saida', texto: `Confirma a realização da avaliação e encerramento da sua presença no evento "${ev.titulo}"?` });
-            setStatusTela('modal_pergunta');
-        } else {
-            setConteudoModal({ tipo: 'confirmar_entrada', texto: `Confirmar presença na formação: "${ev.titulo}"?` });
-            setStatusTela('modal_pergunta');
+            // Se for liberado, prossegue com segurança
+            setEventoSelecionado(ev);
+            
+            if (statusAuditoria.acao === 'saida') {
+                setConteudoModal({ tipo: 'pergunta_saida', texto: `Confirma a realização da avaliação e encerramento da sua presença no evento "${ev.titulo}"?` });
+                setStatusTela('modal_pergunta');
+            } else {
+                setConteudoModal({ tipo: 'confirmar_entrada', texto: `Confirmar presença na formação: "${ev.titulo}"?` });
+                setStatusTela('modal_pergunta');
+            }
+        } catch (error) {
+            dispararAlerta8Segundos("Ocorreu um erro interno ao processar o botão.", "erro");
         }
     };
 
@@ -254,7 +256,7 @@ export default function App() {
                     setTimeout(() => {
                         setTemEventoAtivo(true);
                         setEventoAtivoId(eventoSelecionado.id);
-                        executarInicializacao(deviceToken); // Recarrega o status do ecossistema mantendo o token amarrado
+                        executarInicializacao(deviceToken);
                     }, 8000);
                 } else {
                     setStatusTela('listagem');
@@ -357,24 +359,23 @@ export default function App() {
                             {eventos.map(ev => {
                                 const aud = auditoriaEventos[ev.id] || { carregando: true, liberado: false, motivo: 'Aguardando GPS...', acao: 'entrada' };
                                 
-                                // Determinação da cor estrita do botão conforme as regras analisadas
-                                let corBotao = '#e2e8f0'; // Cor padrão cinza neutro (Aguarde/Bloqueado)
+                                let corBotao = '#e2e8f0'; 
                                 let textoBotao = 'Aguarde...';
                                 let corTextoBotao = '#64748b';
 
                                 if (!aud.carregando) {
                                     if (aud.liberado) {
                                         if (aud.acao === 'saida') {
-                                            corBotao = 'linear-gradient(135deg, #f59e0b 0%, #ea580c 100%)'; // Laranja Vibrante de Saída
+                                            corBotao = 'linear-gradient(135deg, #f59e0b 0%, #ea580c 100%)'; 
                                             textoBotao = 'AVALIAR E REGISTRAR SAÍDA';
                                             corTextoBotao = '#ffffff';
                                         } else {
-                                            corBotao = 'linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)'; // Azul de Presença ativa
+                                            corBotao = 'linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)'; 
                                             textoBotao = 'MARCAR ENTRADA';
                                             corTextoBotao = '#ffffff';
                                         }
                                     } else {
-                                        corBotao = '#ffffff'; // Transparente/Branco conforme solicitado para travas
+                                        corBotao = '#ffffff'; 
                                         textoBotao = aud.acao === 'saida_travada' ? 'SAÍDA BLOQUEADA' : 'ENTRADA BLOQUEADA';
                                         corTextoBotao = '#94a3b8';
                                     }
@@ -386,7 +387,6 @@ export default function App() {
                                         <div style={{ fontSize: '13px', color: '#475569', marginBottom: '4px' }}>📍 Local: <strong>{ev.local}</strong></div>
                                         <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '12px' }}>⏰ Agenda: {ev.hora_inicio ? ev.hora_inicio.slice(0,5) : '--'} às {ev.hora_fim ? ev.hora_fim.slice(0,5) : '--'}</div>
                                         
-                                        {/* BOTÃO INTELIGENTE: NUNCA FICA DISABLED, PERMITINDO O DISPARO DO MENSAGEM DO PORQUÊ DA TRAVA */}
                                         <button
                                             onClick={() => acionarBotaoFormacao(ev, aud)}
                                             style={{
@@ -398,7 +398,6 @@ export default function App() {
                                             {textoBotao}
                                         </button>
 
-                                        {/* TEXTO INFORMATIVO DE ERRO LOGO ABAIXO DO BOTÃO EM CASO DE BLOQUEIO */}
                                         {!aud.liberado && (
                                             <div style={{ marginTop: '8px', fontSize: '11px', color: '#ef4444', fontWeight: '600', lineHeight: '1.3' }}>
                                                 ⚠️ {aud.motivo}
@@ -453,7 +452,7 @@ export default function App() {
                     <div style={{ padding: '35px', borderRadius: '16px', backgroundColor: '#f0fdf4', border: '2px dashed #22c55e' }}>
                         <div style={{ fontSize: '60px', marginBottom: '15px' }}>🏆</div>
                         <h2 style={{ color: '#15803d', fontSize: '24px', fontWeight: '900', margin: '0 0 10px 0' }}>PRESENÇA REGISTRADA!</h2>
-                        <p style={{ color: '#166534', fontSize: '14px', margin: 0, lineHeight: '1.4' }}>Frequência salva com sucesso no banco de dados.</p>
+                        <p style={{ color: '#166534', fontSize: '14px', margin: 0, lineHeight: '1.4' }}>Frequência salva. Entrando em modo estático de economia de banda...</p>
                     </div>
                 )}
 

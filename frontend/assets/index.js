@@ -534,20 +534,38 @@ app.put('/api/v2/admin-exclusivo/usuarios/:id', verificarTokenAdminExclusivo, as
 });
 
 // NOVA ROTA CADASTRO DE EVENTOS - ISOLADA E PROTEGIDA
+// NOVA ROTA CADASTRO DE EVENTOS - COM BUSCA AUTOMÁTICA DE DADOS DO LOCAL
 app.post('/api/v2/admin-exclusivo/eventos', verificarTokenAdminExclusivo, async (req, res) => {
     const {
         titulo, palestrante, data_evento, hora_inicio, hora_fim, carga_horaria,
         local_id, local, endereco, latitude, longitude,
-        setor_id_1, setor_id_2, setor_id_3, area_id, publicos
+        setor_id_1, sector_id_2, sector_id_3, area_id, publicos
     } = req.body;
 
     try {
         const token_qr = uuidv4(); // Gera o token UUID único para o QR Code
         const publico_alvo_id = publicos && publicos.length > 0 ? publicos[0] : null;
 
+        let finalLocal = local;
+        let finalEndereco = endereco;
+        let finalLat = latitude;
+        let finalLng = longitude;
+
+        // ASSOCIAÇÃO AUTOMÁTICA: Busca os dados geográficos direto na tabela 'locais' se o ID existir
+        if (local_id) {
+            const buscaLocal = await pool.query('SELECT nome, endereco, latitude, longitude FROM locais WHERE id = $1', [parseInt(local_id)]);
+            if (buscaLocal.rows.length > 0) {
+                const dadosDoLocal = buscaLocal.rows[0];
+                finalLocal = dadosDoLocal.nome;
+                finalEndereco = dadosDoLocal.endereco;
+                finalLat = dadosDoLocal.latitude;
+                finalLng = dadosDoLocal.longitude;
+            }
+        }
+
         await pool.query('BEGIN');
 
-        // Insere na tabela principal 'eventos'
+        // Insere na tabela principal 'eventos' com os dados consolidados do local
         const queryEvento = `
             INSERT INTO eventos (
                 titulo, palestrante, data_evento, hora_inicio, hora_fim, carga_horaria,
@@ -559,11 +577,11 @@ app.post('/api/v2/admin-exclusivo/eventos', verificarTokenAdminExclusivo, async 
 
         const valoresEvento = [
             titulo, palestrante, data_evento, hora_inicio, hora_fim, parseFloat(carga_horaria),
-            local_id ? parseInt(local_id) : null, local, endereco, 
-            latitude ? parseFloat(latitude) : null, longitude ? parseFloat(longitude) : null,
-            setor_id_1 ? parseInt(setor_id_1) : null, 
-            setor_id_2 ? parseInt(setor_id_2) : null, 
-            setor_id_3 ? parseInt(setor_id_3) : null, 
+            local_id ? parseInt(local_id) : null, finalLocal, finalEndereco, 
+            finalLat ? parseFloat(finalLat) : null, finalLng ? parseFloat(finalLng) : null,
+            req.body.setor_id_1 ? parseInt(req.body.setor_id_1) : null, 
+            req.body.setor_id_2 ? parseInt(req.body.setor_id_2) : null, 
+            req.body.setor_id_3 ? parseInt(req.body.setor_id_3) : null, 
             area_id ? parseInt(area_id) : null,
             publico_alvo_id, token_qr
         ];

@@ -6,7 +6,7 @@ const estilos = {
     brand: { fontSize: '18px', fontWeight: 'bold', color: '#fff', marginBottom: '25px', textAlign: 'center', borderBottom: '1px solid #1e293b', paddingBottom: '15px' },
     menu: { listStyle: 'none', padding: 0, margin: 0, flex: 1 },
     main: { flex: 1, padding: '30px', boxSizing: 'border-box' },
-    topo: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px', backgroundColor: '#fff', padding: '15px 20px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' },
+    topo: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px', backgroundColor: '#fff', padding: '15px 20px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', position: 'relative' },
     card: { backgroundColor: '#fff', padding: '20px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', marginBottom: '20px' },
     gridFiltros: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px', marginBottom: '15px' },
     tabela: { width: '100%', borderCollapse: 'collapse', marginTop: '10px', fontSize: '13px' },
@@ -20,10 +20,10 @@ const estilos = {
     entradaForm: { padding: '8px', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '13px', width: '100%', boxSizing: 'border-box' },
     btnAdicionar: { position: 'absolute', left: '50%', transform: 'translateX(-50%)', backgroundColor: '#16a34a', color: '#fff', padding: '8px 16px', borderRadius: '6px', border: 'none', fontWeight: 'bold', fontSize: '13px', cursor: 'pointer', boxShadow: '0 2px 4px rgba(22,163,74,0.2)' },
     modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.3)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000, padding: '20px' },
-    modalGlass: { backgroundColor: 'rgba(255, 255, 255, 0.75)', border: '1px solid rgba(255, 255, 255, 0.4)', borderRadius: '16px', boxShadow: '0 8px 32px 0 rgba(15, 23, 42, 0.15)', width: '100%', maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto', padding: '30px', boxSizing: 'border-box' }
+    modalGlass: { backgroundColor: 'rgba(255, 255, 255, 0.8)', border: '1px solid rgba(255, 255, 255, 0.4)', borderRadius: '16px', boxShadow: '0 8px 32px 0 rgba(15, 23, 42, 0.15)', width: '100%', maxWidth: '600px', maxHeight: '95vh', overflowY: 'auto', padding: '25px', boxSizing: 'border-box' }
 };
 
-// Movido para fora do componente para evitar erros de inicialização (Temporal Dead Zone) no build de produção
+// Movido para fora do componente para evitar TDZ no build de produção
 const obterUsuarioSeguro = () => {
     try {
         const dadosSalvos = localStorage.getItem('admin_user');
@@ -81,6 +81,125 @@ export default function App() {
         }
     }, [token, view]);
 
+    // Inicialização segura do Mapa Leaflet dinamicamente
+    useEffect(() => {
+        if (!modalLocalAberto) {
+            if (mapaLeaflet) {
+                mapaLeaflet.remove();
+                setMapaLeaflet(null);
+                setMarcadorMapa(null);
+            }
+            return;
+        }
+
+        const iniciarInstanciaMapa = () => {
+            setTimeout(() => {
+                const el = document.getElementById('mapa-leaflet');
+                if (!el) return;
+
+                // Coordenadas padrão de Queimados, RJ
+                const defaultLat = -22.7161;
+                const defaultLng = -43.5556;
+
+                const centroLat = isEditando && form.latitude ? parseFloat(form.latitude) : defaultLat;
+                const centroLng = isEditando && form.longitude ? parseFloat(form.longitude) : defaultLng;
+
+                const map = window.L.map('mapa-leaflet').setView([centroLat, centroLng], 14);
+                window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap'
+                }).addTo(map);
+
+                let marker = null;
+                if (isEditando && form.latitude && form.longitude) {
+                    marker = window.L.marker([centroLat, centroLng]).addTo(map);
+                }
+
+                map.on('click', async (e) => {
+                    const { lat, lng } = e.latlng;
+                    if (marker) {
+                        marker.setLatLng([lat, lng]);
+                    } else {
+                        marker = window.L.marker([lat, lng]).addTo(map);
+                        setMarcadorMapa(marker);
+                    }
+
+                    setForm(prev => ({ ...prev, latitude: lat.toFixed(8), longitude: lng.toFixed(8) }));
+
+                    // Geolocalização Reversa Automática (Nominatim OpenStreetMap)
+                    try {
+                        const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
+                        if (r.ok) {
+                            const d = await r.json();
+                            setForm(prev => ({ ...prev, endereco: d.display_name || '' }));
+                        }
+                    } catch (err) {
+                        console.error(err);
+                    }
+                });
+
+                setMapaLeaflet(map);
+                setMarcadorMapa(marker);
+            }, 350);
+        };
+
+        if (!window.L) {
+            const link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+            document.head.appendChild(link);
+
+            const script = document.createElement('script');
+            script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+            script.onload = iniciarInstanciaMapa;
+            document.body.appendChild(script);
+        } else {
+            iniciarInstanciaMapa();
+        }
+    }, [modalLocalAberto]);
+
+    const buscarCidadeNoMapa = async () => {
+        if (!pesquisaCidade.trim()) return;
+        try {
+            const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(pesquisaCidade)}`);
+            if (r.ok) {
+                const dados = await r.json();
+                if (dados && dados.length > 0) {
+                    const { lat, lon, display_name } = dados[0];
+                    const latNum = parseFloat(lat);
+                    const lngNum = parseFloat(lon);
+
+                    if (mapaLeaflet) {
+                        mapaLeaflet.flyTo([latNum, lngNum], 15);
+                        let m = marcadorMapa;
+                        if (m) {
+                            m.setLatLng([latNum, lngNum]);
+                        } else {
+                            m = window.L.marker([latNum, lngNum]).addTo(mapaLeaflet);
+                            setMarcadorMapa(m);
+                        }
+                        setForm(prev => ({
+                            ...prev,
+                            latitude: latNum.toFixed(8),
+                            longitude: lngNum.toFixed(8),
+                            endereco: display_name || ''
+                        }));
+                    }
+                } else {
+                    alert('Nenhum local localizado com este nome.');
+                }
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
+    const mudarAbaNavegacao = (novaAba) => {
+        setView(novaAba);
+        setSelecionado(null);
+        setForm({});
+        setErro('');
+    };
+
     const carregarCombosAuxiliares = async () => {
         try {
             const headers = { 'Authorization': `Bearer ${token}` };
@@ -132,10 +251,7 @@ export default function App() {
         try {
             const res = await fetch(`${API_URL}/api/v2/admin-exclusivo/auth/alterar-senha-obrigatoria`, {
                 method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ usuario: user.usuario, novaSenha })
             });
             if (res.ok) {
@@ -233,19 +349,38 @@ export default function App() {
         }
     };
 
+    const submeterLocalExclusivo = async (e) => {
+        e.preventDefault();
+        if (!form.nome || !form.endereco || !form.latitude || !form.longitude) {
+            return alert('Por favor, defina o nome do espaço e marque a localização no mapa.');
+        }
+        try {
+            const urlFinal = isEditando ? `${API_URL}/api/v2/admin-exclusivo/locais/${selecionado.id}` : `${API_URL}/api/v2/admin-exclusivo/locais`;
+            const metodo = isEditando ? 'PUT' : 'POST';
+
+            const res = await fetch(urlFinal, {
+                method: metodo,
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify(form)
+            });
+            if (!res.ok) throw new Error('Não foi possível gravar o local.');
+            setModalLocalAberto(false);
+            setForm({});
+            setSelecionado(null);
+            setPesquisaCidade('');
+            executarListagem();
+        } catch (err) {
+            alert(err.message);
+        }
+    };
+
     const processarSaidaManualAdmin = async () => {
         if (!horaSaidaManualInput) return alert('Por favor, informe o horário de saída.');
         try {
             const res = await fetch(`${API_URL}/api/v2/admin-exclusivo/frequencias/saida-manual`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                    frequencia_id: selecionado.id,
-                    hora_saida: horaSaidaManualInput
-                })
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ frequencia_id: selecionado.id, hora_saida: horaSaidaManualInput })
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Erro operational.');
@@ -263,10 +398,7 @@ export default function App() {
         try {
             const res = await fetch(`${API_URL}/api/v2/admin-exclusivo/frequencias/atualizar-tempo-esquecimento`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ frequencia_id: selecionado.id })
             });
             const data = await res.json();
@@ -291,7 +423,7 @@ export default function App() {
                     body: JSON.stringify({ novaSenha })
                 });
                 if (!res.ok) throw new Error('Erro ao redefinir.');
-                alert('Sua senha de operador foi atualizada.');
+                alert('Sua senha de operador foi updated.');
                 fecharFormularioEModais();
                 return;
             }
@@ -319,9 +451,7 @@ export default function App() {
     const iniciarEdicaoItem = (item) => {
         setSelecionado(item);
         setIsEditando(true);
-        if (view === 'locais') {
-            setForm({ nome: item.nome, endereco: item.endereco, latitude: item.latitude, longitude: item.longitude });
-        } else if (view === 'participantes') {
+        if (view === 'participantes') {
             setForm({ nome_completo: item.nome_completo, ativo: item.ativo });
         } else if (['publico-alvo', 'setores', 'areas'].includes(view)) {
             setForm({ nome: item.nome });
@@ -387,16 +517,16 @@ export default function App() {
             <div style={estilos.sidebar}>
                 <div style={estilos.brand}>SEMED - Formações</div>
                 <ul style={estilos.menu}>
-                    <li><button onClick={() => setView('eventos')} style={view === 'eventos' ? estilos.btnMenuAtivo : estilos.btnMenu}>📅 Formações</button></li>
-                    <li><button onClick={() => setView('locais')} style={view === 'locais' ? estilos.btnMenuAtivo : estilos.btnMenu}>📍 Locais</button></li>
-                    <li><button onClick={() => setView('participantes')} style={view === 'participantes' ? estilos.btnMenuAtivo : estilos.btnMenu}>👥 Participantes</button></li>
-                    <li><button onClick={() => setView('frequencias')} style={view === 'frequencias' ? estilos.btnMenuAtivo : estilos.btnMenu}>📝 Histórico</button></li>
-                    <li><button onClick={() => setView('pesquisa-satisfacao')} style={view === 'pesquisa-satisfacao' ? estilos.btnMenuAtivo : estilos.btnMenu}>⭐ Pesquisa de Opinião</button></li>
-                    <li><button onClick={() => setView('publico-alvo')} style={view === 'publico-alvo' ? estilos.btnMenuAtivo : estilos.btnMenu}>🎯 Público-Alvo</button></li>
-                    <li><button onClick={() => setView('setores')} style={view === 'setores' ? estilos.btnMenuAtivo : estilos.btnMenu}>🏢 Setores</button></li>
-                    <li><button onClick={() => setView('areas')} style={view === 'areas' ? estilos.btnMenuAtivo : estilos.btnMenu}>📖 Áreas</button></li>
-                    <li><button onClick={() => setView('usuarios')} style={view === 'usuarios' ? estilos.btnMenuAtivo : estilos.btnMenu}>🔒 Operadores</button></li>
-                    <li><button onClick={() => setView('log-fraudes')} style={view === 'log-fraudes' ? estilos.btnMenuAtivo : estilos.btnMenu}>⚠️ Log de Fraudes</button></li>
+                    <li><button onClick={() => mudarAbaNavegacao('eventos')} style={view === 'eventos' ? estilos.btnMenuAtivo : estilos.btnMenu}>📅 Formações</button></li>
+                    <li><button onClick={() => mudarAbaNavegacao('locais')} style={view === 'locais' ? estilos.btnMenuAtivo : estilos.btnMenu}>📍 Locais</button></li>
+                    <li><button onClick={() => mudarAbaNavegacao('participantes')} style={view === 'participantes' ? estilos.btnMenuAtivo : estilos.btnMenu}>👥 Participantes</button></li>
+                    <li><button onClick={() => mudarAbaNavegacao('frequencias')} style={view === 'frequencias' ? estilos.btnMenuAtivo : estilos.btnMenu}>📝 Histórico</button></li>
+                    <li><button onClick={() => mudarAbaNavegacao('pesquisa-satisfacao')} style={view === 'pesquisa-satisfacao' ? estilos.btnMenuAtivo : estilos.btnMenu}>⭐ Pesquisa de Opinião</button></li>
+                    <li><button onClick={() => mudarAbaNavegacao('publico-alvo')} style={view === 'publico-alvo' ? estilos.btnMenuAtivo : estilos.btnMenu}>🎯 Público-Alvo</button></li>
+                    <li><button onClick={() => mudarAbaNavegacao('setores')} style={view === 'setores' ? estilos.btnMenuAtivo : estilos.btnMenu}>🏢 Setores</button></li>
+                    <li><button onClick={() => mudarAbaNavegacao('areas')} style={view === 'areas' ? estilos.btnMenuAtivo : estilos.btnMenu}>📖 Áreas</button></li>
+                    <li><button onClick={() => mudarAbaNavegacao('usuarios')} style={view === 'usuarios' ? estilos.btnMenuAtivo : estilos.btnMenu}>🔒 Operadores</button></li>
+                    <li><button onClick={() => mudarAbaNavegacao('log-fraudes')} style={view === 'log-fraudes' ? estilos.btnMenuAtivo : estilos.btnMenu}>⚠️ Log de Fraudes</button></li>
                 </ul>
                 <button onClick={efetuarLogout} style={{ ...estilos.btnMenu, color: '#ef4444', marginTop: 'auto', fontWeight: 'bold' }}>🚪 Encerrar Sessão</button>
             </div>
@@ -404,12 +534,46 @@ export default function App() {
             <div style={estilos.main}>
                 <div style={estilos.topo}>
                     <h1 style={{ margin: 0, fontSize: '20px', color: '#1e293b', fontWeight: 'bold', textTransform: 'uppercase' }}>Visualizando: {view}</h1>
+                    
                     {view === 'eventos' && (
                         <button onClick={() => { setForm({}); setPublicosSelecionados([]); setModalEventoAberto(true); }} style={estilos.btnAdicionar}>
                             ADICIONAR NOVO EVENTO
                         </button>
                     )}
-                    <div style={{ fontSize: '13px', color: '#64748b' }}>Registros carregados nesta lista: <strong>{totaisSuperior}</strong></div>
+
+                    {view === 'locais' && (
+                        <div style={{ display: 'flex', gap: '10px', position: 'absolute', left: '50%', transform: 'translateX(-50%)' }}>
+                            <button 
+                                onClick={() => { setForm({}); setIsEditando(false); setPesquisaCidade(''); setModalLocalAberto(true); }} 
+                                style={{ ...estilos.btnAcao, backgroundColor: '#16a34a', color: '#fff', padding: '8px 16px', fontWeight: 'bold', borderRadius: '6px' }}
+                            >
+                                ➕ ADICIONAR LOCAL
+                            </button>
+                            <button 
+                                onClick={() => {
+                                    if(!selecionado) return;
+                                    setForm({ nome: selecionado.nome, endereco: selecionado.endereco, latitude: selecionado.latitude, longitude: selecionado.longitude });
+                                    setIsEditando(true);
+                                    setPesquisaCidade('');
+                                    setModalLocalAberto(true);
+                                }} 
+                                disabled={!selecionado}
+                                style={{ 
+                                    ...estilos.btnAcao, 
+                                    backgroundColor: selecionado ? '#0284c7' : '#cbd5e1', 
+                                    color: '#fff', 
+                                    padding: '8px 16px', 
+                                    fontWeight: 'bold', 
+                                    borderRadius: '6px',
+                                    cursor: selecionado ? 'pointer' : 'not-allowed'
+                                }}
+                            >
+                                ✏️ EDITAR LOCAL
+                            </button>
+                        </div>
+                    )}
+
+                    <div style={{ fontSize: '13px', color: '#64748b' }}>Registros carregados: <strong>{totaisSuperior}</strong></div>
                 </div>
 
                 {modalEventoAberto && (
@@ -520,6 +684,65 @@ export default function App() {
                     </div>
                 )}
 
+                {modalLocalAberto && (
+                    <div style={estilos.modalOverlay}>
+                        <div style={estilos.modalGlass}>
+                            <h2 style={{ margin: '0 0 20px 0', color: '#0f172a', fontSize: '18px', fontWeight: 'bold' }}>
+                                {isEditando ? '✏️ Modificar Dados do Local' : '➕ Adicionar Novo Local no Mapa'}
+                            </h2>
+                            <form onSubmit={submeterLocalExclusivo}>
+                                <div style={{ marginBottom: '15px' }}>
+                                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '5px' }}>Nome do Espaço / Local</label>
+                                    <input type="text" style={estilos.entradaForm} value={form.nome || ''} onChange={e => setForm({...form, nome: e.target.value})} required />
+                                </div>
+
+                                {!isEditando && (
+                                    <div style={{ marginBottom: '15px', backgroundColor: 'rgba(2, 132, 199, 0.05)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(2, 132, 199, 0.1)' }}>
+                                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '5px', color: '#0284c7' }}>🔍 Buscar Endereço ou Referência:</label>
+                                        <div style={{ display: 'flex', gap: '8px' }}>
+                                            <input 
+                                                type="text" 
+                                                placeholder="Ex: Praça Nossa Senhora da Conceição, Queimados" 
+                                                style={estilos.entradaForm} 
+                                                value={pesquisaCidade} 
+                                                onChange={e => setPesquisaCidade(e.target.value)}
+                                                onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), buscarCidadeNoMapa())}
+                                            />
+                                            <button type="button" onClick={buscarCidadeNoMapa} style={{ ...estilos.btnAcao, backgroundColor: '#0284c7', color: '#fff', fontWeight: 'bold', padding: '0 15px' }}>BUSCAR</button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div style={{ marginBottom: '15px' }}>
+                                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '5px' }}>📍 Clique no Mapa para marcar o ponto:</label>
+                                    <div id="mapa-leaflet" style={{ width: '100%', height: '260px', borderRadius: '8px', border: '1px solid #cbd5e1', marginBottom: '10px', zIndex: 1 }}></div>
+                                </div>
+
+                                <div style={{ marginBottom: '15px' }}>
+                                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '5px' }}>Endereço Completo (Preenchido pelo Mapa ou Manual)</label>
+                                    <textarea style={{ ...estilos.entradaForm, height: '55px', resize: 'none' }} value={form.endereco || ''} onChange={e => setForm({...form, endereco: e.target.value})} required />
+                                </div>
+
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '20px' }}>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '5px' }}>Latitude</label>
+                                        <input type="text" style={estilos.entradaForm} value={form.latitude || ''} onChange={e => setForm({...form, latitude: e.target.value})} placeholder="Clique no mapa..." required />
+                                    </div>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '5px' }}>Longitude</label>
+                                        <input type="text" style={estilos.entradaForm} value={form.longitude || ''} onChange={e => setForm({...form, longitude: e.target.value})} placeholder="Clique no mapa..." required />
+                                    </div>
+                                </div>
+
+                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                                    <button type="button" onClick={() => { setModalLocalAberto(false); setForm({}); setPesquisaCidade(''); }} style={{ ...estilos.btnAcao, backgroundColor: '#64748b', color: '#fff' }}>CANCELAR</button>
+                                    <button type="submit" style={{ ...estilos.btnAcao, backgroundColor: '#16a34a', color: '#fff', fontWeight: 'bold' }}>SALVAR REGISTRO</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                )}
+
                 {erro && <div style={estilos.alertaErro}>{erro}</div>}
 
                 {view === 'frequencias' && (
@@ -588,7 +811,6 @@ export default function App() {
                                     <>
                                         <th style={estilos.th}>Nome do Espaço</th>
                                         <th style={estilos.th}>Endereço Completo</th>
-                                        <th style={estilos.th}>Ações</th>
                                     </>
                                 )}
                                 {view === 'frequencias' && (
@@ -624,11 +846,11 @@ export default function App() {
                                 return (
                                     <tr 
                                         key={item.id} 
-                                        onClick={() => view === 'frequencias' && setSelecionado(item)}
+                                        onClick={() => (view === 'frequencias' || view === 'locais') && setSelecionado(item)}
                                         onMouseEnter={() => possuiComentario && setHoveredRowId(item.id)}
                                         onMouseLeave={() => possuiComentario && setHoveredRowId(null)}
                                         style={{ 
-                                            cursor: view === 'frequencias' ? 'pointer' : 'default',
+                                            cursor: (view === 'frequencias' || view === 'locais') ? 'pointer' : 'default',
                                             backgroundColor: selecionado && selecionado.id === item.id ? '#f0fdf4' : (possuiComentario && hoveredRowId === item.id ? '#f8fafc' : 'transparent'),
                                             transition: 'background-color 0.15s ease'
                                         }}
@@ -646,9 +868,6 @@ export default function App() {
                                             <>
                                                 <td style={estilos.td}>{item.nome}</td>
                                                 <td style={estilos.td}>{item.endereco}</td>
-                                                <td style={estilos.td}>
-                                                    <button onClick={(e) => { e.stopPropagation(); iniciarEdicaoItem(item); }} style={{ ...estilos.btnAcao, backgroundColor: '#0284c7', color: '#fff' }}>Editar</button>
-                                                </td>
                                             </>
                                         )}
                                         {view === 'frequencias' && (
@@ -682,7 +901,7 @@ export default function App() {
                                             <>
                                                 <td style={estilos.td}>{item.nome || item.nome_completo || item.usuario}</td>
                                                 <td style={estilos.td}>
-                                                    <button onClick={(e) => { e.stopPropagation(); iniciarEdicaoItem(item); }} style={{ ...estilos.btnAcao, backgroundColor: '#0284c7', color: '#fff' }}>Editar</button>
+                                                    <button onClick={(e) => { e.stopPropagation(); iniciarEdicaoItem(item); setModalEventoAberto(false); }} style={{ ...estilos.btnAcao, backgroundColor: '#0284c7', color: '#fff' }}>Editar</button>
                                                 </td>
                                             </>
                                         )}

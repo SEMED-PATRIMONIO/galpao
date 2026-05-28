@@ -15,293 +15,319 @@ const calcularDistanciaCliente = (lat1, lon1, lat2, lon2) => {
     return R * c;
 };
 
+const obterAgoraSaoPaulo = () => {
+    try {
+        const dataTexto = new Date().toLocaleString("sv-SE", { timeZone: "America/Sao_Paulo" }).replace(' ', 'T');
+        const data = new Date(dataTexto);
+        return isNaN(data.getTime()) ? new Date() : data;
+    } catch (e) {
+        return new Date();
+    }
+};
+
+const obterDataComHorarioString = (horarioStr) => {
+    const agora = obterAgoraSaoPaulo();
+    if (!horarioStr) return agora;
+    const [horas, minutos] = horarioStr.split(':').map(Number);
+    return new Date(agora.getFullYear(), agora.getMonth(), agora.getDate(), horas, minutos, 0);
+};
+
 export default function App() {
-    const [deviceToken, setDeviceToken] = useState(localStorage.getItem('device_token') || ''); 
-    const [statusTela, setStatusTela] = useState('carregando'); 
-    const [eventos, setEventos] = useState([]);
-    const [eventoSelecionado, setEventoSelecionado] = useState(null);
+    const [statusFluxo, setStatusFluxo] = useState('carregando');
+    const [eventoAtual, setEventoAtual] = useState(null);
+    const [listaEventos, setListaEventos] = useState([]);
+    const [alertaMsg, setAlertaMsg] = useState('');
     const [coords, setCoords] = useState({ lat: null, lng: null });
-    
-    const [matriculaInput, setMatriculaInput] = useState('');
-    const [nomeInput, setNomeInput] = useState('');
+    const [msgErro, setMsgErro] = useState('');
+    const [msgSucesso, setMsgSucesso] = useState('');
+    const [carregandoAcao, setCarregandoAcao] = useState(false);
 
-    const [alerta, setAlerta] = useState({ visivel: false, msg: '', tipo: 'sucesso' });
-    const [conteudoModal, setConteudoModal] = useState(null);
-
-    const [estrelas, setEstrelas] = useState(5);
-    const [comentario, setComentario] = useState('');
-
-    const dispararAlerta8Segundos = (mensagem, tipo = 'erro', acaoPosterior = null) => {
-        setAlerta({ visivel: true, msg: mensagem, tipo });
-        setTimeout(() => {
-            setAlerta({ visivel: false, msg: '', tipo: 'sucesso' });
-            if (acaoPosterior) acaoPosterior();
-        }, 8000);
-    };
+    const [avaliacao, setAvaliacao] = useState('Ótimo');
+    const [comentarios, setComentarios] = useState('');
 
     useEffect(() => {
-        if (!deviceToken) {
-            setStatusTela('vincular');
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                const localCoords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                setCoords(localCoords);
+                dispararChecagem(localCoords, null);
+            },
+            () => {
+                exibirAlertaTemporizado('Por favor, ative a localização no seu dispositivo para registrar presença.');
+                setStatusFluxo('erro');
+            }
+        );
+    }, []);
+
+    const exibirAlertaTemporizado = (msg) => {
+        setAlertaMsg(msg);
+        setTimeout(() => setAlertaMsg(''), 7000);
+    };
+
+    const dispararChecagem = async (localCoords, evIdForçado) => {
+        const dKey = localStorage.getItem('device_token') || localStorage.getItem('device_key');
+        if (!dKey) {
+            setStatusFluxo('erro');
+            exibirAlertaTemporizado('Aparelho sem vínculo ativo. Por favor, vincule este dispositivo primeiro.');
             return;
         }
-        executarInicializacao(deviceToken);
-    }, [deviceToken]);
 
-    const executarInicializacao = async (tokenParaValidar) => {
         try {
             const res = await fetch(`${API_URL}/api/v2/presenca/inicializar`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ device_token: tokenParaValidar })
+                body: JSON.stringify({ device_key: dKey })
             });
 
             if (res.status === 401) {
-                localStorage.removeItem('device_token');
-                setDeviceToken('');
-                setStatusTela('vincular');
+                setStatusFluxo('erro');
+                exibirAlertaTemporizado('Vínculo inválido ou revogado.');
                 return;
             }
 
             const data = await res.json();
-
-            if (data.status === 'sem_eventos' || data.status === 'fora_horario') {
-                dispararAlerta8Segundos(data.mensagem, 'erro', () => setStatusTela('encerrado'));
-                return;
-            }
-
             if (data.status === 'sucesso') {
-                setEventos(data.eventos);
-                setStatusTela('listagem');
-                obterLocalizacaoGPS();
+                setListaEventos(data.eventos);
+                
+                let idAlvo = evIdForçado || data.evento_ativo_id;
+                if (idAlvo) {
+                    const evAtivo = data.eventos.find(e => e.id === idAlvo);
+                    if (evAtivo) {
+                        setEventoAtual(evAtivo);
+                        // CORREÇÃO: Se já tem evento ativo, entra em modo logado monitorando o horário
+                        setStatusFluxo(data.tem_evento_ativo ? 'logado' : 'entrada');
+                        return;
+                    }
+                }
+
+                if (data.eventos.length === 1) {
+                    setEventoAtual(data.eventos[0]);
+                    setStatusFluxo(data.tem_evento_ativo ? 'logado' : 'entrada');
+                } else if (data.eventos.length > 1) {
+                    setStatusFluxo('multiplos');
+                } else {
+                    setStatusFluxo('erro');
+                    exibirAlertaTemporizado('Nenhuma atividade agendada ou disponível para o dia de hoje.');
+                }
             } else {
-                dispararAlerta8Segundos(data.error || 'Erro de conexão.', 'erro');
+                setStatusFluxo('erro');
+                exibirAlertaTemporizado(data.error || 'Falha na resposta da inicialização.');
             }
         } catch (err) {
-            dispararAlerta8Segundos('Não foi possível contatar o servidor.', 'erro');
+            setStatusFluxo('erro');
+            exibirAlertaTemporizado('Sem comunicação com o servidor de validação.');
         }
     };
 
-    const lidarComVinculoAparelho = async (e) => {
-        e.preventDefault();
-        try {
-            const res = await fetch(`${API_URL}/api/v2/dispositivo/associar`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ matricula: matriculaInput, nome: nomeInput })
-            });
-            const data = await res.json();
-
-            if (!res.ok) {
-                dispararAlerta8Segundos(data.error || 'Erro ao vincular.', 'erro');
-                return;
-            }
-
-            localStorage.setItem('device_token', data.device_token);
-            setDeviceToken(data.device_token);
-            dispararAlerta8Segundos('APARELHO VINCULADO COM SUCESSO!', 'sucesso');
-        } catch (err) {
-            dispararAlerta8Segundos('Erro ao tentar associar dispositivo.', 'erro');
-        }
+    const selecionarAtividadeManual = (ev) => {
+        setEventoAtual(ev);
+        setStatusFluxo('entrada');
     };
-
-    const obterLocalizacaoGPS = () => {
-        navigator.geolocation.getCurrentPosition(
-            (pos) => { setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }); },
-            () => { dispararAlerta8Segundos('Ative o GPS para assinar a presença.', 'erro'); },
-            { enableHighAccuracy: true }
-        );
-    };
-
-    const selecionarEvento = async (ev) => {
+    const dispararRegistroPresenca = async () => {
         if (!coords.lat || !coords.lng) {
-            dispararAlerta8Segundos('Aguardando localização...', 'erro');
+            exibirAlertaTemporizado('Aguardando capturar sua localização exata. Tente novamente.');
             return;
         }
 
+        const dKey = localStorage.getItem('device_token') || localStorage.getItem('device_key');
+        const agora = obterAgoraSaoPaulo();
+        const dataInicioOficial = obterDataComHorarioString(eventoAtual.hora_inicio);
+        const dataTerminoOficial = obterDataComHorarioString(eventoAtual.hora_fim);
+
+        const limiteEntradaInicio = new Date(dataInicioOficial.getTime() - 30 * 60000);
+        const limiteEntradaFim = new Date(dataTerminoOficial.getTime() - 30 * 60000);
+
+        if (agora < limiteEntradaInicio || agora > limiteEntradaFim) {
+            exibirAlertaTemporizado(`Entrada não permitida neste horário. Janela elegível: ${limiteEntradaInicio.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})} até ${limiteEntradaFim.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})}`);
+            return;
+        }
+
+        const distancia = calcularDistanciaCliente(coords.lat, coords.lng, parseFloat(eventoAtual.latitude), parseFloat(eventoAtual.longitude));
+        if (distancia > 1000) {
+            exibirAlertaTemporizado(`Bloqueio de Perímetro: Você está fora do raio permitido da formação (Distância: ${(distancia/1000).toFixed(1)}km).`);
+            return;
+        }
+
+        setCarregandoAcao(true);
         try {
-            const res = await fetch(`${API_URL}/api/v2/presenca/checar-status`, {
+            const res = await fetch(`${API_URL}/api/v2/presencas`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    device_token: deviceToken,
-                    evento_id: ev.id,
-                    latitude: coords.lat,
-                    longitude: coords.lng
+                    device_key: dKey,
+                    evento_id: eventoAtual.id,
+                    lat_entrada: coords.lat,
+                    lng_entrada: coords.lng
                 })
             });
+
             const data = await res.json();
-
-            if (!res.ok) {
-                dispararAlerta8Segundos(data.error || 'Erro na validação.', 'erro');
-                return;
-            }
-
-            setEventoSelecionado(ev);
-
-            if (data.status === 'completo') {
-                dispararAlerta8Segundos(`Já consta entrada e saída registrada para este evento:\n${data.titulo}\nLocal: ${data.local}`, 'sucesso');
-                return;
-            }
-
-            if (data.status === 'somente_entrada') {
-                setConteudoModal({
-                    tipo: 'pergunta_saida',
-                    texto: `Você já registrou a sua entrada nesta atividade. Confirma que está saindo da formação agora?`
-                });
-                setStatusTela('modal_pergunta');
-                return;
-            }
-
-            if (data.status === 'nenhum') {
-                setConteudoModal({
-                    tipo: 'confirmar_entrada',
-                    texto: `Deseja registrar sua entrada na formação: "${ev.titulo}"?`
-                });
-                setStatusTela('modal_pergunta');
+            if (res.ok && data.status === 'sucesso') {
+                // CORREÇÃO: Em vez de ir direto para a pesquisa, joga para o estado de espera segura
+                setStatusFluxo('logado');
+            } else {
+                exibirAlertaTemporizado(data.error || 'Erro ao validar entrada.');
             }
         } catch (err) {
-            dispararAlerta8Segundos('Erro de comunicação.', 'erro');
+            exibirAlertaTemporizado('Falha na comunicação com o servidor de presença.');
+        } finally {
+            setCarregandoAcao(false);
         }
     };
 
-    const processarAceiteModal = async () => {
-        if (conteudoModal.tipo === 'confirmar_entrada') {
-            try {
-                const res = await fetch(`${API_URL}/api/v2/presenca/confirmar-entrada`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ device_token: deviceToken, evento_id: eventoSelecionado.id })
-                });
-                if (res.ok) {
-                    dispararAlerta8Segundos('REGISTRO EFETUADO!', 'sucesso', () => setStatusTela('listagem'));
-                }
-            } catch (e) {
-                dispararAlerta8Segundos('Falha ao registrar entrada.', 'erro');
-            }
-        } else if (conteudoModal.tipo === 'pergunta_saida') {
-            setStatusTela('pesquisa'); // Redireciona corretamente para a pesquisa de satisfação
-        }
-    };
-
-    const submeterPesquisaSaida = async (e) => {
+    const salvarAvaliacaoEConfirmarSaida = async (e) => {
         e.preventDefault();
+        const dKey = localStorage.getItem('device_token') || localStorage.getItem('device_key');
+        const agora = obterAgoraSaoPaulo();
+        const dataTerminoOficial = obterDataComHorarioString(eventoAtual.hora_fim);
+
+        const limiteSaidaInicio = new Date(dataTerminoOficial.getTime() - 30 * 60000);
+        const limiteSaidaFim = new Date(dataTerminoOficial.getTime() + 30 * 60000);
+
+        if (agora < limiteSaidaInicio || agora > limiteSaidaFim) {
+            exibirAlertaTemporizado(`Saída não permitida neste horário. Janela elegível: ${limiteSaidaInicio.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})} até ${limiteSaidaFim.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})}`);
+            return;
+        }
+
+        setCarregandoAcao(true);
         try {
             const res = await fetch(`${API_URL}/api/v2/presenca/confirmar-saida`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    device_token: deviceToken,
-                    evento_id: eventoSelecionado.id,
-                    estrelas,
-                    comentario
+                    device_key: dKey,
+                    evento_id: eventoAtual.id,
+                    avaliacao,
+                    comentarios,
+                    lat: coords.lat,
+                    lng: coords.lng
                 })
             });
-            if (res.ok) {
-                dispararAlerta8Segundos('REGISTRO EFETUADO!', 'sucesso', () => {
-                    setEstrelas(5);
-                    setComentario('');
-                    setStatusTela('listagem');
-                });
+
+            const data = await res.json();
+            if (res.ok && data.status === 'sucesso') {
+                setStatusFluxo('concluido');
+            } else {
+                exibirAlertaTemporizado(data.error || 'Erro ao registrar saída.');
             }
         } catch (err) {
-            dispararAlerta8Segundos('Erro ao processar sua saída.', 'erro');
+            exibirAlertaTemporizado('Falha na comunicação ao encerrar presença.');
+        } finally {
+            setCarregandoAcao(false);
         }
     };
 
+    const estilos = {
+        container: { fontFamily: 'Arial, sans-serif', backgroundColor: '#f4f6f9', minHeight: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px', boxSizing: 'border-box' },
+        card: { backgroundColor: '#ffffff', borderRadius: '12px', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', padding: '30px', width: '100%', maxWidth: '440px', boxSizing: 'border-box', textAlign: 'center' },
+        titulo: { fontSize: '22px', fontWeight: 'bold', color: '#1e3a8a', margin: '0 0 8px 0' },
+        subtitulo: { fontSize: '14px', color: '#64748b', margin: '0 0 24px 0' },
+        btnPrimario: { width: '100%', padding: '14px', backgroundColor: '#0284c7', color: '#ffffff', border: 'none', borderRadius: '8px', fontWeight: 'bold', fontSize: '15px', cursor: 'pointer', transition: 'background-color 0.2s' },
+        btnSucesso: { width: '100%', padding: '14px', backgroundColor: '#16a34a', color: '#ffffff', border: 'none', borderRadius: '8px', fontWeight: 'bold', fontSize: '15px', cursor: 'pointer', transition: 'background-color 0.2s', marginTop: '15px' },
+        btnItem: { width: '100%', padding: '12px', backgroundColor: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '8px', textAlign: 'left', cursor: 'pointer', marginBottom: '10px' },
+        select: { width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1', backgroundColor: '#ffffff', marginBottom: '15px', marginTop: '5px', fontSize: '14px' },
+        textarea: { width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1', minHeight: '80px', fontFamily: 'inherit', boxSizing: 'border-box', marginBottom: '15px', marginTop: '5px', fontSize: '14px' },
+        alerta: { backgroundColor: '#fef2f2', border: '1px solid #fee2e2', color: '#991b1b', padding: '12px', borderRadius: '8px', fontSize: '13px', marginBottom: '20px', textAlign: 'left', fontWeight: 'bold' }
+    };
+
     return (
-        <div style={{ fontFamily: 'Arial, sans-serif', padding: '20px', maxWidth: '450px', margin: '0 auto', textAlign: 'center', color: '#333' }}>
-            {alerta.visivel && (
-                <div style={{
-                    backgroundColor: alerta.tipo === 'sucesso' ? '#d4edda' : '#f8d7da',
-                    color: alerta.tipo === 'sucesso' ? '#155724' : '#721c24',
-                    padding: '15px', borderRadius: '8px', marginBottom: '20px',
-                    fontWeight: 'bold', border: `1px solid ${alerta.tipo === 'sucesso' ? '#c3e6cb' : '#f5c6cb'}`
-                }}>
-                    {alerta.msg.split('\n').map((str, i) => <div key={i}>{str}</div>)}
+        <div style={estilos.container}>
+            {statusFluxo === 'carregando' && (
+                <div style={estilos.card}>
+                    <p style={estilos.titulo}>Sincronizando GPS...</p>
+                    <p style={estilos.subtitulo}>Aguarde a validação das coordenadas físicas do aparelho.</p>
                 </div>
             )}
 
-            {statusTela === 'carregando' && (
-                <div style={{ padding: '30px' }}>
-                    <h3 style={{ color: '#0284c7' }}>Buscando formações agendadas...</h3>
+            {statusFluxo === 'multiplos' && (
+                <div style={estilos.card}>
+                    <p style={estilos.titulo}>Atividades Disponíveis</p>
+                    <p style={estilos.subtitulo}>Selecione qual formação deseja acessar no momento:</p>
+                    {alertaMsg && <div style={estilos.alerta}>{alertaMsg}</div>}
+                    {listaEventos.map(ev => (
+                        <button key={ev.id} onClick={() => selecionarAtividadeManual(ev)} style={estilos.btnItem}>
+                            <div style={{ fontWeight: 'bold', color: '#1e293b' }}>{ev.titulo}</div>
+                            <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>⏰ {ev.hora_inicio.slice(0,5)} às {ev.hora_fim.slice(0,5)} | 📍 {ev.local}</div>
+                        </button>
+                    ))}
                 </div>
             )}
 
-            {statusTela === 'vincular' && (
-                <form onSubmit={lidarComVinculoAparelho} style={{ border: '1px solid #cbd5e1', padding: '25px', borderRadius: '12px', textAlign: 'left' }}>
-                    <h2 style={{ color: '#1e3a8a', marginTop: 0, textAlign: 'center' }}>Vincular Aparelho</h2>
-                    <div style={{ marginBottom: '15px' }}>
-                        <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '5px' }}>Matrícula:</label>
-                        <input type="text" value={matriculaInput} onChange={e => setMatriculaInput(e.target.value)} required style={{ width: '100%', padding: '11px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} />
-                    </div>
-                    <div style={{ marginBottom: '20px' }}>
-                        <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '5px' }}>Nome Completo:</label>
-                        <input type="text" value={nomeInput} onChange={e => setNomeInput(e.target.value)} required style={{ width: '100%', padding: '11px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} />
-                    </div>
-                    <button type="submit" style={{ width: '100%', padding: '14px', borderRadius: '6px', border: 'none', backgroundColor: '#1e3a8a', color: '#fff', fontWeight: 'bold', cursor: 'pointer' }}>VINCULAR DISPOSITIVO</button>
-                </form>
-            )}
-
-            {statusTela === 'listagem' && (
-                <div>
-                    <h2 style={{ color: '#1e3a8a', marginBottom: '5px' }}>Portal de Presença</h2>
-                    <p style={{ color: '#666', fontSize: '13px', marginBottom: '25px' }}>Selecione a formação para assinar a frequência.</p>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                        {eventos.map(ev => {
-                            const distancia = coords.lat && coords.lng ? calcularDistanciaCliente(coords.lat, coords.lng, parseFloat(ev.latitude), parseFloat(ev.longitude)) : 999;
-                            const estaNoRaio = distancia <= 60;
-
-                            return (
-                                <button
-                                    key={ev.id} onClick={() => selecionarEvento(ev)} disabled={!estaNoRaio}
-                                    style={{
-                                        padding: '16px', borderRadius: '10px', border: 'none', fontWeight: 'bold', fontSize: '15px',
-                                        cursor: estaNoRaio ? 'pointer' : 'not-allowed',
-                                        backgroundColor: estaNoRaio ? '#0284c7' : '#e5e7eb',
-                                        color: estaNoRaio ? '#ffffff' : '#9ca3af'
-                                    }}
-                                >
-                                    <div style={{ textAlign: 'left' }}>
-                                        <div style={{ fontSize: '16px', marginBottom: '4px' }}>{ev.titulo}</div>
-                                        <div style={{ fontSize: '12px', opacity: 0.9 }}>📍 {ev.local}</div>
-                                        {!estaNoRaio && <div style={{ fontSize: '11px', marginTop: '6px', fontStyle: 'italic' }}>Fora do raio de alcance (60m)</div>}
-                                    </div>
-                                </button>
-                            );
-                        })}
-                    </div>
+            {statusFluxo === 'entrada' && eventoAtual && (
+                <div style={estilos.card}>
+                    <p style={estilos.titulo}>{eventoAtual.titulo}</p>
+                    <p style={estilos.subtitulo}>📍 Local: {eventoAtual.local}<br />⏰ Agenda: {eventoAtual.hora_inicio.slice(0,5)} às {eventoAtual.hora_fim.slice(0,5)}</p>
+                    {alertaMsg && <div style={estilos.alerta}>{alertaMsg}</div>}
+                    <button onClick={dispararRegistroPresenca} disabled={carregandoAcao} style={estilos.btnPrimario}>
+                        {carregandoAcao ? 'GRAVANDO PRESENÇA...' : 'REGISTRAR CHEGADA'}
+                    </button>
                 </div>
             )}
 
-            {statusTela === 'modal_pergunta' && conteudoModal && (
-                <div style={{ border: '1px solid #e2e8f0', padding: '25px', borderRadius: '12px', backgroundColor: '#f8fafc', marginTop: '20px' }}>
-                    <p style={{ fontSize: '16px', fontWeight: '500', marginBottom: '25px' }}>{conteudoModal.texto}</p>
-                    <div style={{ display: 'flex', gap: '15px' }}>
-                        <button onClick={processarAceiteModal} style={{ flex: 1, padding: '12px', borderRadius: '6px', border: 'none', backgroundColor: '#16a34a', color: '#fff', fontWeight: 'bold', cursor: 'pointer' }}>Sim, confirmar</button>
-                        <button onClick={() => setStatusTela('listagem')} style={{ flex: 1, padding: '12px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#fff', color: '#64748b', fontWeight: 'bold', cursor: 'pointer' }}>Não, retornar</button>
-                    </div>
+            {/* ACRESCENTADO AQUI: Tela intermediária de bloqueio e espera pós-entrada */}
+            {statusFluxo === 'logado' && eventoAtual && (
+                <div style={estilos.card}>
+                    <div style={{ fontSize: '50px', marginBottom: '10px' }}>⏳</div>
+                    <p style={estilos.titulo}>Presença Confirmada!</p>
+                    <p style={estilos.subtitulo}>Sua entrada na atividade <strong>{eventoAtual.titulo}</strong> foi registrada no sistema.</p>
+                    <p style={{ fontSize: '13px', color: '#475569', backgroundColor: '#f1f5f9', padding: '10px', borderRadius: '6px', margin: '15px 0' }}>
+                        Aguarde o término da formação para realizar a avaliação e computar suas horas de participação.
+                    </p>
+                    <button 
+                        onClick={() => {
+                            const agora = obterAgoraSaoPaulo();
+                            const dataTerminoOficial = obterDataComHorarioString(eventoAtual.hora_fim);
+                            const limiteSaidaInicio = new Date(dataTerminoOficial.getTime() - 30 * 60000);
+                            const limiteSaidaFim = new Date(dataTerminoOficial.getTime() + 30 * 60000);
+
+                            if (agora < limiteSaidaInicio || agora > limiteSaidaFim) {
+                                exibirAlertaTemporizado(`A liberação de saída estará disponível apenas entre ${limiteSaidaInicio.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})} e ${limiteSaidaFim.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})}.`);
+                                return;
+                            }
+                            setStatusFluxo('pesquisa');
+                        }} 
+                        style={{ ...estilos.btnPrimario, backgroundColor: '#0f172a' }}
+                    >
+                        SOLICITAR SAÍDA & AVALIAR
+                    </button>
+                    {alertaMsg && <div style={{ ...estilos.alerta, marginTop: '15px' }}>{alertaMsg}</div>}
                 </div>
             )}
 
-            {statusTela === 'pesquisa' && (
-                <form onSubmit={submeterPesquisaSaida} style={{ border: '1px solid #e2e8f0', padding: '25px', borderRadius: '12px', textAlign: 'left', marginTop: '20px', backgroundColor: '#fff' }}>
-                    <h3 style={{ marginTop: 0, color: '#1e3a8a' }}>Pesquisa de Satisfação</h3>
-                    <p style={{ fontSize: '13px', color: '#666' }}>Sua opinião é fundamental.</p>
-                    <select value={estrelas} onChange={(e) => setEstrelas(Number(e.target.value))} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', marginBottom: '15px' }}>
-                        <option value="5">⭐⭐⭐⭐⭐ Excelência total</option>
-                        <option value="4">⭐⭐⭐⭐ Muito Bom</option>
-                        <option value="3">⭐⭐⭐ Atendeu às expectativas</option>
-                        <option value="2">⭐⭐ Regular</option>
-                        <option value="1">⭐ Precisa melhorar bastante</option>
-                    </select>
-                    <textarea rows="3" value={comentario} onChange={(e) => setComentario(e.target.value)} placeholder="Comentários adicionais (Opcional)..." style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box', marginBottom: '15px' }} />
-                    <button type="submit" style={{ width: '100%', padding: '14px', borderRadius: '6px', border: 'none', backgroundColor: '#0284c7', color: '#fff', fontWeight: 'bold', cursor: 'pointer' }}>Enviar Avaliação & Concluir Saída</button>
-                </form>
+            {statusFluxo === 'pesquisa' && eventoAtual && (
+                <div style={estilos.card}>
+                    <p style={estilos.titulo}>Pesquisa de Satisfação</p>
+                    <p style={estilos.subtitulo}>Sua opinião é fundamental. Avalie a atividade "{eventoAtual.titulo}":</p>
+                    {alertaMsg && <div style={estilos.alerta}>{alertaMsg}</div>}
+                    <form onSubmit={salvarAvaliacaoEConfirmarSaida}>
+                        <div style={{ textAlign: 'left' }}>
+                            <label style={{ fontWeight: 'bold', fontSize: '13px' }}>Classificação:</label>
+                            <select style={estilos.select} value={avaliacao} onChange={(e) => setAvaliacao(e.target.value)}>
+                                <option value="Ótimo">⭐⭐⭐⭐⭐ Ótimo</option>
+                                <option value="Muito Bom">⭐⭐⭐⭐ Muito Bom</option>
+                                <option value="Bom">⭐⭐⭐ Bom</option>
+                                <option value="Regular">⭐⭐ Regular</option>
+                                <option value="Ruim">⭐ Ruim</option>
+                            </select>
+
+                            <label style={{ fontWeight: 'bold', fontSize: '13px' }}>Observações / Sugestões:</label>
+                            <textarea style={estilos.textarea} value={comentarios} onChange={(e) => setComentarios(e.target.value)} placeholder="Deixe sua mensagem..." />
+                        </div>
+                        <button type="submit" disabled={carregandoAcao} style={estilos.btnSucesso}>
+                            {carregandoAcao ? 'PROCESSANDO SAÍDA...' : 'CONFIRMAR ENCERRAMENTO'}
+                        </button>
+                    </form>
+                </div>
             )}
 
-            {statusTela === 'encerrado' && (
-                <div style={{ marginTop: '40px' }}>
-                    <p style={{ color: '#9ca3af', fontStyle: 'italic' }}>Nenhuma operação ativa disponível no momento.</p>
+            {(statusFluxo === 'erro' || statusFluxo === 'concluido') && (
+                <div style={estilos.card}>
+                    <p style={estilos.titulo}>{statusFluxo === 'concluido' ? 'Frequência Concluída!' : 'Portal de Presença'}</p>
+                    <p style={estilos.subtitulo}>{statusFluxo === 'concluido' ? 'Sua participação e avaliação foram consolidadas com sucesso.' : 'Status de operação update.'}</p>
+                    {alertaMsg && <div style={estilos.alerta}>{alertaMsg}</div>}
+                    <button onClick={() => { setStatusFluxo('carregando'); dispararChecagem(coords, eventoAtual?.id); }} style={{ ...estilos.btnPrimario, backgroundColor: '#64748b', marginTop: '10px' }}>
+                        ATUALIZAR PAINEL
+                    </button>
                 </div>
             )}
         </div>

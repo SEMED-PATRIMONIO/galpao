@@ -106,7 +106,7 @@ export default function App() {
         }
     }, [coords, eventos, temEventoAtivo, eventoAtivoId]);
 
-    const ejecutarInicializacao = async (tokenParaValidar) => {
+    const executarInicializacao = async (tokenParaValidar) => {
         try {
             const res = await fetch(`${API_URL}/api/v2/presenca/inicializar`, {
                 method: 'POST',
@@ -286,7 +286,7 @@ export default function App() {
                     setTimeout(() => {
                         setTemEventoAtivo(true);
                         setEventoAtivoId(eventoSelecionado.id);
-                        ejecutarInicializacao(deviceToken);
+                        executarInicializacao(deviceToken);
                     }, 8000);
                 } else {
                     setStatusTela('listagem');
@@ -330,7 +330,7 @@ export default function App() {
             setTimeout(() => {
                 setTemEventoAtivo(false);
                 setEventoAtivoId(null);
-                ejecutarInicializacao(deviceToken);
+                executarInicializacao(deviceToken);
             }, 8000);
 
         } catch (err) {

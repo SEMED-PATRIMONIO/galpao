@@ -23,19 +23,20 @@ const estilos = {
     modalGlass: { backgroundColor: 'rgba(255, 255, 255, 0.75)', border: '1px solid rgba(255, 255, 255, 0.4)', borderRadius: '16px', boxShadow: '0 8px 32px 0 rgba(15, 23, 42, 0.15)', width: '100%', maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto', padding: '30px', boxSizing: 'border-box' }
 };
 
-export default function App() {
-    const obtenerUsuarioSeguro = () => {
-        try {
-            const dadosSalvos = localStorage.getItem('admin_user');
-            if (!dadosSalvos) return null;
-            return JSON.parse(dadosSalvos);
-        } catch (e) {
-            localStorage.removeItem('admin_user'); 
-            localStorage.removeItem('admin_token'); 
-            return null;
-        }
-    };
+// Movido para fora do componente para evitar erros de inicialização (Temporal Dead Zone) no build de produção
+const obterUsuarioSeguro = () => {
+    try {
+        const dadosSalvos = localStorage.getItem('admin_user');
+        if (!dadosSalvos) return null;
+        return JSON.parse(dadosSalvos);
+    } catch (e) {
+        localStorage.removeItem('admin_user'); 
+        localStorage.removeItem('admin_token'); 
+        return null;
+    }
+};
 
+export default function App() {
     const tokenSalvo = localStorage.getItem('admin_token');
     const [token, setToken] = useState(tokenSalvo && tokenSalvo !== 'undefined' && tokenSalvo !== 'null' ? tokenSalvo : null);
     const [user, setUser] = useState(obterUsuarioSeguro());

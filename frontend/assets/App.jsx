@@ -15,38 +15,7 @@ const calcularDistanciaCliente = (lat1, lon1, lat2, lon2) => {
     return R * c;
 };
 
-// REFORÇO DE ALTA ENTROPIA: Posicionado fora do componente principal para não quebrar a compilação
-const obterImpressaoDigitalHardware = () => {
-    try {
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        ctx.textBaseline = 'top';
-        ctx.font = '14px Arial';
-        ctx.fillStyle = '#f60';
-        ctx.fillRect(125, 1, 62, 20);
-        ctx.fillStyle = '#069';
-        ctx.fillText('Fingerprint Logap', 2, 15);
-        ctx.fillStyle = 'rgba(102, 204, 0, 0.7)';
-        ctx.fillText('Fingerprint Logap', 4, 17);
-        const dataURL = canvas.toDataURL();
-        let hash = 0;
-        for (let i = 0; i < dataURL.length; i++) {
-            hash = ((hash << 5) - hash) + dataURL.charCodeAt(i);
-            hash = hash & hash; 
-        }
-        
-        // ADIÇÃO CRÍTICA: Mescla com dados do navegador e hardware secundário
-        const userAgentHash = navigator.userAgent ? navigator.userAgent.length : 0;
-        const memory = navigator.deviceMemory || 0;
-        const cores = navigator.hardwareConcurrency || 0;
-        
-        return `HW-${Math.abs(hash)}-${window.screen.width}x${window.screen.height}-${userAgentHash}-${memory}-${cores}`;
-    } catch (e) {
-        return `HW-GENERIC-${Math.random()}`; 
-    }
-};
-
-// CORREÇÃO CRÍTICA: Formatação blindada para não gerar "Invalid Date" em iPhones/Safari
+// CORREÇÃO CRÍTICA 1: Formatação blindada para não gerar "Invalid Date" em iPhones/Safari
 const obterAgoraSaoPaulo = () => {
     try {
         const dataTexto = new Date().toLocaleString("sv-SE", { timeZone: "America/Sao_Paulo" }).replace(' ', 'T');
@@ -61,14 +30,14 @@ const obterDataComHorarioString = (horarioStr) => {
     const agora = obterAgoraSaoPaulo();
     if (!horarioStr) return agora;
     const [horas, minutos] = horarioStr.split(':').map(Number);
-    // CORRIGIDO: mudado de hours para horas
+    // CORRIGIDO: Alinhado de hours para horas
     return new Date(agora.getFullYear(), agora.getMonth(), agora.getDate(), horas, minutos, 0);
 };
 
 export default function App() {
     const [deviceToken, setDeviceToken] = useState(localStorage.getItem('device_token') || ''); 
     const [statusTela, setStatusTela] = useState('carregando'); 
-    const [eventos, setEventos] = useState([]);
+    const [eventos, setEventEventos] = useState([]);
     const [eventoSelecionado, setEventoSelecionado] = useState(null);
     const [coords, setCoords] = useState({ lat: null, lng: null });
     
@@ -130,7 +99,7 @@ export default function App() {
             }
 
             if (data.status === 'sucesso') {
-                setEventos(data.eventos);
+                setEventEventos(data.eventos);
                 setTemEventoAtivo(data.tem_evento_ativo || false);
                 setEventoAtivoId(data.evento_ativo_id || null);
                 setStatusTela('listagem');
@@ -165,7 +134,7 @@ export default function App() {
             const estaNoRaio = distancia <= 1000;
 
             if (temEventoAtivo && ev.id !== eventoAtivoId) {
-                novoEstadoAuditoria[ev.id] = { carregando: false, liberado: false, motivo: `Bloqueio: Você já possui uma frequência activa no evento de ID ${eventoAtivoId}.`, acao: 'bloqueado' };
+                novoEstadoAuditoria[ev.id] = { carregando: false, liberado: false, motivo: `Bloqueio: Você já possui uma frequência ativa no evento de ID ${eventoAtivoId}.`, acao: 'bloqueado' };
                 continue;
             }
 
@@ -194,13 +163,10 @@ export default function App() {
     const lidarComVinculoAparelho = async (e) => {
         e.preventDefault();
         try {
-            // CAPTURA ESTÁVEL DA IMPRESSÃO DIGITAL NO MOMENTO DA ASSOCIAÇÃO
-            const hardware_id = obterImpressaoDigitalHardware();
-
             const res = await fetch(`${API_URL}/api/v2/dispositivo/associar`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ matricula: matriculaInput, nome: nomeInput, hardware_id })
+                body: JSON.stringify({ matricula: matriculaInput, nome: nomeInput })
             });
             const data = await res.json();
 
@@ -272,7 +238,8 @@ export default function App() {
         if (conteudoModal.tipo === 'confirmar_entrada') {
             setStatusTela('gravando_presenca');
             try {
-                const res = await fetch(`${API_URL}/api/v2/presenca/confirmar-entrada`, {
+                // CORREÇÃO DE URL: Apontado para a rota correta do index.js (/api/v2/presenca)
+                const res = await fetch(`${API_URL}/api/v2/presenca`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
@@ -282,6 +249,7 @@ export default function App() {
                         longitude: coords.lng
                     })
                 });
+                
                 if (res.ok) {
                     setStatusTela('presenca_confirmada_sucesso');
                     setTimeout(() => {
@@ -498,14 +466,14 @@ export default function App() {
                             <option value="2">⭐⭐ Regular</option>
                             <option value="1">⭐ Precisa melhorar bastante</option>
                         </select>
-                        <textarea rows="3" value={comentario} onChange={(e) => setComentario(e.target.value)} placeholder="Comentários adicionais (Opcional)..." style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box', marginBottom: '15px' }} />
-                        <button type="submit" style={{ width: '100%', padding: '14px', borderRadius: '6px', border: 'none', backgroundColor: '#ea580c', color: '#fff', fontWeight: 'bold', cursor: 'pointer' }}>Enviar Avaliação & Concluir Saída</button>
+                        <textarea rows="3" value={comentario} onChange={(e) => setComentario(e.target.value)} placeholder="Comentários adicionais (Opcional)..." style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box', marginBottom: '15px' }} />
+                        <button type="submit" style={{ width: '100%', padding: '14px', borderRadius: '8px', border: 'none', backgroundColor: '#0284c7', color: '#fff', fontWeight: 'bold', cursor: 'pointer' }}>Enviar Avaliação & Concluir Saída</button>
                     </form>
                 )}
 
                 {statusTela === 'encerrado' && (
                     <div style={{ marginTop: '40px' }}>
-                        <p style={{ color: '#9ca3af', fontStyle: 'italic' }}>Nenhuma operação activa disponível no momento.</p>
+                        <p style={{ color: '#9ca3af', fontStyle: 'italic' }}>Nenhuma operação ativa disponível no momento.</p>
                     </div>
                 )}
                 

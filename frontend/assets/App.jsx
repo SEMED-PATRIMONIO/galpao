@@ -24,7 +24,7 @@ const estilos = {
 };
 
 export default function App() {
-    const obterUsuarioSeguro = () => {
+    const obtenerUsuarioSeguro = () => {
         try {
             const dadosSalvos = localStorage.getItem('admin_user');
             if (!dadosSalvos) return null;
@@ -45,6 +45,7 @@ export default function App() {
     const [novaSenha, setNovaSenha] = useState('');
     const [confirmarNovaSenha, setConfirmarNovaSenha] = useState('');
     const [erro, setErro] = useState('');
+    const [isEditando, setIsEditando] = useState(false);
     
     const [lista, setLista] = useState([]);
     const [selecionado, setSelecionado] = useState(null);
@@ -246,7 +247,7 @@ export default function App() {
                 })
             });
             const data = await res.json();
-            if (!res.ok) throw new Error(data.error || 'Erro operacional.');
+            if (!res.ok) throw new Error(data.error || 'Erro operational.');
             alert(data.message || 'Saída registrada com sucesso!');
             setHoraSaidaManualInput('');
             setSelecionado(null);
@@ -271,46 +272,6 @@ export default function App() {
             if (!res.ok) throw new Error(data.error || 'Erro ao processar atualização.');
             alert('Tempo de participação recalculado com base nas regras horárias oficiais e ocorrência registrada no Log de Fraudes!');
             setSelecionado(null);
-            executarListagem();
-        } catch (err) {
-            alert(err.message);
-        }
-    };
-
-    const lidarComPublicoCheckbox = (id) => {
-        if (publicosSelecionados.includes(id)) {
-            setPublicosSelecionados(publicosSelecionados.filter(pId => pId !== id));
-        } else {
-            setPublicosSelecionados([...publicosSelecionados, id]);
-        }
-    };
-
-    const submeterNovoEvento = async (e) => {
-        e.preventDefault();
-        try {
-            if (publicosSelecionados.length === 0) {
-                alert('Selecione pelo menos um Público-Alvo.');
-                return;
-            }
-            const s1 = form.setor_id_1;
-            const s2 = form.setor_id_2;
-            const s3 = form.setor_id_3;
-            if ((s1 && (s1 === s2 || s1 === s3)) || (s2 && s2 === s3)) {
-                alert('Não selecione setores duplicados.');
-                return;
-            }
-            const res = await fetch(`${API_URL}/api/v2/admin-exclusivo/eventos`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ ...form, publicos: publicosSelecionados })
-            });
-            if (!res.ok) {
-                const d = await res.json();
-                throw new Error(d.error || 'Erro ao salvar.');
-            }
-            setModalEventoAberto(false);
-            setForm({});
-            setPublicosSelecionados([]);
             executarListagem();
         } catch (err) {
             alert(err.message);

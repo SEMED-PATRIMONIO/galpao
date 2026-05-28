@@ -61,7 +61,8 @@ const obterDataComHorarioString = (horarioStr) => {
     const agora = obterAgoraSaoPaulo();
     if (!horarioStr) return agora;
     const [horas, minutos] = horarioStr.split(':').map(Number);
-    return new Date(agora.getFullYear(), agora.getMonth(), agora.getDate(), hours, minutos, 0);
+    // CORRIGIDO: mudado de hours para horas
+    return new Date(agora.getFullYear(), agora.getMonth(), agora.getDate(), horas, minutos, 0);
 };
 
 export default function App() {

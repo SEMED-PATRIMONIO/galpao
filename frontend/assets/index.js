@@ -533,5 +533,63 @@ app.put('/api/v2/admin-exclusivo/usuarios/:id', verificarTokenAdminExclusivo, as
     try { return res.json((await pool.query('UPDATE usuarios SET nome=$1, usuario=$2 WHERE id=$3 RETURNING id, nome, usuario', [req.body.nome, req.body.usuario, req.params.id])).rows[0]); } catch (e) { return res.status(500).json({ error: 'Erro.' }); }
 });
 
+// NOVA ROTA CADASTRO DE EVENTOS - ISOLADA E PROTEGIDA
+app.post('/api/v2/admin-exclusivo/eventos', verificarTokenAdminExclusivo, async (req, res) => {
+    const {
+        titulo, palestrante, data_evento, hora_inicio, hora_fim, carga_horaria,
+        local_id, local, endereco, latitude, longitude,
+        setor_id_1, setor_id_2, setor_id_3, area_id, publicos
+    } = req.body;
+
+    try {
+        const token_qr = uuidv4(); // Gera o token UUID único para o QR Code
+        const publico_alvo_id = publicos && publicos.length > 0 ? publicos[0] : null;
+
+        await pool.query('BEGIN');
+
+        // Insere na tabela principal 'eventos'
+        const queryEvento = `
+            INSERT INTO eventos (
+                titulo, palestrante, data_evento, hora_inicio, hora_fim, carga_horaria,
+                local_id, local, endereco, latitude, longitude,
+                setor_id_1, setor_id_2, setor_id_3, area_id, publico_alvo_id, token_qr
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+            RETURNING id
+        `;
+
+        const valoresEvento = [
+            titulo, palestrante, data_evento, hora_inicio, hora_fim, parseFloat(carga_horaria),
+            local_id ? parseInt(local_id) : null, local, endereco, 
+            latitude ? parseFloat(latitude) : null, longitude ? parseFloat(longitude) : null,
+            setor_id_1 ? parseInt(setor_id_1) : null, 
+            setor_id_2 ? parseInt(setor_id_2) : null, 
+            setor_id_3 ? parseInt(setor_id_3) : null, 
+            area_id ? parseInt(area_id) : null,
+            publico_alvo_id, token_qr
+        ];
+
+        const resultadoEvento = await pool.query(queryEvento, valoresEvento);
+        const novoEventoId = resultadoEvento.rows[0].id;
+
+        // Vincula os múltiplos públicos-alvo na tabela intermediária 'evento_publicos'
+        if (publicos && Array.isArray(publicos)) {
+            for (const pId of publicos) {
+                await pool.query(
+                    'INSERT INTO evento_publicos (evento_id, publico_alvo_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+                    [novoEventoId, parseInt(pId)]
+                );
+            }
+        }
+
+        await pool.query('COMMIT');
+        return res.json({ success: true, id: novoEventoId, token_qr });
+
+    } catch (error) {
+        await pool.query('ROLLBACK');
+        console.error('Erro ao cadastrar evento:', error);
+        return res.status(500).json({ error: 'Erro interno ao salvar o evento no banco de dados.' });
+    }
+});
+
 app.use((req, res) => res.status(404).json({ error: 'Rota não encontrada.' }));
 app.listen(PORT, () => console.log(`Servidor ativado na porta ${PORT}`));

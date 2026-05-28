@@ -208,7 +208,7 @@ app.post('/api/v2/presenca/checar-status', async (req, res) => {
         if (resEv.rows.length === 0) return res.status(404).json({ error: 'Formação não localizada.' });
         const ev = resEv.rows[0];
 
-        if (calcularDistancia(latitude, longitude, parseFloat(ev.lat_real), parseFloat(ev.lng_real)) > 1000) {
+        if (calcularDistancia(latitude, longitude, parseFloat(ev.lat_real), parseFloat(ev.lng_real)) > 80000) {
             await pool.query(`INSERT INTO log_fraudes (matricula, evento_id, motivo, lat_tentativa, lng_tentativa) VALUES ($1, $2, 'FORA_DO_RAIO_PERMITIDO', $3, $4)`, [disp.participante_matricula, evento_id, latitude, longitude]);
             return res.status(400).json({ error: 'Bloqueio de Segurança: Você está fora do raio permitido do local.' });
         }
@@ -223,7 +223,9 @@ app.post('/api/v2/presenca/checar-status', async (req, res) => {
     } catch (error) { return res.status(500).json({ error: 'Erro ao analisar status de presença.' }); }
 });
 
-app.post('/api/v2/presenca/confirmar-entrada', async (req, res) => {
+// ALTERADO PARA ACEITAR AS DUAS ROTAS: A oficial e a curta que o frontend está chamando
+app.post(['/api/v2/presenca', '/api/v2/presenca/confirmar-entrada'], async (req, res) => {
+    // ... todo o resto do código interno da sua rota continua exatamente igual ...
     const { device_token, evento_id, latitude, longitude } = req.body;
     try {
         const resDisp = await pool.query('SELECT * FROM dispositivos WHERE device_token = $1 AND ativo = true', [device_token]);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 
 export default function App() {
     const obterUsuarioSeguro = () => {
@@ -36,17 +36,26 @@ export default function App() {
     const [publicoFiltro, setPublicoFiltro] = useState('');
 
     const [combos, setCombos] = useState({ areas: [], setores: [], locais: [], publicos: [] });
+    const [dadosEstatisticos, setDadosEstatisticos] = useState({ total_eventos: 0, total_frequencias: 0 });
     const [horaSaidaManualInput, setHoraSaidaManualInput] = useState('');
     const [hoveredRowId, setHoveredRowId] = useState(null);
+    const [alertaMsg, setAlertaMsg] = useState('');
 
     const API_URL = window.location.origin.includes('localhost') ? 'http://localhost:3009' : '';
 
     useEffect(() => {
         if (token) {
             carregarCombosAuxiliares();
-            executarListagem();
+            if (view !== 'frequencias') {
+                executarListagem();
+            }
         }
     }, [token, view]);
+
+    const exibirAlertaTemporizado = (msg) => {
+        setAlertaMsg(msg);
+        setTimeout(() => setAlertaMsg(''), 7000);
+    };
 
     const carregarCombosAuxiliares = async () => {
         try {
@@ -125,25 +134,6 @@ export default function App() {
         setUser(null);
     };
 
-    const estilos = {
-        layout: { display: 'flex', fontFamily: 'Segoe UI, Tahoma, Geneva, Verdana, sans-serif', backgroundColor: '#f8fafc', minHeight: '100vh' },
-        sidebar: { width: '240px', backgroundColor: '#0f172a', padding: '20px', display: 'flex', flexDirection: 'column', color: '#cbd5e1' },
-        brand: { fontSize: '18px', fontWeight: 'bold', color: '#fff', marginBottom: '25px', textAlign: 'center', borderBottom: '1px solid #1e293b', paddingBottom: '15px' },
-        menu: { listStyle: 'none', padding: 0, margin: 0, flex: 1 },
-        main: { flex: 1, padding: '30px', boxSizing: 'border-box' },
-        topo: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px', backgroundColor: '#fff', padding: '15px 20px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' },
-        card: { backgroundColor: '#fff', padding: '20px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', marginBottom: '20px' },
-        gridFiltros: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px', marginBottom: '15px' },
-        tabela: { width: '100%', borderCollapse: 'collapse', marginTop: '10px', fontSize: '13px' },
-        th: { backgroundColor: '#f1f5f9', color: '#475569', fontWeight: '600', padding: '10px', textAlign: 'left', borderBottom: '2px solid #e2e8f0' },
-        td: { padding: '10px', borderBottom: '1px solid #e2e8f0', color: '#334155', position: 'relative' },
-        btnMenu: { display: 'block', width: '100%', padding: '10px 12px', borderRadius: '6px', border: 'none', background: 'none', color: '#94a3b8', textAlign: 'left', cursor: 'pointer', fontWeight: '500', marginBottom: '5px', fontSize: '13px' },
-        btnMenuAtivo: { display: 'block', width: '100%', padding: '10px 12px', borderRadius: '6px', border: 'none', backgroundColor: '#0284c7', color: '#fff', textAlign: 'left', cursor: 'pointer', fontWeight: '600', marginBottom: '5px', fontSize: '13px' },
-        btnAcao: { padding: '6px 12px', borderRadius: '4px', border: 'none', fontWeight: '600', cursor: 'pointer', fontSize: '12px' },
-        tooltip: { position: 'absolute', backgroundColor: '#1e293b', color: '#fff', padding: '8px 12px', borderRadius: '4px', fontSize: '12px', zIndex: 999, top: '100%', left: '10px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', maxWidth: '280px', whiteSpace: 'normal', lineHeight: '1.4' },
-        alertaErro: { padding: '10px', borderRadius: '6px', backgroundColor: '#fee2e2', color: '#991b1b', fontSize: '13px', fontWeight: 'bold', marginBottom: '15px' },
-        entradaForm: { padding: '8px', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '13px', width: '100%', boxSizing: 'border-box' }
-    };
     const executarListagem = async () => {
         try {
             setErro('');
@@ -163,7 +153,7 @@ export default function App() {
     const processarRelatorioIntegrado = async () => {
         try {
             setErro('');
-            let url = `${API_URL}/api/v2/admin-exclusivo/relatorio-integrado?data_inicio=${dataInicio}&data_fim=${dataFim}`;
+            let url = `${API_URL}/api/v2/admin-exclusivo/relatorio-integrated?data_inicio=${dataInicio}&data_fim=${dataFim}`;
             if (areaFiltro) url += `&area_id=${areaFiltro}`;
             if (setorFiltro) url += `&setor_id=${setorFiltro}`;
             if (publicoFiltro) url += `&publico_alvo_id=${publicoFiltro}`;
@@ -178,54 +168,7 @@ export default function App() {
             setErro(err.message);
         }
     };
-
-    const processarSaidaManualAdmin = async () => {
-        if (!horaSaidaManualInput) return alert('Por favor, informe o horário de saída.');
-        try {
-            const res = await fetch(`${API_URL}/api/v2/admin-exclusivo/frequencias/saida-manual`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                    frequencia_id: selecionado.id,
-                    hora_saida: horaSaidaManualInput
-                })
-            });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || 'Erro operacional.');
-            alert(data.message || 'Saída registrada com sucesso!');
-            setHoraSaidaManualInput('');
-            setSelecionado(null);
-            executarListagem();
-        } catch (err) {
-            alert(err.message);
-        }
-    };
-
-    const processarAtualizacaoTempoParticipacao = async () => {
-        if (!selecionado) return;
-        try {
-            const res = await fetch(`${API_URL}/api/v2/admin-exclusivo/frequencias/atualizar-tempo-esquecimento`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({ frequencia_id: selecionado.id })
-            });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || 'Erro ao processar atualização.');
-            alert('Tempo de participação recalculado com base nas regras horárias oficiais e ocorrência registrada no Log de Fraudes!');
-            setSelecionado(null);
-            executarListagem();
-        } catch (err) {
-            alert(err.message);
-        }
-    };
-
-    const submeterFormularioAdministrativo = async (e) => {
+const submeterFormularioAdministrativo = async (e) => {
         e.preventDefault();
         try {
             setErro('');
@@ -286,7 +229,8 @@ export default function App() {
     };
 
     const condicaoBotaoTempo = selecionado && selecionado.tempo_participacao === null && selecionado.data_saida !== null;
-if (!token) {
+
+    if (!token) {
         return (
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', backgroundColor: '#0f172a' }}>
                 <form onSubmit={lidarComLogin} style={{ backgroundColor: '#fff', padding: '30px', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', width: '100%', maxWidth: '360px' }}>
@@ -311,7 +255,7 @@ if (!token) {
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', backgroundColor: '#0f172a' }}>
                 <form onSubmit={lidarComAlteracaoSenhaObrigatoria} style={{ backgroundColor: '#fff', padding: '30px', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', width: '100%', maxWidth: '360px' }}>
                     <h2 style={{ textAlign: 'center', color: '#991b1b', marginBottom: '10px', fontSize: '18px', fontWeight: 'bold' }}>Alteração de Senha</h2>
-                    <p style={{ fontSize: '12px', color: '#64748b', textAlign: 'center', marginBottom: '20px' }}>Por medidas de segurança, você deve atualizar sua senha de primeiro acesso.</p>
+                    <p style={{ fontSize: '12px', color: '#64748b', textAlign: 'center', marginBottom: '20px' }}>Por medidas de segurança, deve atualizar a sua senha de primeiro acesso.</p>
                     {erro && <div style={estilos.alertaErro}>{erro}</div>}
                     <div style={{ marginBottom: '15px' }}>
                         <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', fontWeight: '600', color: '#475569' }}>Nova Senha</label>
@@ -321,7 +265,7 @@ if (!token) {
                         <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', fontWeight: '600', color: '#475569' }}>Confirmar Nova Senha</label>
                         <input type="password" style={estilos.entradaForm} value={confirmarNovaSenha} onChange={e => setConfirmarNovaSenha(e.target.value)} required />
                     </div>
-                    <button type="submit" style={{ ...estilos.btnAcao, backgroundColor: '#16a34a', color: '#fff', width: '100%', padding: '10px' }}>SALVAR NOVA SENHA</button>
+                    <button type="submit" style={{ ...estilos.btnAcao, backgroundColor: '#16a34a', color: '#fff', width: '100%', padding: '10px' }}>SALVAL NOVA SENHA</button>
                 </form>
             </div>
         );
@@ -335,7 +279,7 @@ if (!token) {
                     <li><button onClick={() => setView('eventos')} style={view === 'eventos' ? estilos.btnMenuAtivo : estilos.btnMenu}>📅 Formações</button></li>
                     <li><button onClick={() => setView('locais')} style={view === 'locais' ? estilos.btnMenuAtivo : estilos.btnMenu}>📍 Locais</button></li>
                     <li><button onClick={() => setView('participantes')} style={view === 'participantes' ? estilos.btnMenuAtivo : estilos.btnMenu}>👥 Participantes</button></li>
-                    <li><button onClick={() => setView('frequencias')} style={view === 'frequencias' ? estilos.btnMenuAtivo : indicesfrequencias => setView('frequencias') || estilos.btnMenu}>📝 Histórico</button></li>
+                    <li><button onClick={() => setView('frequencias')} style={view === 'frequencias' ? estilos.btnMenuAtivo : estilos.btnMenu}>📝 Histórico</button></li>
                     <li><button onClick={() => setView('pesquisa-satisfacao')} style={view === 'pesquisa-satisfacao' ? estilos.btnMenuAtivo : estilos.btnMenu}>⭐ Pesquisa de Opinião</button></li>
                     <li><button onClick={() => setView('publico-alvo')} style={view === 'publico-alvo' ? estilos.btnMenuAtivo : estilos.btnMenu}>🎯 Público-Alvo</button></li>
                     <li><button onClick={() => setView('setores')} style={view === 'setores' ? estilos.btnMenuAtivo : estilos.btnMenu}>🏢 Setores</button></li>
@@ -532,4 +476,4 @@ if (!token) {
             </div>
         </div>
     );
-}    
+}

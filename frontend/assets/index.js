@@ -255,34 +255,50 @@ app.post('/api/v2/presenca/checar-status', async (req, res) => {
     }
 });
 
-app.post(['/api/v2/presencas', '/api/v2/presenca', '/api/v2/presenca/confirmar-entrada'], async (req, res) => {
-    const { device_key, device_token, evento_id, lat_entrada, lng_entrada, lat, lng, latitude, longitude } = req.body;
-    const tokenEfetivo = device_key || device_token;
-    const latEfetiva = lat_entrada || lat || latitude;
-    const lngEfetiva = lng_entrada || lng || longitude;
-    try {
-        if (!tokenEfetivo) return res.status(400).json({ error: 'Identificação ausente.' });
-        const resDisp = await pool.query('SELECT * FROM dispositivos WHERE device_token = $1 AND ativo = true', [tokenEfetivo]);
-        if (resDisp.rows.length === 0) return res.status(401).json({ error: 'Dispositivo não homologado. Por favor, refaça o vínculo do aparelho.' });
-        const disp = resDisp.rows[0];
+// Exemplo de Endpoint na sua API Node.js
+app.post('/api/v2/presencas', async (req, res) => {
+    const { device_key, evento_id, lat_entrada, lng_entrada } = req.body;
 
-        const checkDuplicado = await pool.query(`
-            SELECT id FROM frequencias 
-            WHERE participante_id = $1 AND evento_id = $2 AND data_saida IS NULL
-        `, [disp.participante_id, evento_id]);
-        if (checkDuplicado.rows.length > 0) {
-            return res.json({ status: 'sucesso', message: 'Presença já estava ativa.' });
+    try {
+        // 1. Busca os dados do evento e o participante vinculado ao device_key
+        const evento = await db.query('SELECT * FROM eventos WHERE id = $1', [evento_id]);
+        const participante = await db.query('SELECT * FROM participantes WHERE device_key = $1', [device_key]);
+        
+        const matricula = participante.rows[0]?.matricula || 'Desconhecido';
+
+        // 2. Cálculo da Distância (Haversine) entre o GPS do aluno e o GPS do Evento
+        const distancia = calcularDistancia(
+            lat_entrada, lng_entrada, 
+            parseFloat(evento.rows[0].latitude), parseFloat(evento.rows[0].longitude)
+        );
+
+        // 3. VERIFICAÇÃO DE FRAUDE: Está fora do raio de 1000 metros?
+        if (distancia > 1000) {
+            
+            // REGISTRO SILENCIOSO: Salva na tabela de fraudes antes de barrar
+            await db.query(`
+                INSERT INTO log_fraudes 
+                (device_key, matricula, evento_id, tipo_tentativa, lat_dispositivo, lng_dispositivo, distancia_calculada_metros, motivo_bloqueio)
+                VALUES ($1, $2, $3, 'ENTRADA', $4, $5, $6, 'Fora do raio permitido')
+            `, [device_key, matricula, evento_id, lat_entrada, lng_entrada, Math.round(distancia)]);
+
+            // Retorna o erro para o aplicativo, mas a Diretoria já tem o rastro
+            return res.status(400).json({ 
+                status: 'erro', 
+                error: `Bloqueio de Perímetro: Você está fora do raio permitido da formação.` 
+            });
         }
 
-        await pool.query(`
-            INSERT INTO frequencias (participante_id, evento_id, lat_entrada, lng_entrada, device_key, matricula, funcao, data_entrada) 
-            VALUES ($1, $2, $3, $4, $5, $6, 'Ouvinte', CURRENT_TIMESTAMP)
-        `, [disp.participante_id, evento_id, String(latEfetiva || ''), String(lngEfetiva || ''), tokenEfetivo, disp.participante_matricula]);
+        // 4. Se passou, segue o fluxo normal e registra na tabela 'frequencias'
+        await db.query(`
+            INSERT INTO frequencias (participante_id, evento_id, data_entrada, lat_entrada, lng_entrada, device_key, matricula)
+            VALUES ($1, $2, NOW(), $3, $4, $5, $6)
+        `, [participante.rows[0].id, evento_id, lat_entrada, lng_entrada, device_key, matricula]);
 
         return res.json({ status: 'sucesso' });
-    } catch (error) { 
-        console.error(error);
-        return res.status(500).json({ error: 'Erro interno ao salvar frequência.' }); 
+
+    } catch (error) {
+        return res.status(500).json({ error: 'Erro interno no servidor.' });
     }
 });
 

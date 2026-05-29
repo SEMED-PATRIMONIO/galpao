@@ -1,1035 +1,384 @@
 import React, { useState, useEffect } from 'react';
 
-const estilos = {
-    layout: { display: 'flex', fontFamily: 'Segoe UI, Tahoma, Geneva, Verdana, sans-serif', backgroundColor: '#f8fafc', height: '100vh', overflow: 'hidden' },
-    sidebar: { width: '240px', backgroundColor: '#0f172a', padding: '20px', display: 'flex', flexDirection: 'column', color: '#cbd5e1', height: '100vh', boxSizing: 'border-box' },
-    main: { flex: 1, padding: '30px', boxSizing: 'border-box', height: '100vh', overflowY: 'auto' },
-    brand: { fontSize: '18px', fontWeight: 'bold', color: '#fff', marginBottom: '25px', textAlign: 'center', borderBottom: '1px solid #1e293b', paddingBottom: '15px' },
-    menu: { listStyle: 'none', padding: 0, margin: 0, flex: 1 },
-    topo: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px', backgroundColor: '#fff', padding: '15px 20px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', position: 'relative' },
-    card: { backgroundColor: '#fff', padding: '20px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', marginBottom: '20px' },
-    gridFiltros: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px', marginBottom: '15px' },
-    tabela: { width: '100%', borderCollapse: 'collapse', marginTop: '10px', fontSize: '13px' },
-    th: { backgroundColor: '#f1f5f9', color: '#475569', fontWeight: '600', padding: '10px', textAlign: 'left', borderBottom: '2px solid #e2e8f0' },
-    td: { padding: '10px', borderBottom: '1px solid #e2e8f0', color: '#334155', position: 'relative' },
-    btnMenu: { display: 'block', width: '100%', padding: '10px 12px', borderRadius: '6px', border: 'none', background: 'none', color: '#94a3b8', textAlign: 'left', cursor: 'pointer', fontWeight: '500', marginBottom: '5px', fontSize: '13px' },
-    btnMenuAtivo: { display: 'block', width: '100%', padding: '10px 12px', borderRadius: '6px', border: 'none', backgroundColor: '#0284c7', color: '#fff', textAlign: 'left', cursor: 'pointer', fontWeight: '600', marginBottom: '5px', fontSize: '13px' },
-    btnAcao: { padding: '6px 12px', borderRadius: '4px', border: 'none', fontWeight: '600', cursor: 'pointer', fontSize: '12px' },
-    tooltip: { position: 'absolute', backgroundColor: '#1e293b', color: '#fff', padding: '8px 12px', borderRadius: '4px', fontSize: '12px', zIndex: 999, top: '100%', left: '10px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', maxWidth: '280px', whiteSpace: 'normal', lineHeight: '1.4' },
-    alertaErro: { padding: '10px', borderRadius: '6px', backgroundColor: '#fee2e2', color: '#991b1b', fontSize: '13px', fontWeight: 'bold', marginBottom: '15px' },
-    entradaForm: { padding: '8px', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '13px', width: '100%', boxSizing: 'border-box' },
-    btnAdicionar: { position: 'absolute', left: '50%', transform: 'translateX(-50%)', backgroundColor: '#16a34a', color: '#fff', padding: '8px 16px', borderRadius: '6px', border: 'none', fontWeight: 'bold', fontSize: '13px', cursor: 'pointer', boxShadow: '0 2px 4px rgba(22,163,74,0.2)' },
-    modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.3)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000, padding: '20px' },
-    modalGlass: { backgroundColor: 'rgba(255, 255, 255, 0.8)', border: '1px solid rgba(255, 255, 255, 0.4)', borderRadius: '16px', boxShadow: '0 8px 32px 0 rgba(15, 23, 42, 0.15)', width: '100%', maxWidth: '600px', maxHeight: '95vh', overflowY: 'auto', padding: '25px', boxSizing: 'border-box' }
-};
+const API_URL = window.location.origin.includes('localhost') ? 'http://localhost:3009' : '';
 
-// Movido para fora do componente para evitar TDZ no build de produção
-const obterUsuarioSeguro = () => {
+const obterAgoraSaoPaulo = () => {
     try {
-        const dadosSalvos = localStorage.getItem('admin_user');
-        if (!dadosSalvos) return null;
-        return JSON.parse(dadosSalvos);
+        const dataTexto = new Date().toLocaleString("sv-SE", { timeZone: "America/Sao_Paulo" }).replace(' ', 'T');
+        const data = new Date(dataTexto);
+        return isNaN(data.getTime()) ? new Date() : data;
     } catch (e) {
-        localStorage.removeItem('admin_user'); 
-        localStorage.removeItem('admin_token'); 
-        return null;
+        return new Date();
     }
 };
 
 export default function App() {
-    const tokenSalvo = localStorage.getItem('admin_token');
-    const [token, setToken] = useState(tokenSalvo && tokenSalvo !== 'undefined' && tokenSalvo !== 'null' ? tokenSalvo : null);
-    const [user, setUser] = useState(obterUsuarioSeguro());
-    const [view, setView] = useState('eventos');
-    const [usuarioInput, setUsuarioInput] = useState('');
-    const [senhaInput, setSenhaInput] = useState('');
-    const [novaSenha, setNovaSenha] = useState('');
-    const [confirmarNovaSenha, setConfirmarNovaSenha] = useState('');
-    const [erro, setErro] = useState('');
-    const [isEditando, setIsEditando] = useState(false);
-    
-    const [lista, setLista] = useState([]);
-    const [selecionado, setSelecionado] = useState(null);
-    const [form, setForm] = useState({});
-    const [modalEventoAberto, setModalEventoAberto] = useState(false);
-    const [modalLocalAberto, setModalLocalAberto] = useState(false);
-    const [modalGenericAberto, setModalGenericAberto] = useState(false);
-    const [pesquisaCidade, setPesquisaCidade] = useState('');
-    const [mapaLeaflet, setMapaLeaflet] = useState(null);
-    const [marcadorMapa, setMarcadorMapa] = useState(null);    
-    const [publicosSelecionados, setPublicosSelecionados] = useState([]);
-    const [totaisSuperior, setTotaisSuperior] = useState(0);
-    
-    const [dataInicio, setDataInicio] = useState(new Date().toISOString().split('T')[0]);
-    const [dataFim, setDataFim] = useState(new Date().toISOString().split('T')[0]);
-    const [participanteFiltro, setParticipanteFiltro] = useState('');
-    const [listaParticipantes, setListaParticipantes] = useState([]);    
-    const [areaFiltro, setAreaFiltro] = useState('');
-    const [setorFiltro, setSetorFiltro] = useState('');
-    const [publicoFiltro, setPublicoFiltro] = useState('');
+    // Estados de Controle do Fluxo
+    // Estados possíveis: 'carregando', 'sem_evento', 'nao_vinculado', 'pendente_admin', 'multiplos', 'entrada', 'logado', 'pesquisa', 'concluido'
+    const [statusFluxo, setStatusFluxo] = useState('carregando');
+    const [eventoAtual, setEventoAtual] = useState(null);
+    const [listaEventos, setListaEventos] = useState([]);
+    const [alertaMsg, setAlertaMsg] = useState('');
+    const [coords, setCoords] = useState({ lat: null, lng: null });
+    const [carregandoAcao, setCarregandoAcao] = useState(false);
 
-    const [combos, setCombos] = useState({ areas: [], setores: [], locais: [], publicos: [] });
-    const [dadosEstatisticos, setDadosEstatisticos] = useState({ total_eventos: 0, total_frequencias: 0 });
-    const [horaSaidaManualInput, setHoraSaidaManualInput] = useState('');
-    const [hoveredRowId, setHoveredRowId] = useState(null);
+    // Formulário de Vínculo de Aparelho
+    const [formVinculo, setFormVinculo] = useState({ nome: '', matricula: '' });
 
-    const API_URL = window.location.origin.includes('localhost') ? 'http://localhost:3009' : '';
+    // Formulário de Avaliação de Saída
+    const [avaliacao, setAvaliacao] = useState('Ótimo');
+    const [comentarios, setComentarios] = useState('');
 
+    // Efeito Inicial: Roda assim que o app abre
     useEffect(() => {
-        if (token) {
-            carregarCombosAuxiliares();
-            if (view !== 'frequencias') {
-                executarListagem();
-            }
-        }
-    }, [token, view]);
-    // Monitora horários de início/fim e calcula a carga horária automaticamente
-    useEffect(() => {
-        if (form.hora_inicio && form.hora_fim) {
-            const [hIni, mIni] = form.hora_inicio.split(':').map(Number);
-            const [hFim, mFim] = form.hora_fim.split(':').map(Number);
-            
-            let minutosTotais = (hFim * 60 + mFim) - (hIni * 60 + mIni);
-            if (minutosTotais < 0) minutosTotais += 24 * 60; // Trata eventos que cruzam a meia-noite
-            
-            const horasDecimais = (minutosTotais / 60).toFixed(2);
-            setForm(prev => ({ ...prev, carga_horaria: horasDecimais }));
-        }
-    }, [form.hora_inicio, form.hora_fim]);
-    // Inicialização segura do Mapa Leaflet dinamicamente
-    useEffect(() => {
-        if (!modalLocalAberto) {
-            if (mapaLeaflet) {
-                mapaLeaflet.remove();
-                setMapaLeaflet(null);
-                setMarcadorMapa(null);
-            }
-            return;
-        }
+        verificarFaseInicial();
+    }, []);
 
-        const iniciarInstanciaMapa = () => {
-            setTimeout(() => {
-                const el = document.getElementById('mapa-leaflet');
-                if (!el) return;
-
-                // Coordenadas padrão de Queimados, RJ
-                const defaultLat = -22.7161;
-                const defaultLng = -43.5556;
-
-                const centroLat = isEditando && form.latitude ? parseFloat(form.latitude) : defaultLat;
-                const centroLng = isEditando && form.longitude ? parseFloat(form.longitude) : defaultLng;
-
-                const map = window.L.map('mapa-leaflet').setView([centroLat, centroLng], 14);
-                window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    attribution: '© OpenStreetMap'
-                }).addTo(map);
-
-                let marker = null;
-                if (isEditando && form.latitude && form.longitude) {
-                    marker = window.L.marker([centroLat, centroLng]).addTo(map);
-                }
-
-                map.on('click', async (e) => {
-                    const { lat, lng } = e.latlng;
-                    if (marker) {
-                        marker.setLatLng([lat, lng]);
-                    } else {
-                        marker = window.L.marker([lat, lng]).addTo(map);
-                        setMarcadorMapa(marker);
-                    }
-
-                    setForm(prev => ({ ...prev, latitude: lat.toFixed(8), longitude: lng.toFixed(8) }));
-
-                    // Geolocalização Reversa Automática (Nominatim OpenStreetMap)
-                    try {
-                        const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
-                        if (r.ok) {
-                            const d = await r.json();
-                            setForm(prev => ({ ...prev, endereco: d.display_name || '' }));
-                        }
-                    } catch (err) {
-                        console.error(err);
-                    }
-                });
-
-                setMapaLeaflet(map);
-                setMarcadorMapa(marker);
-            }, 350);
-        };
-
-        if (!window.L) {
-            const link = document.createElement('link');
-            link.rel = 'stylesheet';
-            link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-            document.head.appendChild(link);
-
-            const script = document.createElement('script');
-            script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-            script.onload = iniciarInstanciaMapa;
-            document.body.appendChild(script);
-        } else {
-            iniciarInstanciaMapa();
-        }
-    }, [modalLocalAberto]);
-
-    const buscarCidadeNoMapa = async () => {
-        if (!pesquisaCidade.trim()) return;
+    // PASSO 1 e 2: Verificar evento no dia e checar vínculo do dispositivo (Sem forçar GPS ainda)
+    const verificarFaseInicial = async () => {
+        const dKey = localStorage.getItem('device_token') || localStorage.getItem('device_key');
+        
         try {
-            const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(pesquisaCidade)}`);
-            if (r.ok) {
-                const dados = await r.json();
-                if (dados && dados.length > 0) {
-                    const { lat, lon, display_name } = dados[0];
-                    const latNum = parseFloat(lat);
-                    const lngNum = parseFloat(lon);
-
-                    if (mapaLeaflet) {
-                        mapaLeaflet.flyTo([latNum, lngNum], 15);
-                        let m = marcadorMapa;
-                        if (m) {
-                            m.setLatLng([latNum, lngNum]);
-                        } else {
-                            m = window.L.marker([latNum, lngNum]).addTo(mapaLeaflet);
-                            setMarcadorMapa(m);
-                        }
-                        setForm(prev => ({
-                            ...prev,
-                            latitude: latNum.toFixed(8),
-                            longitude: lngNum.toFixed(8),
-                            endereco: display_name || ''
-                        }));
-                    }
-                } else {
-                    alert('Nenhum local localizado com este nome.');
-                }
-            }
-        } catch (e) {
-            console.error(e);
-        }
-    };
-
-    const mudarAbaNavegacao = (novaAba) => {
-        setView(novaAba);
-        setSelecionado(null);
-        setForm({});
-        setErro('');
-    };
-
-    const carregarCombosAuxiliares = async () => {
-        try {
-            const headers = { 'Authorization': `Bearer ${token}` };
-            const [rA, rS, rL, rP, rPart] = await Promise.all([
-                fetch(`${API_URL}/api/v2/admin-exclusivo/combos/areas`, { headers }),
-                fetch(`${API_URL}/api/v2/admin-exclusivo/combos/setores`, { headers }),
-                fetch(`${API_URL}/api/v2/admin-exclusivo/combos/locais`, { headers }),
-                fetch(`${API_URL}/api/v2/admin-exclusivo/combos/publicos`, { headers }),
-                fetch(`${API_URL}/api/v2/admin-exclusivo/listagens/participantes`, { headers })
-            ]);
-            setCombos({
-                areas: rA.ok ? await rA.json() : [],
-                setores: rS.ok ? await rS.json() : [],
-                locais: rL.ok ? await rL.json() : [],
-                publicos: rP.ok ? await rP.json() : []
-            });
-            if (rPart.ok) {
-                setListaParticipantes(await rPart.json());
-            }
-        } catch (e) {}
-    };
-
-    const lidarComLogin = async (e) => {
-        e.preventDefault();
-        setErro('');
-        try {
-            const res = await fetch(`${API_URL}/api/v2/admin-exclusivo/auth/login`, {
+            const res = await fetch(`${API_URL}/api/v2/presenca/inicializar`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ usuario: usuarioInput, senha: senhaInput })
+                body: JSON.stringify({ device_key: dKey || null })
             });
+
             const data = await res.json();
-            if (!res.ok) {
-                setErro(data.error || 'Erro ao efetuar login.');
+
+            // 1. Se não houver eventos agendados para hoje, barra imediatamente (sem pedir GPS)
+            if (res.status === 404 || (data.eventos && data.eventos.length === 0)) {
+                setStatusFluxo('sem_evento');
                 return;
             }
-            localStorage.setItem('admin_token', data.token);
-            localStorage.setItem('admin_user', JSON.stringify(data.user));
-            setToken(data.token);
-            setUser(data.user);
+
+            // 2. Se o aparelho não for reconhecido ou não tiver chave, vai para a tela de vínculo imediato
+            if (res.status === 401 || !dKey) {
+                setListaEventos(data.eventos || []);
+                setStatusFluxo('nao_vinculado');
+                return;
+            }
+
+            if (data.status === 'sucesso') {
+                setListaEventos(data.eventos);
+
+                // 3. Verificar pendências de saídas antigas ou travas do Admin
+                if (data.situacao === 'bloqueado_saida_estourada') {
+                    setStatusFluxo('pendente_admin');
+                    exibirAlertaTemporizado('Você possui uma entrada sem registro de saída e o prazo expirou. Solicite liberação ao administrador.');
+                    return;
+                }
+
+                // Se o usuário já está ativamente logado em algum evento
+                if (data.tem_evento_ativo && data.evento_ativo_id) {
+                    const evAtivo = data.eventos.find(e => e.id === data.evento_ativo_id);
+                    if (evAtivo) {
+                        setEventoAtual(evAtivo);
+                        setStatusFluxo('logado'); // Vai direto para a tela de espera da saída
+                        capturarGeolocalizacaoSilenciosa();
+                        return;
+                    }
+                }
+
+                // Direcionamento de fluxo padrão para novos registros
+                if (data.eventos.length === 1) {
+                    setEventoAtual(data.eventos[0]);
+                    setStatusFluxo('entrada');
+                } else {
+                    setStatusFluxo('multiplos');
+                }
+                
+                // Captura o GPS em background agora que sabe que tem evento e está vinculado
+                capturarGeolocalizacaoSilenciosa();
+            }
         } catch (err) {
-            setErro('Falha de comunicação.');
+            setStatusFluxo('sem_evento');
+            exibirAlertaTemporizado('Sem comunicação com o servidor. Verifique sua internet.');
         }
     };
 
-    const lidarComAlteracaoSenhaObrigatoria = async (e) => {
+    const capturarGeolocalizacaoSilenciosa = () => {
+        navigator.geolocation.getCurrentPosition(
+            (pos) => setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+            () => exibirAlertaTemporizado('Aviso: Ative o GPS do aparelho para conseguir marcar presença.')
+        );
+    };
+
+    const exibirAlertaTemporizado = (msg) => {
+        setAlertaMsg(msg);
+        setTimeout(() => setAlertaMsg(''), 8000);
+    };
+
+    // AÇÃO: Realizar o Auto-Vínculo do aparelho na hora
+    const dispararAutoVinculo = async (e) => {
         e.preventDefault();
-        setErro('');
-        if (novaSenha !== confirmarNovaSenha) {
-            setErro('As senhas digitadas não conferem.');
+        if (!formVinculo.nome || !formVinculo.matricula) {
+            exibirAlertaTemporizado('Preencha seu Nome e Matrícula para vincular.');
             return;
         }
+
+        setCarregandoAcao(true);
         try {
-            const res = await fetch(`${API_URL}/api/v2/admin-exclusivo/auth/alterar-senha-obrigatoria`, {
+            // Gera um token UUID temporário/aleatório no lado do cliente caso queira, 
+            // ou deixa sua API gerar e devolver no response.
+            const novoToken = 'dev_' + Math.random().toString(36).substr(2, 9) + Date.now();
+
+            const res = await fetch(`${API_URL}/api/v2/dispositivos/vincular`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ usuario: user.usuario, novaSenha })
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    device_key: novoToken,
+                    nome: formVinculo.nome,
+                    matricula: formVinculo.matricula
+                })
             });
-            if (res.ok) {
-                const usuarioAtualizado = { ...user, deve_alterar_senha: false };
-                localStorage.setItem('admin_user', JSON.stringify(usuarioAtualizado));
-                setUser(usuarioAtualizado);
+
+            const data = await res.json();
+            if (res.ok && data.status === 'sucesso') {
+                localStorage.setItem('device_key', novoToken);
+                localStorage.setItem('device_token', novoToken);
+                exibirAlertaTemporizado('Aparelho vinculado com sucesso!');
+                // Reinicializa o fluxo agora com o aparelho devidamente registrado
+                setStatusFluxo('carregando');
+                verificarFaseInicial();
             } else {
-                const d = await res.json();
-                setErro(d.error || 'Erro ao alterar.');
+                exibirAlertaTemporizado(data.error || 'Não foi possível efetuar o vínculo.');
             }
         } catch (err) {
-            setErro('Erro na conexão.');
+            exibirAlertaTemporizado('Erro de rede ao tentar vincular aparelho.');
+        } finally {
+            setCarregandoAcao(false);
         }
     };
 
-    const efetuarLogout = () => {
-        localStorage.removeItem('admin_token');
-        localStorage.removeItem('admin_user');
-        setToken(null);
-        setUser(null);
+    const selecionarAtividadeManual = (ev) => {
+        setEventoAtual(ev);
+        setStatusFluxo('entrada');
     };
 
-    const executarListagem = async () => {
-        try {
-            setErro('');
-            setLista([]);
-            const res = await fetch(`${API_URL}/api/v2/admin-exclusivo/listagens/${view}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (!res.ok) throw new Error('Erro ao buscar dados do painel.');
-            const dados = await res.json();
-            setLista(dados);
-            setTotaisSuperior(dados.length);
-        } catch (err) {
-            setErro(err.message);
-        }
-    };
+    // PASSO 4, 5 e 6: Disparar Registro de Entrada
+    const dispararRegistroPresenca = async () => {
+        setCarregandoAcao(true);
+        // Garante a captura atualizada do GPS antes do envio
+        navigator.geolocation.getCurrentPosition(
+            async (pos) => {
+                const latAtual = pos.coords.latitude;
+                const lngAtual = pos.coords.longitude;
+                setCoords({ lat: latAtual, lng: lngAtual });
 
-    const processarRelatorioIntegrado = async () => {
-        try {
-            setErro('');
-            let url = `${API_URL}/api/v2/admin-exclusivo/relatorio-integrated?data_inicio=${dataInicio}&data_fim=${dataFim}`;
-            if (areaFiltro) url += `&area_id=${areaFiltro}`;
-            if (setorFiltro) url += `&setor_id=${setorFiltro}`;
-            if (publicoFiltro) url += `&publico_alvo_id=${publicoFiltro}`;
+                const dKey = localStorage.getItem('device_token') || localStorage.getItem('device_key');
 
-            const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
-            if (!res.ok) throw new Error('Erro ao processar relatório filtrado.');
-            const dados = await res.json();
-            setDadosEstatisticos(dados.totais);
-            setLista(dados.registros);
-            setTotaisSuperior(dados.registros.length);
-        } catch (err) {
-            setErro(err.message);
-        }
-    };
+                try {
+                    const res = await fetch(`${API_URL}/api/v2/presencas`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            device_key: dKey,
+                            evento_id: eventoAtual.id,
+                            lat_entrada: latAtual,
+                            lng_entrada: lngAtual
+                        })
+                    });
 
-    const lidarComPublicoCheckbox = (id) => {
-        if (publicosSelecionados.includes(id)) {
-            setPublicosSelecionados(publicosSelecionados.filter(pId => pId !== id));
-        } else {
-            setPublicosSelecionados([...publicosSelecionados, id]);
-        }
-    };
-
-    const submeterNovoEvento = async (e) => {
-        e.preventDefault();
-        try {
-            if (publicosSelecionados.length === 0) {
-                alert('Selecione pelo menos um Público-Alvo.');
-                return;
+                    const data = await res.json();
+                    if (res.ok && data.status === 'sucesso') {
+                        setStatusFluxo('logado');
+                    } else {
+                        // Se falhar (por distância ou horário), o backend já salvou no log_fraudes
+                        exibirAlertaTemporizado(data.error || 'Registro rejeitado pelos critérios de validação.');
+                    }
+                } catch (err) {
+                    exibirAlertaTemporizado('Erro ao enviar dados de presença.');
+                } finally {
+                    setCarregandoAcao(false);
+                }
+            },
+            () => {
+                setCarregandoAcao(false);
+                exibirAlertaTemporizado('Erro de GPS: Não foi possível obter sua localização exata.');
             }
-            const s1 = form.setor_id_1;
-            const s2 = form.setor_id_2;
-            const s3 = form.setor_id_3;
-            if ((s1 && (s1 === s2 || s1 === s3)) || (s2 && s2 === s3)) {
-                alert('Não selecione setores duplicados.');
-                return;
-            }
-            const res = await fetch(`${API_URL}/api/v2/admin-exclusivo/eventos`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ ...form, publicos: publicosSelecionados })
-            });
-            if (!res.ok) {
-                const d = await res.json();
-                throw new Error(d.error || 'Erro ao salvar.');
-            }
-            setModalEventoAberto(false);
-            setForm({});
-            setPublicosSelecionados([]);
-            executarListagem();
-        } catch (err) {
-            alert(err.message);
-        }
-    };
-
-    const submeterLocalExclusivo = async (e) => {
-        e.preventDefault();
-        if (!form.nome || !form.endereco || !form.latitude || !form.longitude) {
-            return alert('Por favor, defina o nome do espaço e marque a localização no mapa.');
-        }
-        try {
-            const urlFinal = isEditando ? `${API_URL}/api/v2/admin-exclusivo/locais/${selecionado.id}` : `${API_URL}/api/v2/admin-exclusivo/locais`;
-            const metodo = isEditando ? 'PUT' : 'POST';
-
-            const res = await fetch(urlFinal, {
-                method: metodo,
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify(form)
-            });
-            if (!res.ok) throw new Error('Não foi possível gravar o local.');
-            setModalLocalAberto(false);
-            setForm({});
-            setSelecionado(null);
-            setPesquisaCidade('');
-            executarListagem();
-        } catch (err) {
-            alert(err.message);
-        }
-    };
-
-    const processarSaidaManualAdmin = async () => {
-        if (!horaSaidaManualInput) return alert('Por favor, informe o horário de saída.');
-        try {
-            const res = await fetch(`${API_URL}/api/v2/admin-exclusivo/frequencias/saida-manual`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ frequencia_id: selecionado.id, hora_saida: horaSaidaManualInput })
-            });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || 'Erro operational.');
-            alert(data.message || 'Saída registrada com sucesso!');
-            setHoraSaidaManualInput('');
-            setSelecionado(null);
-            executarListagem();
-        } catch (err) {
-            alert(err.message);
-        }
-    };
-
-    const processarAtualizacaoTempoParticipacao = async () => {
-        if (!selecionado) return;
-        try {
-            const res = await fetch(`${API_URL}/api/v2/admin-exclusivo/frequencias/atualizar-tempo-esquecimento`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ frequencia_id: selecionado.id })
-            });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || 'Erro ao processar atualização.');
-            alert('Tempo de participação recalculado com base nas regras horárias oficiais e ocorrência registrada no Log de Fraudes!');
-            setSelecionado(null);
-            executarListagem();
-        } catch (err) {
-            alert(err.message);
-        }
-    };
-
-    const submeterFormularioAdministrativo = async (e) => {
-        e.preventDefault();
-        try {
-            setErro('');
-            if (view === 'usuarios' && isEditando && selecionado && selecionado.id === null) {
-                if (!novaSenha) throw new Error("A senha de redefinição não pode estar em branco.");
-                const res = await fetch(`${API_URL}/api/v2/admin-exclusivo/usuarios/alterar-propria-senha`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                    body: JSON.stringify({ novaSenha })
-                });
-                if (!res.ok) throw new Error('Erro ao redefinir.');
-                alert('Sua senha de operador foi updated.');
-                fecharFormularioEModais();
-                return;
-            }
-
-            let url = `/api/v2/admin-exclusivo/${view}`;
-            const metodo = isEditando ? 'PUT' : 'POST';
-            const endpointFinal = isEditando ? `${url}/${selecionado.id}` : url;
-
-            const res = await fetch(endpointFinal, {
-                method: metodo,
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify(form)
-            });
-            if (!res.ok) {
-                const d = await res.json();
-                throw new Error(d.error || 'Erro na operação.');
-            }
-            fecharFormularioEModais();
-            executarListagem();
-        } catch (err) {
-            setErro(err.message);
-        }
-    };
-
-    const iniciarEdicaoItem = (item) => {
-        setSelecionado(item);
-        setIsEditando(true);
-        if (view === 'participantes') {
-            setForm({ nome_completo: item.nome_completo, ativo: item.ativo });
-        } else if (['publico-alvo', 'setores', 'areas'].includes(view)) {
-            setForm({ nome: item.nome });
-        } else if (view === 'usuarios') {
-            setForm({ nome: item.nome, usuario: item.usuario });
-        }
-    };
-
-    const fecharFormularioEModais = () => {
-        setForm({});
-        setIsEditando(false);
-        setSelecionado(null);
-        setNovaSenha('');
-        setConfirmarNovaSenha('');
-        setHoraSaidaManualInput('');
-        setModalGenericAberto(false);
-    };
-
-    const condicaoBotaoTempo = selecionado && selecionado.tempo_participacao === null && selecionado.data_saida !== null;
-
-    if (!token) {
-        return (
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', backgroundColor: '#0f172a' }}>
-                <form onSubmit={lidarComLogin} style={{ backgroundColor: '#fff', padding: '30px', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', width: '100%', maxWidth: '360px' }}>
-                    <h2 style={{ textAlign: 'center', color: '#1e293b', marginBottom: '20px', fontSize: '20px', fontWeight: 'bold' }}>Painel Administrativo</h2>
-                    {erro && <div style={estilos.alertaErro}>{erro}</div>}
-                    <div style={{ marginBottom: '15px' }}>
-                        <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', fontWeight: '600', color: '#475569' }}>Usuário</label>
-                        <input type="text" style={estilos.entradaForm} value={usuarioInput} onChange={e => setUsuarioInput(e.target.value)} required />
-                    </div>
-                    <div style={{ marginBottom: '20px' }}>
-                        <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', fontWeight: '600', color: '#475569' }}>Senha</label>
-                        <input type="password" style={estilos.entradaForm} value={senhaInput} onChange={e => setSenhaInput(e.target.value)} required />
-                    </div>
-                    <button type="submit" style={{ ...estilos.btnAcao, backgroundColor: '#0284c7', color: '#fff', width: '100%', padding: '10px' }}>ACESSAR PAINEL</button>
-                </form>
-            </div>
         );
-    }
+    };
 
-    if (user && user.deve_alterar_senha) {
-        return (
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', backgroundColor: '#0f172a' }}>
-                <form onSubmit={lidarComAlteracaoSenhaObrigatoria} style={{ backgroundColor: '#fff', padding: '30px', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', width: '100%', maxWidth: '360px' }}>
-                    <h2 style={{ textAlign: 'center', color: '#991b1b', marginBottom: '10px', fontSize: '18px', fontWeight: 'bold' }}>Alteração de Senha</h2>
-                    <p style={{ fontSize: '12px', color: '#64748b', textAlign: 'center', marginBottom: '20px' }}>Por medidas de segurança, deve atualizar a sua senha de primeiro acesso.</p>
-                    {erro && <div style={estilos.alertaErro}>{erro}</div>}
-                    <div style={{ marginBottom: '15px' }}>
-                        <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', fontWeight: '600', color: '#475569' }}>Nova Senha</label>
-                        <input type="password" style={estilos.entradaForm} value={novaSenha} onChange={e => setNovaSenha(e.target.value)} required />
-                    </div>
-                    <div style={{ marginBottom: '20px' }}>
-                        <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', fontWeight: '600', color: '#475569' }}>Confirmar Nova Senha</label>
-                        <input type="password" style={estilos.entradaForm} value={confirmarNovaSenha} onChange={e => setConfirmarNovaSenha(e.target.value)} required />
-                    </div>
-                    <button type="submit" style={{ ...estilos.btnAcao, backgroundColor: '#16a34a', color: '#fff', width: '100%', padding: '10px' }}>SALVAR NOVA SENHA</button>
-                </form>
-            </div>
+    // PASSO 4, 5 e 6: Disparar Registro de Saída
+    const salvarAvaliacaoEConfirmarSaida = async (e) => {
+        e.preventDefault();
+        setCarregandoAcao(true);
+
+        navigator.geolocation.getCurrentPosition(
+            async (pos) => {
+                const latAtual = pos.coords.latitude;
+                const lngAtual = pos.coords.longitude;
+                const dKey = localStorage.getItem('device_token') || localStorage.getItem('device_key');
+
+                try {
+                    const res = await fetch(`${API_URL}/api/v2/presenca/confirmar-saida`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            device_key: dKey,
+                            evento_id: eventoAtual.id,
+                            avaliacao,
+                            comentarios,
+                            lat: latAtual,
+                            lng: lngAtual
+                        })
+                    });
+
+                    const data = await res.json();
+                    if (res.ok && data.status === 'sucesso') {
+                        setStatusFluxo('concluido');
+                    } else {
+                        exibirAlertaTemporizado(data.error || 'Erro ao registrar sua saída.');
+                    }
+                } catch (err) {
+                    exibirAlertaTemporizado('Erro de comunicação ao encerrar presença.');
+                } finally {
+                    setCarregandoAcao(false);
+                }
+            },
+            () => {
+                setCarregandoAcao(false);
+                exibirAlertaTemporizado('Geolocalização obrigatória para validar a saída.');
+            }
         );
-    }
+    };
+
+    const estilos = {
+        container: { fontFamily: 'Arial, sans-serif', backgroundColor: '#f4f6f9', minHeight: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px', boxSizing: 'border-box' },
+        card: { backgroundColor: '#ffffff', borderRadius: '12px', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', padding: '30px', width: '100%', maxWidth: '440px', boxSizing: 'border-box', textAlign: 'center' },
+        titulo: { fontSize: '22px', fontWeight: 'bold', color: '#1e3a8a', margin: '0 0 8px 0' },
+        subtitulo: { fontSize: '14px', color: '#64748b', margin: '0 0 24px 0' },
+        input: { width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1', marginBottom: '15px', boxSizing: 'border-box' },
+        btnPrimario: { width: '100%', padding: '14px', backgroundColor: '#0284c7', color: '#ffffff', border: 'none', borderRadius: '8px', fontWeight: 'bold', fontSize: '15px', cursor: 'pointer' },
+        btnSucesso: { width: '100%', padding: '14px', backgroundColor: '#16a34a', color: '#ffffff', border: 'none', borderRadius: '8px', fontWeight: 'bold', fontSize: '15px', cursor: 'pointer', marginTop: '15px' },
+        btnItem: { width: '100%', padding: '12px', backgroundColor: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '8px', textAlign: 'left', cursor: 'pointer', marginBottom: '10px' },
+        select: { width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1', backgroundColor: '#ffffff', marginBottom: '15px', marginTop: '5px' },
+        textarea: { width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1', minHeight: '80px', boxSizing: 'border-box', marginBottom: '15px' },
+        alerta: { backgroundColor: '#fef2f2', border: '1px solid #fee2e2', color: '#991b1b', padding: '12px', borderRadius: '8px', fontSize: '13px', marginBottom: '20px', textAlign: 'left', fontWeight: 'bold' }
+    };
+
     return (
-        <div style={estilos.layout}>
-            <div style={estilos.sidebar}>
-                <div style={estilos.brand}>SEMED - Formações</div>
-                <ul style={estilos.menu}>
-                    <li><button onClick={() => mudarAbaNavegacao('eventos')} style={view === 'eventos' ? estilos.btnMenuAtivo : estilos.btnMenu}>📅 Eventos</button></li>
-                    <li><button onClick={() => mudarAbaNavegacao('locais')} style={view === 'locais' ? estilos.btnMenuAtivo : estilos.btnMenu}>📍 Locais</button></li>
-                    <li><button onClick={() => mudarAbaNavegacao('participantes')} style={view === 'participantes' ? estilos.btnMenuAtivo : estilos.btnMenu}>👥 Participantes</button></li>
-                    <li><button onClick={() => mudarAbaNavegacao('frequencias')} style={view === 'frequencias' ? estilos.btnMenuAtivo : estilos.btnMenu}>📝 Histórico</button></li>
-                    <li><button onClick={() => mudarAbaNavegacao('pesquisa-satisfacao')} style={view === 'pesquisa-satisfacao' ? estilos.btnMenuAtivo : estilos.btnMenu}>⭐ Pesquisa de Opinião</button></li>
-                    <li><button onClick={() => mudarAbaNavegacao('publico-alvo')} style={view === 'publico-alvo' ? estilos.btnMenuAtivo : estilos.btnMenu}>🎯 Público-Alvo</button></li>
-                    <li><button onClick={() => mudarAbaNavegacao('setores')} style={view === 'setores' ? estilos.btnMenuAtivo : estilos.btnMenu}>🏢 Setores</button></li>
-                    <li><button onClick={() => mudarAbaNavegacao('areas')} style={view === 'areas' ? estilos.btnMenuAtivo : estilos.btnMenu}>📖 Áreas</button></li>
-                    <li><button onClick={() => mudarAbaNavegacao('usuarios')} style={view === 'usuarios' ? estilos.btnMenuAtivo : estilos.btnMenu}>🔒 Operadores</button></li>
-                    <li><button onClick={() => mudarAbaNavegacao('log-fraudes')} style={view === 'log-fraudes' ? estilos.btnMenuAtivo : estilos.btnMenu}>⚠️ Ocorrências</button></li>
-                </ul>
-                <button onClick={efetuarLogout} style={{ ...estilos.btnMenu, color: '#ef4444', marginTop: 'auto', fontWeight: 'bold' }}>🚪 Finalizar</button>
-            </div>
-
-            <div style={estilos.main}>
-                <div style={estilos.topo}>
-                    <h1 style={{ margin: 0, fontSize: '20px', color: '#1e293b', fontWeight: 'bold', textTransform: 'uppercase' }}>Visualizando: {view}</h1>
-                    
-                    {view === 'eventos' && (
-                        <button onClick={() => { setForm({}); setPublicosSelecionados([]); setModalEventoAberto(true); }} style={estilos.btnAdicionar}>
-                            ADICIONAR NOVO EVENTO
-                        </button>
-                    )}
-
-                    {view === 'locais' && (
-                        <div style={{ display: 'flex', gap: '10px', position: 'absolute', left: '50%', transform: 'translateX(-50%)' }}>
-                            <button 
-                                onClick={() => { setForm({}); setIsEditando(false); setPesquisaCidade(''); setModalLocalAberto(true); }} 
-                                style={{ ...estilos.btnAcao, backgroundColor: '#16a34a', color: '#fff', padding: '8px 16px', fontWeight: 'bold', borderRadius: '6px' }}
-                            >
-                                ➕ ADICIONAR LOCAL
-                            </button>
-                            <button 
-                                onClick={() => {
-                                    if(!selecionado) return;
-                                    setForm({ nome: selecionado.nome, endereco: selecionado.endereco, latitude: selecionado.latitude, longitude: selecionado.longitude });
-                                    setIsEditando(true);
-                                    setPesquisaCidade('');
-                                    setModalLocalAberto(true);
-                                }} 
-                                disabled={!selecionado}
-                                style={{ 
-                                    ...estilos.btnAcao, 
-                                    backgroundColor: selecionado ? '#0284c7' : '#cbd5e1', 
-                                    color: '#fff', 
-                                    padding: '8px 16px', 
-                                    fontWeight: 'bold', 
-                                    borderRadius: '6px',
-                                    cursor: selecionado ? 'pointer' : 'not-allowed'
-                                }}
-                            >
-                                ✏️ EDITAR LOCAL
-                            </button>
-                        </div>
-                    )}
-
-                    {['publico-alvo', 'setores', 'areas', 'usuarios'].includes(view) && (
-                        <div style={{ display: 'flex', gap: '10px', position: 'absolute', left: '50%', transform: 'translateX(-50%)' }}>
-                            <button 
-                                onClick={() => { setForm({}); setIsEditando(false); setModalGenericAberto(true); }} 
-                                style={{ ...estilos.btnAcao, backgroundColor: '#16a34a', color: '#fff', padding: '8px 16px', fontWeight: 'bold', borderRadius: '6px' }}
-                            >
-                                ➕ ADICIONAR NOVO
-                            </button>
-                            <button 
-                                onClick={() => {
-                                    if (!selecionado) return;
-                                    setIsEditando(true);
-                                    if (view === 'usuarios') {
-                                        setForm({ nome: selecionado.nome, usuario: selecionado.usuario });
-                                    } else {
-                                        setForm({ nome: selecionado.nome });
-                                    }
-                                    setModalGenericAberto(true);
-                                }} 
-                                disabled={!selecionado}
-                                style={{ 
-                                    ...estilos.btnAcao, 
-                                    backgroundColor: selecionado ? '#0284c7' : '#cbd5e1', 
-                                    color: '#fff', 
-                                    padding: '8px 16px', 
-                                    fontWeight: 'bold', 
-                                    borderRadius: '6px',
-                                    cursor: selecionado ? 'pointer' : 'not-allowed'
-                                }}
-                            >
-                                ✏️ EDITAR
-                            </button>
-                        </div>
-                    )}
-
-                    <div style={{ fontSize: '13px', color: '#64748b' }}>Registros carregados: <strong>{totaisSuperior}</strong></div>
-                </div>
-
-                {modalEventoAberto && (
-                    <div style={estilos.modalOverlay}>
-                        <div style={estilos.modalGlass}>
-                            <h2 style={{ margin: '0 0 20px 0', color: '#0f172a', fontSize: '18px', fontWeight: 'bold' }}>Cadastrar Nova Formação</h2>
-                            <form onSubmit={submeterNovoEvento}>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px' }}>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '5px' }}>Título do Evento</label>
-                                        <input type="text" style={estilos.entradaForm} value={form.titulo || ''} onChange={e => setForm({...form, titulo: e.target.value})} required />
-                                    </div>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '5px' }}>Palestrante / Facilitador</label>
-                                        <input type="text" style={estilos.entradaForm} value={form.palestrante || ''} onChange={e => setForm({...form, palestrante: e.target.value})} required />
-                                    </div>
-                                </div>
-
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '15px' }}>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '5px' }}>Data do Evento</label>
-                                        <input type="date" style={estilos.entradaForm} value={form.data_evento || ''} onChange={e => setForm({...form, data_evento: e.target.value})} required />
-                                    </div>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '5px' }}>Hora de Início</label>
-                                        <input type="time" style={estilos.entradaForm} value={form.hora_inicio || ''} onChange={e => setForm({...form, hora_inicio: e.target.value})} required />
-                                    </div>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '5px' }}>Hora de Término</label>
-                                        <input type="time" style={estilos.entradaForm} value={form.hora_fim || ''} onChange={e => setForm({...form, hora_fim: e.target.value})} required />
-                                    </div>
-                                </div>
-
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px' }}>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '5px' }}>Carga Horária (Ex: 2.50)</label>
-                                        <input type="number" step="0.01" style={estilos.entradaForm} value={form.carga_horaria || ''} onChange={e => setForm({...form, carga_horaria: e.target.value})} required />
-                                    </div>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '5px' }}>Local da Formação</label>
-                                        <select style={estilos.entradaForm} value={form.local_id || ''} onChange={e => {
-                                            const localEscolhido = combos.locais.find(l => l.id === parseInt(e.target.value));
-                                            setForm({
-                                                ...form,
-                                                local_id: e.target.value,
-                                                local: localEscolhido ? localEscolhido.nome : '',
-                                                endereco: localEscolhido ? localEscolhido.endereco : '',
-                                                latitude: localEscolhido ? localEscolhido.latitude : '',
-                                                longitude: localEscolhido ? localEscolhido.longitude : ''
-                                            });
-                                        }} required>
-                                            <option value="">Selecione um local...</option>
-                                            {combos.locais.map(l => <option key={l.id} value={l.id}>{l.nome}</option>)}
-                                        </select>
-                                    </div>
-                                </div>
-
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '15px' }}>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '11px', fontWeight: '600', marginBottom: '5px' }}>Setor Obrigatório 1</label>
-                                        <select style={estilos.entradaForm} value={form.setor_id_1 || ''} onChange={e => setForm({...form, setor_id_1: e.target.value})} required>
-                                            <option value="">Selecione...</option>
-                                            {combos.setores.map(s => <option key={s.id} value={s.id}>{s.nome}</option>)}
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '11px', fontWeight: '600', marginBottom: '5px' }}>Setor Opcional 2</label>
-                                        <select style={estilos.entradaForm} value={form.setor_id_2 || ''} onChange={e => setForm({...form, setor_id_2: e.target.value})}>
-                                            <option value="">Nenhum</option>
-                                            {combos.setores.map(s => <option key={s.id} value={s.id}>{s.nome}</option>)}
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '11px', fontWeight: '600', marginBottom: '5px' }}>Setor Opcional 3</label>
-                                        <select style={estilos.entradaForm} value={form.setor_id_3 || ''} onChange={e => setForm({...form, setor_id_3: e.target.value})}>
-                                            <option value="">Nenhum</option>
-                                            {combos.setores.map(s => <option key={s.id} value={s.id}>{s.nome}</option>)}
-                                        </select>
-                                    </div>
-                                </div>
-
-                                <div style={{ marginBottom: '15px' }}>
-                                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '5px' }}>Área do Conhecimento</label>
-                                    <select style={estilos.entradaForm} value={form.area_id || ''} onChange={e => setForm({...form, area_id: e.target.value})} required>
-                                        <option value="">Selecione uma área...</option>
-                                        {combos.areas.map(a => <option key={a.id} value={a.id}>{a.nome}</option>)}
-                                    </select>
-                                </div>
-
-                                <div style={{ marginBottom: '20px', backgroundColor: 'rgba(255,255,255,0.4)', padding: '15px', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.05)' }}>
-                                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '8px', color: '#1e293b' }}>Selecione os Públicos-Alvo Elegíveis:</label>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', maxHeight: '120px', overflowY: 'auto', paddingRight: '5px' }}>
-                                        {combos.publicos.map(p => (
-                                            <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', cursor: 'pointer' }}>
-                                                <input type="checkbox" checked={Array.isArray(publicosSelecionados) && publicosSelecionados.includes(p.id)} onChange={() => lidarComPublicoCheckbox(p.id)} />
-                                                {p.nome}
-                                            </label>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-                                    <button type="button" onClick={() => setModalEventoAberto(false)} style={{ ...estilos.btnAcao, backgroundColor: '#64748b', color: '#fff' }}>CANCELAR</button>
-                                    <button type="submit" style={{ ...estilos.btnAcao, backgroundColor: '#16a34a', color: '#fff' }}>SALVAR EVENTO</button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                )}
-
-                {modalLocalAberto && (
-                    <div style={estilos.modalOverlay}>
-                        <div style={estilos.modalGlass}>
-                            <h2 style={{ margin: '0 0 20px 0', color: '#0f172a', fontSize: '18px', fontWeight: 'bold' }}>
-                                {isEditando ? '✏️ Modificar Dados do Local' : '➕ Adicionar Novo Local no Mapa'}
-                            </h2>
-                            <form onSubmit={submeterLocalExclusivo}>
-                                <div style={{ marginBottom: '15px' }}>
-                                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '5px' }}>Nome do Espaço / Local</label>
-                                    <input type="text" style={estilos.entradaForm} value={form.nome || ''} onChange={e => setForm({...form, nome: e.target.value})} required />
-                                </div>
-
-                                {!isEditando && (
-                                    <div style={{ marginBottom: '15px', backgroundColor: 'rgba(2, 132, 199, 0.05)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(2, 132, 199, 0.1)' }}>
-                                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '5px', color: '#0284c7' }}>🔍 Buscar Endereço ou Referência:</label>
-                                        <div style={{ display: 'flex', gap: '8px' }}>
-                                            <input 
-                                                type="text" 
-                                                placeholder="Ex: Praça Nossa Senhora da Conceição, Queimados" 
-                                                style={estilos.entradaForm} 
-                                                value={pesquisaCidade} 
-                                                onChange={e => setPesquisaCidade(e.target.value)}
-                                                onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), buscarCidadeNoMapa())}
-                                            />
-                                            <button type="button" onClick={buscarCidadeNoMapa} style={{ ...estilos.btnAcao, backgroundColor: '#0284c7', color: '#fff', fontWeight: 'bold', padding: '0 15px' }}>BUSCAR</button>
-                                        </div>
-                                    </div>
-                                )}
-
-                                <div style={{ marginBottom: '15px' }}>
-                                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '5px' }}>📍 Clique no Mapa para marcar o ponto:</label>
-                                    <div id="mapa-leaflet" style={{ width: '100%', height: '260px', borderRadius: '8px', border: '1px solid #cbd5e1', marginBottom: '10px', zIndex: 1 }}></div>
-                                </div>
-
-                                <div style={{ marginBottom: '15px' }}>
-                                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '5px' }}>Endereço Completo (Preenchido pelo Mapa ou Manual)</label>
-                                    <textarea style={{ ...estilos.entradaForm, height: '55px', resize: 'none' }} value={form.endereco || ''} onChange={e => setForm({...form, endereco: e.target.value})} required />
-                                </div>
-
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '20px' }}>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '5px' }}>Latitude</label>
-                                        <input type="text" style={estilos.entradaForm} value={form.latitude || ''} onChange={e => setForm({...form, latitude: e.target.value})} placeholder="Clique no mapa..." required />
-                                    </div>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '5px' }}>Longitude</label>
-                                        <input type="text" style={estilos.entradaForm} value={form.longitude || ''} onChange={e => setForm({...form, longitude: e.target.value})} placeholder="Clique no mapa..." required />
-                                    </div>
-                                </div>
-
-                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-                                    <button type="button" onClick={() => { setModalLocalAberto(false); setForm({}); setPesquisaCidade(''); }} style={{ ...estilos.btnAcao, backgroundColor: '#64748b', color: '#fff' }}>CANCELAR</button>
-                                    <button type="submit" style={{ ...estilos.btnAcao, backgroundColor: '#16a34a', color: '#fff', fontWeight: 'bold' }}>SALVAR REGISTRO</button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                )}
-
-                {modalGenericAberto && (
-                    <div style={estilos.modalOverlay}>
-                        <div style={estilos.modalGlass}>
-                            <h2 style={{ margin: '0 0 20px 0', color: '#0f172a', fontSize: '18px', fontWeight: 'bold' }}>
-                                {isEditando ? '✏️ Modificar Registro' : '➕ Adicionar Novo Registro'}
-                            </h2>
-                            <form onSubmit={submeterFormularioAdministrativo}>
-                                {view === 'usuarios' ? (
-                                    <>
-                                        <div style={{ marginBottom: '15px' }}>
-                                            <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '5px' }}>Nome do Operador</label>
-                                            <input type="text" style={estilos.entradaForm} value={form.nome || ''} onChange={e => setForm({...form, nome: e.target.value})} required />
-                                        </div>
-                                        <div style={{ marginBottom: '15px' }}>
-                                            <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '5px' }}>Usuário (Login)</label>
-                                            <input type="text" style={estilos.entradaForm} value={form.usuario || ''} onChange={e => setForm({...form, usuario: e.target.value})} required />
-                                        </div>
-                                        {!isEditando && (
-                                            <div style={{ marginBottom: '15px' }}>
-                                                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '5px' }}>Senha de Acesso</label>
-                                                <input type="password" style={estilos.entradaForm} value={form.senha || ''} onChange={e => setForm({...form, senha: e.target.value})} required />
-                                            </div>
-                                        )}
-                                    </>
-                                ) : (
-                                    <div style={{ marginBottom: '20px' }}>
-                                        <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '5px' }}>Nome / Identificação</label>
-                                        <input type="text" style={estilos.entradaForm} value={form.nome || ''} onChange={e => setForm({...form, nome: e.target.value})} required />
-                                    </div>
-                                )}
-
-                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-                                    <button type="button" onClick={() => { setModalGenericAberto(false); setForm({}); setSelecionado(null); }} style={{ ...estilos.btnAcao, backgroundColor: '#64748b', color: '#fff' }}>CANCELAR</button>
-                                    <button type="submit" style={{ ...estilos.btnAcao, backgroundColor: '#16a34a', color: '#fff', fontWeight: 'bold' }}>SALVAR REGISTRO</button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                )}
-
-                {erro && <div style={estilos.alertaErro}>{erro}</div>}
-
-                {view === 'frequencias' && (
-                    <div style={{ ...estilos.card, display: 'flex', gap: '15px', alignItems: 'flex-end', backgroundColor: '#f8fafc', border: '1px solid #cbd5e1' }}>
-                        <div style={{ flex: 1 }}>
-                            <label style={{ display: 'block', marginBottom: '5px', fontSize: '12px', fontWeight: 'bold', color: '#475569' }}>Data de Início:</label>
-                            <input type="date" style={estilos.entradaForm} value={dataInicio} onChange={e => setDataInicio(e.target.value)} />
-                        </div>
-                        <div style={{ flex: 1 }}>
-                            <label style={{ display: 'block', marginBottom: '5px', fontSize: '12px', fontWeight: 'bold', color: '#475569' }}>Data de Término:</label>
-                            <input type="date" style={estilos.entradaForm} value={dataFim} onChange={e => setDataFim(e.target.value)} />
-                        </div>
-                        <div style={{ flex: 1 }}>
-                            <label style={{ display: 'block', marginBottom: '5px', fontSize: '12px', fontWeight: 'bold', color: '#475569' }}>Filtrar Área:</label>
-                            <select style={estilos.entradaForm} value={areaFiltro} onChange={e => setAreaFiltro(e.target.value)}>
-                                <option value="">Todas</option>
-                                {combos.areas.map(a => <option key={a.id} value={a.id}>{a.nome}</option>)}
-                            </select>
-                        </div>
-                        <div style={{ flex: 1 }}>
-                            <label style={{ display: 'block', marginBottom: '5px', fontSize: '12px', fontWeight: 'bold', color: '#475569' }}>Filtrar Setor:</label>
-                            <select style={estilos.entradaForm} value={setorFiltro} onChange={e => setSetorFiltro(e.target.value)}>
-                                <option value="">Todos</option>
-                                {combos.setores.map(s => <option key={s.id} value={s.id}>{s.nome}</option>)}
-                            </select>
-                        </div>
-                        <div style={{ flex: 1 }}>
-                            <label style={{ display: 'block', marginBottom: '5px', fontSize: '12px', fontWeight: 'bold', color: '#475569' }}>Público-Alvo:</label>
-                            <select style={estilos.entradaForm} value={publicoFiltro} onChange={e => setPublicoFiltro(e.target.value)}>
-                                <option value="">Todos</option>
-                                {combos.publicos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
-                            </select>
-                        </div>
-                        <div style={{ flex: 1 }}>
-                            <label style={{ display: 'block', marginBottom: '5px', fontSize: '12px', fontWeight: 'bold', color: '#475569' }}>Professor / Participante:</label>
-                            <select style={estilos.entradaForm} value={participanteFiltro} onChange={e => setParticipanteFiltro(e.target.value)}>
-                                <option value="">Todos</option>
-                                {listaParticipantes.map(p => (
-                                    <option key={p.id} value={p.matricula}>{p.nome_completo} ({p.matricula})</option>
-                                ))}
-                            </select>
-                        </div>                        
-                        <button onClick={processarRelatorioIntegrado} style={{ ...estilos.btnAcao, backgroundColor: '#0284c7', color: '#fff', padding: '10px 15px' }}>FILTRAR BASE</button>
-                    </div>
-                )}
-
-                {view === 'frequencias' && selecionado && (
-                    <div style={{ ...estilos.card, backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div style={{ fontSize: '13px', color: '#1e40af' }}>
-                            Professor Selecionado: <strong>{selecionado.participante_nome || selecionado.matricula}</strong> | Entrada: {new Date(selecionado.data_entrada).toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})}
-                        </div>
-                        <div style={{ display: 'flex', gap: '10px' }}>
-                            <input type="time" style={{ ...estilos.entradaForm, width: '110px' }} value={horaSaidaManualInput} onChange={e => setHoraSaidaManualInput(e.target.value)} disabled={selecionado.data_saida !== null} />
-                            <button onClick={processarSaidaManualAdmin} disabled={selecionado.data_saida !== null} style={{ ...estilos.btnAcao, backgroundColor: selecionado.data_saida !== null ? '#cbd5e1' : '#ea580c', color: '#fff' }}>REGISTRAR SAÍDA MANUAL</button>
-                            <button onClick={processarAtualizacaoTempoParticipacao} disabled={!condicaoBotaoTempo} style={{ ...estilos.btnAcao, backgroundColor: condicaoBotaoTempo ? '#16a34a' : '#cbd5e1', color: '#fff' }}>ATUALIZAR TEMPO DE PARTICIPAÇÃO</button>
-                            <button onClick={fecharFormularioEModais} style={{ ...estilos.btnAcao, backgroundColor: '#64748b', color: '#fff' }}>CANCELAR</button>
-                        </div>
-                    </div>
-                )}
-
+        <div style={estilos.container}>
+            {statusFluxo === 'carregando' && (
                 <div style={estilos.card}>
-                    <table style={estilos.tabela}>
-                        <thead>
-                            <tr>
-                                {view === 'eventos' && (
-                                    <>
-                                        <th style={estilos.th}>Título da Formação</th>
-                                        <th style={estilos.th}>Localização</th>
-                                        <th style={estilos.th}>Palestrante / Facilitador</th>
-                                        <th style={estilos.th}>Data Evento</th>
-                                        <th style={estilos.th}>Horário Oficial</th>
-                                    </>
-                                )}
-                                {view === 'locais' && (
-                                    <>
-                                        <th style={estilos.th}>Nome do Espaço</th>
-                                        <th style={estilos.th}>Endereço Completo</th>
-                                    </>
-                                )}
-                                {view === 'frequencias' && (
-                                    <>
-                                        <th style={estilos.th}>Data</th>
-                                        <th style={estilos.th}>Matrícula</th>
-                                        <th style={estilos.th}>Participante</th>
-                                        <th style={estilos.th}>Evento</th>
-                                        <th style={estilos.th}>Entrada Real</th>
-                                        <th style={estilos.th}>Saída Real</th>
-                                        <th style={estilos.th}>Carga Horária</th>
-                                        <th style={estilos.th}>Tempo Efetivo</th>
-                                        <th style={estilos.th}>Avaliação</th>
-                                    </>
-                                )}
-                                {view === 'pesquisa-satisfacao' && (
-                                    <>
-                                        <th style={estilos.th}>Atividade / Formação</th>
-                                        <th style={estilos.th}>Participante</th>
-                                        <th style={estilos.th}>Avaliação</th>
-                                        <th style={estilos.th}>Data de Envio</th>
-                                    </>
-                                )}
-                                {['publico-alvo', 'setores', 'areas', 'usuarios'].includes(view) && (
-                                    <th style={estilos.th}>Listagem de Registros</th>
-                                )}
-                                {view === 'participantes' && (
-                                    <>
-                                        <th style={estilos.th}>Listagem de Participantes</th>
-                                        
-                                    </>
-                                )}
-                                {view === 'log-fraudes' && (
-                                    <th style={estilos.th}>Ocorrências</th>
-                                )}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {lista
-                                .filter(item => !participanteFiltro || item.matricula === participanteFiltro)
-                                .map((item) => {
-                                    const possuiComentario = view === 'pesquisa-satisfacao' && item.comentarios && item.comentarios.trim() !== '';
-                                    return (
-                                        <tr 
-                                            key={item.id} 
-                                            onClick={() => (view === 'frequencias' || view === 'locais' || ['publico-alvo', 'setores', 'areas', 'usuarios'].includes(view)) && setSelecionado(item)}
-                                            onMouseEnter={() => possuiComentario && setHoveredRowId(item.id)}
-                                            onMouseLeave={() => possuiComentario && setHoveredRowId(null)}
-                                            style={{ 
-                                                cursor: (view === 'frequencias' || view === 'locais' || ['publico-alvo', 'setores', 'areas', 'usuarios'].includes(view)) ? 'pointer' : 'default',
-                                                backgroundColor: selecionado && selecionado.id === item.id ? '#f0fdf4' : (possuiComentario && hoveredRowId === item.id ? '#f8fafc' : 'transparent'),
-                                                transition: 'background-color 0.15s ease'
-                                            }}
-                                        >
-                                            {view === 'eventos' && (
-                                                <>
-                                                    <td style={estilos.td}>{item.titulo}</td>
-                                                    <td style={estilos.td}>{item.local}</td>
-                                                    <td style={estilos.td}>{item.palestrante}</td>
-                                                    <td style={estilos.td}>{item.data_evento ? new Date(item.data_evento).toLocaleDateString('pt-BR') : ''}</td>
-                                                    <td style={estilos.td}>{item.hora_inicio ? item.hora_inicio.slice(0,5) : ''} às {item.hora_fim ? item.hora_fim.slice(0,5) : ''}</td>
-                                                </>
-                                            )}
-                                            {view === 'locais' && (
-                                                <>
-                                                    <td style={estilos.td}>{item.nome}</td>
-                                                    <td style={estilos.td}>{item.endereco}</td>
-                                                </>
-                                            )}
-                                            {view === 'frequencias' && (
-                                                <>
-                                                    <td style={estilos.td}>{item.data_evento ? new Date(item.data_evento).toLocaleDateString('pt-BR') : (item.data_entrada ? new Date(item.data_entrada).toLocaleDateString('pt-BR') : '')}</td>
-                                                    <td style={estilos.td}>{item.matricula}</td>
-                                                    <td style={estilos.td}>{item.participante_nome || 'Não Identificado'}</td>
-                                                    <td style={estilos.td}>{item.evento_titulo}</td>
-                                                    <td style={estilos.td}>{item.data_entrada ? new Date(item.data_entrada).toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'}) : '--:--'}</td>
-                                                    <td style={estilos.td}>{item.data_saida ? new Date(item.data_saida).toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'}) : '--:--'}</td>
-                                                    <td style={estilos.td}>{item.carga_horaria ? `${item.carga_horaria}h` : ''}</td>
-                                                    <td style={estilos.td}><strong style={{ color: item.tempo_participacao ? '#0f172a' : '#ef4444' }}>{item.tempo_participacao || 'Pendente'}</strong></td>
-                                                    <td style={estilos.td}>⭐ {item.avaliacao || 'Sem nota'}</td>
-                                                </>
-                                            )}
-                                            {view === 'pesquisa-satisfacao' && (
-                                                <>
-                                                    <td style={estilos.td}>{item.evento_titulo}</td>
-                                                    <td style={estilos.td}>{item.participante_nome || item.participante_matricula}</td>
-                                                    <td style={{ ...estilos.td, fontWeight: possuiComentario ? 'bold' : 'normal' }}>
-                                                        {item.avaliacao}
-                                                        {possuiComentario && hoveredRowId === item.id && (
-                                                            <div style={estilos.tooltip}>
-                                                                <strong>Comentário do Participante:</strong><br />
-                                                                {item.comentarios}
-                                                            </div>
-                                                        )}
-                                                    </td>
-                                                    <td style={estilos.td}>{item.criado_em ? new Date(item.criado_em).toLocaleDateString('pt-BR') : ''}</td>
-                                                </>
-                                            )}
-                                            {['publico-alvo', 'setores', 'areas', 'participantes', 'usuarios'].includes(view) && (
-                                                <>
-                                                    <td style={estilos.td}>{item.nome || item.nome_completo || item.usuario}</td>
-                                                </>
-                                            )}
-                                            {view === 'log-fraudes' && (
-                                                <td style={estilos.td}>
-                                                    Matrícula: <strong>{item.matricula}</strong> | Motivo: <span style={{ color: '#ef4444', fontWeight: 'bold' }}>{item.motivo}</span> | Registro: {item.data_tentativa ? new Date(item.data_tentativa).toLocaleString('pt-BR') : ''}
-                                                </td>
-                                            )}
-                                        </tr>
-                                    );
-                            })}
-                               
-                        </tbody>
-                    </table>
+                    <p style={estilos.titulo}>Buscando Atividades...</p>
+                    <p style={estilos.subtitulo}>Verificando cronograma e calendário oficial do dia.</p>
                 </div>
-            </div>
+            )}
+
+            {statusFluxo === 'sem_evento' && (
+                <div style={estilos.card}>
+                    <div style={{ fontSize: '50px', marginBottom: '10px' }}>📆</div>
+                    <p style={estilos.titulo}>Nenhuma Atividade</p>
+                    <p style={estilos.subtitulo}>Não existem reuniões ou formações agendadas para o dia de hoje.</p>
+                    {alertaMsg && <div style={estilos.alerta}>{alertaMsg}</div>}
+                </div>
+            )}
+
+            {statusFluxo === 'nao_vinculado' && (
+                <div style={estilos.card}>
+                    <p style={estilos.titulo}>Vincular Dispositivo</p>
+                    <p style={estilos.subtitulo}>Este aparelho ainda não possui identificação no portal. Cadastre-se abaixo:</p>
+                    {alertaMsg && <div style={estilos.alerta}>{alertaMsg}</div>}
+                    <form onSubmit={dispararAutoVinculo}>
+                        <input style={estilos.input} type="text" placeholder="Seu Nome Completo" value={formVinculo.nome} onChange={e => setFormVinculo({...formVinculo, nome: e.target.value})} required />
+                        <input style={estilos.input} type="text" placeholder="Sua Matrícula/CPF" value={formVinculo.matricula} onChange={e => setFormVinculo({...formVinculo, matricula: e.target.value})} required />
+                        <button type="submit" disabled={carregandoAcao} style={estilos.btnPrimario}>
+                            {carregandoAcao ? 'VINCULANDO APARELHO...' : 'EFETUAR VÍNCULO IMEDIATO'}
+                        </button>
+                    </form>
+                </div>
+            )}
+
+            {statusFluxo === 'pendente_admin' && (
+                <div style={estilos.card}>
+                    <div style={{ fontSize: '50px', marginBottom: '10px' }}>🔒</div>
+                    <p style={estilos.titulo}>Acesso Bloqueado</p>
+                    <p style={estilos.subtitulo}>Você esqueceu de registrar a saída em uma atividade anterior.</p>
+                    <div style={{ ...estilos.alerta, backgroundColor: '#fffbeb', borderColor: '#fef3c7', color: '#b45309' }}>
+                        Por motivos de segurança, você não pode entrar em uma nova atividade até que um Administrador finalize sua pendência passada manualmente.
+                    </div>
+                    <button onClick={verificarFaseInicial} style={estilos.btnPrimario}>CONFERIR NOVAMENTE</button>
+                </div>
+            )}
+
+            {statusFluxo === 'multiplos' && (
+                <div style={estilos.card}>
+                    <p style={estilos.titulo}>Selecione a Formação</p>
+                    <p style={estilos.subtitulo}>Mais de uma atividade foi encontrada para hoje:</p>
+                    {alertaMsg && <div style={estilos.alerta}>{alertaMsg}</div>}
+                    {listaEventos.map(ev => (
+                        <button key={ev.id} onClick={() => selecionarAtividadeManual(ev)} style={estilos.btnItem}>
+                            <div style={{ fontWeight: 'bold', color: '#1e293b' }}>{ev.titulo}</div>
+                            <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>⏰ {ev.hora_inicio.slice(0,5)} às {ev.hora_fim.slice(0,5)}</div>
+                        </button>
+                    ))}
+                </div>
+            )}
+
+            {statusFluxo === 'entrada' && eventoAtual && (
+                <div style={estilos.card}>
+                    <p style={estilos.titulo}>{eventoAtual.titulo}</p>
+                    <p style={estilos.subtitulo}>📍 Local: {eventoAtual.local}<br />⏰ Horário: {eventoAtual.hora_inicio.slice(0,5)} às {eventoAtual.hora_fim.slice(0,5)}</p>
+                    {alertaMsg && <div style={estilos.alerta}>{alertaMsg}</div>}
+                    <button onClick={dispararRegistroPresenca} disabled={carregandoAcao} style={estilos.btnPrimario}>
+                        {carregandoAcao ? 'AVALIANDO CRITÉRIOS...' : 'REGISTRAR MINHA CHEGADA'}
+                    </button>
+                </div>
+            )}
+
+            {statusFluxo === 'logado' && eventoAtual && (
+                <div style={estilos.card}>
+                    <div style={{ fontSize: '50px', marginBottom: '10px' }}>⏳</div>
+                    <p style={estilos.titulo}>Dentro da Atividade</p>
+                    <p style={estilos.subtitulo}>Sua presença foi confirmada em <strong>{eventoAtual.titulo}</strong>.</p>
+                    <p style={{ fontSize: '13px', color: '#475569', backgroundColor: '#f1f5f9', padding: '12px', borderRadius: '6px', margin: '15px 0' }}>
+                        Mantenha o aplicativo aberto ou retorne aqui ao final do evento para preencher a pesquisa de satisfação e validar sua saída.
+                    </p>
+                    <button onClick={() => setStatusFluxo('pesquisa')} style={{ ...estilos.btnPrimario, backgroundColor: '#0f172a' }}>
+                        AVALIAR & REGISTRAR SAÍDA
+                    </button>
+                    {alertaMsg && <div style={{ ...estilos.alerta, marginTop: '15px' }}>{alertaMsg}</div>}
+                </div>
+            )}
+
+            {statusFluxo === 'pesquisa' && eventoAtual && (
+                <div style={estilos.card}>
+                    <p style={estilos.titulo}>Pesquisa de Satisfação</p>
+                    <p style={estilos.subtitulo}>Avalie a atividade "{eventoAtual.titulo}" para computar suas horas:</p>
+                    {alertaMsg && <div style={estilos.alerta}>{alertaMsg}</div>}
+                    <form onSubmit={salvarAvaliacaoEConfirmarSaida}>
+                        <div style={{ textAlign: 'left' }}>
+                            <label style={{ fontWeight: 'bold', fontSize: '13px' }}>Classificação:</label>
+                            <select style={estilos.select} value={avaliacao} onChange={(e) => setAvaliacao(e.target.value)}>
+                                <option value="Ótimo">⭐⭐⭐⭐⭐ Ótimo</option>
+                                <option value="Muito Bom">⭐⭐⭐⭐ Muito Bom</option>
+                                <option value="Bom">⭐⭐⭐ Bom</option>
+                                <option value="Regular">⭐⭐ Regular</option>
+                                <option value="Ruim">⭐ Ruim</option>
+                            </select>
+                            <label style={{ fontWeight: 'bold', fontSize: '13px' }}>Críticas ou Sugestões:</label>
+                            <textarea style={estilos.textarea} value={comentarios} onChange={(e) => setComentarios(e.target.value)} placeholder="Opcional..." />
+                        </div>
+                        <button type="submit" disabled={carregandoAcao} style={estilos.btnSucesso}>
+                            {carregandoAcao ? 'VALIDANDO GEOLOCALIZAÇÃO...' : 'FINALIZAR PARTICIPAÇÃO'}
+                        </button>
+                    </form>
+                </div>
+            )}
+
+            {statusFluxo === 'concluido' && (
+                <div style={estilos.card}>
+                    <div style={{ fontSize: '50px', marginBottom: '10px' }}>✅</div>
+                    <p style={estilos.titulo}>Frequência Concluída!</p>
+                    <p style={estilos.subtitulo}>Sua presença e avaliação foram consolidadas com sucesso neste evento.</p>
+                    <button onClick={() => { setStatusFluxo('carregando'); verificarFaseInicial(); }} style={{ ...estilos.btnPrimario, backgroundColor: '#64748b', marginTop: '10px' }}>
+                        VOLTAR AO INÍCIO
+                    </button>
+                </div>
+            )}
         </div>
     );
 }

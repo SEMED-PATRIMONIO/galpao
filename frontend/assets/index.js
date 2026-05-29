@@ -712,5 +712,228 @@ app.post('/api/v2/dispositivos/vincular', async (req, res) => {
     }
 });
 
+// ==========================================
+// ROTAS EXCLUSIVAS: NOVO PORTAL DE PRESENÇA QRCODE
+// ==========================================
+
+// 1. Inicialização do Portal Isolada
+app.post('/api/v2/qrcode-presenca/inicializar', async (req, res) => {
+    const { device_token, device_key } = req.body;
+    const tokenEfetivo = device_token || device_key;
+
+    try {
+        const resEventos = await pool.query(`
+            SELECT e.id, e.titulo, e.local, e.palestrante, e.hora_inicio, e.hora_fim, 
+                   l.nome as local_nome, l.endereco as local_endereco, 
+                   COALESCE(l.latitude, e.latitude) as latitude, COALESCE(l.longitude, e.longitude) as longitude 
+            FROM eventos e 
+            LEFT JOIN locais l ON e.local_id = l.id 
+            WHERE e.data_evento = CURRENT_DATE::date AND e.hora_fim >= CURRENT_TIME 
+            ORDER BY e.hora_inicio ASC
+        `);
+
+        const listaEventosFormatada = resEventos.rows.map(e => ({ 
+            id: e.id, 
+            titulo: e.titulo, 
+            palestrante: e.palestrante || '', 
+            local: e.local_nome || e.local || 'Auditório', 
+            endereco: e.local_endereco || e.endereco || '', 
+            latitude: e.latitude, 
+            longitude: e.longitude, 
+            hora_inicio: e.hora_inicio, 
+            hora_fim: e.hora_fim 
+        }));
+
+        if (listaEventosFormatada.length === 0) {
+            return res.status(404).json({ status: 'erro', situacao: 'sem_evento', eventos: [] });
+        }
+
+        if (!tokenEfetivo) {
+            return res.json({ status: 'sucesso', situacao: 'nao_vinculado', eventos: listaEventosFormatada });
+        }
+
+        const resDisp = await pool.query('SELECT * FROM dispositivos WHERE device_token = $1 AND ativo = true', [tokenEfetivo]);
+
+        if (resDisp.rows.length === 0) {
+            return res.json({ status: 'sucesso', situacao: 'nao_vinculado', eventos: listaEventosFormatada });
+        }
+
+        const disp = resDisp.rows[0];
+
+        const resSaidaPendenteAntiga = await pool.query(`
+            SELECT * FROM frequencias 
+            WHERE participante_id = $1 AND data_entrada::date < CURRENT_DATE::date AND data_saida IS NULL 
+            LIMIT 1
+        `, [disp.participante_id]);
+
+        if (resSaidaPendenteAntiga.rows.length > 0) {
+            return res.json({ status: 'sucesso', situacao: 'bloqueado_saida_estourada', eventos: listaEventosFormatada });
+        }
+
+        const freqAtiva = await pool.query(`
+            SELECT * FROM frequencias 
+            WHERE participante_id = $1 AND data_entrada::date = CURRENT_DATE::date AND data_saida IS NULL 
+            LIMIT 1
+        `, [disp.participante_id]);
+
+        return res.json({
+            status: 'sucesso', 
+            situacao: 'regular',
+            tem_evento_ativo: freqAtiva.rows.length > 0, 
+            evento_ativo_id: freqAtiva.rows.length > 0 ? freqAtiva.rows[0].evento_id : null,
+            eventos: listaEventosFormatada
+        });
+    } catch (error) { 
+        return res.status(500).json({ error: 'Erro interno ao inicializar o Portal.' }); 
+    }
+});
+
+// 2. Auto-vínculo Isolado de Dispositivo
+app.post('/api/v2/qrcode-presenca/vincular', async (req, res) => {
+    const { device_key, nome, matricula } = req.body;
+
+    if (!device_key || !nome || !matricula) {
+        return res.status(400).json({ error: 'Dados insuficientes para realizar o vínculo.' });
+    }
+
+    try {
+        await pool.query('BEGIN');
+
+        let resPart = await pool.query('SELECT id FROM participantes WHERE matricula = $1', [matricula]);
+        let participanteId;
+
+        if (resPart.rows.length === 0) {
+            const novoPart = await pool.query(
+                'INSERT INTO participantes (nome, matricula, device_key) VALUES ($1, $2, $3) RETURNING id',
+                [nome, matricula, device_key]
+            );
+            participanteId = novoPart.rows[0].id;
+        } else {
+            participanteId = resPart.rows[0].id;
+            await pool.query(
+                'UPDATE participantes SET nome = $1, device_key = $2 WHERE id = $3',
+                [nome, device_key, participanteId]
+            );
+        }
+
+        await pool.query('UPDATE dispositivos SET ativo = false WHERE participante_id = $1', [participanteId]);
+
+        await pool.query(
+            'INSERT INTO dispositivos (device_token, participante_id, ativo) VALUES ($1, $2, true)',
+            [device_key, participanteId]
+        );
+
+        await pool.query('COMMIT');
+        return res.json({ status: 'sucesso', message: 'Aparelho vinculado com sucesso.' });
+    } catch (error) {
+        await pool.query('ROLLBACK');
+        return res.status(500).json({ error: 'Erro interno ao vincular o dispositivo.' });
+    }
+});
+
+// 3. Registro de Entrada com Log Silencioso de Fraudes
+app.post('/api/v2/qrcode-presenca/registrar-entrada', async (req, res) => {
+    const { device_key, evento_id, lat_entrada, lng_entrada } = req.body;
+
+    try {
+        const resDisp = await pool.query('SELECT * FROM dispositivos WHERE device_token = $1 AND ativo = true', [device_key]);
+        if (resDisp.rows.length === 0) return res.status(401).json({ error: 'Aparelho desvinculado.' });
+        const disp = resDisp.rows[0];
+
+        const resPart = await pool.query('SELECT matricula FROM participantes WHERE id = $1', [disp.participante_id]);
+        const matricula = resPart.rows[0]?.matricula || 'Desconhecida';
+
+        const resEv = await pool.query('SELECT * FROM eventos WHERE id = $1', [evento_id]);
+        if (resEv.rows.length === 0) return res.status(444).json({ error: 'Evento inexistente.' });
+        const ev = resEv.rows[0];
+
+        // Função de cálculo Haversine local
+        const calcularDistanciaMetros = (lat1, lon1, lat2, lon2) => {
+            const R = 6371000;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        };
+
+        const distancia = calcularDistanciaMetros(
+            parseFloat(lat_entrada), parseFloat(lng_entrada),
+            parseFloat(ev.latitude), parseFloat(ev.longitude)
+        );
+
+        // Se estiver a mais de 1000 metros (1km) da escola/evento
+        if (distancia > 1000 || isNaN(distancia)) {
+            await pool.query(`
+                INSERT INTO log_fraudes (device_key, matricula, evento_id, tipo_tentativa, lat_tentativa, lng_tentativa, distancia_calculada_metros, motivo)
+                VALUES ($1, $2, $3, 'ENTRADA', $4, $5, $6, 'Fora do raio permitido')
+            `, [device_key, matricula, evento_id, parseFloat(lat_entrada), parseFloat(lng_entrada), Math.round(distancia || 0)]);
+
+            return res.status(400).json({ error: 'Bloqueio de Perímetro: Você está fora do raio permitido da escola.' });
+        }
+
+        await pool.query(`
+            INSERT INTO frequencias (participante_id, evento_id, data_entrada, lat_entrada, lng_entrada, device_key, matricula)
+            VALUES ($1, $2, NOW(), $3, $4, $5, $6)
+        `, [disp.participante_id, evento_id, lat_entrada, lng_entrada, device_key, matricula]);
+
+        return res.json({ status: 'sucesso' });
+    } catch (error) {
+        return res.status(500).json({ error: 'Erro interno ao processar sua chegada.' });
+    }
+});
+
+// 4. Registro de Saída com Log Silencioso de Fraudes
+app.post('/api/v2/qrcode-presenca/registrar-saida', async (req, res) => {
+    const { device_key, evento_id, avaliacao, comentarios, lat, lng } = req.body;
+
+    try {
+        const resDisp = await pool.query('SELECT * FROM dispositivos WHERE device_token = $1 AND ativo = true', [device_key]);
+        if (resDisp.rows.length === 0) return res.status(401).json({ error: 'Aparelho desvinculado.' });
+        const disp = resDisp.rows[0];
+
+        const resPart = await pool.query('SELECT matricula FROM participantes WHERE id = $1', [disp.participante_id]);
+        const matricula = resPart.rows[0]?.matricula || 'Desconhecida';
+
+        const resEv = await pool.query('SELECT * FROM eventos WHERE id = $1', [evento_id]);
+        const ev = resEv.rows[0];
+
+        const calcularDistanciaMetros = (lat1, lon1, lat2, lon2) => {
+            const R = 6371000;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        };
+
+        const distancia = calcularDistanciaMetros(
+            parseFloat(lat), parseFloat(lng),
+            parseFloat(ev.latitude), parseFloat(ev.longitude)
+        );
+
+        if (distancia > 1000 || isNaN(distancia)) {
+            await pool.query(`
+                INSERT INTO log_fraudes (device_key, matricula, evento_id, tipo_tentativa, lat_tentativa, lng_tentativa, distancia_calculada_metros, motivo)
+                VALUES ($1, $2, $3, 'SAIDA', $4, $5, $6, 'Fora do raio permitido')
+            `, [device_key, matricula, evento_id, parseFloat(lat), parseFloat(lng), Math.round(distancia || 0)]);
+
+            return res.status(400).json({ error: 'Bloqueio de Perímetro: Você está fora do raio permitido para encerrar.' });
+        }
+
+        await pool.query(`
+            UPDATE frequencias 
+            SET data_saida = NOW(), lat_saida = $1, lng_saida = $2, justificativa = $3, observacoes = $4
+            WHERE participante_id = $5 AND evento_id = $6 AND data_saida IS NULL
+        `, [lat, lng, avaliacao, comentarios, disp.participante_id, evento_id]);
+
+        return res.json({ status: 'sucesso' });
+    } catch (error) {
+        return res.status(500).json({ error: 'Erro interno ao processar sua saída.' });
+    }
+});
+
 app.use((req, res) => res.status(404).json({ error: 'Rota não encontrada.' }));
 app.listen(PORT, () => console.log(`Servidor ativado na porta ${PORT}`));

@@ -39,7 +39,7 @@ export default function App() {
         const dKey = localStorage.getItem('device_token') || localStorage.getItem('device_key');
         
         try {
-            const res = await fetch(`${API_URL}/api/v2/presenca/inicializar`, {
+            const res = await fetch(`${API_URL}/api/v2/qrcode-presenca/inicializar`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ device_key: dKey || null })
@@ -124,7 +124,7 @@ export default function App() {
             // ou deixa sua API gerar e devolver no response.
             const novoToken = 'dev_' + Math.random().toString(36).substr(2, 9) + Date.now();
 
-            const res = await fetch(`${API_URL}/api/v2/dispositivos/vincular`, {
+            const res = await fetch(`${API_URL}/api/v2/qrcode-presenca/vincular`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -170,7 +170,7 @@ export default function App() {
                 const dKey = localStorage.getItem('device_token') || localStorage.getItem('device_key');
 
                 try {
-                    const res = await fetch(`${API_URL}/api/v2/presencas`, {
+                    const res = await fetch(`${API_URL}/api/v2/qrcode-presenca/registrar-entrada`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -213,7 +213,7 @@ export default function App() {
                 const dKey = localStorage.getItem('device_token') || localStorage.getItem('device_key');
 
                 try {
-                    const res = await fetch(`${API_URL}/api/v2/presenca/confirmar-saida`, {
+                    const res = await fetch(`${API_URL}/api/v2/qrcode-presenca/registrar-saida`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({

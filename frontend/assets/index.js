@@ -836,18 +836,27 @@ app.post('/api/v2/qrcode-presenca/registrar-entrada', async (req, res) => {
     const { device_key, evento_id, lat_entrada, lng_entrada } = req.body;
 
     try {
-        const resDisp = await pool.query('SELECT * FROM dispositivos WHERE device_token = $1 AND ativo = true', [device_key]);
-        if (resDisp.rows.length === 0) return res.status(401).json({ error: 'Aparelho desvinculado.' });
+        // Busca o dispositivo tentando pelos dois nomes de coluna possíveis para evitar erros de banco
+        const resDisp = await pool.query(
+            'SELECT * FROM dispositivos WHERE (device_token = $1 OR device_key = $1) AND ativo = true LIMIT 1', 
+            [device_key]
+        );
+        
+        if (resDisp.rows.length === 0) {
+            return res.status(401).json({ error: 'Aparelho desvinculado ou token inválido.' });
+        }
         const disp = resDisp.rows[0];
 
+        // Busca a matrícula do participante associado
         const resPart = await pool.query('SELECT matricula FROM participantes WHERE id = $1', [disp.participante_id]);
         const matricula = resPart.rows[0]?.matricula || 'Desconhecida';
 
+        // Busca o evento para pegar as coordenadas oficiais
         const resEv = await pool.query('SELECT * FROM eventos WHERE id = $1', [evento_id]);
         if (resEv.rows.length === 0) return res.status(444).json({ error: 'Evento inexistente.' });
         const ev = resEv.rows[0];
 
-        // Função de cálculo Haversine local
+        // Cálculo de Distância Haversine
         const calcularDistanciaMetros = (lat1, lon1, lat2, lon2) => {
             const R = 6371000;
             const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -863,7 +872,7 @@ app.post('/api/v2/qrcode-presenca/registrar-entrada', async (req, res) => {
             parseFloat(ev.latitude), parseFloat(ev.longitude)
         );
 
-        // Se estiver a mais de 1000 metros (1km) da escola/evento
+        // Se estiver fora do raio permitido (1km), registra na tabela silenciosa de fraudes
         if (distancia > 1000 || isNaN(distancia)) {
             await pool.query(`
                 INSERT INTO log_fraudes (device_key, matricula, evento_id, tipo_tentativa, lat_tentativa, lng_tentativa, distancia_calculada_metros, motivo)
@@ -873,9 +882,10 @@ app.post('/api/v2/qrcode-presenca/registrar-entrada', async (req, res) => {
             return res.status(400).json({ error: 'Bloqueio de Perímetro: Você está fora do raio permitido da escola.' });
         }
 
+        // Insere a presença confirmada na tabela frequencias
         await pool.query(`
-            INSERT INTO frequencias (participante_id, evento_id, data_entrada, lat_entrada, lng_entrada, device_key, matricula)
-            VALUES ($1, $2, NOW(), $3, $4, $5, $6)
+            INSERT INTO frequencias (participante_id, evento_id, data_entrada, lat_entrada, lng_entrada, device_key, matricula, funcao)
+            VALUES ($1, $2, NOW(), $3, $4, $5, $6, 'Ouvinte')
         `, [disp.participante_id, evento_id, lat_entrada, lng_entrada, device_key, matricula]);
 
         return res.json({ status: 'sucesso' });
@@ -889,8 +899,14 @@ app.post('/api/v2/qrcode-presenca/registrar-saida', async (req, res) => {
     const { device_key, evento_id, avaliacao, comentarios, lat, lng } = req.body;
 
     try {
-        const resDisp = await pool.query('SELECT * FROM dispositivos WHERE device_token = $1 AND ativo = true', [device_key]);
-        if (resDisp.rows.length === 0) return res.status(401).json({ error: 'Aparelho desvinculado.' });
+        const resDisp = await pool.query(
+            'SELECT * FROM dispositivos WHERE (device_token = $1 OR device_key = $1) AND ativo = true LIMIT 1', 
+            [device_key]
+        );
+        
+        if (resDisp.rows.length === 0) {
+            return res.status(401).json({ error: 'Aparelho desvinculado ou token inválido.' });
+        }
         const disp = resDisp.rows[0];
 
         const resPart = await pool.query('SELECT matricula FROM participantes WHERE id = $1', [disp.participante_id]);
@@ -923,11 +939,12 @@ app.post('/api/v2/qrcode-presenca/registrar-saida', async (req, res) => {
             return res.status(400).json({ error: 'Bloqueio de Perímetro: Você está fora do raio permitido para encerrar.' });
         }
 
+        // Atualiza a tabela frequencias aplicando a avaliação no campo correto
         await pool.query(`
             UPDATE frequencias 
-            SET data_saida = NOW(), lat_saida = $1, lng_saida = $2, justificativa = $3, observacoes = $4
-            WHERE participante_id = $5 AND evento_id = $6 AND data_saida IS NULL
-        `, [lat, lng, avaliacao, comentarios, disp.participante_id, evento_id]);
+            SET data_saida = NOW(), lat_saida = $1, lng_saida = $2, avaliacao = $3, tempo_participacao = AGE(NOW(), data_entrada)
+            WHERE participante_id = $4 AND evento_id = $5 AND data_saida IS NULL
+        `, [lat, lng, avaliacao, disp.participante_id, evento_id]);
 
         return res.json({ status: 'sucesso' });
     } catch (error) {

@@ -53,6 +53,7 @@ export default function App() {
     const [form, setForm] = useState({});
     const [modalEventoAberto, setModalEventoAberto] = useState(false);
     const [modalLocalAberto, setModalLocalAberto] = useState(false);
+    const [modalGenericAberto, setModalGenericAberto] = useState(false);
     const [pesquisaCidade, setPesquisaCidade] = useState('');
     const [mapaLeaflet, setMapaLeaflet] = useState(null);
     const [marcadorMapa, setMarcadorMapa] = useState(null);    
@@ -467,6 +468,7 @@ export default function App() {
         setNovaSenha('');
         setConfirmarNovaSenha('');
         setHoraSaidaManualInput('');
+        setModalGenericAberto(false);
     };
 
     const condicaoBotaoTempo = selecionado && selecionado.tempo_participacao === null && selecionado.data_saida !== null;
@@ -517,7 +519,7 @@ export default function App() {
             <div style={estilos.sidebar}>
                 <div style={estilos.brand}>SEMED - Formações</div>
                 <ul style={estilos.menu}>
-                    <li><button onClick={() => mudarAbaNavegacao('eventos')} style={view === 'eventos' ? estilos.btnMenuAtivo : estilos.btnMenu}>📅 Formações</button></li>
+                    <li><button onClick={() => mudarAbaNavegacao('eventos')} style={view === 'eventos' ? estilos.btnMenuAtivo : estilos.btnMenu}>📅 Eventos</button></li>
                     <li><button onClick={() => mudarAbaNavegacao('locais')} style={view === 'locais' ? estilos.btnMenuAtivo : estilos.btnMenu}>📍 Locais</button></li>
                     <li><button onClick={() => mudarAbaNavegacao('participantes')} style={view === 'participantes' ? estilos.btnMenuAtivo : estilos.btnMenu}>👥 Participantes</button></li>
                     <li><button onClick={() => mudarAbaNavegacao('frequencias')} style={view === 'frequencias' ? estilos.btnMenuAtivo : estilos.btnMenu}>📝 Histórico</button></li>
@@ -526,9 +528,9 @@ export default function App() {
                     <li><button onClick={() => mudarAbaNavegacao('setores')} style={view === 'setores' ? estilos.btnMenuAtivo : estilos.btnMenu}>🏢 Setores</button></li>
                     <li><button onClick={() => mudarAbaNavegacao('areas')} style={view === 'areas' ? estilos.btnMenuAtivo : estilos.btnMenu}>📖 Áreas</button></li>
                     <li><button onClick={() => mudarAbaNavegacao('usuarios')} style={view === 'usuarios' ? estilos.btnMenuAtivo : estilos.btnMenu}>🔒 Operadores</button></li>
-                    <li><button onClick={() => mudarAbaNavegacao('log-fraudes')} style={view === 'log-fraudes' ? estilos.btnMenuAtivo : estilos.btnMenu}>⚠️ Log de Fraudes</button></li>
+                    <li><button onClick={() => mudarAbaNavegacao('log-fraudes')} style={view === 'log-fraudes' ? estilos.btnMenuAtivo : estilos.btnMenu}>⚠️ Ocorrências</button></li>
                 </ul>
-                <button onClick={efetuarLogout} style={{ ...estilos.btnMenu, color: '#ef4444', marginTop: 'auto', fontWeight: 'bold' }}>🚪 Encerrar Sessão</button>
+                <button onClick={efetuarLogout} style={{ ...estilos.btnMenu, color: '#ef4444', marginTop: 'auto', fontWeight: 'bold' }}>🚪 Finalizar</button>
             </div>
 
             <div style={estilos.main}>
@@ -569,6 +571,41 @@ export default function App() {
                                 }}
                             >
                                 ✏️ EDITAR LOCAL
+                            </button>
+                        </div>
+                    )}
+
+                    {['publico-alvo', 'setores', 'areas', 'usuarios'].includes(view) && (
+                        <div style={{ display: 'flex', gap: '10px', position: 'absolute', left: '50%', transform: 'translateX(-50%)' }}>
+                            <button 
+                                onClick={() => { setForm({}); setIsEditando(false); setModalGenericAberto(true); }} 
+                                style={{ ...estilos.btnAcao, backgroundColor: '#16a34a', color: '#fff', padding: '8px 16px', fontWeight: 'bold', borderRadius: '6px' }}
+                            >
+                                ➕ ADICIONAR NOVO
+                            </button>
+                            <button 
+                                onClick={() => {
+                                    if (!selecionado) return;
+                                    setIsEditando(true);
+                                    if (view === 'usuarios') {
+                                        setForm({ nome: selecionado.nome, usuario: selecionado.usuario });
+                                    } else {
+                                        setForm({ nome: selecionado.nome });
+                                    }
+                                    setModalGenericAberto(true);
+                                }} 
+                                disabled={!selecionado}
+                                style={{ 
+                                    ...estilos.btnAcao, 
+                                    backgroundColor: selecionado ? '#0284c7' : '#cbd5e1', 
+                                    color: '#fff', 
+                                    padding: '8px 16px', 
+                                    fontWeight: 'bold', 
+                                    borderRadius: '6px',
+                                    cursor: selecionado ? 'pointer' : 'not-allowed'
+                                }}
+                            >
+                                ✏️ EDITAR
                             </button>
                         </div>
                     )}
@@ -743,6 +780,46 @@ export default function App() {
                     </div>
                 )}
 
+                {modalGenericAberto && (
+                    <div style={estilos.modalOverlay}>
+                        <div style={estilos.modalGlass}>
+                            <h2 style={{ margin: '0 0 20px 0', color: '#0f172a', fontSize: '18px', fontWeight: 'bold' }}>
+                                {isEditando ? '✏️ Modificar Registro' : '➕ Adicionar Novo Registro'}
+                            </h2>
+                            <form onSubmit={submeterFormularioAdministrativo}>
+                                {view === 'usuarios' ? (
+                                    <>
+                                        <div style={{ marginBottom: '15px' }}>
+                                            <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '5px' }}>Nome do Operador</label>
+                                            <input type="text" style={estilos.entradaForm} value={form.nome || ''} onChange={e => setForm({...form, nome: e.target.value})} required />
+                                        </div>
+                                        <div style={{ marginBottom: '15px' }}>
+                                            <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '5px' }}>Usuário (Login)</label>
+                                            <input type="text" style={estilos.entradaForm} value={form.usuario || ''} onChange={e => setForm({...form, usuario: e.target.value})} required />
+                                        </div>
+                                        {!isEditando && (
+                                            <div style={{ marginBottom: '15px' }}>
+                                                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '5px' }}>Senha de Acesso</label>
+                                                <input type="password" style={estilos.entradaForm} value={form.senha || ''} onChange={e => setForm({...form, senha: e.target.value})} required />
+                                            </div>
+                                        )}
+                                    </>
+                                ) : (
+                                    <div style={{ marginBottom: '20px' }}>
+                                        <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '5px' }}>Nome / Identificação</label>
+                                        <input type="text" style={estilos.entradaForm} value={form.nome || ''} onChange={e => setForm({...form, nome: e.target.value})} required />
+                                    </div>
+                                )}
+
+                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                                    <button type="button" onClick={() => { setModalGenericAberto(false); setForm({}); setSelecionado(null); }} style={{ ...estilos.btnAcao, backgroundColor: '#64748b', color: '#fff' }}>CANCELAR</button>
+                                    <button type="submit" style={{ ...estilos.btnAcao, backgroundColor: '#16a34a', color: '#fff', fontWeight: 'bold' }}>SALVAR REGISTRO</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                )}
+
                 {erro && <div style={estilos.alertaErro}>{erro}</div>}
 
                 {view === 'frequencias' && (
@@ -816,7 +893,7 @@ export default function App() {
                                 {view === 'frequencias' && (
                                     <>
                                         <th style={estilos.th}>Matrícula</th>
-                                        <th style={estilos.th}>Professor</th>
+                                        <th style={estilos.th}>Participante</th>
                                         <th style={estilos.th}>Atividade / Formação</th>
                                         <th style={estilos.th}>Entrada Real</th>
                                         <th style={estilos.th}>Saída Real</th>
@@ -827,16 +904,22 @@ export default function App() {
                                 {view === 'pesquisa-satisfacao' && (
                                     <>
                                         <th style={estilos.th}>Atividade / Formação</th>
-                                        <th style={estilos.th}>Professor</th>
+                                        <th style={estilos.th}>Participante</th>
                                         <th style={estilos.th}>Avaliação</th>
                                         <th style={estilos.th}>Data de Envio</th>
                                     </>
                                 )}
-                                {['publico-alvo', 'setores', 'areas', 'participantes', 'usuarios', 'log-fraudes'].includes(view) && (
+                                {['publico-alvo', 'setores', 'areas', 'usuarios'].includes(view) && (
+                                    <th style={estilos.th}>Listagem de Registros</th>
+                                )}
+                                {view === 'participantes' && (
                                     <>
-                                        <th style={estilos.th}>Mapeamento de Conteúdo</th>
-                                        {view !== 'log-fraudes' && <th style={estilos.th}>Ações</th>}
+                                        <th style={estilos.th}>Listagem de Participantes</th>
+                                        
                                     </>
+                                )}
+                                {view === 'log-fraudes' && (
+                                    <th style={estilos.th}>Ocorrências</th>
                                 )}
                             </tr>
                         </thead>
@@ -846,11 +929,11 @@ export default function App() {
                                 return (
                                     <tr 
                                         key={item.id} 
-                                        onClick={() => (view === 'frequencias' || view === 'locais') && setSelecionado(item)}
+                                        onClick={() => (view === 'frequencias' || view === 'locais' || ['publico-alvo', 'setores', 'areas', 'usuarios'].includes(view)) && setSelecionado(item)}
                                         onMouseEnter={() => possuiComentario && setHoveredRowId(item.id)}
                                         onMouseLeave={() => possuiComentario && setHoveredRowId(null)}
                                         style={{ 
-                                            cursor: (view === 'frequencias' || view === 'locais') ? 'pointer' : 'default',
+                                            cursor: (view === 'frequencias' || view === 'locais' || ['publico-alvo', 'setores', 'areas', 'usuarios'].includes(view)) ? 'pointer' : 'default',
                                             backgroundColor: selecionado && selecionado.id === item.id ? '#f0fdf4' : (possuiComentario && hoveredRowId === item.id ? '#f8fafc' : 'transparent'),
                                             transition: 'background-color 0.15s ease'
                                         }}
@@ -889,7 +972,7 @@ export default function App() {
                                                     {item.avaliacao}
                                                     {possuiComentario && hoveredRowId === item.id && (
                                                         <div style={estilos.tooltip}>
-                                                            <strong>Comentário do Professor:</strong><br />
+                                                            <strong>Comentário do Participante:</strong><br />
                                                             {item.comentarios}
                                                         </div>
                                                     )}
@@ -900,9 +983,6 @@ export default function App() {
                                         {['publico-alvo', 'setores', 'areas', 'participantes', 'usuarios'].includes(view) && (
                                             <>
                                                 <td style={estilos.td}>{item.nome || item.nome_completo || item.usuario}</td>
-                                                <td style={estilos.td}>
-                                                    <button onClick={(e) => { e.stopPropagation(); iniciarEdicaoItem(item); setModalEventoAberto(false); }} style={{ ...estilos.btnAcao, backgroundColor: '#0284c7', color: '#fff' }}>Editar</button>
-                                                </td>
                                             </>
                                         )}
                                         {view === 'log-fraudes' && (

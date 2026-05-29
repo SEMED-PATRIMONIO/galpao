@@ -789,6 +789,7 @@ app.post('/api/v2/qrcode-presenca/inicializar', async (req, res) => {
 });
 
 // 2. Auto-vínculo Isolado de Dispositivo
+// 2. Auto-vínculo Isolado de Dispositivo (REVISADO E BLINDADO)
 app.post('/api/v2/qrcode-presenca/vincular', async (req, res) => {
     const { device_key, nome, matricula } = req.body;
 
@@ -799,16 +800,19 @@ app.post('/api/v2/qrcode-presenca/vincular', async (req, res) => {
     try {
         await pool.query('BEGIN');
 
+        // 1. Verifica se o participante já existe pela matrícula
         let resPart = await pool.query('SELECT id FROM participantes WHERE matricula = $1', [matricula]);
         let participanteId;
 
         if (resPart.rows.length === 0) {
+            // Se o banco foi limpo, cria o participante primeiro (Garante o ID para a chave estrangeira)
             const novoPart = await pool.query(
                 'INSERT INTO participantes (nome, matricula, device_key) VALUES ($1, $2, $3) RETURNING id',
                 [nome, matricula, device_key]
             );
             participanteId = novoPart.rows[0].id;
         } else {
+            // Se já existia, atualiza os dados dele
             participanteId = resPart.rows[0].id;
             await pool.query(
                 'UPDATE participantes SET nome = $1, device_key = $2 WHERE id = $3',
@@ -816,8 +820,10 @@ app.post('/api/v2/qrcode-presenca/vincular', async (req, res) => {
             );
         }
 
+        // 2. Desativa quaisquer tokens/dispositivos antigos vinculados a este participante id
         await pool.query('UPDATE dispositivos SET ativo = false WHERE participante_id = $1', [participanteId]);
 
+        // 3. Insere o novo dispositivo garantindo o id válido do participante
         await pool.query(
             'INSERT INTO dispositivos (device_token, participante_id, ativo) VALUES ($1, $2, true)',
             [device_key, participanteId]
@@ -825,9 +831,11 @@ app.post('/api/v2/qrcode-presenca/vincular', async (req, res) => {
 
         await pool.query('COMMIT');
         return res.json({ status: 'sucesso', message: 'Aparelho vinculado com sucesso.' });
+
     } catch (error) {
         await pool.query('ROLLBACK');
-        return res.status(500).json({ error: 'Erro interno ao vincular o dispositivo.' });
+        console.error("ERRO NO VINCULO:", error.message); // Imprime o erro exato no terminal do seu servidor
+        return res.status(500).json({ error: 'Erro interno ao vincular o dispositivo no banco.' });
     }
 });
 

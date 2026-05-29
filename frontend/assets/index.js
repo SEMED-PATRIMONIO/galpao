@@ -799,12 +799,11 @@ app.post('/api/v2/qrcode-presenca/vincular', async (req, res) => {
     try {
         await pool.query('BEGIN');
 
-        // 1. Busca se o participante já existe pela matrícula
+        // 1. REMOVIDA A TRAVA: Insere ou atualiza o participante diretamente sem bloquear
         let resPart = await pool.query('SELECT id FROM participantes WHERE matricula = $1', [matricula]);
         let participanteId;
 
         if (resPart.rows.length === 0) {
-            // CORREÇÃO: Usa 'nome_completo' e marca ativo como true para bater com o banco limpo
             const novoPart = await pool.query(
                 'INSERT INTO participantes (nome_completo, matricula, device_key, ativo) VALUES ($1, $2, $3, true) RETURNING id',
                 [nome, matricula, device_key]
@@ -818,10 +817,15 @@ app.post('/api/v2/qrcode-presenca/vincular', async (req, res) => {
             );
         }
 
-        // 2. Desativa os dispositivos antigos deste participante
+        // 2. REMOVIDA A TRAVA DE DISPOSITIVO ÚNICO: 
+        // Antes de inserir o token novo, removemos qualquer menção antiga a este mesmo token na tabela 
+        // para que a restrição UNIQUE do Postgres (dispositivos_device_token_key) nunca seja violada.
+        await pool.query('DELETE FROM dispositivos WHERE device_token = $1', [device_key]);
+
+        // 3. Garante que registros antigos do mesmo participante fiquem inativos
         await pool.query('UPDATE dispositivos SET ativo = false WHERE participante_id = $1', [participanteId]);
 
-        // 3. CORREÇÃO: Insere na tabela dispositivos usando a coluna real 'participante_matricula'
+        // 4. Cria o novo vínculo limpo
         await pool.query(
             'INSERT INTO dispositivos (device_token, participante_id, participante_matricula, ativo) VALUES ($1, $2, $3, true)',
             [device_key, participanteId, matricula]
@@ -832,8 +836,8 @@ app.post('/api/v2/qrcode-presenca/vincular', async (req, res) => {
 
     } catch (error) {
         await pool.query('ROLLBACK');
-        console.error("ERRO DETECTADO NO VINCULO:", error.message);
-        return res.status(500).json({ error: 'Erro interno ao processar o vínculo no banco de dados.' });
+        console.error("ERRO NO VINCULO:", error.message);
+        return res.status(500).json({ error: 'Erro interno ao processar o vínculo.' });
     }
 });
 

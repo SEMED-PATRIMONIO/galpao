@@ -845,6 +845,9 @@ app.post('/api/v2/qrcode-presenca/vincular', async (req, res) => {
 // ==========================================
 // PORTAL QRCODE - ENTRADA COM VERIFICAÇÃO DE RAIO E LOG SILENCIOSO
 // ==========================================
+// ==========================================
+// PORTAL QRCODE - ENTRADA COM VERIFICAÇÃO DE RAIO E LOG SILENCIOSO
+// ==========================================
 app.post('/api/v2/qrcode-presenca/registrar-entrada', async (req, res) => {
     const { device_key, device_token, evento_id, lat_entrada, lng_entrada, lat, lng, latitude, longitude } = req.body;
     const tokenEfetivo = device_key || device_token;

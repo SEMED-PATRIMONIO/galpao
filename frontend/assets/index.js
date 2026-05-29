@@ -790,12 +790,16 @@ app.post('/api/v2/qrcode-presenca/inicializar', async (req, res) => {
 // 2. AUTO-VÍNCULO DE DISPOSITIVO 
 // ==========================================
 app.post('/api/v2/qrcode-presenca/vincular', async (req, res) => {
-    const { device_key, nome, matricula } = req.body;
+    let { device_key, nome, matricula } = req.body;
 
     if (!device_key || !nome || !matricula) {
         return res.status(400).json({ error: 'Dados insuficientes para realizar o vínculo.' });
     }
 
+    if (typeof device_key !== 'string' || device_key.startsWith('dev_') || device_key.length !== 36) {
+        device_key = uuidv4();
+    }
+    
     try {
         await pool.query('BEGIN');
 

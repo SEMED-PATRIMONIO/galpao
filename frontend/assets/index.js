@@ -842,11 +842,14 @@ app.post('/api/v2/qrcode-presenca/vincular', async (req, res) => {
 // ==========================================
 // PORTAL QRCODE - ENTRADA COM VERIFICAÇÃO DE RAIO E LOG SILENCIOSO
 // ==========================================
+// ==========================================
+// PORTAL QRCODE - ENTRADA COM VERIFICAÇÃO DE RAIO E LOG SILENCIOSO
+// ==========================================
 app.post('/api/v2/qrcode-presenca/registrar-entrada', async (req, res) => {
     const { device_key, device_token, evento_id, lat_entrada, lng_entrada, lat, lng, latitude, longitude } = req.body;
     const tokenEfetivo = device_key || device_token;
     const latEfetiva = lat_entrada || lat || latitude;
-    const lngEfetiva = lng_encoded || lng || longitude;
+    const lngEfetiva = lng_entrada || lng || longitude; // <--- CORRIGIDO AQUI!
 
     try {
         if (!tokenEfetivo) return res.status(400).json({ error: 'Identificação ausente.' });
@@ -855,7 +858,6 @@ app.post('/api/v2/qrcode-presenca/registrar-entrada', async (req, res) => {
         if (resDisp.rows.length === 0) return res.status(401).json({ error: 'Dispositivo não homologado. Por favor, refaça o vínculo do aparelho.' });
         const disp = resDisp.rows[0];
 
-        // --- INÍCIO DA VALIDAÇÃO DE DISTÂNCIA E LOG DE FRAUDE ---
         const resEv = await pool.query(`
             SELECT e.*, COALESCE(l.latitude, e.latitude) as lat_real, COALESCE(l.longitude, e.longitude) as lng_real 
             FROM eventos e 
@@ -866,7 +868,6 @@ app.post('/api/v2/qrcode-presenca/registrar-entrada', async (req, res) => {
         if (resEv.rows.length > 0) {
             const ev = resEv.rows[0];
             
-            // Função interna de Haversine idêntica à que o sistema usa
             const calcularDistanciaLocal = (lat1, lon1, lat2, lon2) => {
                 const R = 6371000;
                 const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -883,7 +884,6 @@ app.post('/api/v2/qrcode-presenca/registrar-entrada', async (req, res) => {
             );
 
             if (distancia > 1000 || isNaN(distancia)) {
-                // Registro silencioso na tabela usando os campos exatos que você configurou no banco
                 await pool.query(`
                     INSERT INTO log_fraudes (device_key, matricula, evento_id, tipo_tentativa, lat_tentativa, lng_tentativa, distancia_calculada_metros, motivo) 
                     VALUES ($1, $2, $3, 'ENTRADA', $4, $5, $6, 'Fora do raio permitido')
@@ -892,7 +892,6 @@ app.post('/api/v2/qrcode-presenca/registrar-entrada', async (req, res) => {
                 return res.status(400).json({ error: 'Bloqueio de Perímetro: Você está fora do raio permitido da escola.' });
             }
         }
-        // --- FIM DA VALIDAÇÃO DE DISTÂNCIA ---
 
         const checkDuplicado = await pool.query(`
             SELECT id FROM frequencias 
@@ -914,7 +913,6 @@ app.post('/api/v2/qrcode-presenca/registrar-entrada', async (req, res) => {
         return res.status(500).json({ error: 'Erro interno ao salvar frequência.' }); 
     }
 });
-
 
 // ==========================================
 // PORTAL QRCODE - SAÍDA COM VERIFICAÇÃO DE RAIO E LOG SILENCIOSO

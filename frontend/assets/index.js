@@ -799,7 +799,7 @@ app.post('/api/v2/qrcode-presenca/vincular', async (req, res) => {
     if (typeof device_key !== 'string' || device_key.startsWith('dev_') || device_key.length !== 36) {
         device_key = uuidv4();
     }
-    
+
     try {
         await pool.query('BEGIN');
 
@@ -836,7 +836,12 @@ app.post('/api/v2/qrcode-presenca/vincular', async (req, res) => {
         );
 
         await pool.query('COMMIT');
-        return res.json({ status: 'sucesso', message: 'Aparelho vinculado com sucesso.' });
+        return res.json({ 
+            status: 'sucesso', 
+            message: 'Aparelho vinculado com sucesso.',
+            device_token: device_key, // <--- Importante para o frontend atualizar o LocalStorage
+            device_key: device_key 
+        });
 
     } catch (error) {
         await pool.query('ROLLBACK');

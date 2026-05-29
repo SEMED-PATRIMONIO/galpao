@@ -284,7 +284,7 @@ export default function App() {
                     {alertaMsg && <div style={estilos.alerta}>{alertaMsg}</div>}
                     <form onSubmit={dispararAutoVinculo}>
                         <input style={estilos.input} type="text" placeholder="Seu Nome Completo" value={formVinculo.nome} onChange={e => setFormVinculo({...formVinculo, nome: e.target.value})} required />
-                        <input style={estilos.input} type="text" placeholder="Sua Matrícula/CPF" value={formVinculo.matricula} onChange={e => setFormVinculo({...formVinculo, matricula: e.target.value})} required />
+                        <input style={estilos.input} type="text" placeholder="Sua Matrícula" value={formVinculo.matricula} onChange={e => setFormVinculo({...formVinculo, matricula: e.target.value})} required />
                         <button type="submit" disabled={carregandoAcao} style={estilos.btnPrimario}>
                             {carregandoAcao ? 'VINCULANDO APARELHO...' : 'EFETUAR VÍNCULO IMEDIATO'}
                         </button>

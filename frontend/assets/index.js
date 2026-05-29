@@ -713,10 +713,8 @@ app.post('/api/v2/dispositivos/vincular', async (req, res) => {
 });
 
 // ==========================================
-// ROTAS EXCLUSIVAS: NOVO PORTAL DE PRESENÇA QRCODE
+// 1. INICIALIZAÇÃO DO PORTAL QRCODE
 // ==========================================
-
-// 1. Inicialização do Portal Isolada
 app.post('/api/v2/qrcode-presenca/inicializar', async (req, res) => {
     const { device_token, device_key } = req.body;
     const tokenEfetivo = device_token || device_key;
@@ -752,7 +750,7 @@ app.post('/api/v2/qrcode-presenca/inicializar', async (req, res) => {
             return res.json({ status: 'sucesso', situacao: 'nao_vinculado', eventos: listaEventosFormatada });
         }
 
-        const resDisp = await pool.query('SELECT * FROM dispositivos WHERE device_token = $1 AND ativo = true', [tokenEfetivo]);
+        const resDisp = await pool.query('SELECT * FROM dispositivos WHERE device_token = $1 AND ativo = true LIMIT 1', [tokenEfetivo]);
 
         if (resDisp.rows.length === 0) {
             return res.json({ status: 'sucesso', situacao: 'nao_vinculado', eventos: listaEventosFormatada });
@@ -788,8 +786,9 @@ app.post('/api/v2/qrcode-presenca/inicializar', async (req, res) => {
     }
 });
 
-// 2. Auto-vínculo Isolado de Dispositivo
-// 2. Auto-vínculo Isolado de Dispositivo (REVISADO E BLINDADO)
+// ==========================================
+// 2. AUTO-VÍNCULO DE DISPOSITIVO 
+// ==========================================
 app.post('/api/v2/qrcode-presenca/vincular', async (req, res) => {
     const { device_key, nome, matricula } = req.body;
 
@@ -800,59 +799,47 @@ app.post('/api/v2/qrcode-presenca/vincular', async (req, res) => {
     try {
         await pool.query('BEGIN');
 
-        // 1. Verifica se o participante já existe pela matrícula
         let resPart = await pool.query('SELECT id FROM participantes WHERE matricula = $1', [matricula]);
         let participanteId;
 
         if (resPart.rows.length === 0) {
-            // Se o banco foi limpo, cria o participante primeiro (Garante o ID para a chave estrangeira)
             const novoPart = await pool.query(
-                'INSERT INTO participantes (nome, matricula, device_key) VALUES ($1, $2, $3) RETURNING id',
+                'INSERT INTO participantes (nome_completo, matricula, device_key, ativo) VALUES ($1, $2, $3, true) RETURNING id',
                 [nome, matricula, device_key]
             );
             participanteId = novoPart.rows[0].id;
         } else {
-            // Se já existia, atualiza os dados dele
             participanteId = resPart.rows[0].id;
             await pool.query(
-                'UPDATE participantes SET nome = $1, device_key = $2 WHERE id = $3',
+                'UPDATE participantes SET nome_completo = $1, device_key = $2, ativo = true WHERE id = $3',
                 [nome, device_key, participanteId]
             );
         }
 
-        // 2. Desativa quaisquer tokens/dispositivos antigos vinculados a este participante id
         await pool.query('UPDATE dispositivos SET ativo = false WHERE participante_id = $1', [participanteId]);
 
-        // 3. Insere o novo dispositivo garantindo o id válido do participante
         await pool.query(
-            'INSERT INTO dispositivos (device_token, participante_id, ativo) VALUES ($1, $2, true)',
-            [device_key, participanteId]
+            'INSERT INTO dispositivos (device_token, participante_id, participante_matricula, ativo) VALUES ($1, $2, $3, true)',
+            [device_key, participanteId, matricula]
         );
 
         await pool.query('COMMIT');
         return res.json({ status: 'sucesso', message: 'Aparelho vinculado com sucesso.' });
-
     } catch (error) {
         await pool.query('ROLLBACK');
-        console.error("ERRO NO VINCULO:", error.message); // Imprime o erro exato no terminal do seu servidor
-        return res.status(500).json({ error: 'Erro interno ao vincular o dispositivo no banco.' });
+        console.error("ERRO NO VINCULO:", error.message);
+        return res.status(500).json({ error: 'Erro interno ao vincular no banco.' });
     }
 });
 
 // ==========================================
-// PORTAL QRCODE - ENTRADA COM VERIFICAÇÃO DE RAIO E LOG SILENCIOSO
-// ==========================================
-// ==========================================
-// PORTAL QRCODE - ENTRADA COM VERIFICAÇÃO DE RAIO E LOG SILENCIOSO
-// ==========================================
-// ==========================================
-// PORTAL QRCODE - ENTRADA COM VERIFICAÇÃO DE RAIO E LOG SILENCIOSO
+// 3. REGISTRO DE ENTRADA COM ANTIFRAUDE
 // ==========================================
 app.post('/api/v2/qrcode-presenca/registrar-entrada', async (req, res) => {
     const { device_key, device_token, evento_id, lat_entrada, lng_entrada, lat, lng, latitude, longitude } = req.body;
     const tokenEfetivo = device_key || device_token;
     const latEfetiva = lat_entrada || lat || latitude;
-    const lngEfetiva = lng_entrada || lng || longitude; // <--- CORRIGIDO AQUI!
+    const lngEfetiva = lng_entrada || lng || longitude;
 
     try {
         if (!tokenEfetivo) return res.status(400).json({ error: 'Identificação ausente.' });
@@ -918,13 +905,13 @@ app.post('/api/v2/qrcode-presenca/registrar-entrada', async (req, res) => {
 });
 
 // ==========================================
-// PORTAL QRCODE - SAÍDA COM VERIFICAÇÃO DE RAIO E LOG SILENCIOSO
+// 4. REGISTRO DE SAÍDA COM ANTIFRAUDE E PESQUISA
 // ==========================================
 app.post('/api/v2/qrcode-presenca/registrar-saida', async (req, res) => {
     const { device_token, device_key, evento_id, estrelas, comentario, lat, lng, latitude, longitude, avaliacao, comentarios } = req.body;
     const tokenEfetivo = device_token || device_key;
     const latEfetiva = lat || latitude;
-    const lngEfetiva = lng || longitude;
+    const lngEfetiva = lng || longitude; // <--- CORRIGIDO PARA USAR A LOGÍSTICA REAL DE VARIÁVEIS
     const textoComentario = comentario || comentarios || '';
     const notaEstrelas = estrelas || (avaliacao === 'Ótimo' ? 5 : avaliacao === 'Muito Bom' ? 4 : avaliacao === 'Bom' ? 3 : avaliacao === 'Regular' ? 2 : 1);
     
@@ -937,7 +924,6 @@ app.post('/api/v2/qrcode-presenca/registrar-saida', async (req, res) => {
 
         const ev = (await pool.query('SELECT data_evento, hora_inicio, hora_fim, publico_alvo_id, latitude, longitude, local_id FROM eventos WHERE id = $1', [evento_id])).rows[0];
         
-        // --- INÍCIO DA VALIDAÇÃO DE DISTÂNCIA E LOG DE FRAUDE NA SAÍDA ---
         const resLocal = await pool.query('SELECT latitude, longitude FROM locais WHERE id = $1', [ev.local_id]);
         const latRealEv = resLocal.rows[0]?.latitude || ev.latitude;
         const lngRealEv = resLocal.rows[0]?.longitude || ev.longitude;
@@ -965,9 +951,8 @@ app.post('/api/v2/qrcode-presenca/registrar-saida', async (req, res) => {
 
             return res.status(400).json({ error: 'Bloqueio de Perímetro: Você está fora do raio permitido para encerrar.' });
         }
-        // --- FIM DA VALIDAÇÃO DE DISTÂNCIA ---
 
-        let avaliacaoTexto = notaEstrelas === 5 ? 'Excelência total' : notaEstrelas === 4 ? 'Muito Bom' : notaEstrelas === 3 ? 'Atendeu às expectativas' : notaEstrelas === 2 ? 'Regular' : 'Precisa melhorar bastante';
+        let avaliacaoTexto = notaEstrelas === 5 ? 'Muito Bom' : notaEstrelas === 4 ? 'Muito Bom' : notaEstrelas === 3 ? 'Bom' : notaEstrelas === 2 ? 'Regular' : 'Ruim';
 
         const dataHoraReal = new Date(new Date().toLocaleString("sv-SE", { timeZone: "America/Sao_Paulo" }).replace(' ', 'T'));
         const dataEventoFormatada = new Date(ev.data_evento).toISOString().split('T')[0];
@@ -988,8 +973,20 @@ app.post('/api/v2/qrcode-presenca/registrar-saida', async (req, res) => {
         }
 
         await pool.query('BEGIN');
-        await pool.query(`UPDATE frequencias SET data_saida = $1, avaliacao = $2, lat_saida = $3, lng_saida = $4, tempo_participacao = $5 WHERE id = $6`, [dataHoraReal, avaliacaoTexto, String(latEfetiva || ''), String(lngEfetiva || ''), tempoFinalFormatado, freq.id]);
-        await pool.query(`INSERT INTO pesquisa_satisfacao (participante_id, evento_id, publico_alvo_id, avaliacao, comentarios, criado_em) VALUES ($1, $2, $3, $4, $5, $6)`, [disp.participante_id, evento_id, ev.publico_alvo_id, avaliacaoTexto, textoComentario, dataHoraReal]);
+        
+        // CORRIGIDO: Salvamento em frequencias usando colunas exatas: lat_saida, lng_saida, avaliacao, tempo_participacao
+        await pool.query(`
+            UPDATE frequencias 
+            SET data_saida = $1, avaliacao = $2, lat_saida = $3, lng_saida = $4, tempo_participacao = $5 
+            WHERE id = $6
+        `, [dataHoraReal, avaliacaoTexto, String(latEfetiva || ''), String(lngEfetiva || ''), tempoFinalFormatado, freq.id]);
+        
+        // CORRIGIDO: Salvamento em pesquisa_satisfacao usando colunas exatas: comentarios, criado_em
+        await pool.query(`
+            INSERT INTO pesquisa_satisfacao (participante_id, evento_id, publico_alvo_id, avaliacao, comentarios, criado_em) 
+            VALUES ($1, $2, $3, $4, $5, $6)
+        `, [disp.participante_id, evento_id, ev.publico_alvo_id, avaliacaoTexto, textoComentario, dataHoraReal]);
+        
         await pool.query('COMMIT');
 
         return res.json({ status: 'sucesso', tempo_gravado: tempoFinalFormatado });

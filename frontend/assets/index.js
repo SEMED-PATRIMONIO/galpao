@@ -668,5 +668,49 @@ app.post('/api/v2/admin-exclusivo/eventos', verificarTokenAdminExclusivo, async 
     }
 });
 
+app.post('/api/v2/dispositivos/vincular', async (req, res) => {
+    const { device_key, nome, matricula } = req.body;
+
+    if (!device_key || !nome || !matricula) {
+        return res.status(400).json({ error: 'Dados insuficientes para realizar o vínculo.' });
+    }
+
+    try {
+        await pool.query('BEGIN');
+
+        let resPart = await pool.query('SELECT id FROM participantes WHERE matricula = $1', [matricula]);
+        let participanteId;
+
+        if (resPart.rows.length === 0) {
+            const novoPart = await pool.query(
+                'INSERT INTO participantes (nome, matricula, device_key) VALUES ($1, $2, $3) RETURNING id',
+                [nome, matricula, device_key]
+            );
+            participanteId = novoPart.rows[0].id;
+        } else {
+            participanteId = resPart.rows[0].id;
+            await pool.query(
+                'UPDATE participantes SET nome = $1, device_key = $2 WHERE id = $3',
+                [nome, device_key, participanteId]
+            );
+        }
+
+        await pool.query('UPDATE dispositivos SET ativo = false WHERE participante_id = $1', [participanteId]);
+
+        await pool.query(
+            'INSERT INTO dispositivos (device_token, participante_id, ativo) VALUES ($1, $2, true)',
+            [device_key, participanteId]
+        );
+
+        await pool.query('COMMIT');
+
+        return res.json({ status: 'sucesso', message: 'Aparelho vinculado com sucesso.' });
+
+    } catch (error) {
+        await pool.query('ROLLBACK');
+        return res.status(500).json({ error: 'Erro interno ao vincular o dispositivo.' });
+    }
+});
+
 app.use((req, res) => res.status(404).json({ error: 'Rota não encontrada.' }));
 app.listen(PORT, () => console.log(`Servidor ativado na porta ${PORT}`));

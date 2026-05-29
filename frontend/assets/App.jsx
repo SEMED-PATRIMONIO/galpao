@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 
 const estilos = {
-    layout: { display: 'flex', fontFamily: 'Segoe UI, Tahoma, Geneva, Verdana, sans-serif', backgroundColor: '#f8fafc', minHeight: '100vh' },
-    sidebar: { width: '240px', backgroundColor: '#0f172a', padding: '20px', display: 'flex', flexDirection: 'column', color: '#cbd5e1' },
+    layout: { display: 'flex', fontFamily: 'Segoe UI, Tahoma, Geneva, Verdana, sans-serif', backgroundColor: '#f8fafc', height: '100vh', overflow: 'hidden' },
+    sidebar: { width: '240px', backgroundColor: '#0f172a', padding: '20px', display: 'flex', flexDirection: 'column', color: '#cbd5e1', height: '100vh', boxSizing: 'border-box' },
+    main: { flex: 1, padding: '30px', boxSizing: 'border-box', height: '100vh', overflowY: 'auto' },
     brand: { fontSize: '18px', fontWeight: 'bold', color: '#fff', marginBottom: '25px', textAlign: 'center', borderBottom: '1px solid #1e293b', paddingBottom: '15px' },
     menu: { listStyle: 'none', padding: 0, margin: 0, flex: 1 },
-    main: { flex: 1, padding: '30px', boxSizing: 'border-box' },
     topo: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px', backgroundColor: '#fff', padding: '15px 20px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', position: 'relative' },
     card: { backgroundColor: '#fff', padding: '20px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', marginBottom: '20px' },
     gridFiltros: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px', marginBottom: '15px' },
@@ -62,6 +62,8 @@ export default function App() {
     
     const [dataInicio, setDataInicio] = useState(new Date().toISOString().split('T')[0]);
     const [dataFim, setDataFim] = useState(new Date().toISOString().split('T')[0]);
+    const [participanteFiltro, setParticipanteFiltro] = useState('');
+    const [listaParticipantes, setListaParticipantes] = useState([]);    
     const [areaFiltro, setAreaFiltro] = useState('');
     const [setorFiltro, setSetorFiltro] = useState('');
     const [publicoFiltro, setPublicoFiltro] = useState('');
@@ -81,7 +83,19 @@ export default function App() {
             }
         }
     }, [token, view]);
-
+    // Monitora horários de início/fim e calcula a carga horária automaticamente
+    useEffect(() => {
+        if (form.hora_inicio && form.hora_fim) {
+            const [hIni, mIni] = form.hora_inicio.split(':').map(Number);
+            const [hFim, mFim] = form.hora_fim.split(':').map(Number);
+            
+            let minutosTotais = (hFim * 60 + mFim) - (hIni * 60 + mIni);
+            if (minutosTotais < 0) minutosTotais += 24 * 60; // Trata eventos que cruzam a meia-noite
+            
+            const horasDecimais = (minutosTotais / 60).toFixed(2);
+            setForm(prev => ({ ...prev, carga_horaria: horasDecimais }));
+        }
+    }, [form.hora_inicio, form.hora_fim]);
     // Inicialização segura do Mapa Leaflet dinamicamente
     useEffect(() => {
         if (!modalLocalAberto) {
@@ -204,11 +218,12 @@ export default function App() {
     const carregarCombosAuxiliares = async () => {
         try {
             const headers = { 'Authorization': `Bearer ${token}` };
-            const [rA, rS, rL, rP] = await Promise.all([
+            const [rA, rS, rL, rP, rPart] = await Promise.all([
                 fetch(`${API_URL}/api/v2/admin-exclusivo/combos/areas`, { headers }),
                 fetch(`${API_URL}/api/v2/admin-exclusivo/combos/setores`, { headers }),
                 fetch(`${API_URL}/api/v2/admin-exclusivo/combos/locais`, { headers }),
-                fetch(`${API_URL}/api/v2/admin-exclusivo/combos/publicos`, { headers })
+                fetch(`${API_URL}/api/v2/admin-exclusivo/combos/publicos`, { headers }),
+                fetch(`${API_URL}/api/v2/admin-exclusivo/listagens/participantes`, { headers })
             ]);
             setCombos({
                 areas: rA.ok ? await rA.json() : [],
@@ -216,6 +231,9 @@ export default function App() {
                 locais: rL.ok ? await rL.json() : [],
                 publicos: rP.ok ? await rP.json() : []
             });
+            if (rPart.ok) {
+                setListaParticipantes(await rPart.json());
+            }
         } catch (e) {}
     };
 
@@ -513,7 +531,6 @@ export default function App() {
             </div>
         );
     }
-
     return (
         <div style={estilos.layout}>
             <div style={estilos.sidebar}>
@@ -853,6 +870,15 @@ export default function App() {
                                 {combos.publicos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
                             </select>
                         </div>
+                        <div style={{ flex: 1 }}>
+                            <label style={{ display: 'block', marginBottom: '5px', fontSize: '12px', fontWeight: 'bold', color: '#475569' }}>Professor / Participante:</label>
+                            <select style={estilos.entradaForm} value={participanteFiltro} onChange={e => setParticipanteFiltro(e.target.value)}>
+                                <option value="">Todos</option>
+                                {listaParticipantes.map(p => (
+                                    <option key={p.id} value={p.matricula}>{p.nome_completo} ({p.matricula})</option>
+                                ))}
+                            </select>
+                        </div>                        
                         <button onClick={processarRelatorioIntegrado} style={{ ...estilos.btnAcao, backgroundColor: '#0284c7', color: '#fff', padding: '10px 15px' }}>FILTRAR BASE</button>
                     </div>
                 )}
@@ -892,13 +918,15 @@ export default function App() {
                                 )}
                                 {view === 'frequencias' && (
                                     <>
+                                        <th style={estilos.th}>Data</th>
                                         <th style={estilos.th}>Matrícula</th>
                                         <th style={estilos.th}>Participante</th>
-                                        <th style={estilos.th}>Atividade / Formação</th>
+                                        <th style={estilos.th}>Evento</th>
                                         <th style={estilos.th}>Entrada Real</th>
                                         <th style={estilos.th}>Saída Real</th>
                                         <th style={estilos.th}>Carga Horária</th>
                                         <th style={estilos.th}>Tempo Efetivo</th>
+                                        <th style={estilos.th}>Avaliação</th>
                                     </>
                                 )}
                                 {view === 'pesquisa-satisfacao' && (
@@ -924,75 +952,80 @@ export default function App() {
                             </tr>
                         </thead>
                         <tbody>
-                            {lista.map((item) => {
-                                const possuiComentario = view === 'pesquisa-satisfacao' && item.comentarios && item.comentarios.trim() !== '';
-                                return (
-                                    <tr 
-                                        key={item.id} 
-                                        onClick={() => (view === 'frequencias' || view === 'locais' || ['publico-alvo', 'setores', 'areas', 'usuarios'].includes(view)) && setSelecionado(item)}
-                                        onMouseEnter={() => possuiComentario && setHoveredRowId(item.id)}
-                                        onMouseLeave={() => possuiComentario && setHoveredRowId(null)}
-                                        style={{ 
-                                            cursor: (view === 'frequencias' || view === 'locais' || ['publico-alvo', 'setores', 'areas', 'usuarios'].includes(view)) ? 'pointer' : 'default',
-                                            backgroundColor: selecionado && selecionado.id === item.id ? '#f0fdf4' : (possuiComentario && hoveredRowId === item.id ? '#f8fafc' : 'transparent'),
-                                            transition: 'background-color 0.15s ease'
-                                        }}
-                                    >
-                                        {view === 'eventos' && (
-                                            <>
-                                                <td style={estilos.td}>{item.titulo}</td>
-                                                <td style={estilos.td}>{item.local}</td>
-                                                <td style={estilos.td}>{item.palestrante}</td>
-                                                <td style={estilos.td}>{item.data_evento ? new Date(item.data_evento).toLocaleDateString('pt-BR') : ''}</td>
-                                                <td style={estilos.td}>{item.hora_inicio ? item.hora_inicio.slice(0,5) : ''} às {item.hora_fim ? item.hora_fim.slice(0,5) : ''}</td>
-                                            </>
-                                        )}
-                                        {view === 'locais' && (
-                                            <>
-                                                <td style={estilos.td}>{item.nome}</td>
-                                                <td style={estilos.td}>{item.endereco}</td>
-                                            </>
-                                        )}
-                                        {view === 'frequencias' && (
-                                            <>
-                                                <td style={estilos.td}>{item.matricula}</td>
-                                                <td style={estilos.td}>{item.participante_nome || 'Não Identificado'}</td>
-                                                <td style={estilos.td}>{item.evento_titulo}</td>
-                                                <td style={estilos.td}>{item.data_entrada ? new Date(item.data_entrada).toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'}) : '--:--'}</td>
-                                                <td style={estilos.td}>{item.data_saida ? new Date(item.data_saida).toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'}) : '--:--'}</td>
-                                                <td style={estilos.td}>{item.carga_horaria ? `${item.carga_horaria}h` : ''}</td>
-                                                <td style={estilos.td}><strong style={{ color: item.tempo_participacao ? '#0f172a' : '#ef4444' }}>{item.tempo_participacao || 'Pendente'}</strong></td>
-                                            </>
-                                        )}
-                                        {view === 'pesquisa-satisfacao' && (
-                                            <>
-                                                <td style={estilos.td}>{item.evento_titulo}</td>
-                                                <td style={estilos.td}>{item.participante_nome || item.participante_matricula}</td>
-                                                <td style={{ ...estilos.td, fontWeight: possuiComentario ? 'bold' : 'normal' }}>
-                                                    {item.avaliacao}
-                                                    {possuiComentario && hoveredRowId === item.id && (
-                                                        <div style={estilos.tooltip}>
-                                                            <strong>Comentário do Participante:</strong><br />
-                                                            {item.comentarios}
-                                                        </div>
-                                                    )}
+                            {lista
+                                .filter(item => !participanteFiltro || item.matricula === participanteFiltro)
+                                .map((item) => {
+                                    const possuiComentario = view === 'pesquisa-satisfacao' && item.comentarios && item.comentarios.trim() !== '';
+                                    return (
+                                        <tr 
+                                            key={item.id} 
+                                            onClick={() => (view === 'frequencias' || view === 'locais' || ['publico-alvo', 'setores', 'areas', 'usuarios'].includes(view)) && setSelecionado(item)}
+                                            onMouseEnter={() => possuiComentario && setHoveredRowId(item.id)}
+                                            onMouseLeave={() => possuiComentario && setHoveredRowId(null)}
+                                            style={{ 
+                                                cursor: (view === 'frequencias' || view === 'locais' || ['publico-alvo', 'setores', 'areas', 'usuarios'].includes(view)) ? 'pointer' : 'default',
+                                                backgroundColor: selecionado && selecionado.id === item.id ? '#f0fdf4' : (possuiComentario && hoveredRowId === item.id ? '#f8fafc' : 'transparent'),
+                                                transition: 'background-color 0.15s ease'
+                                            }}
+                                        >
+                                            {view === 'eventos' && (
+                                                <>
+                                                    <td style={estilos.td}>{item.titulo}</td>
+                                                    <td style={estilos.td}>{item.local}</td>
+                                                    <td style={estilos.td}>{item.palestrante}</td>
+                                                    <td style={estilos.td}>{item.data_evento ? new Date(item.data_evento).toLocaleDateString('pt-BR') : ''}</td>
+                                                    <td style={estilos.td}>{item.hora_inicio ? item.hora_inicio.slice(0,5) : ''} às {item.hora_fim ? item.hora_fim.slice(0,5) : ''}</td>
+                                                </>
+                                            )}
+                                            {view === 'locais' && (
+                                                <>
+                                                    <td style={estilos.td}>{item.nome}</td>
+                                                    <td style={estilos.td}>{item.endereco}</td>
+                                                </>
+                                            )}
+                                            {view === 'frequencias' && (
+                                                <>
+                                                    <td style={estilos.td}>{item.data_evento ? new Date(item.data_evento).toLocaleDateString('pt-BR') : (item.data_entrada ? new Date(item.data_entrada).toLocaleDateString('pt-BR') : '')}</td>
+                                                    <td style={estilos.td}>{item.matricula}</td>
+                                                    <td style={estilos.td}>{item.participante_nome || 'Não Identificado'}</td>
+                                                    <td style={estilos.td}>{item.evento_titulo}</td>
+                                                    <td style={estilos.td}>{item.data_entrada ? new Date(item.data_entrada).toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'}) : '--:--'}</td>
+                                                    <td style={estilos.td}>{item.data_saida ? new Date(item.data_saida).toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'}) : '--:--'}</td>
+                                                    <td style={estilos.td}>{item.carga_horaria ? `${item.carga_horaria}h` : ''}</td>
+                                                    <td style={estilos.td}><strong style={{ color: item.tempo_participacao ? '#0f172a' : '#ef4444' }}>{item.tempo_participacao || 'Pendente'}</strong></td>
+                                                    <td style={estilos.td}>⭐ {item.avaliacao || 'Sem nota'}</td>
+                                                </>
+                                            )}
+                                            {view === 'pesquisa-satisfacao' && (
+                                                <>
+                                                    <td style={estilos.td}>{item.evento_titulo}</td>
+                                                    <td style={estilos.td}>{item.participante_nome || item.participante_matricula}</td>
+                                                    <td style={{ ...estilos.td, fontWeight: possuiComentario ? 'bold' : 'normal' }}>
+                                                        {item.avaliacao}
+                                                        {possuiComentario && hoveredRowId === item.id && (
+                                                            <div style={estilos.tooltip}>
+                                                                <strong>Comentário do Participante:</strong><br />
+                                                                {item.comentarios}
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                    <td style={estilos.td}>{item.criado_em ? new Date(item.criado_em).toLocaleDateString('pt-BR') : ''}</td>
+                                                </>
+                                            )}
+                                            {['publico-alvo', 'setores', 'areas', 'participantes', 'usuarios'].includes(view) && (
+                                                <>
+                                                    <td style={estilos.td}>{item.nome || item.nome_completo || item.usuario}</td>
+                                                </>
+                                            )}
+                                            {view === 'log-fraudes' && (
+                                                <td style={estilos.td}>
+                                                    Matrícula: <strong>{item.matricula}</strong> | Motivo: <span style={{ color: '#ef4444', fontWeight: 'bold' }}>{item.motivo}</span> | Registro: {item.data_tentativa ? new Date(item.data_tentativa).toLocaleString('pt-BR') : ''}
                                                 </td>
-                                                <td style={estilos.td}>{item.criado_em ? new Date(item.criado_em).toLocaleDateString('pt-BR') : ''}</td>
-                                            </>
-                                        )}
-                                        {['publico-alvo', 'setores', 'areas', 'participantes', 'usuarios'].includes(view) && (
-                                            <>
-                                                <td style={estilos.td}>{item.nome || item.nome_completo || item.usuario}</td>
-                                            </>
-                                        )}
-                                        {view === 'log-fraudes' && (
-                                            <td style={estilos.td}>
-                                                Matrícula: <strong>{item.matricula}</strong> | Motivo: <span style={{ color: '#ef4444', fontWeight: 'bold' }}>{item.motivo}</span> | Registro: {item.data_tentativa ? new Date(item.data_tentativa).toLocaleString('pt-BR') : ''}
-                                            </td>
-                                        )}
-                                    </tr>
-                                );
+                                            )}
+                                        </tr>
+                                    );
                             })}
+                               
                         </tbody>
                     </table>
                 </div>

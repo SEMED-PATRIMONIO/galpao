@@ -171,12 +171,8 @@ app.post('/api/v2/dispositivo/associar', async (req, res) => {
 app.post('/api/v2/presenca/inicializar', async (req, res) => {
     const { device_token, device_key } = req.body;
     const tokenEfetivo = device_token || device_key;
-    try {
-        if (!tokenEfetivo) return res.status(400).json({ error: 'Identificação ausente.' });
-        const resDisp = await pool.query('SELECT * FROM dispositivos WHERE device_token = $1 AND ativo = true', [tokenEfetivo]);
-        if (resDisp.rows.length === 0) return res.status(401).json({ error: 'Aparelho não associado ou desativado.' });
-        const disp = resDisp.rows[0];
 
+    try {
         const resEventos = await pool.query(`
             SELECT e.id, e.titulo, e.local, e.palestrante, e.hora_inicio, e.hora_fim, 
                    l.nome as local_nome, l.endereco as local_endereco, 
@@ -186,6 +182,61 @@ app.post('/api/v2/presenca/inicializar', async (req, res) => {
             WHERE e.data_evento = CURRENT_DATE::date AND e.hora_fim >= CURRENT_TIME 
             ORDER BY e.hora_inicio ASC
         `);
+
+        const listaEventosFormatada = resEventos.rows.map(e => ({ 
+            id: e.id, 
+            titulo: e.titulo, 
+            palestrante: e.palestrante || '', 
+            local: e.local_nome || e.local || 'Auditório', 
+            endereco: e.local_endereco || e.endereco || '', 
+            latitude: e.latitude, 
+            longitude: e.longitude, 
+            hora_inicio: e.hora_inicio, 
+            hora_fim: e.hora_fim 
+        }));
+
+        if (listaEventosFormatada.length === 0) {
+            return res.status(404).json({ 
+                status: 'erro', 
+                situacao: 'sem_evento', 
+                eventos: [] 
+            });
+        }
+
+        if (!tokenEfetivo) {
+            return res.json({ 
+                status: 'sucesso', 
+                situacao: 'nao_vinculado', 
+                eventos: listaEventosFormatada 
+            });
+        }
+
+        const resDisp = await pool.query('SELECT * FROM dispositivos WHERE device_token = $1 AND ativo = true', [tokenEfetivo]);
+
+        if (resDisp.rows.length === 0) {
+            return res.json({ 
+                status: 'sucesso', 
+                situacao: 'nao_vinculado', 
+                eventos: listaEventosFormatada 
+            });
+        }
+
+        const disp = resDisp.rows[0];
+
+        const resSaidaPendenteAntiga = await pool.query(`
+            SELECT * FROM frequencias 
+            WHERE participante_id = $1 AND data_entrada::date < CURRENT_DATE::date AND data_saida IS NULL 
+            LIMIT 1
+        `, [disp.participante_id]);
+
+        if (resSaidaPendenteAntiga.rows.length > 0) {
+            return res.json({
+                status: 'sucesso',
+                situacao: 'bloqueado_saida_estourada',
+                eventos: listaEventosFormatada
+            });
+        }
+
         const freqAtiva = await pool.query(`
             SELECT * FROM frequencias 
             WHERE participante_id = $1 AND data_entrada::date = CURRENT_DATE::date AND data_saida IS NULL 
@@ -194,20 +245,12 @@ app.post('/api/v2/presenca/inicializar', async (req, res) => {
 
         return res.json({
             status: 'sucesso', 
+            situacao: 'regular',
             tem_evento_ativo: freqAtiva.rows.length > 0, 
             evento_ativo_id: freqAtiva.rows.length > 0 ? freqAtiva.rows[0].evento_id : null,
-            eventos: resEventos.rows.map(e => ({ 
-                id: e.id, 
-                titulo: e.titulo, 
-                palestrante: e.palestrante || '', 
-                local: e.local_nome || e.local || 'Auditório', 
-                endereco: e.local_endereco || e.endereco || '', 
-                latitude: e.latitude, 
-                longitude: e.longitude, 
-                hora_inicio: e.hora_inicio, 
-                hora_fim: e.hora_fim 
-            }))
+            eventos: listaEventosFormatada
         });
+
     } catch (error) { 
         return res.status(500).json({ error: 'Erro interno ao inicializar o Portal.' }); 
     }

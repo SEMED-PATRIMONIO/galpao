@@ -713,14 +713,14 @@ app.post('/api/v2/dispositivos/vincular', async (req, res) => {
 });
 
 // ==========================================
-// 1. INICIALIZAÇÃO INTELIGENTE COM AUTO-VÍNCULO SILENCIOSO
+// 1. INICIALIZAÇÃO SILENCIOSA E DIRETA
 // ==========================================
 app.post('/api/v2/qrcode-presenca/inicializar', async (req, res) => {
-    const { device_token, device_key, nome, matricula } = req.body;
+    const { device_token, device_key } = req.body;
     let tokenEfetivo = device_token || device_key;
 
     try {
-        // 1. Busca os eventos ativos para o dia de hoje que ainda não terminaram
+        // 1. Busca os eventos ativos para o dia de hoje
         const resEventos = await pool.query(`
             SELECT e.id, e.titulo, e.local, e.palestrante, e.hora_inicio, e.hora_fim, 
                    l.nome as local_nome, l.endereco as local_endereco, 
@@ -743,64 +743,43 @@ app.post('/api/v2/qrcode-presenca/inicializar', async (req, res) => {
             hora_fim: e.hora_fim 
         }));
 
-        // Se não houver nenhum evento hoje, encerra sem precisar de vínculo
+        // Se não houver nenhum evento hoje, encerra
         if (listaEventosFormatada.length === 0) {
             return res.status(404).json({ status: 'erro', situacao: 'sem_evento', eventos: [] });
         }
 
-        // 2. Garante que o tokenEfetivo seja um UUID válido caso o app envie um formato antigo
+        // Garante o formato UUID se o token vier incorreto do dispositivo
         if (!tokenEfetivo || typeof tokenEfetivo !== 'string' || tokenEfetivo.startsWith('dev_') || tokenEfetivo.length !== 36) {
             tokenEfetivo = uuidv4();
         }
 
-        await pool.query('BEGIN');
-
-        // 3. AUTO-VÍNCULO SILENCIOSO: Verifica se o dispositivo existe e está ativo no banco
+        // 2. Verifica se o dispositivo existe
         let resDisp = await pool.query('SELECT * FROM dispositivos WHERE device_token = $1 AND ativo = true LIMIT 1', [tokenEfetivo]);
-        let disp;
 
+        // SE NÃO EXISTE: Responde silenciosamente para o frontend abrir os campos de Nome e Matrícula
         if (resDisp.rows.length === 0) {
-            // Se o aparelho é novo ou o banco foi limpo, cria um participante temporário/padrão silenciosamente
-            const matriculaPadrao = matricula || 'MAT-' + Math.floor(100000 + Math.random() * 900000);
-            const nomePadrao = nome || 'Participante QRCode';
-
-            let resPart = await pool.query('SELECT id FROM participantes WHERE matricula = $1 LIMIT 1', [matriculaPadrao]);
-            let participanteId;
-
-            if (resPart.rows.length === 0) {
-                const novoPart = await pool.query(
-                    'INSERT INTO participantes (nome_completo, matricula, device_key, ativo) VALUES ($1, $2, $3, true) RETURNING id',
-                    [nomePadrao, matriculaPadrao, tokenEfetivo]
-                );
-                participanteId = novoPart.rows[0].id;
-            } else {
-                participanteId = resPart.rows[0].id;
-            }
-
-            // Cria o registro na tabela dispositivos diretamente
-            const novoDisp = await pool.query(
-                'INSERT INTO dispositivos (device_token, participante_id, participante_matricula, ativo) VALUES ($1, $2, $3, true) RETURNING *',
-                [tokenEfetivo, participanteId, matriculaPadrao]
-            );
-            disp = novoDisp.rows[0];
-        } else {
-            disp = resDisp.rows[0];
+            return res.json({ 
+                status: 'sucesso', 
+                situacao: 'vincular', // Avisa o App para pedir os dados direto
+                device_token: tokenEfetivo,
+                device_key: tokenEfetivo,
+                eventos: listaEventosFormatada 
+            });
         }
 
-        await pool.query('COMMIT');
+        const disp = resDisp.rows[0];
 
-        // 4. Verifica se o participante possui uma entrada ativa (saída em aberto) hoje
+        // 3. Se já existe, verifica se possui uma entrada ativa (saída em aberto)
         const freqAtiva = await pool.query(`
             SELECT * FROM frequencias 
             WHERE participante_id = $1 AND data_entrada::date = CURRENT_DATE::date AND data_saida IS NULL 
             LIMIT 1
         `, [disp.participante_id]);
 
-        // Retorna tudo pronto de uma vez. O usuário nunca verá tela de erro.
         return res.json({
             status: 'sucesso', 
             situacao: 'regular',
-            device_token: tokenEfetivo, // Devolve para o celular salvar no LocalStorage
+            device_token: tokenEfetivo,
             device_key: tokenEfetivo,
             tem_evento_ativo: freqAtiva.rows.length > 0, 
             evento_ativo_id: freqAtiva.rows.length > 0 ? freqAtiva.rows[0].evento_id : null,
@@ -808,7 +787,6 @@ app.post('/api/v2/qrcode-presenca/inicializar', async (req, res) => {
         });
 
     } catch (error) { 
-        await pool.query('ROLLBACK');
         console.error(error);
         return res.status(500).json({ error: 'Erro interno ao inicializar o Portal.' }); 
     }

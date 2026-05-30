@@ -469,16 +469,24 @@ app.get('/api/v2/admin-exclusivo/listagens/pesquisa-satisfacao', verificarTokenA
 
 app.get('/api/v2/admin-exclusivo/listagens/frequencias', verificarTokenAdminExclusivo, async (req, res) => {
     try {
-        return res.json((await pool.query(`
-            SELECT f.id, f.matricula, f.tempo_participacao, f.data_entrada, f.data_saida,
-                   p.nome_completo as participante_nome, e.titulo as evento_titulo, e.carga_horaria 
+        // CORREÇÃO: Mudado de JOIN para LEFT JOIN para listar os registros mesmo sem saída,
+        // e garantindo a leitura correta de f.matricula e p.nome_completo
+        const resultado = await pool.query(`
+            SELECT f.id, 
+                   COALESCE(f.matricula, p.matricula) as matricula, 
+                   f.tempo_participacao, f.data_entrada, f.data_saida, f.funcao, f.avaliacao,
+                   COALESCE(p.nome_completo, 'Participante Temporário') as participante_nome, 
+                   e.titulo as evento_titulo, e.carga_horaria 
             FROM frequencias f 
-            JOIN participantes p ON f.participante_id = p.id 
-            JOIN eventos e ON f.evento_id = e.id 
-            WHERE f.data_entrada::date = CURRENT_DATE::date
+            LEFT JOIN participantes p ON f.participante_id = p.id 
+            LEFT JOIN eventos e ON f.evento_id = e.id 
             ORDER BY f.data_entrada DESC
-        `)).rows);
-    } catch (e) { return res.status(500).json([]); }
+        `);
+        return res.json(resultado.rows);
+    } catch (e) { 
+        console.error("Erro na listagem de frequencias:", e.message);
+        return res.status(500).json([]); 
+    }
 });
 
 app.get('/api/v2/admin-exclusivo/relatorio-integrated', verificarTokenAdminExclusivo, async (req, res) => {

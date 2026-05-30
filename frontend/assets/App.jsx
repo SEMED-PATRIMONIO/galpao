@@ -290,7 +290,22 @@ export default function App() {
                     <p style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '25px', lineHeight: '1.5' }}>{conteudoModal.texto}</p>
                     <div style={{ display: 'flex', gap: '15px' }}>
                         <button onClick={() => setStatusTela('listagem')} style={{ flex: 1, padding: '14px', borderRadius: '8px', border: '1px solid #cbd5e1', backgroundColor: '#fff', color: '#64748b', fontWeight: 'bold', cursor: 'pointer' }}>Voltar</button>
-                        <button onClick={processarAceiteModal} style={{ flex: 1, padding: '14px', borderRadius: '8px', border: 'none', backgroundColor: '#16a34a', color: '#fff', fontWeight: 'bold', cursor: 'pointer' }}>Sim, confirmar</button>
+                        <button 
+                            onClick={processarAceiteModal} 
+                            disabled={alerta.visivel && alerta.tipo === 'sucesso'}
+                            style={{ 
+                                flex: 1, 
+                                padding: '14px', 
+                                borderRadius: '8px', 
+                                border: 'none', 
+                                backgroundColor: (alerta.visivel && alerta.tipo === 'sucesso') ? '#94a3b8' : '#16a34a', 
+                                color: '#fff', 
+                                fontWeight: 'bold', 
+                                cursor: (alerta.visivel && alerta.tipo === 'sucesso') ? 'not-allowed' : 'pointer' 
+                            }}
+                        >
+                            {(alerta.visivel && alerta.tipo === 'sucesso') ? 'Aguarde...' : 'Sim, confirmar'}
+                        </button>
                     </div>
                 </div>
             )}

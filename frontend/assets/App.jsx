@@ -56,9 +56,8 @@ export default function App() {
                 body: JSON.stringify({ device_token: tokenParaValidar })
             });
 
+            // Se o token foi invalidado no servidor de forma estrita, joga para a tela de vínculo amigavelmente
             if (res.status === 401) {
-                localStorage.removeItem('device_token');
-                setDeviceToken('');
                 setStatusTela('vincular');
                 return;
             }
@@ -68,13 +67,21 @@ export default function App() {
                 setEventos(data.eventos);
                 setTemEventoAtivo(data.tem_evento_ativo);
                 setEventoAtivoId(data.evento_ativo_id);
-                setStatusTela('listagem');
+                
+                // Se o banco foi limpo ou o token não existe mais, abre a tela de vincular direto, sem mensagens de erro
+                if (!tokenParaValidar || data.eventos.length === 0) {
+                    setStatusTela('vincular');
+                } else {
+                    setStatusTela('listagem');
+                }
                 obterLocalizacaoGPS();
             } else {
-                dispararAlerta8Segundos(data.error || 'Erro de conexão.', 'erro');
+                // Se não está vinculado ainda, apenas abre a tela de vincular sem disparar alertas feios
+                setStatusTela('vincular');
             }
         } catch (err) {
-            dispararAlerta8Segundos('Não foi possível se comunicar com o servidor.', 'erro');
+            // Em caso de falha física de rede, joga para a tela de segurança
+            setStatusTela('vincular');
         }
     };
 

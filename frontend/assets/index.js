@@ -127,60 +127,10 @@ app.get('/api/v2/dispositivo/status', async (req, res) => {
     }
 });
 
-app.post('/api/v2/dispositivo/associar', async (req, res) => {
-    const { matricula, nome, device_token, token } = req.body;
-    try {
-        const tokenDispositivo = device_token || token || uuidv4();
-        const resVerif = await pool.query('SELECT * FROM dispositivos WHERE device_token = $1 AND ativo = true', [tokenDispositivo]);
-        if (resVerif.rows.length > 0) {
-            const vinculo = resVerif.rows[0];
-            const partDono = await pool.query('SELECT * FROM participantes WHERE id = $1', [vinculo.participante_id]);
-            if (partDono.rows.length > 0 && partDono.rows[0].matricula !== matricula) {
-                return res.status(400).json({ error: 'Este dispositivo já está associado a outro participante.' });
-            }
-        }
-
-        let resPart = await pool.query('SELECT * FROM participantes WHERE matricula = $1', [matricula]);
-        let participanteId;
-        if (resPart.rows.length === 0) {
-            const novoPart = await pool.query(
-                'INSERT INTO participantes (nome_completo, matricula, ativo) VALUES ($1, $2, true) RETURNING id', 
-                [nome, matricula]
-            );
-            participanteId = novoPart.rows[0].id;
-        } else {
-            participanteId = resPart.rows[0].id;
-        }
-
-        await pool.query(`
-            INSERT INTO dispositivos (device_token, participante_id, participante_matricula, ativo) 
-            VALUES ($1, $2, $3, true) 
-            ON CONFLICT (device_token) 
-            DO UPDATE SET participante_id = $2, participante_matricula = $3, ativo = true
-        `, [tokenDispositivo, participanteId, matricula]);
-
-        const partFinal = await pool.query('SELECT * FROM participantes WHERE id = $1', [participanteId]);
-        return res.json({ 
-            device_token: tokenDispositivo, 
-            token: tokenDispositivo, 
-            participante: partFinal.rows[0] 
-        });
-    } catch (error) {
-        console.error("Erro crítico na rota /dispositivo/associar:", error.message);
-        return res.status(500).json({ error: 'Erro interno ao associar dispositivo.' });
-    }
-});
-
 app.post('/api/v2/presenca/inicializar', async (req, res) => {
     const { device_token } = req.body;
     try {
-        if (!device_token) return res.status(400).json({ error: 'Identificação ausente.' });
-
-        const resDisp = await pool.query('SELECT * FROM dispositivos WHERE device_token = $1 AND ativo = true', [device_token]);
-        if (resDisp.rows.length === 0) return res.status(401).json({ error: 'Aparelho não associado ou desativado.' });
-        const disp = resDisp.rows[0];
-
-        // Regra 1: Traz apenas eventos de HOJE cuja hora de FIM ainda não passou (ignora os já encerrados)
+        // Busca eventos de hoje que ainda não terminaram
         const resEventos = await pool.query(`
             SELECT e.id, e.titulo, e.local, e.palestrante, e.hora_inicio, e.hora_fim,
                    l.nome as local_nome, l.endereco as local_endereco,
@@ -193,7 +143,30 @@ app.post('/api/v2/presenca/inicializar', async (req, res) => {
             ORDER BY e.hora_inicio ASC
         `);
 
-        // Regra 2 e 3: Verifica se este participante já tem alguma entrada ativa hoje sem saída lançada
+        const listaEventos = resEventos.rows.map(e => ({
+            id: e.id,
+            titulo: e.titulo,
+            palestrante: e.palestrante || '',
+            local: e.local_nome || e.local || 'Auditório',
+            endereco: e.local_endereco || e.endereco || '',
+            latitude: e.latitude,
+            longitude: e.longitude,
+            hora_inicio: e.hora_inicio,
+            hora_fim: e.hora_fim
+        }));
+
+        // Se o dispositivo não enviou token ou não existe, manda os eventos assim mesmo (ativa tela de vincular)
+        if (!device_token) {
+            return res.json({ status: 'sucesso', tem_evento_ativo: false, evento_ativo_id: null, eventos: listaEventos });
+        }
+
+        const resDisp = await pool.query('SELECT * FROM dispositivos WHERE device_token = $1 AND ativo = true', [device_token]);
+        if (resDisp.rows.length === 0) {
+            return res.json({ status: 'sucesso', tem_evento_ativo: false, evento_ativo_id: null, eventos: listaEventos });
+        }
+        const disp = resDisp.rows[0];
+
+        // Verifica se já tem presença aberta hoje
         const freqAtiva = await pool.query(`
             SELECT * FROM frequencias 
             WHERE participante_id = $1 AND data_entrada::date = CURRENT_DATE::date AND data_saida IS NULL
@@ -204,21 +177,60 @@ app.post('/api/v2/presenca/inicializar', async (req, res) => {
             status: 'sucesso',
             tem_evento_ativo: freqAtiva.rows.length > 0,
             evento_ativo_id: freqAtiva.rows.length > 0 ? freqAtiva.rows[0].evento_id : null,
-            eventos: resEventos.rows.map(e => ({
-                id: e.id,
-                titulo: e.titulo,
-                palestrante: e.palestrante || '',
-                local: e.local_nome || e.local || 'Auditório',
-                endereco: e.local_endereco || e.endereco || '',
-                latitude: e.latitude,
-                longitude: e.longitude,
-                hora_inicio: e.hora_inicio,
-                hora_fim: e.hora_fim
-            }))
+            eventos: listaEventos
         });
     } catch (error) {
         console.error("Erro no inicializar:", error.message);
         return res.status(500).json({ error: 'Erro interno ao inicializar o Portal.' });
+    }
+});
+
+app.post('/api/v2/dispositivo/associar', async (req, res) => {
+    const { matricula, nome, device_token } = req.body;
+    // Garante que usaremos um UUID limpo se o celular não tiver um válido
+    const tokenDispositivo = device_token && device_token.length === 36 ? device_token : uuidv4();
+
+    try {
+        await pool.query('BEGIN');
+
+        // Remove qualquer trava ou vínculo antigo desse token para evitar erros de UNIQUE CONSTRAINT
+        await pool.query('DELETE FROM dispositivos WHERE device_token = $1', [tokenDispositivo]);
+
+        // Busca ou cria o participante pela matrícula usando a coluna real 'nome_completo'
+        let resPart = await pool.query('SELECT id FROM participantes WHERE matricula = $1', [matricula]);
+        let participanteId;
+
+        if (resPart.rows.length === 0) {
+            const novoPart = await pool.query(
+                'INSERT INTO participantes (nome_completo, matricula, ativo) VALUES ($1, $2, true) RETURNING id', 
+                [nome, matricula]
+            );
+            participanteId = novoPart.rows[0].id;
+        } else {
+            participanteId = resPart.rows[0].id;
+            await pool.query('UPDATE participantes SET nome_completo = $1, ativo = true WHERE id = $2', [nome, participanteId]);
+        }
+
+        // Desativa vínculos anteriores deste participante
+        await pool.query('UPDATE dispositivos SET ativo = false WHERE participante_id = $1', [participanteId]);
+
+        // Insere o novo dispositivo associado e ativo usando a coluna real 'participante_matricula'
+        await pool.query(`
+            INSERT INTO dispositivos (device_token, participante_id, participante_matricula, ativo) 
+            VALUES ($1, $2, $3, true)
+        `, [tokenDispositivo, participanteId, matricula]);
+
+        await pool.query('COMMIT');
+
+        return res.json({ 
+            status: 'sucesso',
+            device_token: tokenDispositivo, 
+            token: tokenDispositivo
+        });
+    } catch (error) {
+        await pool.query('ROLLBACK');
+        console.error("Erro crítico na associação:", error.message);
+        return res.status(500).json({ error: 'Erro interno ao associar dispositivo.' });
     }
 });
 

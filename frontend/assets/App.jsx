@@ -2,381 +2,320 @@ import React, { useState, useEffect } from 'react';
 
 const API_URL = window.location.origin.includes('localhost') ? 'http://localhost:3009' : '';
 
-const obterAgoraSaoPaulo = () => {
-    try {
-        const dataTexto = new Date().toLocaleString("sv-SE", { timeZone: "America/Sao_Paulo" }).replace(' ', 'T');
-        const data = new Date(dataTexto);
-        return isNaN(data.getTime()) ? new Date() : data;
-    } catch (e) {
-        return new Date();
-    }
+const calcularDistanciaCliente = (lat1, lon1, lat2, lon2) => {
+    const R = 6371e3;
+    const phi1 = lat1 * Math.PI / 180;
+    const phi2 = lat2 * Math.PI / 180;
+    const deltaPhi = (lat2 - lat1) * Math.PI / 180;
+    const deltaLambda = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
+              Math.cos(phi1) * Math.cos(phi2) *
+              Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
 };
 
 export default function App() {
-    // Estados de Controle do Fluxo
-    // Estados possíveis: 'carregando', 'sem_evento', 'nao_vinculado', 'pendente_admin', 'multiplos', 'entrada', 'logado', 'pesquisa', 'concluido'
-    const [statusFluxo, setStatusFluxo] = useState('carregando');
-    const [eventoAtual, setEventoAtual] = useState(null);
-    const [listaEventos, setListaEventos] = useState([]);
-    const [alertaMsg, setAlertaMsg] = useState('');
+    const [deviceToken, setDeviceToken] = useState(localStorage.getItem('device_token') || ''); 
+    const [statusTela, setStatusTela] = useState('carregando'); 
+    const [eventos, setEventos] = useState([]);
+    const [temEventoAtivo, setTemEventoAtivo] = useState(false);
+    const [eventoAtivoId, setEventoAtivoId] = useState(null);
+    const [eventoSelecionado, setEventoSelecionado] = useState(null);
     const [coords, setCoords] = useState({ lat: null, lng: null });
-    const [carregandoAcao, setCarregandoAcao] = useState(false);
+    
+    const [matriculaInput, setMatriculaInput] = useState('');
+    const [nomeInput, setNomeInput] = useState('');
+    const [alerta, setAlerta] = useState({ visivel: false, msg: '', tipo: 'sucesso' });
+    const [conteudoModal, setConteudoModal] = useState(null);
 
-    // Formulário de Vínculo de Aparelho
-    const [formVinculo, setFormVinculo] = useState({ nome: '', matricula: '' });
+    const [estrelas, setEstrelas] = useState(5);
+    const [comentario, setComentario] = useState('');
 
-    // Formulário de Avaliação de Saída
-    const [avaliacao, setAvaliacao] = useState('Ótimo');
-    const [comentarios, setComentarios] = useState('');
+    const dispararAlerta8Segundos = (mensagem, tipo = 'erro', acaoPosterior = null) => {
+        setAlerta({ visivel: true, msg: mensagem, tipo });
+        setTimeout(() => {
+            setAlerta({ visivel: false, msg: '', tipo: 'sucesso' });
+            if (acaoPosterior) acaoPosterior();
+        }, 8000);
+    };
 
-    // Efeito Inicial: Roda assim que o app abre
     useEffect(() => {
-        verificarFaseInicial();
-    }, []);
+        if (!deviceToken) {
+            setStatusTela('vincular');
+            return;
+        }
+        executarInicializacao(deviceToken);
+    }, [deviceToken]);
 
-    // PASSO 1 e 2: Verificar evento no dia e checar vínculo do dispositivo (Sem forçar GPS ainda)
-    const verificarFaseInicial = async () => {
-        const dKey = localStorage.getItem('device_token') || localStorage.getItem('device_key');
-        
+    const executarInicializacao = async (tokenParaValidar) => {
         try {
-            const res = await fetch(`${API_URL}/api/v2/qrcode-presenca/inicializar`, {
+            const res = await fetch(`${API_URL}/api/v2/presenca/inicializar`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ device_key: dKey || null })
+                body: JSON.stringify({ device_token: tokenParaValidar })
             });
 
+            if (res.status === 401) {
+                localStorage.removeItem('device_token');
+                setDeviceToken('');
+                setStatusTela('vincular');
+                return;
+            }
+
             const data = await res.json();
-
-            // 1. Se não houver eventos agendados para hoje, barra imediatamente (sem pedir GPS)
-            if (res.status === 404 || (data.eventos && data.eventos.length === 0)) {
-                setStatusFluxo('sem_evento');
-                return;
-            }
-
-            // 2. Se o aparelho não for reconhecido ou não tiver chave, vai para a tela de vínculo imediato
-            if (res.status === 401 || !dKey) {
-                setListaEventos(data.eventos || []);
-                setStatusFluxo('nao_vinculado');
-                return;
-            }
-
             if (data.status === 'sucesso') {
-                setListaEventos(data.eventos);
-
-                // 3. Verificar pendências de saídas antigas ou travas do Admin
-                if (data.situacao === 'bloqueado_saida_estourada') {
-                    setStatusFluxo('pendente_admin');
-                    exibirAlertaTemporizado('Você possui uma entrada sem registro de saída e o prazo expirou. Solicite liberação ao administrador.');
-                    return;
-                }
-
-                // Se o usuário já está ativamente logado em algum evento
-                if (data.tem_evento_ativo && data.evento_ativo_id) {
-                    const evAtivo = data.eventos.find(e => e.id === data.evento_ativo_id);
-                    if (evAtivo) {
-                        setEventoAtual(evAtivo);
-                        setStatusFluxo('logado'); // Vai direto para a tela de espera da saída
-                        capturarGeolocalizacaoSilenciosa();
-                        return;
-                    }
-                }
-
-                // Direcionamento de fluxo padrão para novos registros
-                if (data.eventos.length === 1) {
-                    setEventoAtual(data.eventos[0]);
-                    setStatusFluxo('entrada');
-                } else {
-                    setStatusFluxo('multiplos');
-                }
-                
-                // Captura o GPS em background agora que sabe que tem evento e está vinculado
-                capturarGeolocalizacaoSilenciosa();
+                setEventos(data.eventos);
+                setTemEventoAtivo(data.tem_evento_ativo);
+                setEventoAtivoId(data.evento_ativo_id);
+                setStatusTela('listagem');
+                obterLocalizacaoGPS();
+            } else {
+                dispararAlerta8Segundos(data.error || 'Erro de conexão.', 'erro');
             }
         } catch (err) {
-            setStatusFluxo('sem_evento');
-            exibirAlertaTemporizado('Sem comunicação com o servidor. Verifique sua internet.');
+            dispararAlerta8Segundos('Não foi possível se comunicar com o servidor.', 'erro');
         }
     };
 
-    const capturarGeolocalizacaoSilenciosa = () => {
-        navigator.geolocation.getCurrentPosition(
-            (pos) => setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-            () => exibirAlertaTemporizado('Aviso: Ative o GPS do aparelho para conseguir marcar presença.')
-        );
-    };
-
-    const exibirAlertaTemporizado = (msg) => {
-        setAlertaMsg(msg);
-        setTimeout(() => setAlertaMsg(''), 8000);
-    };
-
-    // AÇÃO: Realizar o Auto-Vínculo do aparelho na hora
-    const dispararAutoVinculo = async (e) => {
+    const lidarComVinculoAparelho = async (e) => {
         e.preventDefault();
-        if (!formVinculo.nome || !formVinculo.matricula) {
-            exibirAlertaTemporizado('Preencha seu Nome e Matrícula para vincular.');
+        try {
+            const res = await fetch(`${API_URL}/api/v2/dispositivo/associar`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ matricula: matriculaInput, nome: nomeInput })
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                dispararAlerta8Segundos(data.error || 'Erro ao vincular dispositivo.', 'erro');
+                return;
+            }
+            localStorage.setItem('device_token', data.device_token);
+            setDeviceToken(data.device_token);
+            dispararAlerta8Segundos('DISPOSITIVO VINCULADO COM SUCESSO!', 'sucesso');
+        } catch (err) {
+            dispararAlerta8Segundos('Erro ao tentar associar dispositivo.', 'erro');
+        }
+    };
+
+    const obterLocalizacaoGPS = () => {
+        const sucesso = (pos) => {
+            setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        };
+        navigator.geolocation.getCurrentPosition(sucesso, () => {
+            navigator.geolocation.getCurrentPosition(sucesso, () => {
+                dispararAlerta8Segundos('Por favor, ative o GPS e dê as permissões de localização.', 'erro');
+            }, { enableHighAccuracy: false, timeout: 10000 });
+        }, { enableHighAccuracy: true, timeout: 6000 });
+    };
+
+    const selecionarEvento = async (ev) => {
+        if (!coords.lat || !coords.lng) {
+            dispararAlerta8Segundos('Aguardando sinal do GPS para validar proximidade.', 'erro');
             return;
         }
 
-        setCarregandoAcao(true);
         try {
-            // Gera um token UUID temporário/aleatório no lado do cliente caso queira, 
-            // ou deixa sua API gerar e devolver no response.
-            const novoToken = 'dev_' + Math.random().toString(36).substr(2, 9) + Date.now();
-
-            const res = await fetch(`${API_URL}/api/v2/qrcode-presenca/vincular`, {
+            const res = await fetch(`${API_URL}/api/v2/presenca/checar-status`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    device_key: novoToken,
-                    nome: formVinculo.nome,
-                    matricula: formVinculo.matricula
+                    device_token: deviceToken,
+                    evento_id: ev.id,
+                    latitude: coords.lat,
+                    longitude: coords.lng
                 })
             });
-
             const data = await res.json();
-            if (res.ok && data.status === 'sucesso') {
-                localStorage.setItem('device_key', novoToken);
-                localStorage.setItem('device_token', novoToken);
-                exibirAlertaTemporizado('Aparelho vinculado com sucesso!');
-                // Reinicializa o fluxo agora com o aparelho devidamente registrado
-                setStatusFluxo('carregando');
-                verificarFaseInicial();
-            } else {
-                exibirAlertaTemporizado(data.error || 'Não foi possível efetuar o vínculo.');
+
+            if (!res.ok) {
+                dispararAlerta8Segundos(data.error || 'Operação bloqueada.', 'erro');
+                return;
+            }
+
+            setEventoSelecionado(ev);
+
+            if (data.status === 'somente_entrada') {
+                setConteudoModal({
+                    tipo: 'pergunta_saida',
+                    texto: `Sua entrada está ativa. Confirma o preenchimento da avaliação e encerramento da sua frequência agora?`
+                });
+                setStatusTela('modal_pergunta');
+            } else if (data.status === 'nenhum') {
+                setConteudoModal({
+                    tipo: 'confirmar_entrada',
+                    texto: `Deseja registrar sua presença oficial na formação: "${ev.titulo}"?`
+                });
+                setStatusTela('modal_pergunta');
             }
         } catch (err) {
-            exibirAlertaTemporizado('Erro de rede ao tentar vincular aparelho.');
-        } finally {
-            setCarregandoAcao(false);
+            dispararAlerta8Segundos('Falha de conexão com a central.', 'erro');
         }
     };
 
-    const selecionarAtividadeManual = (ev) => {
-        setEventoAtual(ev);
-        setStatusFluxo('entrada');
-    };
-
-    // PASSO 4, 5 e 6: Disparar Registro de Entrada
-    const dispararRegistroPresenca = async () => {
-        setCarregandoAcao(true);
-        // Garante a captura atualizada do GPS antes do envio
-        navigator.geolocation.getCurrentPosition(
-            async (pos) => {
-                const latAtual = pos.coords.latitude;
-                const lngAtual = pos.coords.longitude;
-                setCoords({ lat: latAtual, lng: lngAtual });
-
-                const dKey = localStorage.getItem('device_token') || localStorage.getItem('device_key');
-
-                try {
-                    const res = await fetch(`${API_URL}/api/v2/qrcode-presenca/registrar-entrada`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            device_key: dKey,
-                            evento_id: eventoAtual.id,
-                            lat_entrada: latAtual,
-                            lng_entrada: lngAtual
-                        })
-                    });
-
-                    const data = await res.json();
-                    if (res.ok && data.status === 'sucesso') {
-                        setStatusFluxo('logado');
-                    } else {
-                        // Se falhar (por distância ou horário), o backend já salvou no log_fraudes
-                        exibirAlertaTemporizado(data.error || 'Registro rejeitado pelos critérios de validação.');
-                    }
-                } catch (err) {
-                    exibirAlertaTemporizado('Erro ao enviar dados de presença.');
-                } finally {
-                    setCarregandoAcao(false);
+    const processarAceiteModal = async () => {
+        if (conteudoModal.tipo === 'confirmar_entrada') {
+            try {
+                const res = await fetch(`${API_URL}/api/v2/presenca/confirmar-entrada`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        device_token: deviceToken,
+                        evento_id: eventoSelecionado.id,
+                        latitude: coords.lat,
+                        longitude: coords.lng
+                    })
+                });
+                if (res.ok) {
+                    dispararAlerta8Segundos('ENTRADA REGISTRADA COM SUCESSO!', 'sucesso', () => executarInicializacao(deviceToken));
+                } else {
+                    const d = await res.json();
+                    dispararAlerta8Segundos(d.error || 'Erro ao salvar entrada.', 'erro');
                 }
-            },
-            () => {
-                setCarregandoAcao(false);
-                exibirAlertaTemporizado('Erro de GPS: Não foi possível obter sua localização exata.');
+            } catch (e) {
+                dispararAlerta8Segundos('Falha ao registrar presença.', 'erro');
             }
-        );
+        } else if (conteudoModal.tipo === 'pergunta_saida') {
+            setStatusTela('pesquisa');
+        }
     };
 
-    // PASSO 4, 5 e 6: Disparar Registro de Saída
-    const salvarAvaliacaoEConfirmarSaida = async (e) => {
+    const submeterPesquisaSaida = async (e) => {
         e.preventDefault();
-        setCarregandoAcao(true);
-
-        navigator.geolocation.getCurrentPosition(
-            async (pos) => {
-                const latAtual = pos.coords.latitude;
-                const lngAtual = pos.coords.longitude;
-                const dKey = localStorage.getItem('device_token') || localStorage.getItem('device_key');
-
-                try {
-                    const res = await fetch(`${API_URL}/api/v2/qrcode-presenca/registrar-saida`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            device_key: dKey,
-                            evento_id: eventoAtual.id,
-                            avaliacao,
-                            comentarios,
-                            lat: latAtual,
-                            lng: lngAtual
-                        })
-                    });
-
-                    const data = await res.json();
-                    if (res.ok && data.status === 'sucesso') {
-                        setStatusFluxo('concluido');
-                    } else {
-                        exibirAlertaTemporizado(data.error || 'Erro ao registrar sua saída.');
-                    }
-                } catch (err) {
-                    exibirAlertaTemporizado('Erro de comunicação ao encerrar presença.');
-                } finally {
-                    setCarregandoAcao(false);
-                }
-            },
-            () => {
-                setCarregandoAcao(false);
-                exibirAlertaTemporizado('Geolocalização obrigatória para validar a saída.');
+        try {
+            const res = await fetch(`${API_URL}/api/v2/presenca/confirmar-saida`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    device_token: deviceToken,
+                    evento_id: eventoSelecionado.id,
+                    estrelas,
+                    comentario,
+                    latitude: coords.lat,
+                    longitude: coords.lng
+                })
+            });
+            if (res.ok) {
+                setEstrelas(5);
+                setComentario('');
+                setStatusTela('sucesso_final');
+                
+                setTimeout(() => {
+                    localStorage.removeItem('device_token');
+                    setDeviceToken('');
+                    window.location.reload();
+                }, 8000);
+            } else {
+                const d = await res.json();
+                dispararAlerta8Segundos(d.error || 'Erro ao registrar saída.', 'erro');
             }
-        );
-    };
-
-    const estilos = {
-        container: { fontFamily: 'Arial, sans-serif', backgroundColor: '#f4f6f9', minHeight: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px', boxSizing: 'border-box' },
-        card: { backgroundColor: '#ffffff', borderRadius: '12px', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', padding: '30px', width: '100%', maxWidth: '440px', boxSizing: 'border-box', textAlign: 'center' },
-        titulo: { fontSize: '22px', fontWeight: 'bold', color: '#1e3a8a', margin: '0 0 8px 0' },
-        subtitulo: { fontSize: '14px', color: '#64748b', margin: '0 0 24px 0' },
-        input: { width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1', marginBottom: '15px', boxSizing: 'border-box' },
-        btnPrimario: { width: '100%', padding: '14px', backgroundColor: '#0284c7', color: '#ffffff', border: 'none', borderRadius: '8px', fontWeight: 'bold', fontSize: '15px', cursor: 'pointer' },
-        btnSucesso: { width: '100%', padding: '14px', backgroundColor: '#16a34a', color: '#ffffff', border: 'none', borderRadius: '8px', fontWeight: 'bold', fontSize: '15px', cursor: 'pointer', marginTop: '15px' },
-        btnItem: { width: '100%', padding: '12px', backgroundColor: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '8px', textAlign: 'left', cursor: 'pointer', marginBottom: '10px' },
-        select: { width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1', backgroundColor: '#ffffff', marginBottom: '15px', marginTop: '5px' },
-        textarea: { width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1', minHeight: '80px', boxSizing: 'border-box', marginBottom: '15px' },
-        alerta: { backgroundColor: '#fef2f2', border: '1px solid #fee2e2', color: '#991b1b', padding: '12px', borderRadius: '8px', fontSize: '13px', marginBottom: '20px', textAlign: 'left', fontWeight: 'bold' }
+        } catch (err) {
+            dispararAlerta8Segundos('Erro de comunicação ao encerrar frequência.', 'erro');
+        }
     };
 
     return (
-        <div style={estilos.container}>
-            {statusFluxo === 'carregando' && (
-                <div style={estilos.card}>
-                    <p style={estilos.titulo}>Buscando Atividades...</p>
-                    <p style={estilos.subtitulo}>Verificando cronograma e calendário oficial do dia.</p>
+        <div style={{ fontFamily: 'system-ui, sans-serif', padding: '20px', maxWidth: '450px', margin: '0 auto', textAlign: 'center', color: '#333' }}>
+            
+            {alerta.visivel && (
+                <div style={{
+                    backgroundColor: alerta.tipo === 'sucesso' ? '#dcfce7' : '#fee2e2',
+                    color: alerta.tipo === 'sucesso' ? '#166534' : '#991b1b',
+                    padding: '15px', borderRadius: '12px', marginBottom: '20px',
+                    fontWeight: 'bold', border: `1px solid ${alerta.tipo === 'sucesso' ? '#bbf7d0' : '#fca5a5'}`
+                }}>
+                    {alerta.msg}
                 </div>
             )}
 
-            {statusFluxo === 'sem_evento' && (
-                <div style={estilos.card}>
-                    <div style={{ fontSize: '50px', marginBottom: '10px' }}>📆</div>
-                    <p style={estilos.titulo}>Nenhuma Atividade</p>
-                    <p style={estilos.subtitulo}>Não existem reuniões ou formações agendadas para o dia de hoje.</p>
-                    {alertaMsg && <div style={estilos.alerta}>{alertaMsg}</div>}
-                </div>
+            {statusTela === 'carregando' && <h3 style={{ color: '#0284c7', padding: '30px' }}>Sincronizando dados com o servidor...</h3>}
+
+            {statusTela === 'vincular' && (
+                <form onSubmit={lidarComVinculoAparelho} style={{ border: '1px solid #cbd5e1', padding: '25px', borderRadius: '12px', textAlign: 'left' }}>
+                    <h2 style={{ color: '#1e3a8a', marginTop: 0, textAlign: 'center' }}>Portal Formar</h2>
+                    <input type="text" placeholder="Matrícula" value={matriculaInput} onChange={e => setMatriculaInput(e.target.value)} required style={{ width: '100%', padding: '12px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box', marginBottom: '15px' }} />
+                    <input type="text" placeholder="Nome Completo" value={nomeInput} onChange={e => setNomeInput(e.target.value)} required style={{ width: '100%', padding: '12px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box', marginBottom: '20px' }} />
+                    <button type="submit" style={{ width: '100%', padding: '14px', borderRadius: '6px', border: 'none', backgroundColor: '#1e3a8a', color: '#fff', fontWeight: 'bold', cursor: 'pointer' }}>VINCULAR DISPOSITIVO</button>
+                </form>
             )}
 
-            {statusFluxo === 'nao_vinculado' && (
-                <div style={estilos.card}>
-                    <p style={estilos.titulo}>Vincular Dispositivo</p>
-                    <p style={estilos.subtitulo}>Este aparelho ainda não possui identificação no portal. Cadastre-se abaixo:</p>
-                    {alertaMsg && <div style={estilos.alerta}>{alertaMsg}</div>}
-                    <form onSubmit={dispararAutoVinculo}>
-                        <input style={estilos.input} type="text" placeholder="Seu Nome Completo" value={formVinculo.nome} onChange={e => setFormVinculo({...formVinculo, nome: e.target.value})} required />
-                        <input style={estilos.input} type="text" placeholder="Sua Matrícula" value={formVinculo.matricula} onChange={e => setFormVinculo({...formVinculo, matricula: e.target.value})} required />
-                        <button type="submit" disabled={carregandoAcao} style={estilos.btnPrimario}>
-                            {carregandoAcao ? 'VINCULANDO APARELHO...' : 'EFETUAR VÍNCULO IMEDIATO'}
-                        </button>
-                    </form>
-                </div>
-            )}
+            {statusTela === 'listagem' && (
+                <div>
+                    <h2 style={{ color: '#0f172a', marginBottom: '5px', fontWeight: '800' }}>Portal Formar</h2>
+                    <p style={{ color: '#64748b', fontSize: '13px', marginBottom: '25px' }}>Formações e frequências agendadas para hoje.</p>
+                    
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                        {eventos
+                            // Regra 3: Se houver evento ativo, filtra a lista escondendo todos os outros
+                            .filter(ev => !temEventoAtivo || ev.id === eventoAtivoId)
+                            .map(ev => {
+                                const distancia = coords.lat && coords.lng ? calcularDistanciaCliente(coords.lat, coords.lng, parseFloat(ev.latitude), parseFloat(ev.longitude)) : 9999;
+                                const estaNoRaio = distancia <= 1000;
+                                const souOAtivo = temEventoAtivo && ev.id === eventoAtivoId;
 
-            {statusFluxo === 'pendente_admin' && (
-                <div style={estilos.card}>
-                    <div style={{ fontSize: '50px', marginBottom: '10px' }}>🔒</div>
-                    <p style={estilos.titulo}>Acesso Bloqueado</p>
-                    <p style={estilos.subtitulo}>Você esqueceu de registrar a saída em uma atividade anterior.</p>
-                    <div style={{ ...estilos.alerta, backgroundColor: '#fffbeb', borderColor: '#fef3c7', color: '#b45309' }}>
-                        Por motivos de segurança, você não pode entrar em uma nova atividade até que um Administrador finalize sua pendência passada manualmente.
+                                return (
+                                    <button
+                                        key={ev.id} onClick={() => selecionarEvento(ev)} disabled={!estaNoRaio}
+                                        style={{
+                                            display: 'flex', flexDirection: 'column', gap: '8px', padding: '20px', borderRadius: '16px',
+                                            border: estaNoRaio ? 'none' : '1px solid #e5e7eb', cursor: estaNoRaio ? 'pointer' : 'not-allowed',
+                                            // Regra 3: Fica AMARELO se for o evento ativo, ou azul gradiente se for nova entrada
+                                            background: souOAtivo ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)' : (estaNoRaio ? 'linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)' : '#f8fafc'),
+                                            color: estaNoRaio ? '#ffffff' : '#9ca3af', width: '100%', transition: 'all 0.3s ease', textAlign: 'left',
+                                            boxShadow: estaNoRaio ? `0 10px 25px -5px ${souOAtivo ? 'rgba(217, 119, 6, 0.4)' : 'rgba(2, 132, 199, 0.4)'}` : 'none'
+                                        }}
+                                    >
+                                        <div style={{ fontSize: '18px', fontWeight: '800', marginBottom: '4px', lineHeight: '1.2' }}>
+                                            {souOAtivo ? `⏳ EM ANDAMENTO: ${ev.titulo}` : ev.titulo}
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', opacity: 0.95 }}>📍 {ev.local}</div>
+                                        {ev.palestrante && <div style={{ fontSize: '13px', opacity: 0.95, padding: '4px 8px', borderRadius: '6px', backgroundColor: 'rgba(255,255,255,0.2)', width: 'fit-content', fontWeight: 'bold' }}>🎤 {ev.palestrante}</div>}
+                                        
+                                        {souOAtivo && (
+                                            <div style={{ marginTop: '5px', fontSize: '12px', fontWeight: 'bold', backgroundColor: 'rgba(0,0,0,0.15)', padding: '6px', borderRadius: '6px', textAlign: 'center', width: '100%', boxSizing: 'border-box' }}>
+                                                Clique aqui para registrar sua Saída.
+                                            </div>
+                                        )}
+                                        {!estaNoRaio && coords.lat && <div style={{ marginTop: '12px', padding: '10px', borderRadius: '8px', backgroundColor: '#fee2e2', color: '#b91c1c', fontSize: '13px', fontWeight: 'bold', textAlign: 'center', width: '100%', boxSizing: 'border-box' }}>🔒 Dirija-se ao local da formação.</div>}
+                                    </button>
+                                );
+                            })}
                     </div>
-                    <button onClick={verificarFaseInicial} style={estilos.btnPrimario}>CONFERIR NOVAMENTE</button>
                 </div>
             )}
 
-            {statusFluxo === 'multiplos' && (
-                <div style={estilos.card}>
-                    <p style={estilos.titulo}>Selecione a Formação</p>
-                    <p style={estilos.subtitulo}>Mais de uma atividade foi encontrada para hoje:</p>
-                    {alertaMsg && <div style={estilos.alerta}>{alertaMsg}</div>}
-                    {listaEventos.map(ev => (
-                        <button key={ev.id} onClick={() => selecionarAtividadeManual(ev)} style={estilos.btnItem}>
-                            <div style={{ fontWeight: 'bold', color: '#1e293b' }}>{ev.titulo}</div>
-                            <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>⏰ {ev.hora_inicio.slice(0,5)} às {ev.hora_fim.slice(0,5)}</div>
-                        </button>
-                    ))}
+            {statusTela === 'modal_pergunta' && conteudoModal && (
+                <div style={{ border: '1px solid #e2e8f0', padding: '25px', borderRadius: '12px', backgroundColor: '#f8fafc', marginTop: '20px' }}>
+                    <p style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '25px', lineHeight: '1.5' }}>{conteudoModal.texto}</p>
+                    <div style={{ display: 'flex', gap: '15px' }}>
+                        <button onClick={() => setStatusTela('listagem')} style={{ flex: 1, padding: '14px', borderRadius: '8px', border: '1px solid #cbd5e1', backgroundColor: '#fff', color: '#64748b', fontWeight: 'bold', cursor: 'pointer' }}>Voltar</button>
+                        <button onClick={processarAceiteModal} style={{ flex: 1, padding: '14px', borderRadius: '8px', border: 'none', backgroundColor: '#16a34a', color: '#fff', fontWeight: 'bold', cursor: 'pointer' }}>Sim, confirmar</button>
+                    </div>
                 </div>
             )}
 
-            {statusFluxo === 'entrada' && eventoAtual && (
-                <div style={estilos.card}>
-                    <p style={estilos.titulo}>{eventoAtual.titulo}</p>
-                    <p style={estilos.subtitulo}>📍 Local: {eventoAtual.local}<br />⏰ Horário: {eventoAtual.hora_inicio.slice(0,5)} às {eventoAtual.hora_fim.slice(0,5)}</p>
-                    {alertaMsg && <div style={estilos.alerta}>{alertaMsg}</div>}
-                    <button onClick={dispararRegistroPresenca} disabled={carregandoAcao} style={estilos.btnPrimario}>
-                        {carregandoAcao ? 'AVALIANDO CRITÉRIOS...' : 'REGISTRAR MINHA CHEGADA'}
-                    </button>
-                </div>
+            {statusTela === 'pesquisa' && (
+                <form onSubmit={submeterPesquisaSaida} style={{ border: '1px solid #e2e8f0', padding: '25px', borderRadius: '12px', textAlign: 'left', marginTop: '20px', backgroundColor: '#fff' }}>
+                    <h3 style={{ marginTop: 0, color: '#0f172a', fontWeight: '800' }}>Avaliação da Formação</h3>
+                    <select value={estrelas} onChange={(e) => setEstrelas(Number(e.target.value))} style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1', marginBottom: '15px', backgroundColor: '#fff' }}>
+                        <option value="5">⭐⭐⭐⭐⭐ Excelência total</option>
+                        <option value="4">⭐⭐⭐⭐ Muito Bom</option>
+                        <option value="3">⭐⭐⭐ Atendeu às expectativas</option>
+                        <option value="2">⭐⭐ Regular</option>
+                        <option value="1">⭐ Precisa melhorar bastante</option>
+                    </select>
+                    <textarea rows="3" value={comentario} onChange={(e) => setComentario(e.target.value)} placeholder="Comentários adicionais (Opcional)..." style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box', marginBottom: '15px' }} />
+                    <button type="submit" style={{ width: '100%', padding: '14px', borderRadius: '8px', border: 'none', backgroundColor: '#0284c7', color: '#fff', fontWeight: 'bold', cursor: 'pointer' }}>Enviar Avaliação & Concluir Saída</button>
+                </form>
             )}
 
-            {statusFluxo === 'logado' && eventoAtual && (
-                <div style={estilos.card}>
-                    <div style={{ fontSize: '50px', marginBottom: '10px' }}>⏳</div>
-                    <p style={estilos.titulo}>Dentro da Atividade</p>
-                    <p style={estilos.subtitulo}>Sua presença foi confirmada em <strong>{eventoAtual.titulo}</strong>.</p>
-                    <p style={{ fontSize: '13px', color: '#475569', backgroundColor: '#f1f5f9', padding: '12px', borderRadius: '6px', margin: '15px 0' }}>
-                        Mantenha o aplicativo aberto ou retorne aqui ao final do evento para preencher a pesquisa de satisfação e validar sua saída.
-                    </p>
-                    <button onClick={() => setStatusFluxo('pesquisa')} style={{ ...estilos.btnPrimario, backgroundColor: '#0f172a' }}>
-                        AVALIAR & REGISTRAR SAÍDA
-                    </button>
-                    {alertaMsg && <div style={{ ...estilos.alerta, marginTop: '15px' }}>{alertaMsg}</div>}
-                </div>
-            )}
-
-            {statusFluxo === 'pesquisa' && eventoAtual && (
-                <div style={estilos.card}>
-                    <p style={estilos.titulo}>Pesquisa de Satisfação</p>
-                    <p style={estilos.subtitulo}>Avalie a atividade "{eventoAtual.titulo}" para computar suas horas:</p>
-                    {alertaMsg && <div style={estilos.alerta}>{alertaMsg}</div>}
-                    <form onSubmit={salvarAvaliacaoEConfirmarSaida}>
-                        <div style={{ textAlign: 'left' }}>
-                            <label style={{ fontWeight: 'bold', fontSize: '13px' }}>Classificação:</label>
-                            <select style={estilos.select} value={avaliacao} onChange={(e) => setAvaliacao(e.target.value)}>
-                                <option value="Ótimo">⭐⭐⭐⭐⭐ Ótimo</option>
-                                <option value="Muito Bom">⭐⭐⭐⭐ Muito Bom</option>
-                                <option value="Bom">⭐⭐⭐ Bom</option>
-                                <option value="Regular">⭐⭐ Regular</option>
-                                <option value="Ruim">⭐ Ruim</option>
-                            </select>
-                            <label style={{ fontWeight: 'bold', fontSize: '13px' }}>Críticas ou Sugestões:</label>
-                            <textarea style={estilos.textarea} value={comentarios} onChange={(e) => setComentarios(e.target.value)} placeholder="Opcional..." />
-                        </div>
-                        <button type="submit" disabled={carregandoAcao} style={estilos.btnSucesso}>
-                            {carregandoAcao ? 'VALIDANDO GEOLOCALIZAÇÃO...' : 'FINALIZAR PARTICIPAÇÃO'}
-                        </button>
-                    </form>
-                </div>
-            )}
-
-            {statusFluxo === 'concluido' && (
-                <div style={estilos.card}>
-                    <div style={{ fontSize: '50px', marginBottom: '10px' }}>✅</div>
-                    <p style={estilos.titulo}>Frequência Concluída!</p>
-                    <p style={estilos.subtitulo}>Sua presença e avaliação foram consolidadas com sucesso neste evento.</p>
-                    <button onClick={() => { setStatusFluxo('carregando'); verificarFaseInicial(); }} style={{ ...estilos.btnPrimario, backgroundColor: '#64748b', marginTop: '10px' }}>
-                        VOLTAR AO INÍCIO
-                    </button>
+            {statusTela === 'sucesso_final' && (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', textAlign: 'center' }}>
+                    <div style={{ fontSize: '70px', marginBottom: '15px' }}>✅</div>
+                    <h2 style={{ color: '#166534', marginBottom: '12px', fontSize: '26px', fontWeight: '800' }}>Frequência Concluída!</h2>
+                    <p style={{ color: '#4b5563', fontSize: '16px', lineHeight: '1.6' }}>Sua presença e avaliação foram consolidadas com sucesso no sistema.</p>
+                    <div style={{ marginTop: '30px', padding: '12px 20px', backgroundColor: '#f1f5f9', borderRadius: '12px', fontSize: '12px', color: '#64748b' }}>Desconectando sessão de forma segura...</div>
                 </div>
             )}
         </div>

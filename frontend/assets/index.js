@@ -128,173 +128,168 @@ app.get('/api/v2/dispositivo/status', async (req, res) => {
 });
 
 app.post('/api/v2/dispositivo/associar', async (req, res) => {
-    const { matricula, nome, hardware_id } = req.body;
+    const { matricula, nome, device_token, token } = req.body;
     try {
-        if (!matricula || !nome) {
-            return res.status(400).json({ error: 'A matrícula e o nome completo são obrigatórios.' });
-        }
-        const resPart = await pool.query('SELECT id FROM participantes WHERE matricula = $1', [matricula]);
-        const pId = resPart.rows.length > 0 ? resPart.rows[0].id : null;
-
-        if (hardware_id) {
-            const checkHardware = await pool.query(`
-                SELECT * FROM dispositivos 
-                WHERE hardware_fingerprint = $1 
-                AND participante_matricula != $2 
-                AND ativo = true
-            `, [hardware_id, matricula]);
-
-            if (checkHardware.rows.length > 0) {
-                await pool.query(`
-                    INSERT INTO log_fraudes (matricula, motivo) 
-                    VALUES ($1, 'TENTATIVA_VINCULO_MULTIPLO_NO_MESMO_APARELHO_FISICO')
-                `, [matricula]).catch(() => {});
-                return res.status(403).json({ 
-                    error: 'Bloqueio de Segurança: Detectamos que este aparelho físico já foi utilizado para vincular a matrícula de outro professor.' 
-                });
+        const tokenDispositivo = device_token || token || uuidv4();
+        const resVerif = await pool.query('SELECT * FROM dispositivos WHERE device_token = $1 AND ativo = true', [tokenDispositivo]);
+        if (resVerif.rows.length > 0) {
+            const vinculo = resVerif.rows[0];
+            const partDono = await pool.query('SELECT * FROM participantes WHERE id = $1', [vinculo.participante_id]);
+            if (partDono.rows.length > 0 && partDono.rows[0].matricula !== matricula) {
+                return res.status(400).json({ error: 'Este dispositivo já está associado a outro participante.' });
             }
         }
 
-        await pool.query('UPDATE dispositivos SET ativo = false WHERE participante_matricula = $1 AND ativo = true', [matricula]);
-        const novoDeviceToken = crypto.randomUUID();
-        await pool.query(`
-            INSERT INTO dispositivos (participante_id, participante_matricula, device_token, ativo, hardware_fingerprint)
-            VALUES ($1, $2, $3, true, $4)
-        `, [pId, matricula, novoDeviceToken, hardware_id || null]);
+        let resPart = await pool.query('SELECT * FROM participantes WHERE matricula = $1', [matricula]);
+        let participanteId;
+        if (resPart.rows.length === 0) {
+            const novoPart = await pool.query(
+                'INSERT INTO participantes (nome_completo, matricula, ativo) VALUES ($1, $2, true) RETURNING id', 
+                [nome, matricula]
+            );
+            participanteId = novoPart.rows[0].id;
+        } else {
+            participanteId = resPart.rows[0].id;
+        }
 
-        return res.json({ status: 'sucesso', device_token: novoDeviceToken });
+        await pool.query(`
+            INSERT INTO dispositivos (device_token, participante_id, participante_matricula, ativo) 
+            VALUES ($1, $2, $3, true) 
+            ON CONFLICT (device_token) 
+            DO UPDATE SET participante_id = $2, participante_matricula = $3, ativo = true
+        `, [tokenDispositivo, participanteId, matricula]);
+
+        const partFinal = await pool.query('SELECT * FROM participantes WHERE id = $1', [participanteId]);
+        return res.json({ 
+            device_token: tokenDispositivo, 
+            token: tokenDispositivo, 
+            participante: partFinal.rows[0] 
+        });
     } catch (error) {
-        return res.status(500).json({ error: 'Erro interno no servidor ao processar o vínculo.' });
+        console.error("Erro crítico na rota /dispositivo/associar:", error.message);
+        return res.status(500).json({ error: 'Erro interno ao associar dispositivo.' });
     }
 });
 
 app.post('/api/v2/presenca/inicializar', async (req, res) => {
-    const { device_token, device_key } = req.body;
-    const tokenEfetivo = device_token || device_key;
-
+    const { device_token } = req.body;
     try {
+        if (!device_token) return res.status(400).json({ error: 'Identificação ausente.' });
+
+        const resDisp = await pool.query('SELECT * FROM dispositivos WHERE device_token = $1 AND ativo = true', [device_token]);
+        if (resDisp.rows.length === 0) return res.status(401).json({ error: 'Aparelho não associado ou desativado.' });
+        const disp = resDisp.rows[0];
+
+        // Regra 1: Traz apenas eventos de HOJE cuja hora de FIM ainda não passou (ignora os já encerrados)
         const resEventos = await pool.query(`
-            SELECT e.id, e.titulo, e.local, e.palestrante, e.hora_inicio, e.hora_fim, 
-                   l.nome as local_nome, l.endereco as local_endereco, 
-                   COALESCE(l.latitude, e.latitude) as latitude, COALESCE(l.longitude, e.longitude) as longitude 
-            FROM eventos e 
-            LEFT JOIN locais l ON e.local_id = l.id 
-            WHERE e.data_evento = CURRENT_DATE::date AND e.hora_fim >= CURRENT_TIME 
+            SELECT e.id, e.titulo, e.local, e.palestrante, e.hora_inicio, e.hora_fim,
+                   l.nome as local_nome, l.endereco as local_endereco,
+                   COALESCE(l.latitude, e.latitude) as latitude, 
+                   COALESCE(l.longitude, e.longitude) as longitude
+            FROM eventos e
+            LEFT JOIN locais l ON e.local_id = l.id
+            WHERE e.data_evento = CURRENT_DATE::date 
+              AND e.hora_fim >= CURRENT_TIME
             ORDER BY e.hora_inicio ASC
         `);
 
-        const listaEventosFormatada = resEventos.rows.map(e => ({ 
-            id: e.id, 
-            titulo: e.titulo, 
-            palestrante: e.palestrante || '', 
-            local: e.local_nome || e.local || 'Auditório', 
-            endereco: e.local_endereco || e.endereco || '', 
-            latitude: e.latitude, 
-            longitude: e.longitude, 
-            hora_inicio: e.hora_inicio, 
-            hora_fim: e.hora_fim 
-        }));
-
-        if (listaEventosFormatada.length === 0) {
-            return res.status(404).json({ 
-                status: 'erro', 
-                situacao: 'sem_evento', 
-                eventos: [] 
-            });
-        }
-
-        if (!tokenEfetivo) {
-            return res.json({ 
-                status: 'sucesso', 
-                situacao: 'nao_vinculado', 
-                eventos: listaEventosFormatada 
-            });
-        }
-
-        const resDisp = await pool.query('SELECT * FROM dispositivos WHERE device_token = $1 AND ativo = true', [tokenEfetivo]);
-
-        if (resDisp.rows.length === 0) {
-            return res.json({ 
-                status: 'sucesso', 
-                situacao: 'nao_vinculado', 
-                eventos: listaEventosFormatada 
-            });
-        }
-
-        const disp = resDisp.rows[0];
-
-        const resSaidaPendenteAntiga = await pool.query(`
-            SELECT * FROM frequencias 
-            WHERE participante_id = $1 AND data_entrada::date < CURRENT_DATE::date AND data_saida IS NULL 
-            LIMIT 1
-        `, [disp.participante_id]);
-
-        if (resSaidaPendenteAntiga.rows.length > 0) {
-            return res.json({
-                status: 'sucesso',
-                situacao: 'bloqueado_saida_estourada',
-                eventos: listaEventosFormatada
-            });
-        }
-
+        // Regra 2 e 3: Verifica se este participante já tem alguma entrada ativa hoje sem saída lançada
         const freqAtiva = await pool.query(`
             SELECT * FROM frequencias 
-            WHERE participante_id = $1 AND data_entrada::date = CURRENT_DATE::date AND data_saida IS NULL 
+            WHERE participante_id = $1 AND data_entrada::date = CURRENT_DATE::date AND data_saida IS NULL
             LIMIT 1
         `, [disp.participante_id]);
 
         return res.json({
-            status: 'sucesso', 
-            situacao: 'regular',
-            tem_evento_ativo: freqAtiva.rows.length > 0, 
+            status: 'sucesso',
+            tem_evento_ativo: freqAtiva.rows.length > 0,
             evento_ativo_id: freqAtiva.rows.length > 0 ? freqAtiva.rows[0].evento_id : null,
-            eventos: listaEventosFormatada
+            eventos: resEventos.rows.map(e => ({
+                id: e.id,
+                titulo: e.titulo,
+                palestrante: e.palestrante || '',
+                local: e.local_nome || e.local || 'Auditório',
+                endereco: e.local_endereco || e.endereco || '',
+                latitude: e.latitude,
+                longitude: e.longitude,
+                hora_inicio: e.hora_inicio,
+                hora_fim: e.hora_fim
+            }))
         });
-
-    } catch (error) { 
-        return res.status(500).json({ error: 'Erro interno ao inicializar o Portal.' }); 
+    } catch (error) {
+        console.error("Erro no inicializar:", error.message);
+        return res.status(500).json({ error: 'Erro interno ao inicializar o Portal.' });
     }
 });
 
 app.post('/api/v2/presenca/checar-status', async (req, res) => {
-    const { device_token, device_key, evento_id, latitude, longitude, lat, lng } = req.body;
-    const tokenEfetivo = device_token || device_key;
-    const latEfetiva = latitude || lat;
-    const lngEfetiva = longitude || lng;
+    const { device_token, evento_id, latitude, longitude } = req.body;
     try {
-        const resDisp = await pool.query('SELECT * FROM dispositivos WHERE device_token = $1 AND ativo = true', [tokenEfetivo]);
+        const resDisp = await pool.query('SELECT * FROM dispositivos WHERE device_token = $1 AND ativo = true', [device_token]);
         if (resDisp.rows.length === 0) return res.status(401).json({ error: 'Dispositivo inválido.' });
         const disp = resDisp.rows[0];
 
         const resEv = await pool.query(`
-            SELECT e.*, COALESCE(l.latitude, e.latitude) as lat_real, COALESCE(l.longitude, e.longitude) as lng_real 
-            FROM eventos e 
-            LEFT JOIN locais l ON e.local_id = l.id 
-            WHERE e.id = $1
+            SELECT e.*, COALESCE(l.latitude, e.latitude) as lat_real, COALESCE(l.longitude, e.longitude) as lng_real
+            FROM eventos e LEFT JOIN locais l ON e.local_id = l.id WHERE e.id = $1
         `, [evento_id]);
         if (resEv.rows.length === 0) return res.status(404).json({ error: 'Formação não localizada.' });
         const ev = resEv.rows[0];
 
-        if (calcularDistancia(latEfetiva, lngEfetiva, parseFloat(ev.lat_real), parseFloat(ev.lng_real)) > 1000) {
-            await pool.query(`
-                INSERT INTO log_fraudes (matricula, evento_id, motivo, lat_tentativa, lng_tentativa) 
-                VALUES ($1, $2, 'FORA_DO_RAIO_PERMITIDO', $3, $4)
-            `, [disp.participante_matricula, evento_id, String(latEfetiva), String(lngEfetiva)]);
+        const dist = calcularDistancia(latitude, longitude, parseFloat(ev.lat_real), parseFloat(ev.lng_real));
+        if (dist > 1000) {
+            await pool.query(`INSERT INTO log_fraudes (matricula, evento_id, motivo, lat_tentativa, lng_tentativa) VALUES ($1, $2, 'FORA_DO_RAIO_PERMITIDO', $3, $4)`, [disp.participante_matricula, evento_id, latitude, longitude]);
             return res.status(400).json({ error: 'Bloqueio de Segurança: Você está fora do raio permitido do local.' });
         }
 
+        // Verifica o histórico deste par (participante, evento) hoje
         const resFreq = await pool.query(`
-            SELECT * FROM frequencias 
-            WHERE participante_id = $1 AND evento_id = $2 AND data_entrada::date = CURRENT_DATE::date
+            SELECT *, EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - data_entrada))/60 as minutos_decorridos
+            FROM frequencias WHERE participante_id = $1 AND evento_id = $2 AND data_entrada::date = CURRENT_DATE::date
         `, [disp.participante_id, evento_id]);
+
         if (resFreq.rows.length > 0) {
             const freq = resFreq.rows[0];
-            if (freq.data_saida !== null) return res.json({ status: 'completo' });
-            return res.json({ status: 'somente_entrada' });
+            if (freq.data_saida !== null) {
+                return res.json({ status: 'completo' });
+            } else {
+                // Regra 5: Bloqueia saída se tiver menos de 30 minutos de participação
+                if (freq.minutos_decorridos < 30) {
+                    return res.status(400).json({ error: `Acesso Retido: Você só poderá registrar sua saída após 30 minutos da sua entrada (Faltam ${Math.ceil(30 - freq.minutos_decorridos)} min).` });
+                }
+                return res.json({ status: 'somente_entrada' });
+            }
         }
+
+        // Regra 2: Bloqueia entrada se já houver OUTRO evento ativo pendente de saída
+        const outroAtivo = await pool.query(`SELECT id FROM frequencias WHERE participante_id = $1 AND data_entrada::date = CURRENT_DATE::date AND data_saida IS NULL`, [disp.participante_id]);
+        if (outroAtivo.rows.length > 0) {
+            return res.status(400).json({ error: 'Você já possui uma frequência em andamento. Encerre-a antes de iniciar outra.' });
+        }
+
         return res.json({ status: 'nenhum' });
-    } catch (error) { 
-        return res.status(500).json({ error: 'Erro ao analisar status de presença.' }); 
+    } catch (error) {
+        return res.status(500).json({ error: 'Erro ao analisar status de presença.' });
+    }
+});
+
+app.post('/api/v2/presenca/confirmar-entrada', async (req, res) => {
+    const { device_token, evento_id, latitude, longitude } = req.body;
+    try {
+        const resDisp = await pool.query('SELECT * FROM dispositivos WHERE device_token = $1 AND ativo = true', [device_token]);
+        if (resDisp.rows.length === 0) return res.status(401).json({ error: 'Dispositivo inválido.' });
+        const disp = resDisp.rows[0];
+
+        // Regra 6: Preenche os campos lat_entrada, lng_entrada, device_key e matricula corretamente
+        await pool.query(`
+            INSERT INTO frequencias (participante_id, evento_id, lat_entrada, lng_entrada, device_key, matricula, funcao, data_entrada)
+            VALUES ($1, $2, $3, $4, $5, $6, 'Ouvinte', CURRENT_TIMESTAMP)
+        `, [disp.participante_id, evento_id, String(latitude), String(longitude), device_token, disp.participante_matricula]);
+
+        return res.json({ status: 'sucesso' });
+    } catch (error) {
+        console.error("Erro ao gravar entrada:", error.message);
+        return res.status(500).json({ error: 'Erro interno ao salvar frequência.' });
     }
 });
 
@@ -346,50 +341,70 @@ app.post('/api/v2/presencas', async (req, res) => {
 });
 
 app.post('/api/v2/presenca/confirmar-saida', async (req, res) => {
-    const { device_token, device_key, evento_id, estrelas, comentario, lat, lng, latitude, longitude, avaliacao, comentarios } = req.body;
-    const tokenEfetivo = device_token || device_key;
-    const latEfetiva = lat || latitude;
-    const lngEfetiva = lng || longitude;
-    const textoComentario = comentario || comentarios || '';
-    const notaEstrelas = estrelas || (avaliacao === 'Ótimo' ? 5 : avaliacao === 'Muito Bom' ? 4 : avaliacao === 'Bom' ? 3 : avaliacao === 'Regular' ? 2 : 1);
+    const { device_token, evento_id, estrelas, comentario, latitude, longitude } = req.body;
     try {
-        const resDisp = await pool.query('SELECT * FROM dispositivos WHERE device_token = $1 AND ativo = true', [tokenEfetivo]);
+        const resDisp = await pool.query('SELECT * FROM dispositivos WHERE device_token = $1 AND ativo = true', [device_token]);
         if (resDisp.rows.length === 0) return res.status(401).json({ error: 'Dispositivo inválido.' });
         const disp = resDisp.rows[0];
 
-        const ev = (await pool.query('SELECT data_evento, hora_inicio, hora_fim, publico_alvo_id FROM eventos WHERE id = $1', [evento_id])).rows[0];
-        let avaliacaoTexto = notaEstrelas === 5 ? 'Excelência total' : notaEstrelas === 4 ? 'Muito Bom' : notaEstrelas === 3 ? 'Atendeu às expectativas' : notaEstrelas === 2 ? 'Regular' : 'Precisa melhorar bastante';
+        const resEv = await pool.query('SELECT hora_fim, publico_alvo_id FROM eventos WHERE id = $1', [evento_id]);
+        const ev = resEv.rows[0];
 
-        const dataHoraReal = new Date(new Date().toLocaleString("sv-SE", { timeZone: "America/Sao_Paulo" }).replace(' ', 'T'));
-        const dataEventoFormatada = new Date(ev.data_evento).toISOString().split('T')[0];
-        const dataHoraInicioOficial = new Date(`${dataEventoFormatada}T${ev.hora_inicio}`);
-        const dataHoraTerminoOficial = new Date(`${dataEventoFormatada}T${ev.hora_fim}`);
+        // Tradução estrita da avaliação textual exigida pela CHECK CONSTRAINT
+        let avaliacaoTexto = 'Ótimo';
+        if (estrelas === 4) avaliacaoTexto = 'Muito Bom';
+        if (estrelas === 3) avaliacaoTexto = 'Bom';
+        if (estrelas === 2) avaliacaoTexto = 'Regular';
+        if (estrelas === 1) avaliacaoTexto = 'Ruim';
 
-        const resFreq = await pool.query(`SELECT id, data_entrada FROM frequencias WHERE participante_id = $1 AND evento_id = $2 AND data_saida IS NULL`, [disp.participante_id, evento_id]);
-        if (resFreq.rows.length === 0) return res.status(400).json({ error: 'Registro de entrada ativa não localizado.' });
-        const freq = resFreq.rows[0];
+        // Calcula atraso do fim do evento em minutos
+        const resTempo = await pool.query(`SELECT EXTRACT(EPOCH FROM (CURRENT_TIME - $1::time))/60 as minutos_atraso`, [ev.hora_fim]);
+        const minutosAtraso = resTempo.rows[0].minutos_atraso || 0;
 
-        const entradaParaCalculo = new Date(freq.data_entrada) < dataHoraInicioOficial ? dataHoraInicioOficial : new Date(freq.data_entrada);
-        const formulaSaida = dataHoraReal > dataHoraTerminoOficial ? dataHoraTerminoOficial : dataHoraReal;
+        let horarioSaidaFinal = 'CURRENT_TIMESTAMP';
+        let parametrosSaida = [avaliacaoTexto, String(latitude), String(longitude), disp.participante_id, evento_id];
 
-        let tempoFinalFormatado = "00:00";
-        if (formulaSaida > entradaParaCalculo) {
-            const totalMinutosCalculados = Math.floor((formulaSaida - entradaParaCalculo) / (1000 * 60));
-            tempoFinalFormatado = `${String(Math.floor(totalMinutosCalculados / 60)).padStart(2, '0')}:${String(totalMinutosCalculados % 60).padStart(2, '0')}`;
+        // Regra 4: Se passou mais de 40 minutos do encerramento oficial
+        if (minutosAtraso > 40) {
+            // Salva na tabela log_fraudes a tentativa irregular
+            await pool.query(`
+                INSERT INTO log_fraudes (matricula, evento_id, motivo, lat_tentativa, lng_tentativa)
+                VALUES ($1, $2, 'SAIDA_APOS_40_MIN_DO_FIM', $3, $4)
+            `, [disp.participante_matricula, evento_id, String(latitude), String(longitude)]);
+
+            // Retroage o horário de saída na tabela frequencias para a hora exata do fim do evento
+            horarioSaidaFinal = `(CURRENT_DATE + $6::time)`;
+            parametrosSaida.push(ev.hora_fim);
         }
 
+        // Executa a transação garantindo a integridade relacional
         await pool.query('BEGIN');
-        await pool.query(`UPDATE frequencias SET data_saida = $1, avaliacao = $2, lat_saida = $3, lng_saida = $4, tempo_participacao = $5 WHERE id = $6`, [dataHoraReal, avaliacaoTexto, String(latEfetiva || ''), String(lngEfetiva || ''), tempoFinalFormatado, freq.id]);
-        await pool.query(`INSERT INTO pesquisa_satisfacao (participante_id, evento_id, publico_alvo_id, avaliacao, comentarios, criado_em) VALUES ($1, $2, $3, $4, $5, $6)`, [disp.participante_id, evento_id, ev.publico_alvo_id, avaliacaoTexto, textoComentario, dataHoraReal]);
-        await pool.query('COMMIT');
 
-        return res.json({ status: 'sucesso', tempo_gravado: tempoFinalFormatado });
-    } catch (error) { 
-        await pool.query('ROLLBACK'); 
-        console.error(error); 
-        return res.status(500).json({ error: 'Erro interno ao processar saída.' }); 
+        // Regra 7: Atualiza frequencias inserindo lat_saida, lng_saida e avaliacao
+        await pool.query(`
+            UPDATE frequencias 
+            SET data_saida = ${horarioSaidaFinal}, avaliacao = $1, lat_saida = $2, lng_saida = $3
+            WHERE participante_id = $4 AND evento_id = $5 AND data_saida IS NULL
+        `, parametrosSaida);
+
+        // Insere a avaliação na tabela pesquisa_satisfacao
+        const jaAvaliou = await pool.query(`SELECT id FROM pesquisa_satisfacao WHERE participante_id = $1 AND evento_id = $2`, [disp.participante_id, evento_id]);
+        if (jaAvaliou.rows.length === 0) {
+            await pool.query(`
+                INSERT INTO pesquisa_satisfacao (participante_id, evento_id, publico_alvo_id, avaliacao, comentarios)
+                VALUES ($1, $2, $3, $4, $5)
+            `, [disp.participante_id, evento_id, ev.publico_alvo_id, avaliacaoTexto, comentario || '']);
+        }
+
+        await pool.query('COMMIT');
+        return res.json({ status: 'sucesso' });
+    } catch (error) {
+        await pool.query('ROLLBACK');
+        console.error("Erro ao fechar saída:", error.message);
+        return res.status(500).json({ error: 'Erro interno ao processar saída.' });
     }
 });
+
 app.get('/api/v2/admin-exclusivo/combos/areas', verificarTokenAdminExclusivo, async (req, res) => {
     try { return res.json((await pool.query('SELECT id, nome FROM area ORDER BY nome ASC')).rows); } catch (e) { return res.status(500).json([]); }
 });
@@ -592,8 +607,6 @@ app.put('/api/v2/admin-exclusivo/usuarios/:id', verificarTokenAdminExclusivo, as
     try { return res.json((await pool.query('UPDATE usuarios SET nome=$1, usuario=$2 WHERE id=$3 RETURNING id, nome, usuario', [req.body.nome, req.body.usuario, req.params.id])).rows[0]); } catch (e) { return res.status(500).json({ error: 'Erro.' }); }
 });
 
-// NOVA ROTA CADASTRO DE EVENTOS - ISOLADA E PROTEGIDA
-// NOVA ROTA CADASTRO DE EVENTOS - COM BUSCA AUTOMÁTICA DE DADOS DO LOCAL
 app.post('/api/v2/admin-exclusivo/eventos', verificarTokenAdminExclusivo, async (req, res) => {
     const {
         titulo, palestrante, data_evento, hora_inicio, hora_fim, carga_horaria,
@@ -709,315 +722,6 @@ app.post('/api/v2/dispositivos/vincular', async (req, res) => {
     } catch (error) {
         await pool.query('ROLLBACK');
         return res.status(500).json({ error: 'Erro interno ao vincular o dispositivo.' });
-    }
-});
-
-// ==========================================
-// 1. INICIALIZAÇÃO SILENCIOSA E DIRETA
-// ==========================================
-app.post('/api/v2/qrcode-presenca/inicializar', async (req, res) => {
-    const { device_token, device_key } = req.body;
-    let tokenEfetivo = device_token || device_key;
-
-    try {
-        // 1. Busca os eventos ativos para o dia de hoje
-        const resEventos = await pool.query(`
-            SELECT e.id, e.titulo, e.local, e.palestrante, e.hora_inicio, e.hora_fim, 
-                   l.nome as local_nome, l.endereco as local_endereco, 
-                   COALESCE(l.latitude, e.latitude) as latitude, COALESCE(l.longitude, e.longitude) as longitude 
-            FROM eventos e 
-            LEFT JOIN locais l ON e.local_id = l.id 
-            WHERE e.data_evento = CURRENT_DATE::date AND e.hora_fim >= CURRENT_TIME 
-            ORDER BY e.hora_inicio ASC
-        `);
-
-        const listaEventosFormatada = resEventos.rows.map(e => ({ 
-            id: e.id, 
-            titulo: e.titulo, 
-            palestrante: e.palestrante || '', 
-            local: e.local_nome || e.local || 'Auditório', 
-            endereco: e.local_endereco || e.endereco || '', 
-            latitude: e.latitude, 
-            longitude: e.longitude, 
-            hora_inicio: e.hora_inicio, 
-            hora_fim: e.hora_fim 
-        }));
-
-        // Se não houver nenhum evento hoje, encerra
-        if (listaEventosFormatada.length === 0) {
-            return res.status(404).json({ status: 'erro', situacao: 'sem_evento', eventos: [] });
-        }
-
-        // Garante o formato UUID se o token vier incorreto do dispositivo
-        if (!tokenEfetivo || typeof tokenEfetivo !== 'string' || tokenEfetivo.startsWith('dev_') || tokenEfetivo.length !== 36) {
-            tokenEfetivo = uuidv4();
-        }
-
-        // 2. Verifica se o dispositivo existe
-        let resDisp = await pool.query('SELECT * FROM dispositivos WHERE device_token = $1 AND ativo = true LIMIT 1', [tokenEfetivo]);
-
-        // SE NÃO EXISTE: Responde silenciosamente para o frontend abrir os campos de Nome e Matrícula
-        if (resDisp.rows.length === 0) {
-            return res.json({ 
-                status: 'sucesso', 
-                situacao: 'vincular', // Avisa o App para pedir os dados direto
-                device_token: tokenEfetivo,
-                device_key: tokenEfetivo,
-                eventos: listaEventosFormatada 
-            });
-        }
-
-        const disp = resDisp.rows[0];
-
-        // 3. Se já existe, verifica se possui uma entrada ativa (saída em aberto)
-        const freqAtiva = await pool.query(`
-            SELECT * FROM frequencias 
-            WHERE participante_id = $1 AND data_entrada::date = CURRENT_DATE::date AND data_saida IS NULL 
-            LIMIT 1
-        `, [disp.participante_id]);
-
-        return res.json({
-            status: 'sucesso', 
-            situacao: 'regular',
-            device_token: tokenEfetivo,
-            device_key: tokenEfetivo,
-            tem_evento_ativo: freqAtiva.rows.length > 0, 
-            evento_ativo_id: freqAtiva.rows.length > 0 ? freqAtiva.rows[0].evento_id : null,
-            eventos: listaEventosFormatada
-        });
-
-    } catch (error) { 
-        console.error(error);
-        return res.status(500).json({ error: 'Erro interno ao inicializar o Portal.' }); 
-    }
-});
-
-// ==========================================
-// 2. AUTO-VÍNCULO DE DISPOSITIVO 
-// ==========================================
-app.post('/api/v2/qrcode-presenca/vincular', async (req, res) => {
-    let { device_key, nome, matricula } = req.body;
-
-    if (!device_key || !nome || !matricula) {
-        return res.status(400).json({ error: 'Dados insuficientes para realizar o vínculo.' });
-    }
-
-    if (typeof device_key !== 'string' || device_key.startsWith('dev_') || device_key.length !== 36) {
-        device_key = uuidv4();
-    }
-
-    try {
-        await pool.query('BEGIN');
-
-        // 1. REMOVIDA A TRAVA: Insere ou atualiza o participante diretamente sem bloquear
-        let resPart = await pool.query('SELECT id FROM participantes WHERE matricula = $1', [matricula]);
-        let participanteId;
-
-        if (resPart.rows.length === 0) {
-            const novoPart = await pool.query(
-                'INSERT INTO participantes (nome_completo, matricula, device_key, ativo) VALUES ($1, $2, $3, true) RETURNING id',
-                [nome, matricula, device_key]
-            );
-            participanteId = novoPart.rows[0].id;
-        } else {
-            participanteId = resPart.rows[0].id;
-            await pool.query(
-                'UPDATE participantes SET nome_completo = $1, device_key = $2, ativo = true WHERE id = $3',
-                [nome, device_key, participanteId]
-            );
-        }
-
-        // 2. REMOVIDA A TRAVA DE DISPOSITIVO ÚNICO: 
-        // Antes de inserir o token novo, removemos qualquer menção antiga a este mesmo token na tabela 
-        // para que a restrição UNIQUE do Postgres (dispositivos_device_token_key) nunca seja violada.
-        await pool.query('DELETE FROM dispositivos WHERE device_token = $1', [device_key]);
-
-        // 3. Garante que registros antigos do mesmo participante fiquem inativos
-        await pool.query('UPDATE dispositivos SET ativo = false WHERE participante_id = $1', [participanteId]);
-
-        // 4. Cria o novo vínculo limpo
-        await pool.query(
-            'INSERT INTO dispositivos (device_token, participante_id, participante_matricula, ativo) VALUES ($1, $2, $3, true)',
-            [device_key, participanteId, matricula]
-        );
-
-        await pool.query('COMMIT');
-        return res.json({ 
-            status: 'sucesso', 
-            message: 'Aparelho vinculado com sucesso.',
-            device_token: device_key, // <--- Importante para o frontend atualizar o LocalStorage
-            device_key: device_key 
-        });
-
-    } catch (error) {
-        await pool.query('ROLLBACK');
-        console.error("ERRO NO VINCULO:", error.message);
-        return res.status(500).json({ error: 'Erro interno ao processar o vínculo.' });
-    }
-});
-
-// ==========================================
-// 3. REGISTRO DE ENTRADA COM ANTIFRAUDE
-// ==========================================
-app.post('/api/v2/qrcode-presenca/registrar-entrada', async (req, res) => {
-    const { device_key, device_token, evento_id, lat_entrada, lng_entrada, lat, lng, latitude, longitude } = req.body;
-    const tokenEfetivo = device_key || device_token;
-    const latEfetiva = lat_entrada || lat || latitude;
-    const lngEfetiva = lng_entrada || lng || longitude;
-
-    try {
-        if (!tokenEfetivo) return res.status(400).json({ error: 'Identificação ausente.' });
-        
-        const resDisp = await pool.query('SELECT * FROM dispositivos WHERE device_token = $1 AND ativo = true', [tokenEfetivo]);
-        if (resDisp.rows.length === 0) return res.status(401).json({ error: 'Dispositivo não homologado. Por favor, refaça o vínculo do aparelho.' });
-        const disp = resDisp.rows[0];
-
-        const resEv = await pool.query(`
-            SELECT e.*, COALESCE(l.latitude, e.latitude) as lat_real, COALESCE(l.longitude, e.longitude) as lng_real 
-            FROM eventos e 
-            LEFT JOIN locais l ON e.local_id = l.id 
-            WHERE e.id = $1
-        `, [evento_id]);
-        
-        if (resEv.rows.length > 0) {
-            const ev = resEv.rows[0];
-            
-            const calcularDistanciaLocal = (lat1, lon1, lat2, lon2) => {
-                const R = 6371000;
-                const dLat = (lat2 - lat1) * Math.PI / 180;
-                const dLon = (lon2 - lon1) * Math.PI / 180;
-                const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                          Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
-                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-                return R * c;
-            };
-
-            const distancia = calcularDistanciaLocal(
-                parseFloat(latEfetiva), parseFloat(lngEfetiva),
-                parseFloat(ev.lat_real), parseFloat(ev.lng_real)
-            );
-
-            if (distancia > 1000 || isNaN(distancia)) {
-                await pool.query(`
-                    INSERT INTO log_fraudes (device_key, matricula, evento_id, tipo_tentativa, lat_tentativa, lng_tentativa, distancia_calculada_metros, motivo) 
-                    VALUES ($1, $2, $3, 'ENTRADA', $4, $5, $6, 'Fora do raio permitido')
-                `, [tokenEfetivo, disp.participante_matricula, evento_id, parseFloat(latEfetiva), parseFloat(lngEfetiva), Math.round(distancia || 0)]);
-
-                return res.status(400).json({ error: 'Bloqueio de Perímetro: Você está fora do raio permitido da escola.' });
-            }
-        }
-
-        const checkDuplicado = await pool.query(`
-            SELECT id FROM frequencias 
-            WHERE participante_id = $1 AND evento_id = $2 AND data_saida IS NULL
-        `, [disp.participante_id, evento_id]);
-        
-        if (checkDuplicado.rows.length > 0) {
-            return res.json({ status: 'sucesso', message: 'Presença já estava ativa.' });
-        }
-
-        await pool.query(`
-            INSERT INTO frequencias (participante_id, evento_id, lat_entrada, lng_entrada, device_key, matricula, funcao, data_entrada) 
-            VALUES ($1, $2, $3, $4, $5, $6, 'Ouvinte', CURRENT_TIMESTAMP)
-        `, [disp.participante_id, evento_id, String(latEfetiva || ''), String(lngEfetiva || ''), tokenEfetivo, disp.participante_matricula]);
-
-        return res.json({ status: 'sucesso' });
-    } catch (error) { 
-        console.error(error);
-        return res.status(500).json({ error: 'Erro interno ao salvar frequência.' }); 
-    }
-});
-
-// ==========================================
-// 4. REGISTRO DE SAÍDA COM ANTIFRAUDE E PESQUISA
-// ==========================================
-app.post('/api/v2/qrcode-presenca/registrar-saida', async (req, res) => {
-    const { device_token, device_key, evento_id, estrelas, comentario, lat, lng, latitude, longitude, avaliacao, comentarios } = req.body;
-    const tokenEfetivo = device_token || device_key;
-    const latEfetiva = lat || latitude;
-    const lngEfetiva = lng || longitude; // <--- CORRIGIDO PARA USAR A LOGÍSTICA REAL DE VARIÁVEIS
-    const textoComentario = comentario || comentarios || '';
-    const notaEstrelas = estrelas || (avaliacao === 'Ótimo' ? 5 : avaliacao === 'Muito Bom' ? 4 : avaliacao === 'Bom' ? 3 : avaliacao === 'Regular' ? 2 : 1);
-    
-    try {
-        if (!tokenEfetivo) return res.status(400).json({ error: 'Identificação ausente.' });
-
-        const resDisp = await pool.query('SELECT * FROM dispositivos WHERE device_token = $1 AND ativo = true', [tokenEfetivo]);
-        if (resDisp.rows.length === 0) return res.status(401).json({ error: 'Dispositivo inválido.' });
-        const disp = resDisp.rows[0];
-
-        const ev = (await pool.query('SELECT data_evento, hora_inicio, hora_fim, publico_alvo_id, latitude, longitude, local_id FROM eventos WHERE id = $1', [evento_id])).rows[0];
-        
-        const resLocal = await pool.query('SELECT latitude, longitude FROM locais WHERE id = $1', [ev.local_id]);
-        const latRealEv = resLocal.rows[0]?.latitude || ev.latitude;
-        const lngRealEv = resLocal.rows[0]?.longitude || ev.longitude;
-
-        const calcularDistanciaLocal = (lat1, lon1, lat2, lon2) => {
-            const R = 6371000;
-            const dLat = (lat2 - lat1) * Math.PI / 180;
-            const dLon = (lon2 - lon1) * Math.PI / 180;
-            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-            return R * c;
-        };
-
-        const distancia = calcularDistanciaLocal(
-            parseFloat(latEfetiva), parseFloat(lngEfetiva),
-            parseFloat(latRealEv), parseFloat(lngRealEv)
-        );
-
-        if (distancia > 1000 || isNaN(distancia)) {
-            await pool.query(`
-                INSERT INTO log_fraudes (device_key, matricula, evento_id, tipo_tentativa, lat_tentativa, lng_tentativa, distancia_calculada_metros, motivo) 
-                VALUES ($1, $2, $3, 'SAIDA', $4, $5, $6, 'Fora do raio permitido')
-            `, [tokenEfetivo, disp.participante_matricula, evento_id, parseFloat(latEfetiva), parseFloat(lngEfetiva), Math.round(distancia || 0)]);
-
-            return res.status(400).json({ error: 'Bloqueio de Perímetro: Você está fora do raio permitido para encerrar.' });
-        }
-
-        let avaliacaoTexto = notaEstrelas === 5 ? 'Muito Bom' : notaEstrelas === 4 ? 'Muito Bom' : notaEstrelas === 3 ? 'Bom' : notaEstrelas === 2 ? 'Regular' : 'Ruim';
-
-        const dataHoraReal = new Date(new Date().toLocaleString("sv-SE", { timeZone: "America/Sao_Paulo" }).replace(' ', 'T'));
-        const dataEventoFormatada = new Date(ev.data_evento).toISOString().split('T')[0];
-        const dataHoraInicioOficial = new Date(`${dataEventoFormatada}T${ev.hora_inicio}`);
-        const dataHoraTerminoOficial = new Date(`${dataEventoFormatada}T${ev.hora_fim}`);
-
-        const resFreq = await pool.query(`SELECT id, data_entrada FROM frequencias WHERE participante_id = $1 AND evento_id = $2 AND data_saida IS NULL`, [disp.participante_id, evento_id]);
-        if (resFreq.rows.length === 0) return res.status(400).json({ error: 'Registro de entrada ativa não localizado.' });
-        const freq = resFreq.rows[0];
-
-        const entradaParaCalculo = new Date(freq.data_entrada) < dataHoraInicioOficial ? dataHoraInicioOficial : new Date(freq.data_entrada);
-        const formulaSaida = dataHoraReal > dataHoraTerminoOficial ? dataHoraTerminoOficial : dataHoraReal;
-
-        let tempoFinalFormatado = "00:00";
-        if (formulaSaida > entradaParaCalculo) {
-            const totalMinutosCalculados = Math.floor((formulaSaida - entradaParaCalculo) / (1000 * 60));
-            tempoFinalFormatado = `${String(Math.floor(totalMinutosCalculados / 60)).padStart(2, '0')}:${String(totalMinutosCalculados % 60).padStart(2, '0')}`;
-        }
-
-        await pool.query('BEGIN');
-        
-        // CORRIGIDO: Salvamento em frequencias usando colunas exatas: lat_saida, lng_saida, avaliacao, tempo_participacao
-        await pool.query(`
-            UPDATE frequencias 
-            SET data_saida = $1, avaliacao = $2, lat_saida = $3, lng_saida = $4, tempo_participacao = $5 
-            WHERE id = $6
-        `, [dataHoraReal, avaliacaoTexto, String(latEfetiva || ''), String(lngEfetiva || ''), tempoFinalFormatado, freq.id]);
-        
-        // CORRIGIDO: Salvamento em pesquisa_satisfacao usando colunas exatas: comentarios, criado_em
-        await pool.query(`
-            INSERT INTO pesquisa_satisfacao (participante_id, evento_id, publico_alvo_id, avaliacao, comentarios, criado_em) 
-            VALUES ($1, $2, $3, $4, $5, $6)
-        `, [disp.participante_id, evento_id, ev.publico_alvo_id, avaliacaoTexto, textoComentario, dataHoraReal]);
-        
-        await pool.query('COMMIT');
-
-        return res.json({ status: 'sucesso', tempo_gravado: tempoFinalFormatado });
-    } catch (error) { 
-        await pool.query('ROLLBACK'); 
-        console.error(error); 
-        return res.status(500).json({ error: 'Erro interno ao processar saída.' }); 
     }
 });
 

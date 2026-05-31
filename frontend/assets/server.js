@@ -7,8 +7,6 @@ const session = require('express-session');
 const bcrypt = require('bcryptjs');
 
 const app = express();
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));

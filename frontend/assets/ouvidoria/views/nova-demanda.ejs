@@ -1,0 +1,86 @@
+<%- include('partials/header') %>
+
+<main class="max-w-4xl mx-auto p-4 md:p-6">
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+        <div class="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+            <h3 class="font-bold text-slate-700"><i class="fa-solid fa-file-circle-plus mr-2 text-sky-800"></i>Cadastrar Nova Demanda</h3>
+            <a href="/" class="text-xs bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg hover:bg-slate-300 font-medium transition-all">Voltar ao Painel</a>
+        </div>
+
+        <form action="/nova-demanda" method="POST" class="p-6 space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 mb-1">Nº Protocolo</label>
+                    <input type="text" name="protocolo" required placeholder="Ex: 01/2026" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 mb-1">Data de Registro</label>
+                    <input type="date" name="data_registro" required class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 mb-1">Prazo Final</label>
+                    <input type="date" name="prazo_final" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600 focus:outline-none">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 mb-1">Requerente</label>
+                    <input type="text" name="requerente" required placeholder="Nome Completo" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 mb-1">CPF</label>
+                    <input type="text" name="cpf" placeholder="000.000.000-00" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 mb-1">Envolvimento</label>
+                    <select name="envolvimento" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600 focus:outline-none">
+                        <option value="Mãe de aluno">Mãe de Aluno</option>
+                        <option value="Pai de aluno">Pai de Aluno</option>
+                        <option value="Professor">Professor(a)</option>
+                        <option value="Funcionário">Funcionário(a)</option>
+                        <option value="Cidadão">Cidadão</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 mb-1">Unidade Escolar Vinculada</label>
+                    <select name="escola_id" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600 focus:outline-none">
+                        <option value="">-- Selecione a Unidade --</option>
+                        <% listagemEscolas.forEach(escola => { %>
+                            <option value="<%= escola.id %>"><%= escola.nome %></option>
+                        <% }) %>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 mb-1">Status Inicial</label>
+                    <select name="status" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600 focus:outline-none">
+                        <option value="Em análise">Em análise</option>
+                        <option value="Concluído">Concluído</option>
+                        <option value="Atrasado">Atrasado</option>
+                    </select>
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-slate-600 mb-1">Natureza da Ocorrência</label>
+                <input type="text" name="natureza_demanda" placeholder="Ex: Solicitação, Reclamação, Denúncia" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600 focus:outline-none">
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-slate-600 mb-1">Descrição Resumida do Fato</label>
+                <textarea name="descricao_resumida" rows="4" placeholder="Detalhes descritos na planilha..." class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600 focus:outline-none"></textarea>
+            </div>
+
+            <div class="pt-4 border-t border-slate-200 flex justify-end space-x-2">
+                <button type="submit" class="bg-sky-800 text-white font-semibold text-sm px-5 py-2.5 rounded-lg hover:bg-sky-900 shadow-sm transition-all">
+                    Salvar Processo
+                </button>
+            </div>
+        </form>
+    </div>
+</main>
+
+<%- include('partials/footer') %>

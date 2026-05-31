@@ -4,7 +4,7 @@ require('dotenv').config({ path: path.join(__dirname, '.env') });
 const express = require('express');
 const pool = require('./config/database.js');
 const session = require('express-session');
-const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 
 const app = express();
 app.use(express.json());
@@ -51,10 +51,15 @@ app.post('/login', async (req, res) => {
   const { username, senha } = req.body;
   try {
     const result = await pool.query('SELECT * FROM usuarios WHERE username = $1 AND ativo = true', [username]);
+    
     if (result.rows.length > 0) {
       const usuario = result.rows[0];
-      const senhaValida = await bcrypt.compare(senha, usuario.senha_hash);
-      if (senhaValida) {
+      
+      // Gera o hash SHA-256 da senha digitada no formulário
+      const hashDigitado = crypto.createHash('sha256').update(senha).digest('hex');
+      
+      // Compara os dois hashes SHA-256 textuais
+      if (hashDigitado === usuario.senha_hash) {
         req.session.usuarioId = usuario.id;
         req.session.usuarioNome = usuario.nome;
         req.session.usuarioPerfil = usuario.perfil;
@@ -149,12 +154,16 @@ app.get('/usuarios', requererAutenticacao, verificarPermissao(['admin']), async 
 app.post('/usuarios', requererAutenticacao, verificarPermissao(['admin']), async (req, res) => {
   const { nome, username, senha, perfil } = req.body;
   try {
-    const senhaHash = await bcrypt.hash(senha, 10);
+    // Criptografa em SHA-256 antes de salvar o novo funcionário
+    const senhaHash = crypto.createHash('sha256').update(senha).digest('hex');
+    
     await pool.query('INSERT INTO usuarios (nome, username, senha_hash, perfil) VALUES ($1, $2, $3, $4)', [nome, username, senhaHash, perfil]);
+    
     const lista = await pool.query('SELECT id, nome, username, perfil, ativo FROM usuarios ORDER BY nome');
     res.render('usuarios', { listaUsuarios: lista.rows, msg: "Usuário cadastrado com sucesso!" });
   } catch (err) {
-    res.status(500).send("Erro ao cadastrar usuário. Certifique-se de que o username é único.");
+    console.error(err);
+    res.status(500).send("Erro ao cadastrar usuário.");
   }
 });
 

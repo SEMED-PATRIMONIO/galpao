@@ -1,13 +1,14 @@
+
 <%- include('partials/header') %>
 
-<div class="flex h-screen bg-slate-100 overflow-hidden" x-data="{ sidebarOpen: true }">
+<div class="flex h-screen bg-slate-100 overflow-hidden" x-data="{ sidebarOpen: true, modalSenhaOpen: false }">
     
     <aside :class="sidebarOpen ? 'w-64' : 'w-20'" class="bg-slate-900 text-slate-300 transition-all duration-300 flex flex-col justify-between border-r border-slate-800 z-20">
         <div>
             <div class="p-4 flex items-center justify-between border-b border-slate-800 bg-slate-950">
                 <div class="flex items-center space-x-3" x-show="sidebarOpen">
                     <i class="fa-solid fa-building-shield text-amber-500 text-lg"></i>
-                    <span class="font-bold text-sm tracking-wider text-white">Acompanhamento Processual</span>
+                    <span class="font-bold text-sm tracking-wider text-white">Ouvidoria SEMED</span>
                 </div>
                 <button @click="sidebarOpen = !sidebarOpen" class="text-slate-400 hover:text-white mx-auto">
                     <i class="fa-solid fa-bars text-lg"></i>
@@ -17,22 +18,39 @@
             <nav class="p-3 space-y-1">
                 <a href="/" class="flex items-center space-x-3 px-3 py-2.5 bg-sky-800 text-white rounded-lg font-medium transition-all text-sm">
                     <i class="fa-solid fa-chart-pie w-5 text-center text-base"></i>
-                    <span x-show="sidebarOpen">Painel</span>
+                    <span x-show="sidebarOpen">Painel Central</span>
+                </a>
+
+                <a href="/processos" class="flex items-center space-x-3 px-3 py-2.5 text-slate-400 hover:bg-slate-800 hover:text-white rounded-lg transition-all text-sm">
+                    <i class="fa-solid fa-folder-open w-5 text-center text-base text-sky-400"></i>
+                    <span x-show="sidebarOpen">Processos</span>
                 </a>
 
                 <% if (perfil === 'operador' || perfil === 'admin') { %>
-                <a href="/nova-demanda" class="flex items-center space-x-3 px-3 py-2.5 text-slate-400 hover:bg-slate-800 hover:text-white rounded-lg transition-all text-sm">
-                    <i class="fa-solid fa-file-circle-plus w-5 text-center text-base"></i>
-                    <span x-show="sidebarOpen">Nova</span>
+                <a href="/movimentacoes" class="flex items-center space-x-3 px-3 py-2.5 text-slate-400 hover:bg-slate-800 hover:text-white rounded-lg transition-all text-sm">
+                    <i class="fa-solid fa-timeline w-5 text-center text-base text-emerald-400"></i>
+                    <span x-show="sidebarOpen">Movimentações</span>
                 </a>
                 <% } %>
 
-                <% if (perfil === 'admin') { %>
-                <a href="/arquivados" class="flex items-center space-x-3 px-3 py-2.5 text-slate-400 hover:bg-slate-800 hover:text-white rounded-lg transition-all text-sm">
-                    <i class="fa-solid fa-box-archive w-5 text-center text-base"></i>
-                    <span x-show="sidebarOpen">Processos Inativos</span>
+                <div class="border-t border-slate-800/60 my-2 pt-2">
+                    <p x-show="sidebarOpen" class="text-[10px] font-bold text-slate-500 uppercase px-3 tracking-wider mb-1">Configurações</p>
+                </div>
+
+                <a href="/departamentos" class="flex items-center space-x-3 px-3 py-2.5 text-slate-400 hover:bg-slate-800 hover:text-white rounded-lg transition-all text-sm">
+                    <i class="fa-solid fa-network-wired w-5 text-center text-base"></i>
+                    <span x-show="sidebarOpen">Departamentos/Locais</span>
                 </a>
-                <% } %>
+
+                <a href="/escolas" class="flex items-center space-x-3 px-3 py-2.5 text-slate-400 hover:bg-slate-800 hover:text-white rounded-lg transition-all text-sm">
+                    <i class="fa-solid fa-school w-5 text-center text-base"></i>
+                    <span x-show="sidebarOpen">Escolas/Clientes</span>
+                </a>
+
+                <a href="/naturezas" class="flex items-center space-x-3 px-3 py-2.5 text-slate-400 hover:bg-slate-800 hover:text-white rounded-lg transition-all text-sm">
+                    <i class="fa-solid fa-tags w-5 text-center text-base"></i>
+                    <span x-show="sidebarOpen">Tipos (Natureza)</span>
+                </a>
 
                 <% if (perfil === 'admin') { %>
                 <a href="/usuarios" class="flex items-center space-x-3 px-3 py-2.5 text-slate-400 hover:bg-slate-800 hover:text-white rounded-lg transition-all text-sm border-t border-slate-800/60 pt-2 mt-2">
@@ -45,40 +63,43 @@
 
         <div class="p-3 border-t border-slate-800 bg-slate-950 flex items-center justify-between text-xs">
             <div class="flex items-center space-x-2 overflow-hidden" x-show="sidebarOpen">
-                <div class="bg-sky-900 text-sky-200 p-2 rounded-lg font-bold"><%= usuario.substring(0,2).toUpperCase() %></div>
+                <div class="bg-sky-900 text-sky-200 p-2 rounded-lg font-bold min-w-[32px] text-center">
+                    <%= usuario.substring(0,2).toUpperCase() %>
+                </div>
                 <div class="truncate">
                     <p class="font-semibold text-slate-200 truncate"><%= usuario %></p>
-                    <p class="text-slate-500 text-[10px]">Operador</p>
+                    <p class="text-slate-500 text-[10px] uppercase tracking-wider"><%= perfil %></p>
                 </div>
-                <div x-data="{ modalSenhaOpen: false }">
-                    <button @click="modalSenhaOpen = true" class="flex items-center gap-2 px-3 py-2 text-sm text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg transition-all shadow-sm">
-                        <i class="fa-solid fa-key text-amber-400"></i>
-                        <span>Alterar minha Senha</span>
-                    </button>
-
-                    <div x-show="modalSenhaOpen" class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50" x-cloak>
-                        <div class="bg-white rounded-xl p-6 w-full max-w-sm shadow-2xl border border-slate-200" @click.away="modalSenhaOpen = false">
-                            <h3 class="text-base font-bold text-slate-800 mb-2 flex items-center gap-2">
-                                <i class="fa-solid fa-lock text-sky-700"></i> Nova Senha de Acesso
-                            </h3>
-                            <p class="text-xs text-slate-500 mb-4">Insira sua nova senha individual. Ela será criptografada imediatamente.</p>
-                            
-                            <form action="/usuarios/alterar-senha" method="POST" class="space-y-4">
-                                <input type="password" name="novaSenha" required class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-600" placeholder="Digite a nova senha">
-                                
-                                <div class="flex justify-end gap-2 text-xs font-semibold pt-2">
-                                    <button type="button" @click="modalSenhaOpen = false" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-all">Cancelar</button>
-                                    <button type="submit" class="px-4 py-2 bg-sky-800 hover:bg-sky-900 text-white rounded-lg transition-all shadow-md">Salvar Nova Senha</button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                </div> 
             </div>
-            <a href="/logout" class="text-red-400 hover:text-red-300 p-2"><i class="fa-solid fa-right-from-bracket"></i></a>
+            
+            <div class="flex items-center space-x-1">
+                <button @click="modalSenhaOpen = true" class="text-amber-400 hover:text-amber-300 p-1.5 rounded transition-colors" title="Alterar senha">
+                    <i class="fa-solid fa-key text-xs"></i>
+                </button>
+                <a href="/logout" class="text-red-400 hover:text-red-300 p-1.5 rounded transition-colors" title="Sair do Sistema">
+                    <i class="fa-solid fa-right-from-bracket text-xs"></i>
+                </a>
+            </div>
         </div>
     </aside>
 
+    <div x-show="modalSenhaOpen" class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50" x-cloak>
+        <div class="bg-white rounded-xl p-5 w-full max-w-sm shadow-2xl border border-slate-200" @click.away="modalSenhaOpen = false">
+            <h3 class="text-sm font-bold text-slate-800 mb-1 flex items-center gap-2">
+                <i class="fa-solid fa-lock text-sky-700"></i> Alterar senha
+            </h3>
+            <p class="text-xs text-slate-500 mb-4">Insira a nova senha para o seu login.</p>
+            
+            <form action="/usuarios/alterar-senha" method="POST" class="space-y-3">
+                <input type="password" name="novaSenha" required class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-600" placeholder="Digite a nova senha">
+                
+                <div class="flex justify-end gap-2 text-xs font-semibold pt-1">
+                    <button type="button" @click="modalSenhaOpen = false" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-all">Cancelar</button>
+                    <button type="submit" class="px-3 py-1.5 bg-sky-800 hover:bg-sky-900 text-white rounded-lg transition-all shadow-md">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
     <div class="flex-1 flex flex-col h-full overflow-hidden">
         
         <section class="bg-white border-b border-slate-200 p-4 shadow-sm z-10">

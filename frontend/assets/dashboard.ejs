@@ -16,81 +16,80 @@
         modalTramitarOpen: false
      }">
     
-    <aside :class="sidebarOpen ? 'w-64' : 'w-20'" class="bg-slate-900 text-slate-300 transition-all duration-300 flex flex-col justify-between border-r border-slate-800 z-20">
-        <div>
-            <div class="p-4 flex items-center justify-between border-b border-slate-800 bg-slate-950">
-                <div class="flex items-center space-x-3" x-show="sidebarOpen">
-                    <i class="fa-solid fa-building-shield text-amber-500 text-lg"></i>
-                    <span class="font-bold text-sm tracking-wider text-white">Ouvidoria SEMED</span>
-                </div>
-                <button @click="sidebarOpen = !sidebarOpen" class="text-slate-400 hover:text-white mx-auto">
-                    <i class="fa-solid fa-bars text-lg"></i>
-                </button>
+    <aside :class="sidebarOpen ? 'w-64' : 'w-20'" class="bg-slate-900 text-slate-300 transition-all duration-300 flex flex-col h-screen border-r border-slate-800 z-20 shrink-0">
+        
+        <div class="p-4 flex items-center justify-between border-b border-slate-800 bg-slate-950 shrink-0">
+            <div class="flex items-center space-x-3" x-show="sidebarOpen">
+                <i class="fa-solid fa-building-shield text-amber-500 text-lg"></i>
+                <span class="font-bold text-sm tracking-wider text-white">Ouvidoria SEMED</span>
             </div>
-            
-            <nav class="p-3 space-y-1">
-                <button @click="abaAtual = 'painel'; itemSelecionado = null" :class="abaAtual === 'painel' ? 'bg-sky-800 text-white' : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg font-medium transition-all text-sm text-left">
-                    <i class="fa-solid fa-chart-pie w-5 text-center text-base"></i>
-                    <span x-show="sidebarOpen">Painel Central</span>
-                </button>
-
-                <button @click="abaAtual = 'processos'; itemSelecionado = null" :class="abaAtual === 'processos' ? 'bg-sky-800 text-white' : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg font-medium transition-all text-sm text-left">
-                    <i class="fa-solid fa-folder-open w-5 text-center text-base text-sky-400"></i>
-                    <span x-show="sidebarOpen">Processos</span>
-                </button>
-
-                <button @click="abaAtual = 'movimentacoes'; itemSelecionado = null" :class="abaAtual === 'movimentacoes' ? 'bg-sky-800 text-white' : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg font-medium transition-all text-sm text-left">
-                    <i class="fa-solid fa-timeline w-5 text-center text-base text-emerald-400"></i>
-                    <span x-show="sidebarOpen">Movimentações</span>
-                </button>
-
-                <div class="border-t border-slate-800/60 my-2 pt-2">
-                    <p x-show="sidebarOpen" class="text-[10px] font-bold text-slate-500 uppercase px-3 tracking-wider mb-1">Configurações</p>
-                </div>
-
-                <button @click="abaAtual = 'departamentos'; itemSelecionado = null" :class="abaAtual === 'departamentos' ? 'bg-sky-800 text-white' : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg font-medium transition-all text-sm text-left">
-                    <i class="fa-solid fa-network-wired w-5 text-center text-base"></i>
-                    <span x-show="sidebarOpen">Departamentos/Locais</span>
-                </button>
-
-                <button @click="abaAtual = 'escolas'; itemSelecionado = null" :class="abaAtual === 'escolas' ? 'bg-sky-800 text-white' : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg font-medium transition-all text-sm text-left">
-                    <i class="fa-solid fa-school w-5 text-center text-base"></i>
-                    <span x-show="sidebarOpen">Escolas/Clientes</span>
-                </button>
-
-                <button @click="abaAtual = 'naturezas'; itemSelecionado = null" :class="abaAtual === 'naturezas' ? 'bg-sky-800 text-white' : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg font-medium transition-all text-sm text-left">
-                    <i class="fa-solid fa-tags w-5 text-center text-base"></i>
-                    <span x-show="sidebarOpen">Tipos (Natureza)</span>
-                </button>
-
-                <% if (perfil === 'admin') { %>
-                <button @click="abaAtual = 'usuarios'; itemSelecionado = null" 
-                        :class="abaAtual === 'usuarios' ? 'bg-sky-800 text-white' : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'" 
-                        class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg font-medium transition-all text-sm text-left border-t border-slate-800/60 pt-2 mt-2">
-                    <i class="fa-solid fa-users-gear w-5 text-center text-base text-amber-500"></i>
-                    <span x-show="sidebarOpen" class="text-slate-300 font-semibold">Gestão de Usuários</span>
-                </button>
-                <% } %>
-            </nav>
+            <button @click="sidebarOpen = !sidebarOpen" class="text-slate-400 hover:text-white mx-auto">
+                <i class="fa-solid fa-bars text-lg"></i>
+            </button>
         </div>
+        
+        <nav class="p-3 space-y-1 flex-1 overflow-y-auto">
+            <button @click="abaAtual = 'painel'; itemSelecionado = null" :class="abaAtual === 'painel' ? 'bg-sky-800 text-white' : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg font-medium transition-all text-sm text-left">
+                <i class="fa-solid fa-chart-pie w-5 text-center text-base"></i>
+                <span x-show="sidebarOpen">Painel Central</span>
+            </button>
 
-        <div class="p-3 border-t border-slate-800 bg-slate-950 flex items-center justify-between text-xs">
-            <div class="flex items-center space-x-2 overflow-hidden" x-show="sidebarOpen">
-                <div class="bg-sky-900 text-sky-200 p-2 rounded-lg font-bold min-w-[32px] text-center"><%= usuario.substring(0,2).toUpperCase() %></div>
-                <div class="truncate">
-                    <p class="font-semibold text-slate-200 truncate"><%= usuario %></p>
-                    <p class="text-slate-500 text-[10px] uppercase tracking-wider"><%= perfil %></p>
+            <button @click="abaAtual = 'processos'; itemSelecionado = null" :class="abaAtual === 'processos' ? 'bg-sky-800 text-white' : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg font-medium transition-all text-sm text-left">
+                <i class="fa-solid fa-folder-open w-5 text-center text-base text-sky-400"></i>
+                <span x-show="sidebarOpen">Tarefas</span>
+            </button>
+
+            <button @click="abaAtual = 'movimentacoes'; itemSelecionado = null" :class="abaAtual === 'movimentacoes' ? 'bg-sky-800 text-white' : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg font-medium transition-all text-sm text-left">
+                <i class="fa-solid fa-timeline w-5 text-center text-base text-emerald-400"></i>
+                <span x-show="sidebarOpen">Movimentações</span>
+            </button>
+
+            <div class="border-t border-slate-800/60 my-2 pt-2">
+                <p x-show="sidebarOpen" class="text-[10px] font-bold text-slate-500 uppercase px-3 tracking-wider mb-1">Configurações</p>
+            </div>
+
+            <button @click="abaAtual = 'departamentos'; itemSelecionado = null" :class="abaAtual === 'departamentos' ? 'bg-sky-800 text-white' : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg font-medium transition-all text-sm text-left">
+                <i class="fa-solid fa-network-wired w-5 text-center text-base"></i>
+                <span x-show="sidebarOpen">Departamentos/Locais</span>
+            </button>
+
+            <button @click="abaAtual = 'escolas'; itemSelecionado = null" :class="abaAtual === 'escolas' ? 'bg-sky-800 text-white' : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg font-medium transition-all text-sm text-left">
+                <i class="fa-solid fa-school w-5 text-center text-base"></i>
+                <span x-show="sidebarOpen">Escolas/Clientes</span>
+            </button>
+
+            <button @click="abaAtual = 'naturezas'; itemSelecionado = null" :class="abaAtual === 'naturezas' ? 'bg-sky-800 text-white' : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg font-medium transition-all text-sm text-left">
+                <i class="fa-solid fa-tags w-5 text-center text-base"></i>
+                <span x-show="sidebarOpen">Tipos (Natureza)</span>
+            </button>
+
+            <% if (perfil === 'admin') { %>
+            <button @click="abaAtual = 'usuarios'; itemSelecionado = null" :class="abaAtual === 'usuarios' ? 'bg-sky-800 text-white' : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg font-medium transition-all text-sm text-left border-t border-slate-800/60 pt-2 mt-2">
+                <i class="fa-solid fa-users-gear w-5 text-center text-base text-amber-500"></i>
+                <span x-show="sidebarOpen" class="text-slate-300 font-semibold">Gestão de Usuários</span>
+            </button>
+            <% } %>
+        </nav>
+
+        <div class="shrink-0 p-3 border-t border-slate-800 bg-slate-950 text-xs">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-2" x-show="sidebarOpen">
+                    <div class="bg-sky-900 text-sky-200 p-2 rounded-lg font-bold min-w-[32px] text-center"><%= usuario.substring(0,2).toUpperCase() %></div>
+                    <div class="truncate">
+                        <p class="font-semibold text-slate-200"><%= usuario %></p>
+                        <p class="text-slate-500 text-[10px] uppercase"><%= perfil %></p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-1">
+                    <button @click="modalSenhaOpen = true" class="text-amber-400 hover:text-amber-300 p-1.5"><i class="fa-solid fa-key"></i></button>
+                    <a href="/logout" class="text-red-400 hover:text-red-300 p-1.5"><i class="fa-solid fa-right-from-bracket"></i></a>
                 </div>
             </div>
-            <div class="flex items-center space-x-1">
-                <button @click="modalSenhaOpen = true" class="text-amber-400 hover:text-amber-300 p-1.5 rounded transition-colors" title="Alterar senha">
-                    <i class="fa-solid fa-key text-xs"></i>
-                </button>
-                <a href="/logout" class="text-red-400 hover:text-red-300 p-1.5 rounded transition-colors"><i class="fa-solid fa-right-from-bracket text-xs"></i></a>
-            </div>
+            <p x-show="sidebarOpen" class="mt-3 text-[9px] text-slate-600 text-center uppercase tracking-widest border-t border-slate-800 pt-2">
+                Desenvolvido pela Subsecretaria Adjunta de Inovação e Tecnologia
+            </p>
         </div>
     </aside>
-
     <div class="flex-1 flex flex-col overflow-hidden">
         
         <header class="bg-white border-b border-slate-200 h-16 flex items-center justify-between px-6 shadow-sm">
@@ -279,6 +278,39 @@
                     </table>
                 </div>
             </div>
+            <div x-show="abaAtual === 'usuarios'" class="flex flex-col h-full">
+                <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-auto flex-1 relative">
+                    <table class="w-full text-left text-xs border-collapse min-w-[600px]">
+                        <thead class="sticky top-0 z-20 shadow-sm">
+                            <tr class="bg-slate-100 text-slate-600 font-bold uppercase border-b border-slate-200">
+                                <th class="p-4 w-12 sticky left-0 z-30 bg-slate-100 border-r border-slate-200"></th>
+                                <th class="p-4 bg-slate-100">Nome Oficial</th>
+                                <th class="p-4 bg-slate-100">Login</th>
+                                <th class="p-4 bg-slate-100 text-center">Perfil</th>
+                                <th class="p-4 bg-slate-100 text-center">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            <% usuarios.forEach(u => { %>
+                            <tr class="group transition-colors cursor-pointer" 
+                                @click="itemSelecionado = { id: '<%= u.id %>', nome: '<%= u.nome %>', username: '<%= u.username %>', perfil: '<%= u.perfil %>', ativo: <%= u.ativo %> }">
+                                <td class="p-4 text-center sticky left-0 z-10 border-r border-slate-100 bg-white group-hover:bg-slate-50" :class="itemSelecionado && itemSelecionado.id === '<%= u.id %>' ? '!bg-sky-50' : ''">
+                                    <input type="radio" name="select_user" :checked="itemSelecionado && itemSelecionado.id === '<%= u.id %>'">
+                                </td>
+                                <td class="p-4 font-semibold text-slate-800"><%= u.nome %></td>
+                                <td class="p-4 font-mono text-sky-700"><%= u.username %></td>
+                                <td class="p-4 text-center"><span class="px-2 py-0.5 rounded border bg-slate-50"><%= u.perfil %></span></td>
+                                <td class="p-4 text-center">
+                                    <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase <%= u.ativo ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700' %>">
+                                        <%= u.ativo ? 'Ativo' : 'Bloqueado' %>
+                                    </span>
+                                </td>
+                            </tr>
+                            <% }) %>
+                        </tbody>
+                    </table>
+                </div>
+            </div>            
         </main>
     </div>
 

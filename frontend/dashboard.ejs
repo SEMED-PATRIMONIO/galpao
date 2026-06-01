@@ -16,82 +16,83 @@
         modalTramitarOpen: false
      }">
     
-    <aside :class="sidebarOpen ? 'w-64' : 'w-20'" class="bg-slate-900 text-slate-300 transition-all duration-300 flex flex-col justify-between border-r border-slate-800 z-20">
-        <div>
-            <div class="p-4 flex items-center justify-between border-b border-slate-800 bg-slate-950">
-                <div class="flex items-center space-x-3" x-show="sidebarOpen">
-                    <i class="fa-solid fa-building-shield text-amber-500 text-lg"></i>
-                    <span class="font-bold text-sm tracking-wider text-white">Ouvidoria SEMED</span>
-                </div>
-                <button @click="sidebarOpen = !sidebarOpen" class="text-slate-400 hover:text-white mx-auto">
-                    <i class="fa-solid fa-bars text-lg"></i>
-                </button>
+    <aside :class="sidebarOpen ? 'w-64' : 'w-20'" class="bg-slate-900 text-slate-300 transition-all duration-300 flex flex-col h-screen border-r border-slate-800 z-20 shrink-0">
+        
+        <div class="p-4 flex items-center justify-between border-b border-slate-800 bg-slate-950 shrink-0">
+            <div class="flex items-center space-x-3" x-show="sidebarOpen">
+                <i class="fa-solid fa-building-shield text-amber-500 text-lg"></i>
+                <span class="font-bold text-sm tracking-wider text-white">Ouvidoria SEMED</span>
             </div>
-            
-            <nav class="p-3 space-y-1">
-                <button @click="abaAtual = 'painel'; itemSelecionado = null" :class="abaAtual === 'painel' ? 'bg-sky-800 text-white' : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg font-medium transition-all text-sm text-left">
-                    <i class="fa-solid fa-chart-pie w-5 text-center text-base"></i>
-                    <span x-show="sidebarOpen">Painel Central</span>
-                </button>
-
-                <button @click="abaAtual = 'processos'; itemSelecionado = null" :class="abaAtual === 'processos' ? 'bg-sky-800 text-white' : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg font-medium transition-all text-sm text-left">
-                    <i class="fa-solid fa-folder-open w-5 text-center text-base text-sky-400"></i>
-                    <span x-show="sidebarOpen">Processos</span>
-                </button>
-
-                <button @click="abaAtual = 'movimentacoes'; itemSelecionado = null" :class="abaAtual === 'movimentacoes' ? 'bg-sky-800 text-white' : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg font-medium transition-all text-sm text-left">
-                    <i class="fa-solid fa-timeline w-5 text-center text-base text-emerald-400"></i>
-                    <span x-show="sidebarOpen">Movimentações</span>
-                </button>
-
-                <div class="border-t border-slate-800/60 my-2 pt-2">
-                    <p x-show="sidebarOpen" class="text-[10px] font-bold text-slate-500 uppercase px-3 tracking-wider mb-1">Configurações</p>
-                </div>
-
-                <button @click="abaAtual = 'departamentos'; itemSelecionado = null" :class="abaAtual === 'departamentos' ? 'bg-sky-800 text-white' : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg font-medium transition-all text-sm text-left">
-                    <i class="fa-solid fa-network-wired w-5 text-center text-base"></i>
-                    <span x-show="sidebarOpen">Departamentos/Locais</span>
-                </button>
-
-                <button @click="abaAtual = 'escolas'; itemSelecionado = null" :class="abaAtual === 'escolas' ? 'bg-sky-800 text-white' : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg font-medium transition-all text-sm text-left">
-                    <i class="fa-solid fa-school w-5 text-center text-base"></i>
-                    <span x-show="sidebarOpen">Escolas/Clientes</span>
-                </button>
-
-                <button @click="abaAtual = 'naturezas'; itemSelecionado = null" :class="abaAtual === 'naturezas' ? 'bg-sky-800 text-white' : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg font-medium transition-all text-sm text-left">
-                    <i class="fa-solid fa-tags w-5 text-center text-base"></i>
-                    <span x-show="sidebarOpen">Tipos (Natureza)</span>
-                </button>
-
-                <% if (perfil === 'admin') { %>
-                <a href="/usuarios" class="flex items-center space-x-3 px-3 py-2.5 text-slate-400 hover:bg-slate-800 hover:text-white rounded-lg transition-all text-sm border-t border-slate-800/60 pt-2 mt-2">
-                    <i class="fa-solid fa-users-gear w-5 text-center text-base text-amber-500"></i>
-                    <span x-show="sidebarOpen" class="text-slate-300 font-semibold">Gestão de Usuários</span>
-                </a>
-                <% } %>
-            </nav>
+            <button @click="sidebarOpen = !sidebarOpen" class="text-slate-400 hover:text-white mx-auto">
+                <i class="fa-solid fa-bars text-lg"></i>
+            </button>
         </div>
+        
+        <nav class="p-3 space-y-1 flex-1 overflow-y-auto">
+            <button @click="abaAtual = 'painel'; itemSelecionado = null" :class="abaAtual === 'painel' ? 'bg-sky-800 text-white' : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg font-medium transition-all text-sm text-left">
+                <i class="fa-solid fa-chart-pie w-5 text-center text-base"></i>
+                <span x-show="sidebarOpen">Painel Central</span>
+            </button>
 
-        <div class="p-3 border-t border-slate-800 bg-slate-950 flex items-center justify-between text-xs">
-            <div class="flex items-center space-x-2 overflow-hidden" x-show="sidebarOpen">
-                <div class="bg-sky-900 text-sky-200 p-2 rounded-lg font-bold min-w-[32px] text-center"><%= usuario.substring(0,2).toUpperCase() %></div>
-                <div class="truncate">
-                    <p class="font-semibold text-slate-200 truncate"><%= usuario %></p>
-                    <p class="text-slate-500 text-[10px] uppercase tracking-wider"><%= perfil %></p>
+            <button @click="abaAtual = 'processos'; itemSelecionado = null" :class="abaAtual === 'processos' ? 'bg-sky-800 text-white' : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg font-medium transition-all text-sm text-left">
+                <i class="fa-solid fa-folder-open w-5 text-center text-base text-sky-400"></i>
+                <span x-show="sidebarOpen">Tarefas</span>
+            </button>
+
+            <button @click="abaAtual = 'movimentacoes'; itemSelecionado = null" :class="abaAtual === 'movimentacoes' ? 'bg-sky-800 text-white' : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg font-medium transition-all text-sm text-left">
+                <i class="fa-solid fa-timeline w-5 text-center text-base text-emerald-400"></i>
+                <span x-show="sidebarOpen">Movimentações</span>
+            </button>
+
+            <div class="border-t border-slate-800/60 my-2 pt-2">
+                <p x-show="sidebarOpen" class="text-[10px] font-bold text-slate-500 uppercase px-3 tracking-wider mb-1">Configurações</p>
+            </div>
+
+            <button @click="abaAtual = 'departamentos'; itemSelecionado = null" :class="abaAtual === 'departamentos' ? 'bg-sky-800 text-white' : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg font-medium transition-all text-sm text-left">
+                <i class="fa-solid fa-network-wired w-5 text-center text-base"></i>
+                <span x-show="sidebarOpen">Departamentos/Locais</span>
+            </button>
+
+            <button @click="abaAtual = 'escolas'; itemSelecionado = null" :class="abaAtual === 'escolas' ? 'bg-sky-800 text-white' : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg font-medium transition-all text-sm text-left">
+                <i class="fa-solid fa-school w-5 text-center text-base"></i>
+                <span x-show="sidebarOpen">Escolas/Clientes</span>
+            </button>
+
+            <button @click="abaAtual = 'naturezas'; itemSelecionado = null" :class="abaAtual === 'naturezas' ? 'bg-sky-800 text-white' : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg font-medium transition-all text-sm text-left">
+                <i class="fa-solid fa-tags w-5 text-center text-base"></i>
+                <span x-show="sidebarOpen">Tipos (Natureza)</span>
+            </button>
+
+            <% if (perfil === 'admin') { %>
+            <button @click="abaAtual = 'usuarios'; itemSelecionado = null" :class="abaAtual === 'usuarios' ? 'bg-sky-800 text-white' : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg font-medium transition-all text-sm text-left border-t border-slate-800/60 pt-2 mt-2">
+                <i class="fa-solid fa-users-gear w-5 text-center text-base text-amber-500"></i>
+                <span x-show="sidebarOpen" class="text-slate-300 font-semibold">Gestão de Usuários</span>
+            </button>
+            <% } %>
+        </nav>
+
+        <div class="shrink-0 p-3 border-t border-slate-800 bg-slate-950 text-xs">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-2" x-show="sidebarOpen">
+                    <div class="bg-sky-900 text-sky-200 p-2 rounded-lg font-bold min-w-[32px] text-center"><%= usuario.substring(0,2).toUpperCase() %></div>
+                    <div class="truncate">
+                        <p class="font-semibold text-slate-200"><%= usuario %></p>
+                        <p class="text-slate-500 text-[10px] uppercase"><%= perfil %></p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-1">
+                    <button @click="modalSenhaOpen = true" class="text-amber-400 hover:text-amber-300 p-1.5"><i class="fa-solid fa-key"></i></button>
+                    <a href="/logout" class="text-red-400 hover:text-red-300 p-1.5"><i class="fa-solid fa-right-from-bracket"></i></a>
                 </div>
             </div>
-            <div class="flex items-center space-x-1">
-                <button @click="modalSenhaOpen = true" class="text-amber-400 hover:text-amber-300 p-1.5 rounded transition-colors" title="Alterar senha">
-                    <i class="fa-solid fa-key text-xs"></i>
-                </button>
-                <a href="/logout" class="text-red-400 hover:text-red-300 p-1.5 rounded transition-colors"><i class="fa-solid fa-right-from-bracket text-xs"></i></a>
-            </div>
+            <p x-show="sidebarOpen" class="mt-3 text-[9px] text-slate-600 text-center uppercase tracking-widest border-t border-slate-800 pt-2">
+                Desenvolvido pela Subsecretaria Adjunta de Inovação e Tecnologia
+            </p>
         </div>
     </aside>
-
     <div class="flex-1 flex flex-col overflow-hidden">
         
-        <header class="bg-white border-b border-slate-200 h-16 flex items-center justify-between px-6 shadow-sm">
+        <header class="bg-white border-b border-slate-200 h-16 flex items-center justify-between px-6 shadow-sm shrink-0">
             <div class="flex items-center space-x-2">
                 <span class="text-xs font-bold uppercase tracking-wider text-slate-400 bg-slate-100 px-2 py-1 rounded" x-text="abaAtual"></span>
                 <span class="text-slate-300" x-show="itemSelecionado">|</span>
@@ -99,13 +100,13 @@
             </div>
 
             <div class="flex items-center space-x-2">
-                <button x-show="['processos','departamentos','escolas','naturezas'].includes(abaAtual) && '<%= perfil %>' !== 'leitor'"
+                <button x-show="['processos','departamentos','escolas','naturezas','usuarios'].includes(abaAtual) && '<%= perfil %>' !== 'leitor'"
                         @click="modalAddOpen = true"
                         class="bg-sky-800 hover:bg-sky-900 text-white text-xs font-bold px-3 py-2 rounded-lg flex items-center gap-1.5 shadow transition-all">
                     <i class="fa-solid fa-plus"></i> Incluir Novo
                 </button>
 
-                <button x-show="['processos','departamentos','escolas','naturezas'].includes(abaAtual) && '<%= perfil %>' !== 'leitor'"
+                <button x-show="['processos','departamentos','escolas','naturezas','usuarios'].includes(abaAtual) && '<%= perfil %>' !== 'leitor'"
                         @click="modalEditOpen = true"
                         :disabled="!itemSelecionado"
                         :class="itemSelecionado ? 'bg-amber-500 hover:bg-amber-600 text-white cursor-pointer' : 'bg-slate-100 text-slate-400 cursor-not-allowed'"
@@ -121,7 +122,7 @@
                     <i class="fa-solid fa-route"></i> Tramitar Local
                 </button>
 
-                <button x-show="['processos','departamentos','escolas','naturezas'].includes(abaAtual) && '<%= perfil %>' === 'admin'"
+                <button x-show="['processos','departamentos','escolas','naturezas','usuarios'].includes(abaAtual) && '<%= perfil %>' === 'admin'"
                         @click="modalStatusOpen = true"
                         :disabled="!itemSelecionado"
                         :class="itemSelecionado ? 'bg-red-700 hover:bg-red-800 text-white cursor-pointer' : 'bg-slate-100 text-slate-400 cursor-not-allowed'"
@@ -162,29 +163,47 @@
                 </div>
             </div>
 
-            <div x-show="abaAtual === 'processos'">
-                <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                    <table class="w-full text-left text-xs border-collapse">
-                        <thead>
-                            <tr class="bg-slate-50 text-slate-600 font-bold uppercase tracking-wider border-b border-slate-200">
-                                <th class="p-4 w-12"></th>
-                                <th class="p-4">Nº Processo / Protocolo</th>
-                                <th class="p-4">Requerente / CPF</th>
-                                <th class="p-4">Localização</th>
-                                <th class="p-4">Escola Vinculada</th>
-                                <th class="p-4 text-center">Status</th>
+            <div x-show="abaAtual === 'processos'" class="flex flex-col h-full">
+                <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-auto flex-1 relative">
+                    <table class="w-full text-left text-xs border-collapse min-w-[1200px]">
+                        <thead class="sticky top-0 z-20 shadow-sm">
+                            <tr class="bg-slate-100 text-slate-600 font-bold uppercase tracking-wider border-b border-slate-200">
+                                <th class="p-4 w-12 sticky left-0 z-30 bg-slate-100 border-r border-slate-200"></th>
+                                <th class="p-4 bg-slate-100 whitespace-nowrap">Nº Processo</th>
+                                <th class="p-4 bg-slate-100 whitespace-nowrap">Protocolo</th>
+                                <th class="p-4 bg-slate-100 whitespace-nowrap">Data Reg.</th>
+                                <th class="p-4 bg-slate-100 whitespace-nowrap">Requerente</th>
+                                <th class="p-4 bg-slate-100 whitespace-nowrap">CPF</th>
+                                <th class="p-4 bg-slate-100 whitespace-nowrap">Envolvimento</th>
+                                <th class="p-4 bg-slate-100 whitespace-nowrap">Localização</th>
+                                <th class="p-4 bg-slate-100 whitespace-nowrap">Escola</th>
+                                <th class="p-4 bg-slate-100 whitespace-nowrap">Descrição</th>
+                                <th class="p-4 bg-slate-100 text-center whitespace-nowrap">Status</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
                             <% processos.forEach(p => { %>
-                            <tr :class="itemSelecionado && itemSelecionado.id === '<%= p.id %>' ? 'bg-sky-50/50' : 'hover:bg-slate-50/60'" class="transition-colors cursor-pointer"
+                            <tr class="group transition-colors cursor-pointer"
                                 @click="itemSelecionado = { id: '<%= p.id %>', numero: '<%= p.numero_processo %>', protocolo: '<%= p.protocolo %>', data: '<%= p.data_registro ? p.data_registro.toISOString().split('T')[0] : '' %>', ano: '<%= p.ano_exercicio %>', status: '<%= p.status %>', requerente: '<%= p.requerente %>', cpf: '<%= p.cpf %>', envolvimento: '<%= p.envolvimento %>', escola_id: '<%= p.escola_id %>', departamento_id: '<%= p.departamento_id %>', natureza_id: '<%= p.natureza_id %>', desc: `<%= p.descricao_resumida %>`, ativo: <%= p.ativo %> }">
-                                <td class="p-4 text-center"><input type="radio" name="select_proc" :checked="itemSelecionado && itemSelecionado.id === '<%= p.id %>'" class="text-sky-600 focus:ring-sky-500"></td>
-                                <td class="p-4"><div class="font-bold text-slate-900 <%= !p.ativo ? 'line-through text-slate-400' : '' %>"><%= p.numero_processo %></div><div class="text-[10px] text-slate-400 font-mono">Prot: <%= p.protocolo %> | Exercício: <%= p.ano_exercicio %></div></td>
-                                <td class="p-4"><div class="font-semibold"><%= p.requerente %></div><div class="text-slate-400 font-mono"><%= p.cpf || 'Sem CPF' %></div></td>
-                                <td class="p-4 font-mono font-bold"><%= p.depto || '-' %></td>
-                                <td class="p-4 truncate max-w-xs"><%= p.escola || '-' %></td>
-                                <td class="p-4 text-center"><span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase <%= p.ativo ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700' %>"><%= p.ativo ? p.status : 'ARQUIVADO' %></span></td>
+                                
+                                <td class="p-4 text-center sticky left-0 z-10 border-r border-slate-100 bg-white group-hover:bg-slate-50 transition-colors" :class="itemSelecionado && itemSelecionado.id === '<%= p.id %>' ? '!bg-sky-50' : ''">
+                                    <input type="radio" name="select_proc" :checked="itemSelecionado && itemSelecionado.id === '<%= p.id %>'" class="text-sky-600 focus:ring-sky-500">
+                                </td>
+                                
+                                <td class="p-4 font-bold text-slate-900 bg-transparent group-hover:bg-slate-50" :class="itemSelecionado && itemSelecionado.id === '<%= p.id %>' ? '!bg-sky-50' : ''"><%= p.numero_processo %></td>
+                                <td class="p-4 font-mono text-slate-500 bg-transparent group-hover:bg-slate-50" :class="itemSelecionado && itemSelecionado.id === '<%= p.id %>' ? '!bg-sky-50' : ''"><%= p.protocolo || '-' %></td>
+                                <td class="p-4 whitespace-nowrap bg-transparent group-hover:bg-slate-50" :class="itemSelecionado && itemSelecionado.id === '<%= p.id %>' ? '!bg-sky-50' : ''"><%= p.data_registro ? new Date(p.data_registro).toLocaleDateString('pt-BR') : '-' %></td>
+                                <td class="p-4 font-semibold text-slate-800 bg-transparent group-hover:bg-slate-50" :class="itemSelecionado && itemSelecionado.id === '<%= p.id %>' ? '!bg-sky-50' : ''"><%= p.requerente %></td>
+                                <td class="p-4 font-mono bg-transparent group-hover:bg-slate-50" :class="itemSelecionado && itemSelecionado.id === '<%= p.id %>' ? '!bg-sky-50' : ''"><%= p.cpf || '-' %></td>
+                                <td class="p-4 bg-transparent group-hover:bg-slate-50" :class="itemSelecionado && itemSelecionado.id === '<%= p.id %>' ? '!bg-sky-50' : ''"><%= p.envolvimento || '-' %></td>
+                                <td class="p-4 font-bold text-sky-700 bg-transparent group-hover:bg-slate-50" :class="itemSelecionado && itemSelecionado.id === '<%= p.id %>' ? '!bg-sky-50' : ''"><%= p.depto || '-' %></td>
+                                <td class="p-4 truncate max-w-[150px] bg-transparent group-hover:bg-slate-50" :class="itemSelecionado && itemSelecionado.id === '<%= p.id %>' ? '!bg-sky-50' : ''"><%= p.escola || '-' %></td>
+                                <td class="p-4 truncate max-w-[200px] bg-transparent group-hover:bg-slate-50" :class="itemSelecionado && itemSelecionado.id === '<%= p.id %>' ? '!bg-sky-50' : ''" title="<%= p.descricao_resumida %>"><%= p.descricao_resumida || '-' %></td>
+                                <td class="p-4 text-center bg-transparent group-hover:bg-slate-50" :class="itemSelecionado && itemSelecionado.id === '<%= p.id %>' ? '!bg-sky-50' : ''">
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase <%= p.ativo ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700' %>">
+                                        <%= p.ativo ? p.status : 'ARQUIVADO' %>
+                                    </span>
+                                </td>
                             </tr>
                             <% }) %>
                         </tbody>
@@ -259,6 +278,39 @@
                     </table>
                 </div>
             </div>
+            <div x-show="abaAtual === 'usuarios'" class="flex flex-col h-full">
+                <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-auto flex-1 relative">
+                    <table class="w-full text-left text-xs border-collapse min-w-[600px]">
+                        <thead class="sticky top-0 z-20 shadow-sm">
+                            <tr class="bg-slate-100 text-slate-600 font-bold uppercase border-b border-slate-200">
+                                <th class="p-4 w-12 sticky left-0 z-30 bg-slate-100 border-r border-slate-200"></th>
+                                <th class="p-4 bg-slate-100">Nome Oficial</th>
+                                <th class="p-4 bg-slate-100">Login</th>
+                                <th class="p-4 bg-slate-100 text-center">Perfil</th>
+                                <th class="p-4 bg-slate-100 text-center">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            <% usuarios.forEach(u => { %>
+                            <tr class="group transition-colors cursor-pointer" 
+                                @click="itemSelecionado = { id: '<%= u.id %>', nome: '<%= u.nome %>', username: '<%= u.username %>', perfil: '<%= u.perfil %>', ativo: <%= u.ativo %> }">
+                                <td class="p-4 text-center sticky left-0 z-10 border-r border-slate-100 bg-white group-hover:bg-slate-50" :class="itemSelecionado && itemSelecionado.id === '<%= u.id %>' ? '!bg-sky-50' : ''">
+                                    <input type="radio" name="select_user" :checked="itemSelecionado && itemSelecionado.id === '<%= u.id %>'">
+                                </td>
+                                <td class="p-4 font-semibold text-slate-800"><%= u.nome %></td>
+                                <td class="p-4 font-mono text-sky-700"><%= u.username %></td>
+                                <td class="p-4 text-center"><span class="px-2 py-0.5 rounded border bg-slate-50"><%= u.perfil %></span></td>
+                                <td class="p-4 text-center">
+                                    <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase <%= u.ativo ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700' %>">
+                                        <%= u.ativo ? 'Ativo' : 'Bloqueado' %>
+                                    </span>
+                                </td>
+                            </tr>
+                            <% }) %>
+                        </tbody>
+                    </table>
+                </div>
+            </div>            
         </main>
     </div>
 
@@ -304,33 +356,33 @@
             <h3 class="text-sm font-bold text-slate-800 mb-4" x-text="'Editar em ' + abaAtual.toUpperCase()"></h3>
             
             <form x-show="abaAtual === 'processos'" :action="'/processos/' + (itemSelecionado ? itemSelecionado.id : '') + '/editar'" method="POST" class="grid grid-cols-2 gap-4 text-xs">
-                <div><label class="block font-semibold text-slate-600">Nº Processo</label><input type="text" name="numero_processo" x-model="itemSelecionado.numero" class="w-full px-3 py-2 border rounded-lg text-sm"></div>
-                <div><label class="block font-semibold text-slate-600">Protocolo</label><input type="text" name="protocolo" x-model="itemSelecionado.protocolo" class="w-full px-3 py-2 border rounded-lg text-sm"></div>
-                <div><label class="block font-semibold text-slate-600">Data Registro</label><input type="date" name="data_registro" x-model="itemSelecionado.data" class="w-full px-3 py-2 border rounded-lg text-sm"></div>
-                <div><label class="block font-semibold text-slate-600">Ano Exercício</label><input type="number" name="ano_exercicio" x-model="itemSelecionado.ano" class="w-full px-3 py-2 border rounded-lg text-sm"></div>
-                <div><label class="block font-semibold text-slate-600">Requerente</label><input type="text" name="requerente" x-model="itemSelecionado.requerente" class="w-full px-3 py-2 border rounded-lg text-sm"></div>
-                <div><label class="block font-semibold text-slate-600">CPF</label><input type="text" name="cpf" x-model="itemSelecionado.cpf" class="w-full px-3 py-2 border rounded-lg text-sm"></div>
-                <div><label class="block font-semibold text-slate-600">Status</label><select name="status" x-model="itemSelecionado.status" class="w-full px-3 py-2 border rounded-lg text-sm"><option value="Em Andamento">Em Andamento</option><option value="Pendente">Pendente</option><option value="Concluído">Concluído</option></select></div>
-                <div><label class="block font-semibold text-slate-600">Tipo (Natureza)</label><select name="natureza_id" x-model="itemSelecionado.natureza_id" class="w-full px-3 py-2 border rounded-lg text-sm"><option value="">Selecione...</option><% naturezas.forEach(n => { %><option value="<%= n.id %>"><%= n.nome %></option><% }) %></select></div>
-                <div><label class="block font-semibold text-slate-600">Departamento Atual</label><select name="departamento_id" x-model="itemSelecionado.departamento_id" class="w-full px-3 py-2 border rounded-lg text-sm"><option value="">Selecione...</option><% departamentos.forEach(d => { %><option value="<%= d.id %>"><%= d.nome %></option><% }) %></select></div>
-                <div><label class="block font-semibold text-slate-600">Escola Vinculada</label><select name="escola_id" x-model="itemSelecionado.escola_id" class="w-full px-3 py-2 border rounded-lg text-sm"><option value="">Selecione...</option><% escolas.forEach(e => { %><option value="<%= e.id %>"><%= e.nome %></option><% }) %></select></div>
-                <div class="col-span-2"><label class="block font-semibold text-slate-600">Descrição</label><textarea name="descricao_resumida" x-model="itemSelecionado.desc" rows="2" class="w-full px-3 py-2 border rounded-lg text-sm"></textarea></div>
+                <div><label class="block font-semibold text-slate-600">Nº Processo</label><input type="text" name="numero_processo" x-model="itemSelecionado?.numero" class="w-full px-3 py-2 border rounded-lg text-sm"></div>
+                <div><label class="block font-semibold text-slate-600">Protocolo</label><input type="text" name="protocolo" x-model="itemSelecionado?.protocolo" class="w-full px-3 py-2 border rounded-lg text-sm"></div>
+                <div><label class="block font-semibold text-slate-600">Data Registro</label><input type="date" name="data_registro" x-model="itemSelecionado?.data" class="w-full px-3 py-2 border rounded-lg text-sm"></div>
+                <div><label class="block font-semibold text-slate-600">Ano Exercício</label><input type="number" name="ano_exercicio" x-model="itemSelecionado?.ano" class="w-full px-3 py-2 border rounded-lg text-sm"></div>
+                <div><label class="block font-semibold text-slate-600">Requerente</label><input type="text" name="requerente" x-model="itemSelecionado?.requerente" class="w-full px-3 py-2 border rounded-lg text-sm"></div>
+                <div><label class="block font-semibold text-slate-600">CPF</label><input type="text" name="cpf" x-model="itemSelecionado?.cpf" class="w-full px-3 py-2 border rounded-lg text-sm"></div>
+                <div><label class="block font-semibold text-slate-600">Status</label><select name="status" x-model="itemSelecionado?.status" class="w-full px-3 py-2 border rounded-lg text-sm"><option value="Em Andamento">Em Andamento</option><option value="Pendente">Pendente</option><option value="Concluído">Concluído</option></select></div>
+                <div><label class="block font-semibold text-slate-600">Tipo (Natureza)</label><select name="natureza_id" x-model="itemSelecionado?.natureza_id" class="w-full px-3 py-2 border rounded-lg text-sm"><option value="">Selecione...</option><% naturezas.forEach(n => { %><option value="<%= n.id %>"><%= n.nome %></option><% }) %></select></div>
+                <div><label class="block font-semibold text-slate-600">Departamento Atual</label><select name="departamento_id" x-model="itemSelecionado?.departamento_id" class="w-full px-3 py-2 border rounded-lg text-sm"><option value="">Selecione...</option><% departamentos.forEach(d => { %><option value="<%= d.id %>"><%= d.nome %></option><% }) %></select></div>
+                <div><label class="block font-semibold text-slate-600">Escola Vinculada</label><select name="escola_id" x-model="itemSelecionado?.escola_id" class="w-full px-3 py-2 border rounded-lg text-sm"><option value="">Selecione...</option><% escolas.forEach(e => { %><option value="<%= e.id %>"><%= e.nome %></option><% }) %></select></div>
+                <div class="col-span-2"><label class="block font-semibold text-slate-600">Descrição</label><textarea name="descricao_resumida" x-model="itemSelecionado?.desc" rows="2" class="w-full px-3 py-2 border rounded-lg text-sm"></textarea></div>
                 <div class="col-span-2 flex justify-end gap-2 pt-2"><button type="button" @click="modalEditOpen = false" class="px-3 py-1.5 bg-slate-100 rounded-lg">Cancelar</button><button type="submit" class="px-4 py-1.5 bg-amber-500 text-white rounded-lg font-medium shadow">Salvar Edição</button></div>
             </form>
 
-            <form x-show="abaAtual === 'departamentos'" :action="'/departamentos/' + itemSelecionado.id + '/editar'" method="POST" class="space-y-4 text-xs">
-                <div><label class="block font-semibold text-slate-600">Sigla</label><input type="text" name="sigla" x-model="itemSelecionado.sigla" class="w-full px-3 py-2 border rounded-lg text-sm"></div>
-                <div><label class="block font-semibold text-slate-600">Nome do Setor</label><input type="text" name="nome" x-model="itemSelecionado.nome" class="w-full px-3 py-2 border rounded-lg text-sm"></div>
+            <form x-show="abaAtual === 'departamentos'" :action="'/departamentos/' + (itemSelecionado ? itemSelecionado.id : '') + '/editar'" method="POST" class="space-y-4 text-xs">
+                <div><label class="block font-semibold text-slate-600">Sigla</label><input type="text" name="sigla" x-model="itemSelecionado?.sigla" class="w-full px-3 py-2 border rounded-lg text-sm"></div>
+                <div><label class="block font-semibold text-slate-600">Nome do Setor</label><input type="text" name="nome" x-model="itemSelecionado?.nome" class="w-full px-3 py-2 border rounded-lg text-sm"></div>
                 <div class="flex justify-end gap-2 pt-2"><button type="button" @click="modalEditOpen = false" class="px-3 py-1.5 bg-slate-100 rounded-lg">Cancelar</button><button type="submit" class="px-4 py-1.5 bg-amber-500 text-white rounded-lg font-medium">Salvar Alterações</button></div>
             </form>
 
-            <form x-show="abaAtual === 'escolas'" :action="'/escolas/' + itemSelecionado.id + '/editar'" method="POST" class="space-y-4 text-xs">
-                <div><label class="block font-semibold text-slate-600">Nome da Escola</label><input type="text" name="nome" x-model="itemSelecionado.nome" class="w-full px-3 py-2 border rounded-lg text-sm"></div>
+            <form x-show="abaAtual === 'escolas'" :action="'/escolas/' + (itemSelecionado ? itemSelecionado.id : '') + '/editar'" method="POST" class="space-y-4 text-xs">
+                <div><label class="block font-semibold text-slate-600">Nome da Escola</label><input type="text" name="nome" x-model="itemSelecionado?.nome" class="w-full px-3 py-2 border rounded-lg text-sm"></div>
                 <div class="flex justify-end gap-2 pt-2"><button type="button" @click="modalEditOpen = false" class="px-3 py-1.5 bg-slate-100 rounded-lg">Cancelar</button><button type="submit" class="px-4 py-1.5 bg-amber-500 text-white rounded-lg font-medium">Salvar Alterações</button></div>
             </form>
 
-            <form x-show="abaAtual === 'naturezas'" :action="'/naturezas/' + itemSelecionado.id + '/editar'" method="POST" class="space-y-4 text-xs">
-                <div><label class="block font-semibold text-slate-600">Descrição do Tipo</label><input type="text" name="nome" x-model="itemSelecionado.nome" class="w-full px-3 py-2 border rounded-lg text-sm"></div>
+            <form x-show="abaAtual === 'naturezas'" :action="'/naturezas/' + (itemSelecionado ? itemSelecionado.id : '') + '/editar'" method="POST" class="space-y-4 text-xs">
+                <div><label class="block font-semibold text-slate-600">Descrição do Tipo</label><input type="text" name="nome" x-model="itemSelecionado?.nome" class="w-full px-3 py-2 border rounded-lg text-sm"></div>
                 <div class="flex justify-end gap-2 pt-2"><button type="button" @click="modalEditOpen = false" class="px-3 py-1.5 bg-slate-100 rounded-lg">Cancelar</button><button type="submit" class="px-4 py-1.5 bg-amber-500 text-white rounded-lg font-medium">Salvar Alterações</button></div>
             </form>
         </div>
@@ -340,9 +392,9 @@
         <div class="bg-white rounded-xl p-5 w-full max-w-sm shadow-2xl border border-slate-200">
             <h3 class="text-sm font-bold text-slate-800 mb-2 flex items-center gap-2"><i class="fa-solid fa-triangle-exclamation text-red-600"></i> Alterar Status do Registro</h3>
             <p class="text-xs text-slate-500 mb-4" x-text="'Tem certeza de que deseja alterar a visibilidade e o status ativo deste registro na aba ' + abaAtual + '?'"></p>
-            <form :action="'/' + abaAtual + '/' + itemSelecionado.id + '/status'" method="POST" class="flex justify-end gap-2 text-xs">
+            <form :action="'/' + abaAtual + '/' + (itemSelecionado ? itemSelecionado.id : '') + '/status'" method="POST" class="flex justify-end gap-2 text-xs">
                 <button type="button" @click="modalStatusOpen = false" class="px-3 py-1.5 bg-slate-100 rounded-lg font-semibold text-slate-600">Cancelar</button>
-                <button type="submit" @click="if(abaAtual==='processos') $el.form.action='/processos/'+itemSelecionado.id+'/'+(itemSelecionado.ativo ? 'inativar':'reativar')" 
+                <button type="submit" @click="if(abaAtual==='processos' && itemSelecionado) $el.form.action='/processos/'+itemSelecionado.id+'/'+(itemSelecionado.ativo ? 'inativar':'reativar')" 
                         class="px-4 py-1.5 bg-red-700 text-white rounded-lg font-bold shadow shadow-red-900/30">Confirmar Transição</button>
             </form>
         </div>
@@ -351,8 +403,8 @@
     <div x-show="modalTramitarOpen" class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50" x-cloak>
         <div class="bg-white rounded-xl p-5 w-full max-w-sm shadow-2xl border border-slate-200">
             <h3 class="text-sm font-bold text-slate-800 mb-1 flex items-center gap-2"><i class="fa-solid fa-route text-emerald-600"></i> Tramitar Local do Processo</h3>
-            <p class="text-xs text-slate-500 mb-3" x-text="'Despachar o processo ' + itemSelecionado.numero + ' para uma nova localização física.'"></p>
-            <form :action="'/processos/' + itemSelecionado.id + '/alterar-local'" method="POST" class="space-y-4 text-xs">
+            <p class="text-xs text-slate-500 mb-3" x-text="'Despachar o processo ' + (itemSelecionado ? itemSelecionado.numero : '') + ' para uma nova localização física.'"></p>
+            <form :action="'/processos/' + (itemSelecionado ? itemSelecionado.id : '') + '/alterar-local'" method="POST" class="space-y-4 text-xs">
                 <div><label class="block font-semibold text-slate-600 mb-1">Novo Setor de Destino</label><select name="novo_departamento_id" required class="w-full px-3 py-2 border rounded-lg text-sm bg-slate-50"><option value="">Selecione o local...</option><% departamentos.filter(d=>d.ativo).forEach(d => { %><option value="<%= d.id %>"><%= d.nome %></option><% }) %></select></div>
                 <div class="flex justify-end gap-2 pt-1"><button type="button" @click="modalTramitarOpen = false" class="px-3 py-1.5 bg-slate-100 rounded-lg">Cancelar</button><button type="submit" class="px-4 py-1.5 bg-emerald-600 text-white rounded-lg font-semibold shadow">Confirmar Despacho</button></div>
             </form>

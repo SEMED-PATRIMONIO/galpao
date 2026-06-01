@@ -1,0 +1,233 @@
+<%- include('dashboard') %>
+
+<main class="flex-1 overflow-y-auto p-6 bg-slate-100" 
+      x-data="{ modalAddOpen: false, modalEditOpen: false, modalMoveOpen: false,
+                editId: '', editNumero: '', editProtocolo: '', editData: '', editAno: '', editStatus: '', editRequerente: '', editCpf: '', editEnvolvimento: '', editEscola: '', editDepto: '', editNatureza: '', editDesc: '' }">
+    
+    <div class="max-w-7xl mx-auto">
+        
+        <div class="flex items-center justify-between mb-6">
+            <div>
+                <h1 class="text-xl font-bold text-slate-800 tracking-tight">Gerenciamento de Processos</h1>
+                <p class="text-xs text-slate-500 mt-0.5">Listagem, tramitação e despacho de autos processuais</p>
+            </div>
+            <% if (perfil === 'operador' || perfil === 'admin') { %>
+            <button @click="modalAddOpen = true" class="bg-sky-800 hover:bg-sky-900 text-white text-xs font-semibold px-4 py-2 rounded-lg shadow transition-all flex items-center gap-2">
+                <i class="fa-solid fa-folder-plus"></i> Abrir Novo Processo
+            </button>
+            <% } %>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <table class="w-full text-left border-collapse text-xs">
+                <thead>
+                    <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider">
+                        <th class="p-4">Nº Processo / Ano</th>
+                        <th class="p-4">Requerente / CPF</th>
+                        <th class="p-4">Local Atual</th>
+                        <th class="p-4">Tipo (Natureza)</th>
+                        <th class="p-4 text-center">Status</th>
+                        <th class="p-4 text-right">Ações</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 text-slate-700">
+                    <% lista.forEach(item => { %>
+                    <tr class="hover:bg-slate-50/80 transition-colors <%= !item.ativo ? 'bg-slate-50/50 opacity-60' : '' %>">
+                        <td class="p-4">
+                            <div class="font-bold text-slate-900"><%= item.numero_processo %></div>
+                            <div class="text-[10px] text-slate-400 font-mono">Prot: <%= item.protocolo || 'Não informado' %> | Exercício: <%= item.ano_exercicio %></div>
+                        </td>
+                        <td class="p-4">
+                            <div class="font-semibold text-slate-800"><%= item.requerente %></div>
+                            <div class="text-slate-400 font-mono"><%= item.cpf || 'Sem CPF' %></div>
+                        </td>
+                        <td class="p-4">
+                            <span class="px-2 py-1 bg-slate-100 rounded text-slate-700 font-mono font-bold"><%= item.depto || 'Não Alocado' %></span>
+                        </td>
+                        <td class="p-4 font-medium max-w-xs truncate"><%= item.natureza || 'Geral' %></td>
+                        <td class="p-4 text-center">
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase <%= item.status === 'Concluído' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800' %>">
+                                <%= item.status %>
+                            </span>
+                        </td>
+                        <td class="p-4 text-right space-x-1 whitespace-nowrap">
+                            <button @click="modalMoveOpen = true; editId = '<%= item.id %>'" class="text-emerald-600 hover:text-emerald-800 p-1" title="Tramitar / Mover Local"><i class="fa-solid fa-route"></i></button>
+                            
+                            <button @click="modalEditOpen = true; editId = '<%= item.id %>'; editNumero = '<%= item.numero_processo %>'; editProtocolo = '<%= item.protocolo %>'; editData = '<%= item.data_registro ? item.data_registro.toISOString().split('T')[0] : '' %>'; editAno = '<%= item.ano_exercicio %>'; editStatus = '<%= item.status %>'; editRequerente = '<%= item.requerente %>'; editCpf = '<%= item.cpf %>'; editEnvolvimento = '<%= item.envolvimento %>'; editEscola = '<%= item.escola_id %>'; editDepto = '<%= item.departamento_id %>'; editNatureza = '<%= item.natureza_id %>'; editDesc = `<%= item.descricao_resumida %>`" 
+                                    class="text-slate-500 hover:text-sky-700 p-1" title="Editar dados gerais"><i class="fa-solid fa-pen-to-square"></i></button>
+                            
+                            <% if (perfil === 'admin') { %>
+                            <form action="/processos/<%= item.id %>/<%= item.ativo ? 'inativar' : 'reativar' %>" method="POST" class="inline">
+                                <button type="submit" class="<%= item.ativo ? 'text-red-500 hover:text-red-700' : 'text-sky-500 hover:text-sky-700' %> p-1" title="<%= item.ativo ? 'Inativar/Arquivar' : 'Restaurar/Reativar' %>">
+                                    <i class="fa-solid <%= item.ativo ? 'fa-box-archive' : 'fa-folder-minus' %>"></i>
+                                </button>
+                            </form>
+                            <% } %>
+                        </td>
+                    </tr>
+                    <% }) %>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div x-show="modalAddOpen" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50" x-cloak>
+        <div class="bg-white rounded-xl p-6 w-full max-w-2xl shadow-xl border border-slate-200 overflow-y-auto max-h-[90vh]" @click.away="modalAddOpen = false">
+            <h3 class="text-base font-bold text-slate-800 mb-4">Abertura de Processo</h3>
+            <form action="/processos" method="POST" class="grid grid-cols-2 gap-4 text-xs">
+                <div>
+                    <label class="block font-semibold text-slate-600 mb-1">Número do Processo *</label>
+                    <input type="text" name="numero_processo" required placeholder="Ex: SEMED-2026-0443" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm">
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-600 mb-1">Código de Protocolo</label>
+                    <input type="text" name="protocolo" placeholder="Ex: PROT-9982" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm">
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-600 mb-1">Data de Registro *</label>
+                    <input type="date" name="data_registro" required class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm">
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-600 mb-1">Ano de Exercício *</label>
+                    <input type="number" name="ano_exercicio" required value="2026" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm">
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-600 mb-1">Nome do Requerente *</label>
+                    <input type="text" name="requerente" required placeholder="Nome do Cidadão ou Servidor" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm">
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-600 mb-1">CPF do Requerente</label>
+                    <input type="text" name="cpf" placeholder="000.000.000-00" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm">
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-600 mb-1">Status Inicial *</label>
+                    <select name="status" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm">
+                        <option value="Em Andamento">Em Andamento</option>
+                        <option value="Pendente">Pendente</option>
+                        <option value="Concluído">Concluído</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-600 mb-1">Tipo / Natureza do Processo</label>
+                    <select name="natureza_id" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm">
+                        <option value="">Selecione...</option>
+                        <% naturezas.forEach(n => { %><option value="<%= n.id %>"><%= n.name || n.nome %></option><% }) %>
+                    </select>
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-600 mb-1">Departamento / Destino Atual</label>
+                    <select name="departamento_id" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm">
+                        <option value="">Selecione...</option>
+                        <% departamentos.forEach(d => { %><option value="<%= d.id %>"><%= d.nome %></option><% }) %>
+                    </select>
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-600 mb-1">Escola / Unidade Vinculada</label>
+                    <select name="escola_id" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm">
+                        <option value="">Selecione...</option>
+                        <% escolas.forEach(e => { %><option value="<%= e.id %>"><%= e.nome %></option><% }) %>
+                    </select>
+                </div>
+                <div class="col-span-2">
+                    <label class="block font-semibold text-slate-600 mb-1">Descrição Resumida dos Fatos</label>
+                    <textarea name="descricao_resumida" rows="3" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm placeholder:text-slate-400" placeholder="Insira o resumo da demanda processual..."></textarea>
+                </div>
+                <div class="col-span-2 flex justify-end gap-2 pt-2">
+                    <button type="button" @click="modalAddOpen = false" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg font-medium">Cancelar</button>
+                    <button type="submit" class="px-4 py-2 bg-sky-800 hover:bg-sky-900 text-white rounded-lg font-medium shadow-md">Salvar Registro</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div x-show="modalMoveOpen" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50" x-cloak>
+        <div class="bg-white rounded-xl p-6 w-full max-w-sm shadow-xl border border-slate-200" @click.away="modalMoveOpen = false">
+            <h3 class="text-sm font-bold text-slate-800 mb-2 flex items-center gap-2"><i class="fa-solid fa-route text-emerald-600"></i> Tramitar Processo</h3>
+            <p class="text-xs text-slate-500 mb-4">Selecione para qual departamento ou setor este processo está sendo despachado fisicamente agora.</p>
+            <form :action="'/processos/' + editId + '/alterar-local'" method="POST" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Destino Atualizado</label>
+                    <select name="novo_departamento_id" required class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-800 outline-none focus:ring-2 focus:ring-sky-600">
+                        <option value="">Selecione o setor...</option>
+                        <% departamentos.forEach(d => { %><option value="<%= d.id %>"><%= d.nome %></option><% }) %>
+                    </select>
+                </div>
+                <div class="flex justify-end gap-2 text-xs font-semibold pt-2">
+                    <button type="button" @click="modalMoveOpen = false" class="px-3 py-1.5 bg-slate-100 text-slate-600 rounded-lg">Cancelar</button>
+                    <button type="submit" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-md">Confirmar Despacho</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <div x-show="modalEditOpen" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50" x-cloak>
+        <div class="bg-white rounded-xl p-6 w-full max-w-2xl shadow-xl border border-slate-200 overflow-y-auto max-h-[90vh]" @click.away="modalEditOpen = false">
+            <h3 class="text-base font-bold text-slate-800 mb-4">Editar Dados do Processo</h3>
+            <form :action="'/processos/' + editId + '/editar'" method="POST" class="grid grid-cols-2 gap-4 text-xs">
+                <div>
+                    <label class="block font-semibold text-slate-600 mb-1">Número do Processo *</label>
+                    <input type="text" name="numero_processo" x-model="editNumero" required class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm">
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-600 mb-1">Código de Protocolo</label>
+                    <input type="text" name="protocolo" x-model="editProtocolo" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm">
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-600 mb-1">Data de Registro *</label>
+                    <input type="date" name="data_registro" x-model="editData" required class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm">
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-600 mb-1">Ano de Exercício *</label>
+                    <input type="number" name="ano_exercicio" x-model="editAno" required class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm">
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-600 mb-1">Nome do Requerente *</label>
+                    <input type="text" name="requerente" x-model="editRequerente" required class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm">
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-600 mb-1">CPF do Requerente</label>
+                    <input type="text" name="cpf" x-model="editCpf" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm">
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-600 mb-1">Status *</label>
+                    <select name="status" x-model="editStatus" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm">
+                        <option value="Em Andamento">Em Andamento</option>
+                        <option value="Pendente">Pendente</option>
+                        <option value="Concluído">Concluído</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-600 mb-1">Tipo / Natureza</label>
+                    <select name="natureza_id" x-model="editNatureza" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm">
+                        <option value="">Selecione...</option>
+                        <% naturezas.forEach(n => { %><option value="<%= n.id %>"><%= n.name || n.nome %></option><% }) %>
+                    </select>
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-600 mb-1">Departamento / Local Atual</label>
+                    <select name="departamento_id" x-model="editDepto" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm">
+                        <option value="">Selecione...</option>
+                        <% departamentos.forEach(d => { %><option value="<%= d.id %>"><%= d.nome %></option><% }) %>
+                    </select>
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-600 mb-1">Escola / Unidade</label>
+                    <select name="escola_id" x-model="editEscola" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm">
+                        <option value="">Selecione...</option>
+                        <% escolas.forEach(e => { %><option value="<%= e.id %>"><%= e.nome %></option><% }) %>
+                    </select>
+                </div>
+                <div class="col-span-2">
+                    <label class="block font-semibold text-slate-600 mb-1">Descrição Resumida</label>
+                    <textarea name="descricao_resumida" x-model="editDesc" rows="3" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm"></textarea>
+                </div>
+                <div class="col-span-2 flex justify-end gap-2 pt-2">
+                    <button type="button" @click="modalEditOpen = false" class="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg font-medium">Cancelar</button>
+                    <button type="submit" class="px-4 py-2 bg-sky-800 text-white rounded-lg font-medium shadow-md">Salvar Alterações</button>
+                </div>
+            </form>
+        </div>
+    </div>    
+</main>
+</div>
+</body>
+</html>

@@ -159,6 +159,74 @@
             </form>
         </div>
     </div>
+    <div x-show="modalEditOpen" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50" x-cloak>
+        <div class="bg-white rounded-xl p-6 w-full max-w-2xl shadow-xl border border-slate-200 overflow-y-auto max-h-[90vh]" @click.away="modalEditOpen = false">
+            <h3 class="text-base font-bold text-slate-800 mb-4">Editar Dados do Processo</h3>
+            <form :action="'/processos/' + editId + '/editar'" method="POST" class="grid grid-cols-2 gap-4 text-xs">
+                <div>
+                    <label class="block font-semibold text-slate-600 mb-1">Número do Processo *</label>
+                    <input type="text" name="numero_processo" x-model="editNumero" required class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm">
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-600 mb-1">Código de Protocolo</label>
+                    <input type="text" name="protocolo" x-model="editProtocolo" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm">
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-600 mb-1">Data de Registro *</label>
+                    <input type="date" name="data_registro" x-model="editData" required class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm">
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-600 mb-1">Ano de Exercício *</label>
+                    <input type="number" name="ano_exercicio" x-model="editAno" required class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm">
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-600 mb-1">Nome do Requerente *</label>
+                    <input type="text" name="requerente" x-model="editRequerente" required class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm">
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-600 mb-1">CPF do Requerente</label>
+                    <input type="text" name="cpf" x-model="editCpf" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm">
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-600 mb-1">Status *</label>
+                    <select name="status" x-model="editStatus" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm">
+                        <option value="Em Andamento">Em Andamento</option>
+                        <option value="Pendente">Pendente</option>
+                        <option value="Concluído">Concluído</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-600 mb-1">Tipo / Natureza</label>
+                    <select name="natureza_id" x-model="editNatureza" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm">
+                        <option value="">Selecione...</option>
+                        <% naturezas.forEach(n => { %><option value="<%= n.id %>"><%= n.name || n.nome %></option><% }) %>
+                    </select>
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-600 mb-1">Departamento / Local Atual</label>
+                    <select name="departamento_id" x-model="editDepto" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm">
+                        <option value="">Selecione...</option>
+                        <% departamentos.forEach(d => { %><option value="<%= d.id %>"><%= d.nome %></option><% }) %>
+                    </select>
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-600 mb-1">Escola / Unidade</label>
+                    <select name="escola_id" x-model="editEscola" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm">
+                        <option value="">Selecione...</option>
+                        <% escolas.forEach(e => { %><option value="<%= e.id %>"><%= e.nome %></option><% }) %>
+                    </select>
+                </div>
+                <div class="col-span-2">
+                    <label class="block font-semibold text-slate-600 mb-1">Descrição Resumida</label>
+                    <textarea name="descricao_resumida" x-model="editDesc" rows="3" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm"></textarea>
+                </div>
+                <div class="col-span-2 flex justify-end gap-2 pt-2">
+                    <button type="button" @click="modalEditOpen = false" class="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg font-medium">Cancelar</button>
+                    <button type="submit" class="px-4 py-2 bg-sky-800 text-white rounded-lg font-medium shadow-md">Salvar Alterações</button>
+                </div>
+            </form>
+        </div>
+    </div>    
 </main>
 </div>
 </body>

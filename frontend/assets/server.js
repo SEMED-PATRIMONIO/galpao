@@ -90,57 +90,51 @@ app.post('/usuarios/alterar-senha', requererAutenticacao, async (req, res) => {
 });
 
 // --- PAINEL PRINCIPAL DINÂMICO ---
+// --- PAINEL CENTRAL UNIFICADO (CARREGAMENTO EM LOTE) ---
 app.get('/', requererAutenticacao, async (req, res) => {
   try {
-    // 1. Filtros coletados dinamicamente das tabelas reais do banco de dados
-    const anosValidos = await pool.query('SELECT DISTINCT ano_exercicio FROM processos WHERE ativo = true ORDER BY ano_exercicio DESC');
-    const escolas = await pool.query('SELECT id, nome FROM escolas WHERE ativo = true ORDER BY nome');
-    const departamentos = await pool.query('SELECT id, nome FROM departamentos WHERE ativo = true ORDER BY nome');
-
-    let sql = `
-      SELECT p.*, e.nome as nome_escola, d.nome as nome_departamento, n.nome as nome_natureza 
-      FROM processos p
-      LEFT JOIN escolas e ON p.escola_id = e.id
-      LEFT JOIN departamentos d ON p.departamento_id = d.id
-      LEFT JOIN naturezas n ON p.natureza_id = n.id
-      WHERE p.ativo = true
-    `;
-    let parametros = [];
-    let contador = 1;
-
-    if (req.query.ano) {
-      sql += ` AND p.ano_exercicio = $${contador}`;
-      parametros.push(parseInt(req.query.ano));
-      contador++;
-    }
-    if (req.query.status) {
-      sql += ` AND p.status = $${contador}`;
-      parametros.push(req.query.status);
-      contador++;
-    }
-    if (req.query.escola_id) {
-      sql += ` AND p.escola_id = $${contador}`;
-      parametros.push(req.query.escola_id);
-      contador++;
-    }
-    if (req.query.busca) {
-      sql += ` AND (p.requerente ILIKE $${contador} OR p.protocolo ILIKE $${contador} OR p.numero_processo ILIKE $${contador})`;
-      parametros.push(`%${req.query.busca}%`);
-      contador++;
-    }
-
-    sql += ' ORDER BY p.data_registro DESC';
-    const processosResult = await pool.query(sql, parametros);
+    // 1. Coleta de dados das tabelas de apoio
+    const escolas = await pool.query('SELECT * FROM escolas ORDER BY nome');
+    const departamentos = await pool.query('SELECT * FROM departamentos ORDER BY nome');
+    const naturezas = await pool.query('SELECT * FROM naturezas ORDER BY nome');
     
-    res.render('dashboard', { 
-      demandas: processosResult.rows, 
-      anos: anonymous = anosValidos.rows.map(r => r.ano_exercicio),
-      escolas: escolas.rows, 
-      departamentos: departamentos.rows 
+    // 2. Coleta de processos (Ativos e Inativos)
+    const processos = await pool.query(`
+      SELECT p.*, e.nome as escola, d.nome as depto, n.nome as natureza 
+      FROM processos p 
+      LEFT JOIN escolas e ON p.escola_id = e.id 
+      LEFT JOIN departamentos d ON p.departamento_id = d.id 
+      LEFT JOIN naturezas n ON p.natureza_id = n.id 
+      ORDER BY p.data_registro DESC
+    `);
+
+    // 3. Coleta da Trilha de Auditoria (Movimentações)
+    const movimentacoes = await pool.query(`
+      SELECT m.*, p.numero_processo, u.nome as nome_usuario, d1.nome as depto_antigo, d2.nome as depto_novo
+      FROM movimentacoes m
+      JOIN processos p ON m.processo_id = p.id
+      LEFT JOIN usuarios u ON m.usuario_id = u.id
+      LEFT JOIN departamentos d1 ON m.valor_antigo = CAST(d1.id AS TEXT)
+      LEFT JOIN departamentos d2 ON m.valor_novo = CAST(d2.id AS TEXT)
+      ORDER BY m.data_alteracao DESC
+    `);
+
+    // 4. Extração dinâmica de anos reais para o filtro do painel
+    const anosValidos = await pool.query('SELECT DISTINCT ano_exercicio FROM processos WHERE ativo = true ORDER BY ano_exercicio DESC');
+
+    // Entrega tudo para uma única View centralizadora
+    res.render('dashboard', {
+      processos: processos.rows,
+      escolas: escolas.rows,
+      departamentos: departamentos.rows,
+      naturezas: naturezas.rows,
+      movimentacoes: movimentacoes.rows,
+      anos: anosValidos.rows.map(r => r.ano_exercicio)
     });
+
   } catch (err) {
     console.error(err);
-    res.status(500).send("Erro ao processar o painel dinâmico.");
+    res.status(500).send("Erro crítico ao carregar o ecossistema operacional.");
   }
 });
 

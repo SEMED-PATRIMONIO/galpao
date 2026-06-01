@@ -162,29 +162,47 @@
                 </div>
             </div>
 
-            <div x-show="abaAtual === 'processos'">
-                <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                    <table class="w-full text-left text-xs border-collapse">
-                        <thead>
-                            <tr class="bg-slate-50 text-slate-600 font-bold uppercase tracking-wider border-b border-slate-200">
-                                <th class="p-4 w-12"></th>
-                                <th class="p-4">Nº Processo / Protocolo</th>
-                                <th class="p-4">Requerente / CPF</th>
-                                <th class="p-4">Localização</th>
-                                <th class="p-4">Escola Vinculada</th>
-                                <th class="p-4 text-center">Status</th>
+            <div x-show="abaAtual === 'processos'" class="flex flex-col h-full">
+                <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-auto flex-1 relative">
+                    <table class="w-full text-left text-xs border-collapse min-w-[1200px]">
+                        <thead class="sticky top-0 z-20 shadow-sm">
+                            <tr class="bg-slate-100 text-slate-600 font-bold uppercase tracking-wider border-b border-slate-200">
+                                <th class="p-4 w-12 sticky left-0 z-30 bg-slate-100 border-r border-slate-200"></th>
+                                <th class="p-4 bg-slate-100 whitespace-nowrap">Nº Processo</th>
+                                <th class="p-4 bg-slate-100 whitespace-nowrap">Protocolo</th>
+                                <th class="p-4 bg-slate-100 whitespace-nowrap">Data Reg.</th>
+                                <th class="p-4 bg-slate-100 whitespace-nowrap">Requerente</th>
+                                <th class="p-4 bg-slate-100 whitespace-nowrap">CPF</th>
+                                <th class="p-4 bg-slate-100 whitespace-nowrap">Envolvimento</th>
+                                <th class="p-4 bg-slate-100 whitespace-nowrap">Localização</th>
+                                <th class="p-4 bg-slate-100 whitespace-nowrap">Escola</th>
+                                <th class="p-4 bg-slate-100 whitespace-nowrap">Descrição</th>
+                                <th class="p-4 bg-slate-100 text-center whitespace-nowrap">Status</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
                             <% processos.forEach(p => { %>
-                            <tr :class="itemSelecionado && itemSelecionado.id === '<%= p.id %>' ? 'bg-sky-50/50' : 'hover:bg-slate-50/60'" class="transition-colors cursor-pointer"
+                            <tr class="group transition-colors cursor-pointer"
                                 @click="itemSelecionado = { id: '<%= p.id %>', numero: '<%= p.numero_processo %>', protocolo: '<%= p.protocolo %>', data: '<%= p.data_registro ? p.data_registro.toISOString().split('T')[0] : '' %>', ano: '<%= p.ano_exercicio %>', status: '<%= p.status %>', requerente: '<%= p.requerente %>', cpf: '<%= p.cpf %>', envolvimento: '<%= p.envolvimento %>', escola_id: '<%= p.escola_id %>', departamento_id: '<%= p.departamento_id %>', natureza_id: '<%= p.natureza_id %>', desc: `<%= p.descricao_resumida %>`, ativo: <%= p.ativo %> }">
-                                <td class="p-4 text-center"><input type="radio" name="select_proc" :checked="itemSelecionado && itemSelecionado.id === '<%= p.id %>'" class="text-sky-600 focus:ring-sky-500"></td>
-                                <td class="p-4"><div class="font-bold text-slate-900 <%= !p.ativo ? 'line-through text-slate-400' : '' %>"><%= p.numero_processo %></div><div class="text-[10px] text-slate-400 font-mono">Prot: <%= p.protocolo %> | Exercício: <%= p.ano_exercicio %></div></td>
-                                <td class="p-4"><div class="font-semibold"><%= p.requerente %></div><div class="text-slate-400 font-mono"><%= p.cpf || 'Sem CPF' %></div></td>
-                                <td class="p-4 font-mono font-bold"><%= p.depto || '-' %></td>
-                                <td class="p-4 truncate max-w-xs"><%= p.escola || '-' %></td>
-                                <td class="p-4 text-center"><span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase <%= p.ativo ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700' %>"><%= p.ativo ? p.status : 'ARQUIVADO' %></span></td>
+                                
+                                <td class="p-4 text-center sticky left-0 z-10 border-r border-slate-100 bg-white group-hover:bg-slate-50 transition-colors" :class="itemSelecionado && itemSelecionado.id === '<%= p.id %>' ? '!bg-sky-50' : ''">
+                                    <input type="radio" name="select_proc" :checked="itemSelecionado && itemSelecionado.id === '<%= p.id %>'" class="text-sky-600 focus:ring-sky-500">
+                                </td>
+                                
+                                <td class="p-4 font-bold text-slate-900 bg-transparent group-hover:bg-slate-50" :class="itemSelecionado && itemSelecionado.id === '<%= p.id %>' ? '!bg-sky-50' : ''"><%= p.numero_processo %></td>
+                                <td class="p-4 font-mono text-slate-500 bg-transparent group-hover:bg-slate-50" :class="itemSelecionado && itemSelecionado.id === '<%= p.id %>' ? '!bg-sky-50' : ''"><%= p.protocolo || '-' %></td>
+                                <td class="p-4 whitespace-nowrap bg-transparent group-hover:bg-slate-50" :class="itemSelecionado && itemSelecionado.id === '<%= p.id %>' ? '!bg-sky-50' : ''"><%= p.data_registro ? new Date(p.data_registro).toLocaleDateString('pt-BR') : '-' %></td>
+                                <td class="p-4 font-semibold text-slate-800 bg-transparent group-hover:bg-slate-50" :class="itemSelecionado && itemSelecionado.id === '<%= p.id %>' ? '!bg-sky-50' : ''"><%= p.requerente %></td>
+                                <td class="p-4 font-mono bg-transparent group-hover:bg-slate-50" :class="itemSelecionado && itemSelecionado.id === '<%= p.id %>' ? '!bg-sky-50' : ''"><%= p.cpf || '-' %></td>
+                                <td class="p-4 bg-transparent group-hover:bg-slate-50" :class="itemSelecionado && itemSelecionado.id === '<%= p.id %>' ? '!bg-sky-50' : ''"><%= p.envolvimento || '-' %></td>
+                                <td class="p-4 font-bold text-sky-700 bg-transparent group-hover:bg-slate-50" :class="itemSelecionado && itemSelecionado.id === '<%= p.id %>' ? '!bg-sky-50' : ''"><%= p.depto || '-' %></td>
+                                <td class="p-4 truncate max-w-[150px] bg-transparent group-hover:bg-slate-50" :class="itemSelecionado && itemSelecionado.id === '<%= p.id %>' ? '!bg-sky-50' : ''"><%= p.escola || '-' %></td>
+                                <td class="p-4 truncate max-w-[200px] bg-transparent group-hover:bg-slate-50" :class="itemSelecionado && itemSelecionado.id === '<%= p.id %>' ? '!bg-sky-50' : ''" title="<%= p.descricao_resumida %>"><%= p.descricao_resumida || '-' %></td>
+                                <td class="p-4 text-center bg-transparent group-hover:bg-slate-50" :class="itemSelecionado && itemSelecionado.id === '<%= p.id %>' ? '!bg-sky-50' : ''">
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase <%= p.ativo ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700' %>">
+                                        <%= p.ativo ? p.status : 'ARQUIVADO' %>
+                                    </span>
+                                </td>
                             </tr>
                             <% }) %>
                         </tbody>

@@ -89,16 +89,13 @@ app.post('/usuarios/alterar-senha', requererAutenticacao, async (req, res) => {
   }
 });
 
-// --- PAINEL PRINCIPAL DINÂMICO ---
 // --- PAINEL CENTRAL UNIFICADO (CARREGAMENTO EM LOTE) ---
 app.get('/', requererAutenticacao, async (req, res) => {
   try {
-    // 1. Coleta de dados das tabelas de apoio
     const escolas = await pool.query('SELECT * FROM escolas ORDER BY nome');
     const departamentos = await pool.query('SELECT * FROM departamentos ORDER BY nome');
     const naturezas = await pool.query('SELECT * FROM naturezas ORDER BY nome');
     
-    // 2. Coleta de processos (Ativos e Inativos)
     const processos = await pool.query(`
       SELECT p.*, e.nome as escola, d.nome as depto, n.nome as natureza 
       FROM processos p 
@@ -108,7 +105,6 @@ app.get('/', requererAutenticacao, async (req, res) => {
       ORDER BY p.data_registro DESC
     `);
 
-    // 3. Coleta da Trilha de Auditoria (Movimentações)
     const movimentacoes = await pool.query(`
       SELECT m.*, p.numero_processo, u.nome as nome_usuario, d1.nome as depto_antigo, d2.nome as depto_novo
       FROM movimentacoes m
@@ -119,16 +115,22 @@ app.get('/', requererAutenticacao, async (req, res) => {
       ORDER BY m.data_alteracao DESC
     `);
 
-    // 4. Extração dinâmica de anos reais para o filtro do painel
     const anosValidos = await pool.query('SELECT DISTINCT ano_exercicio FROM processos WHERE ativo = true ORDER BY ano_exercicio DESC');
 
-    // Entrega tudo para uma única View centralizadora
+    // Carrega a lista de usuários APENAS se quem logou for ADMIN
+    let listaUsuarios = [];
+    if (req.session.usuarioPerfil === 'admin') {
+      const uResult = await pool.query('SELECT id, nome, username, perfil, ativo FROM usuarios ORDER BY nome');
+      listaUsuarios = uResult.rows;
+    }
+
     res.render('dashboard', {
       processos: processos.rows,
       escolas: escolas.rows,
       departamentos: departamentos.rows,
       naturezas: naturezas.rows,
       movimentacoes: movimentacoes.rows,
+      usuarios: listaUsuarios,
       anos: anosValidos.rows.map(r => r.ano_exercicio)
     });
 
@@ -138,35 +140,13 @@ app.get('/', requererAutenticacao, async (req, res) => {
   }
 });
 
-// --- SUB-ROTAS CRUD: PROCESSOS COM AUDITORIA AUTOMÁTICA ---
-app.get('/processos', requererAutenticacao, async (req, res) => {
-  try {
-    const list = await pool.query(`
-      SELECT p.*, e.nome as escola, d.nome as depto, n.nome as natureza 
-      FROM processos p 
-      LEFT JOIN escolas e ON p.escola_id = e.id 
-      LEFT JOIN departamentos d ON p.departamento_id = d.id 
-      LEFT JOIN naturezas n ON p.natureza_id = n.id 
-      ORDER BY p.data_registro DESC`);
-    
-    const escolas = await pool.query('SELECT id, nome FROM escolas WHERE ativo = true ORDER BY nome');
-    const deptos = await pool.query('SELECT id, nome FROM departamentos WHERE ativo = true ORDER BY nome');
-    const naturezas = await pool.query('SELECT id, nome FROM naturezas WHERE ativo = true ORDER BY nome');
-    
-    res.render('processos', { lista: list.rows, escolas: escolas.rows, departamentos: deptos.rows, naturezas: naturezas.rows });
-  } catch (err) {
-    console.error(err);
-    res.status(500).send("Erro ao listar processos.");
-  }
-});
-
 app.post('/processos', requererAutenticacao, verificarPermissao(['operador', 'admin']), async (req, res) => {
   const p = req.body;
   try {
     const sql = `INSERT INTO processos (numero_processo, protocolo, data_registro, ano_exercicio, status, requerente, cpf, envolvimento, escola_id, departamento_id, natureza_id, descricao_resumida) 
                  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`;
     await pool.query(sql, [p.numero_processo, p.protocolo, p.data_registro, parseInt(p.ano_exercicio), p.status, p.requerente, p.cpf, p.envolvimento, p.escola_id || null, p.departamento_id || null, p.natureza_id || null, p.descricao_resumida]);
-    res.redirect('/processos');
+    res.redirect('/');
   } catch (err) {
     console.error(err);
     res.status(500).send("Erro ao salvar processo.");
@@ -187,66 +167,26 @@ app.post('/processos/:id/alterar-local', requererAutenticacao, verificarPermissa
       await pool.query(`INSERT INTO movimentacoes (processo_id, usuario_id, campo_alterado, valor_antigo, valor_novo) 
                         VALUES ($1, $2, $3, $4, $5)`, [id, req.session.usuarioId, 'departamento_id', String(antigoDeptoId), String(novo_departamento_id)]);
     }
-    res.redirect('/processos');
+    res.redirect('/');
   } catch (err) {
     console.error(err);
     res.status(500).send("Erro ao registrar movimentação.");
   }
 });
 
-// --- ROTA DE AUDITORIA (MOVIMENTAÇÕES) ---
-app.get('/movimentacoes', requererAutenticacao, verificarPermissao(['operador', 'admin']), async (req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT m.*, p.numero_processo, u.nome as nome_usuario, d1.nome as depto_antigo, d2.nome as depto_novo
-      FROM movimentacoes m
-      JOIN processos p ON m.processo_id = p.id
-      LEFT JOIN usuarios u ON m.usuario_id = u.id
-      LEFT JOIN departamentos d1 ON m.valor_antigo = CAST(d1.id AS TEXT)
-      LEFT JOIN departamentos d2 ON m.valor_novo = CAST(d2.id AS TEXT)
-      ORDER BY m.data_alteracao DESC
-    `);
-    res.render('movimentacoes', { logs: result.rows });
-  } catch (err) {
-    console.error(err);
-    res.status(500).send("Erro ao carregar auditoria.");
-  }
-});
-
-// --- CRUD: DEPARTAMENTOS ---
-app.get('/departamentos', requererAutenticacao, async (req, res) => {
-  const result = await pool.query('SELECT * FROM departamentos ORDER BY nome');
-  res.render('departamentos', { lista: result.rows });
-});
 app.post('/departamentos', requererAutenticacao, verificarPermissao(['operador', 'admin']), async (req, res) => {
   await pool.query('INSERT INTO departamentos (nome, sigla) VALUES ($1, $2)', [req.body.nome, req.body.sigla]);
-  res.redirect('/departamentos');
+  res.redirect('/');
 });
 
-// --- CRUD: ESCOLAS ---
-app.get('/escolas', requererAutenticacao, async (req, res) => {
-  const result = await pool.query('SELECT * FROM escolas ORDER BY nome');
-  res.render('escolas', { lista: result.rows });
-});
 app.post('/escolas', requererAutenticacao, verificarPermissao(['operador', 'admin']), async (req, res) => {
   await pool.query('INSERT INTO escolas (nome) VALUES ($1)', [req.body.nome]);
   res.redirect('/escolas');
 });
 
-// --- CRUD: NATUREZAS (TIPOS) ---
-app.get('/naturezas', requererAutenticacao, async (req, res) => {
-  const result = await pool.query('SELECT * FROM naturezas ORDER BY nome');
-  res.render('naturezas', { lista: result.rows });
-});
 app.post('/naturezas', requererAutenticacao, verificarPermissao(['operador', 'admin']), async (req, res) => {
   await pool.query('INSERT INTO naturezas (nome) VALUES ($1)', [req.body.nome]);
-  res.redirect('/naturezas');
-});
-
-// --- CRUD: USUÁRIOS (Apenas Admin) ---
-app.get('/usuarios', requererAutenticacao, verificarPermissao(['admin']), async (req, res) => {
-  const lista = await pool.query('SELECT id, nome, username, perfil, ativo FROM usuarios ORDER BY nome');
-  res.render('usuarios', { listaUsuarios: lista.rows, msg: null });
+  res.redirect('/');
 });
 
 app.post('/usuarios', requererAutenticacao, verificarPermissao(['admin']), async (req, res) => {
@@ -254,7 +194,7 @@ app.post('/usuarios', requererAutenticacao, verificarPermissao(['admin']), async
   try {
     const senhaHash = crypto.createHash('sha256').update(senha).digest('hex');
     await pool.query('INSERT INTO usuarios (nome, username, senha_hash, perfil) VALUES ($1, $2, $3, $4)', [nome, username, senhaHash, perfil]);
-    res.redirect('/usuarios');
+    res.redirect('/');
   } catch (err) {
     console.error(err);
     res.status(500).send("Erro ao gerenciar usuário.");
@@ -303,7 +243,7 @@ app.post('/processos/:id/editar', requererAutenticacao, verificarPermissao(['ope
       }
     }
 
-    res.redirect('/processos');
+    res.redirect('/');
   } catch (err) {
     console.error(err);
     res.status(500).send("Erro ao editar o processo.");
@@ -314,7 +254,7 @@ app.post('/processos/:id/editar', requererAutenticacao, verificarPermissao(['ope
 app.post('/processos/:id/inativar', requererAutenticacao, verificarPermissao(['admin']), async (req, res) => {
   try {
     await pool.query('UPDATE processos SET ativo = false WHERE id = $1', [req.params.id]);
-    res.redirect('/processos');
+    res.redirect('/');
   } catch (err) {
     console.error(err);
     res.status(500).send("Erro ao inativar processo.");
@@ -325,7 +265,7 @@ app.post('/processos/:id/inativar', requererAutenticacao, verificarPermissao(['a
 app.post('/processos/:id/reativar', requererAutenticacao, verificarPermissao(['admin']), async (req, res) => {
   try {
     await pool.query('UPDATE processos SET ativo = true WHERE id = $1', [req.params.id]);
-    res.redirect('/processos');
+    res.redirect('/');
   } catch (err) {
     console.error(err);
     res.status(500).send("Erro ao reativar processo.");
@@ -340,14 +280,14 @@ app.post('/processos/:id/reativar', requererAutenticacao, verificarPermissao(['a
 app.post('/departamentos/:id/editar', requererAutenticacao, verificarPermissao(['operador', 'admin']), async (req, res) => {
   const { nome, sigla } = req.body;
   await pool.query('UPDATE departamentos SET nome = $1, sigla = $2 WHERE id = $3', [nome, sigla, req.params.id]);
-  res.redirect('/departamentos');
+  res.redirect('/');
 });
 
 app.post('/departamentos/:id/status', requererAutenticacao, verificarPermissao(['admin']), async (req, res) => {
   const { ativo } = req.body; 
   const novoStatus = ativo === 'true' ? false : true;
   await pool.query('UPDATE departamentos SET ativo = $1 WHERE id = $2', [novoStatus, req.params.id]);
-  res.redirect('/departamentos');
+  res.redirect('/');
 });
 
 
@@ -357,14 +297,14 @@ app.post('/departamentos/:id/status', requererAutenticacao, verificarPermissao([
 
 app.post('/escolas/:id/editar', requererAutenticacao, verificarPermissao(['operador', 'admin']), async (req, res) => {
   await pool.query('UPDATE escolas SET nome = $1 WHERE id = $2', [req.body.nome, req.params.id]);
-  res.redirect('/escolas');
+  res.redirect('/');
 });
 
 app.post('/escolas/:id/status', requererAutenticacao, verificarPermissao(['admin']), async (req, res) => {
   const { ativo } = req.body;
   const novoStatus = ativo === 'true' ? false : true;
   await pool.query('UPDATE escolas SET ativo = $1 WHERE id = $2', [novoStatus, req.params.id]);
-  res.redirect('/escolas');
+  res.redirect('/');
 });
 
 
@@ -374,14 +314,27 @@ app.post('/escolas/:id/status', requererAutenticacao, verificarPermissao(['admin
 
 app.post('/naturezas/:id/editar', requererAutenticacao, verificarPermissao(['operador', 'admin']), async (req, res) => {
   await pool.query('UPDATE naturezas SET nome = $1 WHERE id = $2', [req.body.nome, req.params.id]);
-  res.redirect('/naturezas');
+  res.redirect('/');
 });
 
 app.post('/naturezas/:id/status', requererAutenticacao, verificarPermissao(['admin']), async (req, res) => {
   const { ativo } = req.body;
   const novoStatus = ativo === 'true' ? false : true;
   await pool.query('UPDATE naturezas SET ativo = $1 WHERE id = $2', [novoStatus, req.params.id]);
-  res.redirect('/naturezas');
+  res.redirect('/');
+});
+
+app.post('/usuarios/:id/editar', requererAutenticacao, verificarPermissao(['admin']), async (req, res) => {
+  const { nome, username, perfil } = req.body;
+  await pool.query('UPDATE usuarios SET nome = $1, username = $2, perfil = $3 WHERE id = $4', [nome, username, perfil, req.params.id]);
+  res.redirect('/');
+});
+
+app.post('/usuarios/:id/status', requererAutenticacao, verificarPermissao(['admin']), async (req, res) => {
+  const { ativo } = req.body; 
+  const novoStatus = ativo === 'true' ? false : true;
+  await pool.query('UPDATE usuarios SET ativo = $1 WHERE id = $2', [novoStatus, req.params.id]);
+  res.redirect('/');
 });
 
 const PORT = process.env.PORT || 3035;

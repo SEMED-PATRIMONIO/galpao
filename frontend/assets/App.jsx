@@ -533,13 +533,15 @@ export default function App() {
     }
     return (
         <div style={estilos.layout}>
+            {/* MENU LATERAL ADMINISTRATIVO */}
             <div style={estilos.sidebar}>
                 <div style={estilos.brand}>SEMED - Formações</div>
                 <ul style={estilos.menu}>
                     <li><button onClick={() => mudarAbaNavegacao('eventos')} style={view === 'eventos' ? estilos.btnMenuAtivo : estilos.btnMenu}>📅 Eventos</button></li>
                     <li><button onClick={() => mudarAbaNavegacao('locais')} style={view === 'locais' ? estilos.btnMenuAtivo : estilos.btnMenu}>📍 Locais</button></li>
                     <li><button onClick={() => mudarAbaNavegacao('participantes')} style={view === 'participantes' ? estilos.btnMenuAtivo : estilos.btnMenu}>👥 Participantes</button></li>
-                    <li><button onClick={() => mudarAbaNavegacao('frequencias')} style={view === 'frequencias' ? estilos.btnMenuAtivo : estilos.btnMenu}>📝 Histórico</button></li>
+                    {/* Alterado para 'historico' para casar com a nova rota estável */}
+                    <li><button onClick={() => mudarAbaNavegacao('historico')} style={view === 'historico' ? estilos.btnMenuAtivo : estilos.btnMenu}>📝 Histórico</button></li>
                     <li><button onClick={() => mudarAbaNavegacao('pesquisa-satisfacao')} style={view === 'pesquisa-satisfacao' ? estilos.btnMenuAtivo : estilos.btnMenu}>⭐ Pesquisa de Opinião</button></li>
                     <li><button onClick={() => mudarAbaNavegacao('publico-alvo')} style={view === 'publico-alvo' ? estilos.btnMenuAtivo : estilos.btnMenu}>🎯 Público-Alvo</button></li>
                     <li><button onClick={() => mudarAbaNavegacao('setores')} style={view === 'setores' ? estilos.btnMenuAtivo : estilos.btnMenu}>🏢 Setores</button></li>
@@ -550,9 +552,10 @@ export default function App() {
                 <button onClick={efetuarLogout} style={{ ...estilos.btnMenu, color: '#ef4444', marginTop: 'auto', fontWeight: 'bold' }}>🚪 Finalizar</button>
             </div>
 
+            {/* ESPAÇO PRINCIPAL DE CONTEÚDO */}
             <div style={estilos.main}>
                 <div style={estilos.topo}>
-                    <h1 style={{ margin: 0, fontSize: '20px', color: '#1e293b', fontWeight: 'bold', textTransform: 'uppercase' }}>Visualizando: {view}</h1>
+                    <h1 style={{ margin: 0, fontSize: '20px', color: '#1e293b', fontWeight: 'bold', textTransform: 'uppercase' }}>Visualizando: {view === 'historico' ? 'Histórico de Ponto' : view}</h1>
                     
                     {view === 'eventos' && (
                         <button onClick={() => { setForm({}); setPublicosSelecionados([]); setModalEventoAberto(true); }} style={estilos.btnAdicionar}>
@@ -630,6 +633,7 @@ export default function App() {
                     <div style={{ fontSize: '13px', color: '#64748b' }}>Registros carregados: <strong>{totaisSuperior}</strong></div>
                 </div>
 
+                {/* MODAL: EVENTOS */}
                 {modalEventoAberto && (
                     <div style={estilos.modalOverlay}>
                         <div style={estilos.modalGlass}>
@@ -738,6 +742,7 @@ export default function App() {
                     </div>
                 )}
 
+                {/* MODAL: LOCAIS COM MAPA */}
                 {modalLocalAberto && (
                     <div style={estilos.modalOverlay}>
                         <div style={estilos.modalGlass}>
@@ -797,6 +802,7 @@ export default function App() {
                     </div>
                 )}
 
+                {/* MODAL: GENÉRICO */}
                 {modalGenericAberto && (
                     <div style={estilos.modalOverlay}>
                         <div style={estilos.modalGlass}>
@@ -839,7 +845,8 @@ export default function App() {
 
                 {erro && <div style={estilos.alertaErro}>{erro}</div>}
 
-                {view === 'frequencias' && (
+                {/* PAINEL DE FILTROS DO HISTÓRICO DE PONTO */}
+                {view === 'historico' && (
                     <div style={{ ...estilos.card, display: 'flex', gap: '15px', alignItems: 'flex-end', backgroundColor: '#f8fafc', border: '1px solid #cbd5e1' }}>
                         <div style={{ flex: 1 }}>
                             <label style={{ display: 'block', marginBottom: '5px', fontSize: '12px', fontWeight: 'bold', color: '#475569' }}>Data de Início:</label>
@@ -883,7 +890,8 @@ export default function App() {
                     </div>
                 )}
 
-                {view === 'frequencias' && selecionado && (
+                {/* PAINEL DE AÇÕES DE SEGUNDO PLANO DO HISTÓRICO */}
+                {view === 'historico' && selecionado && (
                     <div style={{ ...estilos.card, backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div style={{ fontSize: '13px', color: '#1e40af' }}>
                             Professor Selecionado: <strong>{selecionado.participante_nome || selecionado.matricula}</strong> | Entrada: {new Date(selecionado.data_entrada).toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})}
@@ -897,6 +905,7 @@ export default function App() {
                     </div>
                 )}
 
+                {/* TABELA DINÂMICA DE EXIBIÇÃO */}
                 <div style={estilos.card}>
                     <table style={estilos.tabela}>
                         <thead>
@@ -916,7 +925,8 @@ export default function App() {
                                         <th style={estilos.th}>Endereço Completo</th>
                                     </>
                                 )}
-                                {view === 'frequencias' && (
+                                {/* CORREGIDO: Redirecionado de 'frequencias' para 'historico' e removida a coluna 'Avaliação' */}
+                                {view === 'historico' && (
                                     <>
                                         <th style={estilos.th}>Data</th>
                                         <th style={estilos.th}>Matrícula</th>
@@ -926,7 +936,6 @@ export default function App() {
                                         <th style={estilos.th}>Saída Real</th>
                                         <th style={estilos.th}>Carga Horária</th>
                                         <th style={estilos.th}>Tempo Efetivo</th>
-                                        <th style={estilos.th}>Avaliação</th>
                                     </>
                                 )}
                                 {view === 'pesquisa-satisfacao' && (
@@ -937,14 +946,8 @@ export default function App() {
                                         <th style={estilos.th}>Data de Envio</th>
                                     </>
                                 )}
-                                {['publico-alvo', 'setores', 'areas', 'usuarios'].includes(view) && (
+                                {['publico-alvo', 'setores', 'areas', 'usuarios', 'participantes'].includes(view) && (
                                     <th style={estilos.th}>Listagem de Registros</th>
-                                )}
-                                {view === 'participantes' && (
-                                    <>
-                                        <th style={estilos.th}>Listagem de Participantes</th>
-                                        
-                                    </>
                                 )}
                                 {view === 'log-fraudes' && (
                                     <th style={estilos.th}>Ocorrências</th>
@@ -959,11 +962,11 @@ export default function App() {
                                     return (
                                         <tr 
                                             key={item.id} 
-                                            onClick={() => (view === 'frequencias' || view === 'locais' || ['publico-alvo', 'setores', 'areas', 'usuarios'].includes(view)) && setSelecionado(item)}
+                                            onClick={() => (view === 'historico' || view === 'locais' || ['publico-alvo', 'setores', 'areas', 'usuarios'].includes(view)) && setSelecionado(item)}
                                             onMouseEnter={() => possuiComentario && setHoveredRowId(item.id)}
                                             onMouseLeave={() => possuiComentario && setHoveredRowId(null)}
                                             style={{ 
-                                                cursor: (view === 'frequencias' || view === 'locais' || ['publico-alvo', 'setores', 'areas', 'usuarios'].includes(view)) ? 'pointer' : 'default',
+                                                cursor: (view === 'historico' || view === 'locais' || ['publico-alvo', 'setores', 'areas', 'usuarios'].includes(view)) ? 'pointer' : 'default',
                                                 backgroundColor: selecionado && selecionado.id === item.id ? '#f0fdf4' : (possuiComentario && hoveredRowId === item.id ? '#f8fafc' : 'transparent'),
                                                 transition: 'background-color 0.15s ease'
                                             }}
@@ -983,17 +986,17 @@ export default function App() {
                                                     <td style={estilos.td}>{item.endereco}</td>
                                                 </>
                                             )}
-                                            {view === 'frequencias' && (
+                                            {/* CORREGIDO: Renderização limpa do Histórico de Ponto mapeando as colunas exatas da tabela do banco de dados */}
+                                            {view === 'historico' && (
                                                 <>
-                                                    <td style={estilos.td}>{item.data_evento ? new Date(item.data_evento).toLocaleDateString('pt-BR') : (item.data_entrada ? new Date(item.data_entrada).toLocaleDateString('pt-BR') : '')}</td>
+                                                    <td style={estilos.td}>{item.data_entrada ? new Date(item.data_entrada).toLocaleDateString('pt-BR') : ''}</td>
                                                     <td style={estilos.td}>{item.matricula}</td>
                                                     <td style={estilos.td}>{item.participante_nome || 'Não Identificado'}</td>
                                                     <td style={estilos.td}>{item.evento_titulo}</td>
                                                     <td style={estilos.td}>{item.data_entrada ? new Date(item.data_entrada).toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'}) : '--:--'}</td>
-                                                    <td style={estilos.td}>{item.data_saida ? new Date(item.data_saida).toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'}) : '--:--'}</td>
-                                                    <td style={estilos.td}>{item.carga_horaria ? `${item.carga_horaria}h` : ''}</td>
-                                                    <td style={estilos.td}><strong style={{ color: item.tempo_participacao ? '#0f172a' : '#ef4444' }}>{item.tempo_participacao || 'Pendente'}</strong></td>
-                                                    <td style={estilos.td}>⭐ {item.avaliacao || 'Sem nota'}</td>
+                                                    <td style={estilos.td}>{item.data_saida ? new Date(item.data_saida).toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'}) : 'Em andamento...'}</td>
+                                                    <td style={estilos.td}>{item.carga_horaria ? `${item.carga_horaria}h` : '-'}</td>
+                                                    <td style={estilos.td}><strong style={{ color: item.tempo_participacao ? '#0284c7' : '#ef4444' }}>{item.tempo_participacao || 'Pendente'}</strong></td>
                                                 </>
                                             )}
                                             {view === 'pesquisa-satisfacao' && (
@@ -1013,9 +1016,7 @@ export default function App() {
                                                 </>
                                             )}
                                             {['publico-alvo', 'setores', 'areas', 'participantes', 'usuarios'].includes(view) && (
-                                                <>
-                                                    <td style={estilos.td}>{item.nome || item.nome_completo || item.usuario}</td>
-                                                </>
+                                                <td style={estilos.td}>{item.nome || item.nome_completo || item.usuario}</td>
                                             )}
                                             {view === 'log-fraudes' && (
                                                 <td style={estilos.td}>
@@ -1024,8 +1025,7 @@ export default function App() {
                                             )}
                                         </tr>
                                     );
-                            })}
-                               
+                                })}
                         </tbody>
                     </table>
                 </div>

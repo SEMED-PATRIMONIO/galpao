@@ -733,5 +733,27 @@ app.post('/api/v2/dispositivos/vincular', async (req, res) => {
     }
 });
 
+// CORREÇÃO CIRÚRGICA: Adicionado o endpoint que o painel admin está procurando
+app.get(['/api/v2/admin-exclusivo/listagens/frequencias', '/api/v2/admin-exclusivo/listagens/historico'], verificarTokenAdminExclusivo, async (req, res) => {
+    try {
+        // Deixamos o LEFT JOIN para garantir que liste tudo perfeitamente
+        const resultado = await pool.query(`
+            SELECT f.id, 
+                   COALESCE(f.matricula, p.matricula) as matricula, 
+                   f.tempo_participacao, f.data_entrada, f.data_saida, f.funcao, f.avaliacao,
+                   COALESCE(p.nome_completo, 'Participante Temporário') as participante_nome, 
+                   e.titulo as evento_titulo, e.carga_horaria 
+            FROM frequencias f 
+            LEFT JOIN participantes p ON f.participante_id = p.id 
+            LEFT JOIN eventos e ON f.evento_id = e.id 
+            ORDER BY f.data_entrada DESC
+        `);
+        return res.json(resultado.rows);
+    } catch (e) { 
+        console.error("Erro na listagem de historico:", e.message);
+        return res.status(500).json([]); 
+    }
+});
+
 app.use((req, res) => res.status(404).json({ error: 'Rota não encontrada.' }));
 app.listen(PORT, () => console.log(`Servidor ativado na porta ${PORT}`));

@@ -160,7 +160,7 @@ router.post('/ativos/salvar', async (req, res) => {
 });
 
 // 1. ROTA DO DASHBOARD FILTRADA POR SETOR (CONTRATOS, ATIVOS E ALERTAS COM CIÊNCIA)
-app.get('/api/v2/admin-exclusivo/dashboard/contratos-setor', verificarTokenAdminExclusivo, async (req, res) => {
+router.get('/api/v2/admin-exclusivo/dashboard/contratos-setor', verificarTokenAdminExclusivo, async (req, res) => {
     try {
         const { setor_id, id: usuario_id } = req.user; // Pega os dados do operador logado
 
@@ -211,7 +211,7 @@ app.get('/api/v2/admin-exclusivo/dashboard/contratos-setor', verificarTokenAdmin
 });
 
 // 2. ROTA NOVA PARA DAR CIÊNCIA NO ALERTA E REMOVÊ-LO DA CONTAGEM PENDENTE
-app.post('/api/v2/admin-exclusivo/contratos/declarar-ciencia', verificarTokenAdminExclusivo, async (req, res) => {
+router.post('/api/v2/admin-exclusivo/contratos/declarar-ciencia', verificarTokenAdminExclusivo, async (req, res) => {
     try {
         const { contrato_id } = req.body;
         const { setor_id, id: usuario_id } = req.user;

@@ -106,7 +106,23 @@
                         </button>
                     </div>
 
-                    <template x-if="abaAtual === 'contratos' && '<%= usuarioLogado.perfil %>' !== 'VISUALIZADOR'"></template>
+                    <div>
+                        <button x-show="abaAtual === 'contratos' && '<%= usuarioLogado.perfil %>' !== 'VISUALIZADOR'" @click="modalContratoOpen = true" class="bg-sky-800 hover:bg-sky-900 text-white text-[11px] font-bold px-4 py-2 rounded-lg shadow flex items-center gap-1.5 transition-all">
+                            <i class="fa-solid fa-file-circle-plus"></i> Novo Contrato
+                        </button>
+                        <button x-show="abaAtual === 'fornecedores'" @click="modalFornecedorOpen = true" class="bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-bold px-4 py-2 rounded-lg shadow flex items-center gap-1.5 transition-all">
+                            <i class="fa-solid fa-truck-field"></i> Novo Fornecedor
+                        </button>
+                        <button x-show="abaAtual === 'categorias'" @click="modalCategoriaOpen = true" class="bg-teal-600 hover:bg-teal-700 text-white text-[11px] font-bold px-4 py-2 rounded-lg shadow flex items-center gap-1.5 transition-all">
+                            <i class="fa-solid fa-tag"></i> Nova Categoria
+                        </button>
+                        <button x-show="abaAtual === 'usuarios'" @click="modalUsuarioOpen = true" class="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold px-4 py-2 rounded-lg shadow flex items-center gap-1.5 transition-all">
+                            <i class="fa-solid fa-user-gear"></i> Novo Operador
+                        </button>
+                        <button x-show="abaAtual === 'setores'" @click="modalSetorOpen = true" class="bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold px-4 py-2 rounded-lg shadow flex items-center gap-1.5 transition-all">
+                            <i class="fa-solid fa-building"></i> Novo Setor
+                        </button>
+                    </div>
                 </div>
             </header>
 

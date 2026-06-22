@@ -84,9 +84,12 @@ app.get('/', verificarAutenticacao, async (req, res) => {
         let filtroSetorParcela = '';
         let params = [];
 
+        // Garante que se o ADMIN tiver setor_id nulo ou inválido, a query não quebre
+        const idBuscaConfig = (perfil === 'ADMIN' && !setor_id) ? 1 : setor_id;
+
         const configSetorBusca = await pool.query(
             'SELECT * FROM configuracoes_setores WHERE setor_id = $1', 
-            [setor_id]
+            [idBuscaConfig]
         );
 
         const configSetor = configSetorBusca.rows[0] || {
@@ -110,16 +113,17 @@ app.get('/', verificarAutenticacao, async (req, res) => {
         `;
         const listaContratos = await pool.query(queryContratos, params);
 
+        // CORREÇÃO CIRÚRGICA: Uso de ($1 * INTERVAL '1 day') evita o erro de conversão de string no PostgreSQL
         const parcelasCriticas = await pool.query(`
             SELECT p.*, c.numero_contrato, f.razao_social as fornecedor 
             FROM parcelas p
             JOIN contratos c ON p.contrato_id = c.id
             JOIN fornecedores f ON c.fornecedor_id = f.id
             WHERE p.status = 'Em aberto' 
-            AND p.data_vencimento <= CURRENT_DATE + CAST(($1 || ' days') AS INTERVAL) ${filtroSetorParcela}
-            AND p.id NOT IN (SELECT contrato_id FROM contratos_cienca_alertas WHERE setor_id = ${perfil === 'ADMIN' ? 0 : setor_id})
+            AND p.data_vencimento <= CURRENT_DATE + ($1 * INTERVAL '1 day') ${filtroSetorParcela}
+            AND p.id NOT IN (SELECT contrato_id FROM contratos_cienca_alertas WHERE setor_id = ${perfil === 'ADMIN' ? 0 : (setor_id || 0)})
             ORDER BY p.data_vencimento ASC;
-        `, [configSetor.dias_alerta_parcela, ...(perfil !== 'ADMIN' ? [setor_id] : [])]);
+        `, [parseInt(configSetor.dias_alerta_parcela), ...(perfil !== 'ADMIN' ? [setor_id] : [])]);
 
         const fornecedores = await pool.query('SELECT id, razao_social FROM fornecedores WHERE ativo = true ORDER BY razao_social');
         const categorias = await pool.query('SELECT id, nome FROM categorias ORDER BY nome');
@@ -143,7 +147,7 @@ app.get('/', verificarAutenticacao, async (req, res) => {
             `;
         } else {
             queryAuditoria = `
-                SELECT h.id, h.usuario_nome, h.criado_em, h.tabela_alterada as tabela_afetada, h.registro_id, h.campo_alterado as acao, 
+                SELECT h.id, h.usuario_nome, h.criado_em, h.tabela_alterada as text, h.registro_id, h.campo_alterado as acao, 
                        ('Campo: ' || h.campo_alterado || ' | Antigo: ' || h.valor_antigo || ' | Novo: ' || h.valor_novo) as detalhes
                 FROM historico_auditoria h
                 JOIN usuarios u ON h.usuario_id = u.id
@@ -165,7 +169,7 @@ app.get('/', verificarAutenticacao, async (req, res) => {
             historicoAuditoria: listaAuditoria.rows
         });
     } catch (err) {
-        console.error(err);
+        console.error("FALHA CRÍTICA NA ROTA DASHBOARD:", err);
         res.status(500).send("Erro operacional.");
     }
 });

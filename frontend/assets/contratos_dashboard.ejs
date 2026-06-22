@@ -11,10 +11,12 @@
 
     <div class="flex h-screen overflow-hidden" 
          x-data="{ 
-            abaAtual: 'contratos', 
+            abaAtual: 'alertas', 
             filtroTexto: '',
             idSelecionado: null,
             filtroAlerta: 'todos', 
+            filtroDataInicio: '',
+            filtroDataFim: '',
             modalContratoOpen: false,
             modalLiquidarOpen: false,
             modalUsuarioOpen: false,
@@ -35,7 +37,7 @@
         <aside class="w-56 bg-slate-900 text-slate-300 flex flex-col h-screen shrink-0 border-r border-slate-800">
             <div class="p-3 flex items-center justify-between bg-white h-16 border-b border-slate-200 text-slate-900">
                 <div class="flex items-center space-x-2">
-                    <img src="/assets/logap.png" alt="SEMED" class="h-9 w-auto object-contain">
+                    <img src="/logap.png" alt="SEMED" class="h-9 w-auto object-contain">
                 </div>
                 <a href="/logout" 
                    class="flex items-center justify-center w-8 h-8 rounded-lg text-rose-600 hover:bg-rose-50 border border-slate-200 transition-all shadow-xs" 
@@ -57,36 +59,47 @@
             </div>
 
             <nav class="p-2 space-y-1 flex-1 text-xs font-bold tracking-wide">
-                <button @click="abaAtual = 'contratos'" :class="abaAtual === 'contratos' ? 'bg-sky-800 text-white shadow-xs' : 'text-slate-400 hover:bg-slate-800/60'" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-all">
-                    <i class="fa-solid fa-file-signature text-base w-5 text-center text-sky-400"></i> <span>Contratos</span>
-                </button>
-
                 <button @click="abaAtual = 'alertas'" :class="abaAtual === 'alertas' ? 'bg-sky-800 text-white shadow-xs' : 'text-slate-400 hover:bg-slate-800/60'" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-all">
                     <i class="fa-solid fa-triangle-exclamation text-base w-5 text-center text-amber-400"></i> <span>Alertas</span>
                 </button>
 
+                <button @click="abaAtual = 'contratos'" :class="abaAtual === 'contratos' ? 'bg-sky-800 text-white shadow-xs' : 'text-slate-400 hover:bg-slate-800/60'" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-all">
+                    <i class="fa-solid fa-file-signature text-base w-5 text-center text-sky-400"></i> <span>Contratos</span>
+                </button>
+
                 <% if (usuarioLogado.perfil !== 'VISUALIZADOR') { %>
-                <button @click="abaAtual = 'fornecedores'" :class="abaAtual === 'fornecedores' ? 'bg-sky-800 text-white' : 'text-slate-400 hover:bg-slate-800/60'" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-all">
+                <button @click="abaAtual = 'fornecedores'" :class="abaAtual === 'fornecedores' ? 'bg-sky-800 text-white shadow-xs' : 'text-slate-400 hover:bg-slate-800/60'" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-all">
                     <i class="fa-solid fa-truck-field text-base w-5 text-center text-indigo-400"></i> <span>Fornecedores</span>
                 </button>
 
-                <button @click="abaAtual = 'categorias'" :class="abaAtual === 'categorias' ? 'bg-sky-800 text-white' : 'text-slate-400 hover:bg-slate-800/60'" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-all">
+                <button @click="abaAtual = 'categorias'" :class="abaAtual === 'categorias' ? 'bg-sky-800 text-white shadow-xs' : 'text-slate-400 hover:bg-slate-800/60'" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-all">
                     <i class="fa-solid fa-tags text-base w-5 text-center text-teal-400"></i> <span>Categorias</span>
                 </button>
                 <% } %>
 
                 <% if (usuarioLogado.perfil !== 'VISUALIZADOR') { %>
-                <button @click="abaAtual = 'usuarios'" :class="abaAtual === 'usuarios' ? 'bg-sky-800 text-white' : 'text-slate-400 hover:bg-slate-800/60'" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-all">
+                <button @click="abaAtual = 'usuarios'" :class="abaAtual === 'usuarios' ? 'bg-sky-800 text-white shadow-xs' : 'text-slate-400 hover:bg-slate-800/60'" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-all">
                     <i class="fa-solid fa-users text-base w-5 text-center text-emerald-400"></i> <span>Usuários</span>
                 </button>
                 <% } %>
 
+                <button @click="abaAtual = 'historico'" :class="abaAtual === 'historico' ? 'bg-sky-800 text-white shadow-xs' : 'text-slate-400 hover:bg-slate-800/60'" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-all">
+                    <i class="fa-solid fa-clock-rotate-left text-base w-5 text-center text-slate-400"></i> <span>Histórico</span>
+                </button>
+
+                <button @click="abaAtual = 'configuracoes'" :class="abaAtual === 'configuracoes' ? 'bg-sky-800 text-white shadow-xs' : 'text-slate-400 hover:bg-slate-800/60'" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-all">
+                    <i class="fa-solid fa-gear text-base w-5 text-center text-slate-400"></i> <span>Configurações</span>
+                </button>
+
                 <% if (usuarioLogado.perfil === 'ADMIN') { %>
-                <button @click="abaAtual = 'setores'" :class="abaAtual === 'setores' ? 'bg-sky-800 text-white' : 'text-slate-400 hover:bg-slate-800/60'" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-all">
+                <button @click="abaAtual = 'setores'" :class="abaAtual === 'setores' ? 'bg-sky-800 text-white shadow-xs' : 'text-slate-400 hover:bg-slate-800/60'" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-all">
                     <i class="fa-solid fa-building-user text-base w-5 text-center text-violet-400"></i> <span>Estrutura</span>
                 </button>
                 <% } %>
             </nav>
+            <div class="p-3 border-t border-slate-850 bg-slate-950/20 text-center text-[10px] text-slate-500 font-medium tracking-wide leading-relaxed">
+                Desenvolvido pela Subsecretaria<br>Adjunta de Inovação e Tecnologia
+            </div>
         </aside>
 
         <div class="flex-1 flex flex-col overflow-hidden">
@@ -379,6 +392,124 @@
                     </table>
                 </div>
 
+                <div x-show="abaAtual === 'historico'" class="space-y-4">
+                    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div>
+                            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-2">
+                                <i class="fa-solid fa-timeline text-sky-800"></i> Auditoria e Histórico do Setor
+                            </h3>
+                            <p class="text-[11px] text-slate-400 mt-0.5">Exibindo logs operacionais do seu setor em ordem decrescente</p>
+                        </div>
+                        <div class="flex items-center gap-2 text-xs font-semibold text-slate-600">
+                            <div class="flex items-center gap-1">
+                                <label class="text-[10px] uppercase text-slate-400">Início:</label>
+                                <input type="date" x-model="filtroDataInicio" class="p-1.5 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none font-mono text-slate-800">
+                            </div>
+                            <div class="flex items-center gap-1">
+                                <label class="text-[10px] uppercase text-slate-400">Fim:</label>
+                                <input type="date" x-model="filtroDataFim" class="p-1.5 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none font-mono text-slate-800">
+                            </div>
+                            <button @click="filtroDataInicio = ''; filtroDataFim = ''" x-show="filtroDataInicio || filtroDataFim" class="p-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold transition-all text-[10px] uppercase">
+                                Limpar
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                        <table class="w-full text-left text-xs border-collapse">
+                            <thead>
+                                <tr class="bg-slate-50 text-slate-600 font-bold border-b border-slate-200 uppercase tracking-wider">
+                                    <th class="p-4">Data/Hora</th>
+                                    <th class="p-4">Operador</th>
+                                    <th class="p-4">Ação Realizada</th>
+                                    <th class="p-4">Registro Afetado</th>
+                                    <th class="p-4">Detalhes</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100 font-medium text-slate-700">
+                                <% let logs = (typeof historicoAuditoria !== 'undefined') ? historicoAuditoria : [] %>
+                                <% logs.forEach(log => { %>
+                                    <tr data-data="<%= new Date(log.criado_em).toISOString().split('T')[0] %>"
+                                        x-show="(!filtroDataInicio || $el.getAttribute('data-data') >= filtroDataInicio) && (!filtroDataFim || $el.getAttribute('data-data') <= filtroDataFim)"
+                                        class="hover:bg-slate-50/60 transition-colors">
+                                        <td class="p-4 font-mono text-slate-500"><%= new Date(log.criado_em).toLocaleString('pt-BR') %></td>
+                                        <td class="p-4 text-slate-900 font-bold"><%= log.usuario_nome %></td>
+                                        <td class="p-4">
+                                            <span class="px-2 py-0.5 text-[10px] font-bold rounded-full uppercase border
+                                                <%= log.acao === 'INSERÇÃO' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 
+                                                    log.acao === 'EDIÇÃO' ? 'bg-amber-50 text-amber-700 border-amber-200' : 
+                                                    'bg-slate-50 text-slate-700 border-slate-200' %>">
+                                                <%= log.acao %>
+                                            </span>
+                                        </td>
+                                        <td class="p-4 text-slate-600 font-semibold"><%= log.tabela_afetada %> (ID: <%= log.registro_id %>)</td>
+                                        <td class="p-4 text-slate-500 italic max-w-xs truncate"><%= log.detalhes %></td>
+                                    </tr>
+                                <% }) %>
+                                <% if (logs.length === 0) { %>
+                                    <tr>
+                                        <td colspan="5" class="p-8 text-center text-slate-400 italic font-semibold">Nenhum registro de auditoria encontrado para o seu setor.</td>
+                                    </tr>
+                                <% } %>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div x-show="abaAtual === 'configuracoes'" class="space-y-4" 
+                    x-data="{
+                        formConfig: {
+                            dias_alerta_parcela: '<%= configSetor.dias_alerta_parcela %>',
+                            dias_alerta_contrato: '<%= configSetor.dias_alerta_contrato %>',
+                            alerta_apostilamento_ativo: <%= configSetor.alerta_apostilamento_ativo %>
+                        },
+                        async salvarConfiguracoes() {
+                            try {
+                                let resposta = await fetch('/api/v1/setor/configuracoes', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify(this.formConfig)
+                                });
+                                if (resposta.ok) {
+                                    alert('Parâmetros de alerta do setor atualizados com sucesso!');
+                                    window.location.reload();
+                                } else {
+                                    alert('Erro operacional ao salvar configurações.');
+                                }
+                            } catch(e) {
+                                alert('Falha na comunicação com o servidor.');
+                            }
+                        }
+                    }">
+                    
+                    <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm max-w-md">
+                        <h3 class="text-sm font-bold text-slate-900 mb-1 uppercase flex items-center gap-2">
+                            <i class="fa-solid fa-sliders text-sky-800"></i> Personalizar Alertas do Setor
+                        </h3>
+                        <p class="text-[11px] text-slate-400 mb-4">Ajuste os critérios de antecedência dos gatilhos críticos visualizados no seu painel.</p>
+                        
+                        <form @submit.prevent="salvarConfiguracoes()" class="space-y-4 text-xs font-semibold text-slate-600">
+                            <div>
+                                <label class="block text-slate-500 mb-1">Antecedência para Alerta de Parcelas (Dias)</label>
+                                <input type="number" x-model="formConfig.dias_alerta_parcela" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:outline-none" required>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-slate-500 mb-1">Antecedência para Fim de Vigência de Contratos (Dias)</label>
+                                <input type="number" x-model="formConfig.dias_alerta_contrato" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:outline-none" required>
+                            </div>
+                            
+                            <div class="flex items-center space-x-2 p-2 bg-slate-50 rounded-lg border border-slate-200">
+                                <input type="checkbox" id="config_alerta_apostilamento" x-model="formConfig.alerta_apostilamento_ativo" class="w-4 h-4 text-sky-800 border-slate-300 rounded">
+                                <label for="config_alerta_apostilamento" class="text-slate-700 cursor-pointer select-none">Monitorar e alertar apostilamentos pendentes</label>
+                            </div>
+                            
+                            <div class="pt-2 border-t border-slate-100 flex justify-end">
+                                <button type="submit" class="px-4 py-2 bg-sky-800 hover:bg-sky-900 text-white font-bold rounded-lg shadow transition-colors">Salvar Parâmetros</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
             </main>
         </div>
 

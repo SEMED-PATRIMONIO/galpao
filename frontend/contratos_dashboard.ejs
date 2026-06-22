@@ -1,0 +1,1474 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>SEMED | Gestão de Contratos e Acessos</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body class="bg-slate-100 antialiased font-sans text-slate-800">
+
+    <div class="flex h-screen overflow-hidden" 
+         x-data="{ 
+            abaAtual: 'alertas', 
+            filtroTexto: '',
+            idSelecionado: null,
+            filtroAlerta: 'todos', 
+            filtroDataInicio: '',
+            filtroDataFim: '',
+            modalContratoOpen: false,
+            modalLiquidarOpen: false,
+            modalUsuarioOpen: false,
+            modalSetorOpen: false,
+            modalCategoriaOpen: false, 
+            modalFornecedorOpen: false,
+            modalFornecedorEditarOpen: false,
+            modalCategoriaEditarOpen: false,
+            modalUsuarioEditarOpen: false,
+            modalSetorEditarOpen: false,
+            modalContratoEditarOpen: false,
+            modalMinhaSenhaOpen: false,
+            formContrato: { fornecedor_id: '', categoria_id: '', numero_contrato: '', objeto_resumido: '', valor_total: '', data_inicio: '', vigencia_meses: '', periodicidade_pagamento: 'Mensal', setor_id: '' },
+            formLiquidar: { id: '', numero_contrato: '', valor_previsto: '', data_pagamento: '', valor_pago: '', juros_pagos: 0 },
+            init() { this.$watch('abaAtual', value => this.idSelecionado = null) }
+         }">
+
+        <aside class="w-56 bg-slate-900 text-slate-300 flex flex-col h-screen shrink-0 border-r border-slate-800">
+            <div class="p-3 flex items-center justify-between bg-white h-16 border-b border-slate-200 text-slate-900">
+                <div class="flex items-center space-x-2">
+                    <img src="/logap.png" alt="SEMED" class="h-9 w-auto object-contain">
+                </div>
+                <a href="/logout" 
+                   class="flex items-center justify-center w-8 h-8 rounded-lg text-rose-600 hover:bg-rose-50 border border-slate-200 transition-all shadow-xs" 
+                   title="Sair do Sistema">
+                    <i class="fa-solid fa-right-from-bracket text-sm"></i>
+                </a>
+            </div>
+            
+            <div class="p-3 bg-slate-800/40 border-b border-slate-800/80 text-[11px] flex items-center justify-between">
+                <div class="truncate pr-1">
+                    <p class="text-slate-300 truncate">Usuário: <strong class="text-white"><%= usuarioLogado.nome %></strong></p>
+                    <p class="text-slate-400 mt-0.5">Perfil: <span class="px-1.5 py-0.2 bg-sky-950 text-sky-300 rounded border border-sky-800 font-bold text-[9px] uppercase"><%= usuarioLogado.perfil %></span></p>
+                </div>
+                <button @click="modalMinhaSenhaOpen = true" 
+                        class="w-7 h-7 bg-slate-800 hover:bg-slate-700 hover:text-amber-400 border border-slate-700 rounded-md flex items-center justify-center transition-colors shrink-0 text-slate-400" 
+                        title="Alterar minha senha">
+                    <i class="fa-solid fa-key text-[11px]"></i>
+                </button>
+            </div>
+
+            <nav class="p-2 space-y-1 flex-1 text-xs font-bold tracking-wide">
+                <button @click="abaAtual = 'alertas'" :class="abaAtual === 'alertas' ? 'bg-sky-800 text-white shadow-xs' : 'text-slate-400 hover:bg-slate-800/60'" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-all">
+                    <i class="fa-solid fa-triangle-exclamation text-base w-5 text-center text-amber-400"></i> <span>Alertas</span>
+                </button>
+
+                <button @click="abaAtual = 'contratos'" :class="abaAtual === 'contratos' ? 'bg-sky-800 text-white shadow-xs' : 'text-slate-400 hover:bg-slate-800/60'" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-all">
+                    <i class="fa-solid fa-file-signature text-base w-5 text-center text-sky-400"></i> <span>Contratos</span>
+                </button>
+
+                <% if (usuarioLogado.perfil !== 'VISUALIZADOR') { %>
+                <button @click="abaAtual = 'fornecedores'" :class="abaAtual === 'fornecedores' ? 'bg-sky-800 text-white shadow-xs' : 'text-slate-400 hover:bg-slate-800/60'" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-all">
+                    <i class="fa-solid fa-truck-field text-base w-5 text-center text-indigo-400"></i> <span>Fornecedores</span>
+                </button>
+
+                <button @click="abaAtual = 'categorias'" :class="abaAtual === 'categorias' ? 'bg-sky-800 text-white shadow-xs' : 'text-slate-400 hover:bg-slate-800/60'" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-all">
+                    <i class="fa-solid fa-tags text-base w-5 text-center text-teal-400"></i> <span>Categorias</span>
+                </button>
+                <% } %>
+
+                <% if (usuarioLogado.perfil !== 'VISUALIZADOR') { %>
+                <button @click="abaAtual = 'usuarios'" :class="abaAtual === 'usuarios' ? 'bg-sky-800 text-white shadow-xs' : 'text-slate-400 hover:bg-slate-800/60'" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-all">
+                    <i class="fa-solid fa-users text-base w-5 text-center text-emerald-400"></i> <span>Usuários</span>
+                </button>
+                <% } %>
+
+                <button @click="abaAtual = 'historico'" :class="abaAtual === 'historico' ? 'bg-sky-800 text-white shadow-xs' : 'text-slate-400 hover:bg-slate-800/60'" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-all">
+                    <i class="fa-solid fa-clock-rotate-left text-base w-5 text-center text-slate-400"></i> <span>Histórico</span>
+                </button>
+
+                <button @click="abaAtual = 'configuracoes'" :class="abaAtual === 'configuracoes' ? 'bg-sky-800 text-white shadow-xs' : 'text-slate-400 hover:bg-slate-800/60'" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-all">
+                    <i class="fa-solid fa-gear text-base w-5 text-center text-slate-400"></i> <span>Configurações</span>
+                </button>
+
+                <% if (usuarioLogado.perfil === 'ADMIN') { %>
+                <button @click="abaAtual = 'setores'" :class="abaAtual === 'setores' ? 'bg-sky-800 text-white shadow-xs' : 'text-slate-400 hover:bg-slate-800/60'" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-all">
+                    <i class="fa-solid fa-building-user text-base w-5 text-center text-violet-400"></i> <span>Estrutura</span>
+                </button>
+                <% } %>
+            </nav>
+            <div class="p-3 border-t border-slate-850 bg-slate-950/20 text-center text-[10px] text-slate-500 font-medium tracking-wide leading-relaxed">
+                Desenvolvido pela Subsecretaria<br>Adjunta de Inovação e Tecnologia
+            </div>
+        </aside>
+
+        <div class="flex-1 flex flex-col overflow-hidden">
+            <header class="bg-white h-16 border-b border-slate-200 flex items-center justify-between px-6 shadow-sm">
+                <h2 class="text-xs font-bold uppercase tracking-wider text-slate-600" x-text="'Painel Administrativo > ' + abaAtual"></h2>
+                
+                <div class="flex items-center space-x-2">
+                    <div x-show="idSelecionado !== null" x-transition>
+                        <button @click="
+                            if(abaAtual === 'fornecedores') { $dispatch('abrir-editar-fornecedor', { id: idSelecionado }); }
+                            if(abaAtual === 'categorias') { $dispatch('abrir-editar-categoria', { id: idSelecionado }); }
+                            if(abaAtual === 'usuarios') { $dispatch('abrir-editar-usuario', { id: idSelecionado }); }
+                            if(abaAtual === 'setores') { $dispatch('abrir-editar-setor', { id: idSelecionado }); }
+                            if(abaAtual === 'contratos') { $dispatch('abrir-editar-contrato', { id: idSelecionado }); }
+                        " class="bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-bold px-4 py-2 rounded-lg shadow flex items-center gap-1.5 transition-all">
+                            <i class="fa-solid fa-pen-to-square"></i> Editar Registro
+                        </button>
+                    </div>
+
+                    <div>
+                        <button x-show="abaAtual === 'contratos' && '<%= usuarioLogado.perfil %>' !== 'VISUALIZADOR'" @click="modalContratoOpen = true" class="bg-sky-800 hover:bg-sky-900 text-white text-[11px] font-bold px-4 py-2 rounded-lg shadow flex items-center gap-1.5 transition-all">
+                            <i class="fa-solid fa-file-circle-plus"></i> Novo Contrato
+                        </button>
+                        <button x-show="abaAtual === 'fornecedores'" @click="modalFornecedorOpen = true" class="bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-bold px-4 py-2 rounded-lg shadow flex items-center gap-1.5 transition-all">
+                            <i class="fa-solid fa-truck-field"></i> Novo Fornecedor
+                        </button>
+                        <button x-show="abaAtual === 'categorias'" @click="modalCategoriaOpen = true" class="bg-teal-600 hover:bg-teal-700 text-white text-[11px] font-bold px-4 py-2 rounded-lg shadow flex items-center gap-1.5 transition-all">
+                            <i class="fa-solid fa-tag"></i> Nova Categoria
+                        </button>
+                        <button x-show="abaAtual === 'usuarios'" @click="modalUsuarioOpen = true" class="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold px-4 py-2 rounded-lg shadow flex items-center gap-1.5 transition-all">
+                            <i class="fa-solid fa-user-gear"></i> Novo Operador
+                        </button>
+                        <button x-show="abaAtual === 'setores'" @click="modalSetorOpen = true" class="bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold px-4 py-2 rounded-lg shadow flex items-center gap-1.5 transition-all">
+                            <i class="fa-solid fa-building"></i> Novo Setor
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <main class="flex-1 overflow-y-auto p-6">
+                
+                <div x-show="abaAtual === 'contratos'" class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                    <table class="w-full text-left text-xs border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 text-slate-600 font-bold border-b border-slate-200 uppercase tracking-wider">
+                                <th class="p-4">Nº Contrato</th>
+                                <th class="p-4">Fornecedor</th>
+                                <th class="p-4">Categoria</th>
+                                <th class="p-4 text-right">Valor Global</th>
+                                <th class="p-4 text-center">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            <% contratos.forEach(c => { %>
+                            <tr @click="idSelecionado = (idSelecionado === <%= c.id %> ? null : <%= c.id %>)"
+                                :class="idSelecionado === <%= c.id %> ? 'bg-sky-100/80 font-bold border-l-4 border-sky-600' : 'hover:bg-slate-50/60'"
+                                class="transition-all cursor-pointer">
+                                <td class="p-4 font-bold text-slate-900"><%= c.numero_contrato %></td>
+                                <td class="p-4 font-semibold text-slate-700"><%= c.fornecedor %></td>
+                                <td class="p-4 text-slate-500"><%= c.categoria %></td>
+                                <td class="p-4 text-right font-mono font-bold text-slate-900">R$ <%= parseFloat(c.valor_total).toLocaleString('pt-BR', {minimumFractionDigits: 2}) %></td>
+                                <td class="p-4 text-center">
+                                    <span class="text-slate-400 italic text-[11px]">Online</span>
+                                </td>
+                            </tr>
+                            <% }) %>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div x-show="abaAtual === 'alertas'" class="space-y-6 animate-fade-in">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        
+                        <div @click="filtroAlerta = (filtroAlerta === 'expiracao' ? 'todos' : 'expiracao')"
+                             :class="filtroAlerta === 'expiracao' ? 'ring-2 ring-amber-500 bg-amber-50 border-amber-300' : 'bg-white hover:shadow-md border-slate-200'"
+                             class="p-5 rounded-2xl border shadow-xs cursor-pointer transition-all flex items-center justify-between select-none">
+                            <div class="space-y-1">
+                                <span class="text-xs font-bold uppercase text-slate-500 tracking-wider">Contratos a Vencer</span>
+                                <h4 class="text-2xl font-black text-slate-900">
+                                    <% 
+                                       let countVencer = contratos.filter(c => {
+                                           let dataFim = new Date(c.data_inicio);
+                                           dataFim.setMonth(dataFim.getMonth() + c.vigencia_meses);
+                                           let diffDias = Math.ceil((dataFim - new Date()) / (1000 * 60 * 60 * 24));
+                                           return diffDias >= 0 && diffDias <= 45;
+                                       }).length;
+                                    %>
+                                    <%= countVencer %>
+                                </h4>
+                                <p class="text-[10px] text-slate-400">Expiração nos próximos 45 dias</p>
+                            </div>
+                            <div class="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-600">
+                                <i class="fa-solid fa-clock-history text-lg"></i>
+                            </div>
+                        </div>
+
+                        <div @click="filtroAlerta = (filtroAlerta === 'parcelas' ? 'todos' : 'parcelas')"
+                             :class="filtroAlerta === 'parcelas' ? 'ring-2 ring-emerald-500 bg-emerald-50 border-emerald-300' : 'bg-white hover:shadow-md border-slate-200'"
+                             class="p-5 rounded-2xl border shadow-xs cursor-pointer transition-all flex items-center justify-between select-none">
+                            <div class="space-y-1">
+                                <span class="text-xs font-bold uppercase text-slate-500 tracking-wider">Vencimento de Parcelas</span>
+                                <h4 class="text-2xl font-black text-slate-900">
+                                    <%= alertasFinanceiros.length %>
+                                </h4>
+                                <p class="text-[10px] text-slate-400">Parcelas críticas em aberto</p>
+                            </div>
+                            <div class="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-600">
+                                <i class="fa-solid fa-calendar-check text-lg"></i>
+                            </div>
+                        </div>
+
+                        <div @click="filtroAlerta = (filtroAlerta === 'apostilamento' ? 'todos' : 'apostilamento')"
+                             :class="filtroAlerta === 'apostilamento' ? 'ring-2 ring-rose-500 bg-rose-50 border-rose-300' : 'bg-white hover:shadow-md border-slate-200'"
+                             class="p-5 rounded-2xl border shadow-xs cursor-pointer transition-all flex items-center justify-between select-none">
+                            <div class="space-y-1">
+                                <span class="text-xs font-bold uppercase text-slate-500 tracking-wider">Apostilamentos Pendentes</span>
+                                <h4 class="text-2xl font-black text-rose-600">
+                                    <% let countApostila = contratos.filter(c => c.necessita_apostilamento && !c.data_apostilamento).length; %>
+                                    <%= countApostila %>
+                                </h4>
+                                <p class="text-[10px] text-rose-500/80 font-semibold">Marcados sem data preenchida</p>
+                            </div>
+                            <div class="w-10 h-10 rounded-xl bg-rose-500/10 flex items-center justify-center text-rose-600 animate-pulse">
+                                <i class="fa-solid fa-triangle-exclamation text-lg"></i>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                        <div class="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                            <div>
+                                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-2">
+                                    <i class="fa-solid fa-list-check text-sky-800"></i> Listagem Detalhada de Atenção
+                                </h3>
+                                <p class="text-[11px] text-slate-400 mt-0.5">
+                                    Filtro Selecionado: <span class="font-bold text-sky-800 uppercase" x-text="filtroAlerta"></span>
+                                </p>
+                            </div>
+                            <div x-show="filtroAlerta !== 'todos'">
+                                <button @click="filtroAlerta = 'todos'" class="text-[10px] bg-slate-200 hover:bg-slate-300 text-slate-700 px-2.5 py-1 rounded-md font-bold transition-all">
+                                    Limpar Filtro <i class="fa-solid fa-xmark ml-1"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse text-xs">
+                                <thead>
+                                    <tr class="bg-slate-100/70 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
+                                        <th class="p-4">Nº Contrato</th>
+                                        <th class="p-4">Fornecedor</th>
+                                        <th class="p-4">Objeto Resumido</th>
+                                        <th class="p-4 text-center">Tipo de Alerta</th>
+                                        <th class="p-4 text-center">Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100 font-medium text-slate-700">
+                                    <% contratos.forEach(c => { 
+                                        let dataFim = new Date(c.data_inicio);
+                                        dataFim.setMonth(dataFim.getMonth() + c.vigencia_meses);
+                                        let diffDias = Math.ceil((dataFim - new Date()) / (1000 * 60 * 60 * 24));
+                                        
+                                        let isExpiracao = (diffDias >= 0 && diffDias <= 45);
+                                        let isApostilaPendente = (c.necessita_apostilamento && !c.data_apostilamento);
+                                    %>
+                                        <tr data-expiracao="<%= isExpiracao %>" 
+                                            data-apostila="<%= isApostilaPendente %>"
+                                            x-show="filtroAlerta === 'todos' || 
+                                                    (filtroAlerta === 'expiracao' && $el.getAttribute('data-expiracao') === 'true') || 
+                                                    (filtroAlerta === 'apostilamento' && $el.getAttribute('data-apostila') === 'true')"
+                                            class="hover:bg-slate-50/60 transition-all">
+                                            
+                                            <td class="p-4 font-mono font-bold text-slate-900"><%= c.numero_contrato %></td>
+                                            <td class="p-4 font-semibold text-slate-700"><%= c.fornecedor %></td>
+                                            <td class="p-4 max-w-[240px] truncate text-slate-500"><%= c.objeto_resumido %></td>
+                                            
+                                            <td class="p-4 text-center">
+                                                <% if (isApostilaPendente) { %>
+                                                    <span class="inline-flex items-center gap-1 bg-rose-100 text-rose-700 px-2.5 py-0.5 rounded-full text-[10px] font-bold border border-rose-200">
+                                                        <i class="fa-solid fa-stamp text-[9px]"></i> Apostilamento Pendente
+                                                    </span>
+                                                <% } %>
+                                                <% if (isExpiracao) { %>
+                                                    <span class="inline-flex items-center gap-1 bg-amber-100 text-amber-700 px-2.5 py-0.5 rounded-full text-[10px] font-bold border border-amber-200">
+                                                        <i class="fa-solid fa-hourglass-half text-[9px]"></i> Expira em <%= diffDias %> dias
+                                                    </span>
+                                                <% } %>
+                                            </td>
+                                            
+                                            <td class="p-4 text-center">
+                                                <button @click="$dispatch('abrir-editar-contrato', { id: <%= c.id %> })" 
+                                                        class="bg-slate-100 hover:bg-amber-500 hover:text-white text-slate-600 font-bold px-3 py-1.5 rounded-lg transition-all text-[10px] flex items-center gap-1 mx-auto shadow-xs border border-slate-200">
+                                                    <i class="fa-solid fa-pen-to-square"></i> Tratar
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    <% }) %>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                </div>
+
+                <div x-show="abaAtual === 'fornecedores'" class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                    <table class="w-full text-left text-xs border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 text-slate-600 font-bold border-b border-slate-200 uppercase"><th class="p-4">Razão Social</th><th class="p-4">CNPJ</th><th class="p-4">Contato</th><th class="p-4">Telefone</th></tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            <% proveedores = (typeof fornecedores !== 'undefined') ? fornecedores : [] %>
+                            <% proveedores.forEach(f => { %>
+                            <tr @click="idSelecionado = (idSelecionado === <%= f.id %> ? null : <%= f.id %>)"
+                                :class="idSelecionado === <%= f.id %> ? 'bg-sky-100/80 font-bold border-l-4 border-sky-600' : 'hover:bg-slate-50/60'"
+                                class="transition-all cursor-pointer">
+                                <td class="p-4 font-bold text-slate-900"><%= f.razao_social %></td>
+                                <td class="p-4 font-mono text-slate-600"><%= f.cnpj %></td>
+                                <td class="p-4 text-slate-500"><%= f.contato_nome || '-' %></td>
+                                <td class="p-4 font-mono text-slate-700"><%= f.telefone %></td>
+                            </tr>
+                            <% }) %>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div x-show="abaAtual === 'categorias'" class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                    <table class="w-full text-left text-xs border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 text-slate-600 font-bold border-b border-slate-200 uppercase"><th class="p-4">Identificador (ID)</th><th class="p-4">Nome da Categoria</th></tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            <% categorias.forEach(cat => { %>
+                            <tr @click="idSelecionado = (idSelecionado === <%= cat.id %> ? null : <%= cat.id %>)"
+                                :class="idSelecionado === <%= cat.id %> ? 'bg-sky-100/80 font-bold border-l-4 border-sky-600' : 'hover:bg-slate-50/60'"
+                                class="transition-all cursor-pointer">
+                                <td class="p-4 font-mono font-bold text-slate-400"><%= cat.id %></td>
+                                <td class="p-4 font-bold text-slate-800"><%= cat.nome %></td>
+                            </tr>
+                            <% }) %>
+                        </tbody>
+                    </table>
+                </div>                
+
+                <div x-show="abaAtual === 'usuarios'" class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                    <table class="w-full text-left text-xs border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 text-slate-600 font-bold border-b border-slate-200 uppercase">
+                                <th class="p-4">Nome Completo</th>
+                                <th class="p-4">E-mail Corporativo</th>
+                                <th class="p-4 text-center">Setor</th>
+                                <th class="p-4 text-center">Nível Perfil</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            <% usuariosCadastrados.forEach(u => { %>
+                            <tr @click="idSelecionado = (idSelecionado === <%= u.id %> ? null : <%= u.id %>)"
+                                :class="idSelecionado === <%= u.id %> ? 'bg-sky-100/80 font-bold border-l-4 border-sky-600' : 'hover:bg-slate-50/60'"
+                                class="transition-all cursor-pointer">
+                                <td class="p-4 font-bold text-slate-900"><%= u.nome %></td>
+                                <td class="p-4 font-semibold text-slate-600"><%= u.email %></td>
+                                <td class="p-4 text-center font-bold text-indigo-700"><%= u.setor_sigla %></td>
+                                <td class="p-4 text-center"><span class="px-2 py-0.5 bg-slate-100 border text-slate-700 rounded font-bold text-[10px] uppercase"><%= u.perfil %></span></td>
+                            </tr>
+                            <% }) %>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div x-show="abaAtual === 'setores'" class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                    <table class="w-full text-left text-xs border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 text-slate-600 font-bold border-b border-slate-200 uppercase">
+                                <th class="p-4">Identificador (ID)</th>
+                                <th class="p-4">Sigla</th>
+                                <th class="p-4">Nome Oficial do Setor / Secretaria</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            <% setores.forEach(s => { %>
+                            <tr @click="idSelecionado = (idSelecionado === <%= s.id %> ? null : <%= s.id %>)"
+                                :class="idSelecionado === <%= s.id %> ? 'bg-sky-100/80 font-bold border-l-4 border-sky-600' : 'hover:bg-slate-50/60'"
+                                class="transition-all cursor-pointer">
+                                <td class="p-4 font-mono font-bold text-slate-400"><%= s.id %></td>
+                                <td class="p-4 font-bold text-indigo-700 font-mono"><%= s.sigla %></td>
+                                <td class="p-4 font-semibold text-slate-700"><%= s.nome %></td>
+                            </tr>
+                            <% }) %>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div x-show="abaAtual === 'historico'" class="space-y-4">
+                    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div>
+                            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-2">
+                                <i class="fa-solid fa-timeline text-sky-800"></i> Auditoria e Histórico do Setor
+                            </h3>
+                            <p class="text-[11px] text-slate-400 mt-0.5">Exibindo logs operacionais do seu setor em ordem decrescente</p>
+                        </div>
+                        <div class="flex items-center gap-2 text-xs font-semibold text-slate-600">
+                            <div class="flex items-center gap-1">
+                                <label class="text-[10px] uppercase text-slate-400">Início:</label>
+                                <input type="date" x-model="filtroDataInicio" class="p-1.5 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none font-mono text-slate-800">
+                            </div>
+                            <div class="flex items-center gap-1">
+                                <label class="text-[10px] uppercase text-slate-400">Fim:</label>
+                                <input type="date" x-model="filtroDataFim" class="p-1.5 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none font-mono text-slate-800">
+                            </div>
+                            <button @click="filtroDataInicio = ''; filtroDataFim = ''" x-show="filtroDataInicio || filtroDataFim" class="p-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold transition-all text-[10px] uppercase">
+                                Limpar
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                        <table class="w-full text-left text-xs border-collapse">
+                            <thead>
+                                <tr class="bg-slate-50 text-slate-600 font-bold border-b border-slate-200 uppercase tracking-wider">
+                                    <th class="p-4">Data/Hora</th>
+                                    <th class="p-4">Operador</th>
+                                    <th class="p-4">Ação Realizada</th>
+                                    <th class="p-4">Registro Afetado</th>
+                                    <th class="p-4">Detalhes</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100 font-medium text-slate-700">
+                                <% let logs = (typeof historicoAuditoria !== 'undefined') ? historicoAuditoria : [] %>
+                                <% logs.forEach(log => { %>
+                                    <tr data-data="<%= new Date(log.criado_em).toISOString().split('T')[0] %>"
+                                        x-show="(!filtroDataInicio || $el.getAttribute('data-data') >= filtroDataInicio) && (!filtroDataFim || $el.getAttribute('data-data') <= filtroDataFim)"
+                                        class="hover:bg-slate-50/60 transition-colors">
+                                        <td class="p-4 font-mono text-slate-500"><%= new Date(log.criado_em).toLocaleString('pt-BR') %></td>
+                                        <td class="p-4 text-slate-900 font-bold"><%= log.usuario_nome %></td>
+                                        <td class="p-4">
+                                            <span class="px-2 py-0.5 text-[10px] font-bold rounded-full uppercase border
+                                                <%= log.acao === 'INSERÇÃO' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 
+                                                    log.acao === 'EDIÇÃO' ? 'bg-amber-50 text-amber-700 border-amber-200' : 
+                                                    'bg-slate-50 text-slate-700 border-slate-200' %>">
+                                                <%= log.acao %>
+                                            </span>
+                                        </td>
+                                        <td class="p-4 text-slate-600 font-semibold"><%= log.tabela_afetada %> (ID: <%= log.registro_id %>)</td>
+                                        <td class="p-4 text-slate-500 italic max-w-xs truncate"><%= log.detalhes %></td>
+                                    </tr>
+                                <% }) %>
+                                <% if (logs.length === 0) { %>
+                                    <tr>
+                                        <td colspan="5" class="p-8 text-center text-slate-400 italic font-semibold">Nenhum registro de auditoria encontrado para o seu setor.</td>
+                                    </tr>
+                                <% } %>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div x-show="abaAtual === 'configuracoes'" class="space-y-4" 
+                    x-data="{
+                        formConfig: {
+                            dias_alerta_parcela: '<%= configSetor.dias_alerta_parcela %>',
+                            dias_alerta_contrato: '<%= configSetor.dias_alerta_contrato %>',
+                            alerta_apostilamento_ativo: <%= configSetor.alerta_apostilamento_ativo %>
+                        },
+                        async salvarConfiguracoes() {
+                            try {
+                                let resposta = await fetch('/api/v1/setor/configuracoes', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify(this.formConfig)
+                                });
+                                if (resposta.ok) {
+                                    alert('Parâmetros de alerta do setor atualizados com sucesso!');
+                                    window.location.reload();
+                                } else {
+                                    alert('Erro operacional ao salvar configurações.');
+                                }
+                            } catch(e) {
+                                alert('Falha na comunicação com o servidor.');
+                            }
+                        }
+                    }">
+                    
+                    <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm max-w-md">
+                        <h3 class="text-sm font-bold text-slate-900 mb-1 uppercase flex items-center gap-2">
+                            <i class="fa-solid fa-sliders text-sky-800"></i> Personalizar Alertas do Setor
+                        </h3>
+                        <p class="text-[11px] text-slate-400 mb-4">Ajuste os critérios de antecedência dos gatilhos críticos visualizados no seu painel.</p>
+                        
+                        <form @submit.prevent="salvarConfiguracoes()" class="space-y-4 text-xs font-semibold text-slate-600">
+                            <div>
+                                <label class="block text-slate-500 mb-1">Antecedência para Alerta de Parcelas (Dias)</label>
+                                <input type="number" x-model="formConfig.dias_alerta_parcela" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:outline-none" required>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-slate-500 mb-1">Antecedência para Fim de Vigência de Contratos (Dias)</label>
+                                <input type="number" x-model="formConfig.dias_alerta_contrato" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:outline-none" required>
+                            </div>
+                            
+                            <div class="flex items-center space-x-2 p-2 bg-slate-50 rounded-lg border border-slate-200">
+                                <input type="checkbox" id="config_alerta_apostilamento" x-model="formConfig.alerta_apostilamento_ativo" class="w-4 h-4 text-sky-800 border-slate-300 rounded">
+                                <label for="config_alerta_apostilamento" class="text-slate-700 cursor-pointer select-none">Monitorar e alertar apostilamentos pendentes</label>
+                            </div>
+                            
+                            <div class="pt-2 border-t border-slate-100 flex justify-end">
+                                <button type="submit" class="px-4 py-2 bg-sky-800 hover:bg-sky-900 text-white font-bold rounded-lg shadow transition-colors">Salvar Parâmetros</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </main>
+        </div>
+
+        <div x-show="modalUsuarioOpen" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex justify-center items-center z-50 p-4">
+            <div class="bg-white rounded-2xl border w-full max-w-sm p-6 shadow-2xl" 
+                 @click.away="modalUsuarioOpen = false"
+                 x-data="{
+                    dados: { nome: '', email: '', senha: '', perfilNovo: 'OPERADOR', setorNovoId: '' },
+                    async submeterUsuario() {
+                        try {
+                            let resposta = await fetch('/usuarios/salvar', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(this.dados)
+                            });
+
+                            if (resposta.ok) {
+                                alert('Usuário cadastrado com sucesso!');
+                                this.dados = { nome: '', email: '', senha: '', perfilNovo: 'OPERADOR', setorNovoId: this.dados.setorNovoId };
+                                modalUsuarioOpen = false;
+                                window.location.reload();
+                            } else {
+                                alert('Erro operacional ao salvar usuário.');
+                            }
+                        } catch(e) {
+                            alert('Falha de comunicação com o servidor.');
+                        }
+                    }
+                 }"
+                 x-init="dados.setorNovoId = '<%= usuarioLogado.setor_id %>'">
+                <h3 class="text-sm font-bold text-slate-900 mb-4 uppercase"><i class="fa-solid fa-user-gear text-emerald-700"></i> Cadastrar Operador</h3>
+                <form @submit.prevent="submeterUsuario()" class="space-y-3 text-xs font-semibold text-slate-600">
+                    <div>
+                        <label class="block text-slate-500 mb-1">Nome Completo</label>
+                        <input type="text" 
+                               x-ref="focoUsuario"
+                               x-model="dados.nome" 
+                               class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none text-slate-900" required>
+                    </div>
+                    <div>
+                        <label class="block text-slate-500 mb-1">E-mail</label>
+                        <input type="email" x-model="dados.email" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none text-slate-900" required>
+                    </div>
+                    <div>
+                        <label class="block text-slate-500 mb-1">Senha de Acesso</label>
+                        <input type="password" x-model="dados.senha" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none text-slate-900" required>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-slate-500 mb-1">Nível de Perfil</label>
+                            <select name="perfilNovo" x-model="dados.perfilNovo" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none text-slate-900">
+                                <option value="OPERADOR">OPERADOR</option>
+                                <option value="VISUALIZADOR">VISUALIZADOR</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-slate-500 mb-1">Setor Destino</label>
+                            <select name="setorNovoId" x-model="dados.setorNovoId" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none text-slate-900" <%= usuarioLogado.perfil !== 'ADMIN' ? 'disabled' : '' %>>
+                                <% setores.forEach(s => { %>
+                                    <option value="<%= s.id %>" <%= s.id === usuarioLogado.setor_id ? 'selected' : '' %>><%= s.sigla %></option>
+                                <% }) %>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="flex justify-end space-x-2 pt-2 border-t border-slate-100">
+                        <button type="button" @click="modalUsuarioOpen = false" class="px-3 py-1.5 bg-slate-100 text-slate-700 font-bold rounded-lg hover:bg-slate-200">Cancelar</button>
+                        <button type="submit" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow">Criar Usuário</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div x-show="modalSetorOpen" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex justify-center items-center z-50 p-4">
+            <div class="bg-white rounded-2xl border w-full max-w-xs p-6 shadow-2xl" 
+                 @click.away="modalSetorOpen = false"
+                 x-data="{
+                    dados: { nome: '', sigla: '' },
+                    async submeterSetor() {
+                        try {
+                            let resposta = await fetch('/setores/salvar', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(this.dados)
+                            });
+
+                            if (resposta.ok) {
+                                alert('Setor cadastrado com sucesso!');
+                                this.dados = { nome: '', sigla: '' };
+                                modalSetorOpen = false;
+                                window.location.reload();
+                            } else {
+                                alert('Erro operacional ao salvar setor.');
+                            }
+                        } catch(e) {
+                            alert('Falha de comunicação com o servidor.');
+                        }
+                    }
+                 }">
+                <h3 class="text-sm font-bold text-slate-900 mb-4 uppercase"><i class="fa-solid fa-building text-indigo-700"></i> Criar Novo Setor</h3>
+                <form @submit.prevent="submeterSetor()" class="space-y-3 text-xs font-semibold text-slate-600">
+                    <div>
+                        <label class="block text-slate-500 mb-1">Nome Oficial da Repartição</label>
+                        <input type="text" 
+                               x-ref="focoSetor"
+                               x-model="dados.nome" 
+                               placeholder="Ex: Secretaria de Finanças" 
+                               class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none text-slate-900" required>
+                    </div>
+                    <div>
+                        <label class="block text-slate-500 mb-1">Sigla de Identificação</label>
+                        <input type="text" 
+                               x-model="dados.sigla" 
+                               placeholder="Ex: SEFIN" 
+                               class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none text-slate-900" required>
+                    </div>
+                    <div class="flex justify-end space-x-2 pt-2 border-t border-slate-100">
+                        <button type="button" @click="modalSetorOpen = false" class="px-3 py-1.5 bg-slate-100 text-slate-700 font-bold rounded-lg hover:bg-slate-200">Voltar</button>
+                        <button type="submit" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow">Injetar Setor</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div x-show="modalCategoriaOpen" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex justify-center items-center z-50 p-4">
+            <div class="bg-white rounded-2xl border w-full max-w-xs p-6 shadow-2xl" 
+                 @click.away="modalCategoriaOpen = false"
+                 x-data="{
+                    dados: { nome: '' },
+                    async submeterCategoria() {
+                        try {
+                            let resposta = await fetch('/categorias/salvar', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(this.dados)
+                            });
+
+                            if (resposta.ok) {
+                                alert('Categoria cadastrada com sucesso!');
+                                this.dados.nome = '';
+                                modalCategoriaOpen = false;
+                                window.location.reload();
+                            } else {
+                                alert('Erro operacional ao salvar categoria.');
+                            }
+                        } catch(e) {
+                            alert('Falha de comunicação com o servidor.');
+                        }
+                    }
+                 }">
+                <h3 class="text-sm font-bold text-slate-900 mb-4 uppercase"><i class="fa-solid fa-tag text-teal-700"></i> Criar Categoria</h3>
+                <form @submit.prevent="submeterCategoria()" class="space-y-3 text-xs font-semibold">
+                    <div>
+                        <label class="block text-slate-500 mb-1">Nome da Categoria</label>
+                        <input type="text" 
+                               x-ref="focoCategoria"
+                               x-model="dados.nome" 
+                               placeholder="Ex: Services de Internet" 
+                               class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none text-slate-900" required>
+                    </div>
+                    <div class="flex justify-end space-x-2 pt-2 border-t border-slate-100">
+                        <button type="button" @click="modalCategoriaOpen = false" class="px-3 py-1.5 bg-slate-100 text-slate-700 font-bold rounded-lg hover:bg-slate-200">Cancelar</button>
+                        <button type="submit" class="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg shadow">Injetar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div x-show="modalFornecedorOpen" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex justify-center items-center z-50 p-4">
+            <div class="bg-white rounded-2xl border w-full max-w-sm p-6 shadow-2xl relative" 
+                 @click.away="modalFornecedorOpen = false"
+                 x-data="{
+                    erroCNPJ: '',
+                    dados: { razao_social: '', cnpj: '', contato_nome: '', telefone: '(21) ', email: '' },
+
+                    aplicarMascaraCNPJ(valor) {
+                        valor = valor.replace(/\D/g, ''); 
+                        if (valor.length > 14) valor = valor.slice(0, 14);
+                        valor = valor.replace(/^(\d{2})(\d)/, '$1.$2');
+                        valor = valor.replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3');
+                        valor = valor.replace(/\.(\d{3})(\d)/, '.$1/$2');
+                        valor = valor.replace(/(\d{4})(\d)/, '$1-$2');
+                        this.dados.cnpj = valor;
+                    },
+
+                    validarCNPJMatematico(cnpj) {
+                        cnpj = cnpj.replace(/\D/g, '');
+                        if (cnpj.length !== 14 || /^(\d)\1+$/.test(cnpj)) return false;
+                        
+                        let tamanho = cnpj.length - 2;
+                        let numeros = cnpj.substring(0, tamanho);
+                        let digitos = cnpj.substring(tamanho);
+                        let soma = 0;
+                        let pos = tamanho - 7;
+                        
+                        for (let i = tamanho; i >= 1; i--) {
+                            soma += numeros.charAt(tamanho - i) * pos--;
+                            if (pos < 2) pos = 9;
+                        }
+                        
+                        let resultado = soma % 11 < 2 ? 0 : 11 - (soma % 11);
+                        if (resultado != digitos.charAt(0)) return false;
+                        
+                        tamanho = tamanho + 1;
+                        numeros = cnpj.substring(0, tamanho);
+                        soma = 0;
+                        pos = tamanho - 7;
+                        for (let i = tamanho; i >= 1; i--) {
+                            soma += numeros.charAt(tamanho - i) * pos--;
+                            if (pos < 2) pos = 9;
+                        }
+                        resultado = soma % 11 < 2 ? 0 : 11 - (soma % 11);
+                        return resultado == digitos.charAt(1);
+                    },
+
+                    verificarCampoCNPJ() {
+                        let purificado = this.dados.cnpj.replace(/\D/g, '');
+                        if (purificado.length === 14) {
+                            if (!this.validarCNPJMatematico(this.dados.cnpj)) {
+                                this.erroCNPJ = 'CNPJ MATEMATICAMENTE INVÁLIDO!';
+                                this.dados.cnpj = '';
+                                setTimeout(() => { this.erroCNPJ = ''; }, 5000);
+                            }
+                        }
+                    },
+
+                    tratarRazaoSocial(valor) {
+                        this.dados.razao_social = valor
+                            .normalize('NFD')
+                            .replace(/[\u0300-\u036f]/g, '') 
+                            .toUpperCase();
+                    },
+
+                    aplicarMascaraTelefone(valor) {
+                        valor = valor.replace(/\D/g, '');
+                        if (valor.length > 11) valor = valor.slice(0, 11);
+                        if (valor.length > 6) {
+                            valor = valor.replace(/^(\d{2})(\d{5})(\d{4})$/, '($1) $2-$3');
+                        } else if (valor.length > 2) {
+                            valor = valor.replace(/^(\d{2})(\d)/, '($1) $2');
+                        } else {
+                            valor = valor.replace(/^(\d*)/, '($1');
+                        }
+                        this.dados.telefone = valor;
+                    },
+
+                    tratarEmail(valor) {
+                        let formatado = valor.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+                        if (formatado.endsWith('@')) {
+                            formatado += 'gmail.com';
+                        }
+                        this.dados.email = formatado;
+                    },
+
+                    async submeterFornecedor() {
+                        try {
+                            let resposta = await fetch('/fornecedores/salvar', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(this.dados)
+                            });
+
+                            if (resposta.ok) {
+                                alert('Fornecedor cadastrado com sucesso!');
+                                this.dados = { razao_social: '', cnpj: '', contato_nome: '', telefone: '(21) ', email: '' };
+                                modalFornecedorOpen = false;
+                                window.location.reload();
+                            } else {
+                                alert('Erro operacional ao salvar fornecedor.');
+                            }
+                        } catch(e) {
+                            alert('Falha de comunicação com o servidor.');
+                        }
+                    }
+                 }">
+
+                <div x-show="erroCNPJ" x-transition class="fixed inset-0 flex items-center justify-center z-50 bg-black/20 backdrop-blur-xs">
+                    <div class="bg-rose-600 text-white font-black text-center px-6 py-4 rounded-xl shadow-2xl border border-rose-700 uppercase tracking-wider animate-bounce text-sm">
+                        <i class="fa-solid fa-triangle-exclamation mr-2 text-base"></i>
+                        <span x-text="erroCNPJ"></span>
+                    </div>
+                </div>
+
+                <h3 class="text-sm font-bold text-slate-900 mb-4 uppercase flex items-center gap-2">
+                    <i class="fa-solid fa-truck-field text-amber-600"></i> Cadastrar Fornecedor
+                </h3>
+                
+                <form @submit.prevent="submeterFornecedor()" class="space-y-3 text-xs font-semibold text-slate-600">
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-slate-500 mb-1">Razão Social</label>
+                            <input type="text" 
+                                   x-ref="focoInicial"
+                                   x-model="dados.razao_social" 
+                                   @input="tratarRazaoSocial($event.target.value)"
+                                   class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none text-slate-900" required>
+                        </div>
+                        <div>
+                            <label class="block text-slate-500 mb-1">CNPJ</label>
+                            <input type="text" 
+                                   x-model="dados.cnpj" 
+                                   @input="aplicarMascaraCNPJ($event.target.value)"
+                                   @blur="verificarCampoCNPJ()"
+                                   placeholder="00.000.000/0001-00" 
+                                   class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none text-slate-900 font-mono" required>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-slate-500 mb-1">Nome do Contato</label>
+                        <input type="text" x-model="dados.contato_nome" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none text-slate-900">
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-slate-500 mb-1">Telefone</label>
+                            <input type="text" 
+                                   x-model="dados.telefone" 
+                                   @input="aplicarMascaraTelefone($event.target.value)"
+                                   class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none text-slate-900 font-mono" required>
+                        </div>
+                        <div>
+                            <label class="block text-slate-500 mb-1">E-mail</label>
+                            <input type="text" 
+                                   x-model="dados.email" 
+                                   @input="tratarEmail($event.target.value)"
+                                   placeholder="exemplo@gmail.com"
+                                   class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none text-slate-900" required>
+                        </div>
+                    </div>
+                    <div class="flex justify-end space-x-2 pt-2 border-t border-slate-100">
+                        <button type="button" @click="modalFornecedorOpen = false" class="px-3 py-1.5 bg-slate-100 text-slate-700 font-bold rounded-lg hover:bg-slate-200">Cancelar</button>
+                        <button type="submit" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg shadow">Salvar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <div x-show="modalContratoOpen" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex justify-center items-center z-50 p-4">
+            <div class="bg-white rounded-2xl border w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto shadow-2xl" 
+                 @click.away="modalContratoOpen = false"
+                 x-data="{
+                    valorExibicao: '',
+                    
+                    dados: { 
+                        numero_contrato: '', 
+                        categoria_id: '', 
+                        fornecedor_id: '', 
+                        objeto_resumido: '', 
+                        valor_total: '', 
+                        data_inicio: '', 
+                        vigencia_meses: '', 
+                        periodicidade_pagamento: 'Mensal', 
+                        setor_id: '<%= usuarioLogado.setor_id %>' 
+                    },
+
+                    aplicarMascaraMoeda(valor) {
+                        let apenasNumeros = valor.replace(/\D/g, '');
+                        
+                        if (!apenasNumeros) {
+                            this.valorExibicao = '';
+                            this.dados.valor_total = '';
+                            return;
+                        }
+
+                        let valorNumerico = (parseFloat(apenasNumeros) / 100).toFixed(2);
+                        this.dados.valor_total = valorNumerico;
+
+                        this.valorExibicao = parseFloat(valorNumerico).toLocaleString('pt-BR', {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2
+                        });
+                    },
+
+                    async submeterContrato() {
+                        try {
+                            let resposta = await fetch('/contratos/salvar', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(this.dados)
+                            });
+
+                            if (resposta.ok) {
+                                alert('Contrato e parcelas gerados com sucesso!');
+                                this.dados = { 
+                                    numero_contrato: '', categoria_id: '', fornecedor_id: '', 
+                                    objeto_resumido: '', valor_total: '', data_inicio: '', 
+                                    vigencia_meses: '', periodicidade_pagamento: 'Mensal', 
+                                    setor_id: '<%= usuarioLogado.setor_id %>' 
+                                };
+                                this.valorExibicao = '';
+                                modalContratoOpen = false;
+                                window.location.reload();
+                            } else {
+                                alert('Erro operacional ao salvar o contrato. Verifique as datas e valores.');
+                            }
+                        } catch(e) {
+                            alert('Falha crítica de comunicação com o servidor.');
+                        }
+                    }
+                 }">
+                <h3 class="text-sm font-bold text-slate-900 mb-4 uppercase"><i class="fa-solid fa-file-circle-plus text-sky-800"></i> Cadastrar Novo Contrato</h3>
+                
+                <form @submit.prevent="submeterContrato()" class="space-y-4 text-xs font-semibold text-slate-600">
+                    
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-slate-500 mb-1">Nº do Contrato / Processo</label>
+                            <input type="text" 
+                                   x-ref="focoContrato"
+                                   x-model="dados.numero_contrato" 
+                                   placeholder="Ex: 123/2026" 
+                                   class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none text-slate-800" required>
+                        </div>
+                        <div>
+                            <label class="block text-slate-500 mb-1">Categoria</label>
+                            <select name="categoria_id" x-model="dados.categoria_id" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none text-slate-800" required>
+                                <option value="">Selecione...</option>
+                                <% categorias.forEach(cat => { %>
+                                    <option value="<%= cat.id %>"><%= cat.nome %></option>
+                                <% }) %>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-slate-500 mb-1">Fornecedor / Razão Social</label>
+                        <select name="fornecedor_id" x-model="dados.fornecedor_id" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none text-slate-800" required>
+                            <option value="">Selecione...</option>
+                            <% fornecedores.forEach(f => { %>
+                                <option value="<%= f.id %>"><%= f.razao_social %></option>
+                            <% }) %>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-slate-500 mb-1">Objeto Resumido (Descrição do Escopo)</label>
+                        <textarea x-model="dados.objeto_resumido" rows="2" placeholder="Ex: Prestação de serviços de internet corporativa..." class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none text-slate-800" required></textarea>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-3">
+                        <div>
+                            <label class="block text-slate-500 mb-1">Valor Global (R$)</label>
+                            <input type="text" 
+                                   x-model="valorExibicao"
+                                   @input="aplicarMascaraMoeda($event.target.value)"
+                                   placeholder="0,00" 
+                                   class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none text-slate-800 font-mono text-right" required>
+                        </div>
+                        <div>
+                            <label class="block text-slate-500 mb-1">Data de Início</label>
+                            <input type="date" x-model="dados.data_inicio" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none text-slate-800" required>
+                        </div>
+                        <div>
+                            <label class="block text-slate-500 mb-1">Vigência (Meses)</label>
+                            <input type="number" x-model="dados.vigencia_meses" placeholder="Ex: 12" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none text-slate-800" required>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-slate-500 mb-1">Periodicidade de Pagamento</label>
+                            <select x-model="dados.periodicidade_pagamento" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none text-slate-800">
+                                <option value="Mensal">Mensal</option>
+                                <option value="Trimestral">Trimestral</option>
+                                <option value="Semestral">Semestral</option>
+                                <option value="Anual">Anual</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-slate-500 mb-1">Setor Responsável</label>
+                            <% if (usuarioLogado.perfil === 'ADMIN') { %>
+                                <select name="setor_id" x-model="dados.setor_id" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none text-slate-800" required>
+                                    <option value="">Selecione o Setor...</option>
+                                    <% setores.forEach(s => { %>
+                                        <option value="<%= s.id %>"><%= s.sigla %> - <%= s.nome %></option>
+                                    <% }) %>
+                                </select>
+                            <% } else { %>
+                                <select class="w-full p-2 bg-slate-200 border border-slate-300 rounded-lg focus:outline-none text-slate-500 cursor-not-allowed" disabled>
+                                    <option selected>Seu Setor Atual (Automático)</option>
+                                </select>
+                            <% } %>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end space-x-2 pt-2 border-t border-slate-100">
+                        <button type="button" @click="modalContratoOpen = false" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg transition-colors">Cancelar</button>
+                        <button type="submit" class="px-4 py-2 bg-sky-800 hover:bg-sky-900 text-white font-bold rounded-lg shadow transition-colors">Gerar Contrato e Parcelas</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div x-show="modalFornecedorEditarOpen" 
+             class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex justify-center items-center z-50 p-4"
+             @abrir-editar-fornecedor.window="
+                idEditar = $event.detail.id;
+                fetch('/fornecedores/' + idEditar)
+                    .then(res => res.json())
+                    .then(res => {
+                        dados = { 
+                            razao_social: res.razao_social, 
+                            cnpj: res.cnpj, 
+                            contato_nome: res.contato_nome || '', 
+                            telefone: res.telefone || '(21) ', 
+                            email: res.email || '' 
+                        };
+                        modalFornecedorEditarOpen = true;
+                    });
+             "
+             x-data="{
+                idEditar: null,
+                erroCNPJ: '',
+                dados: { razao_social: '', cnpj: '', contato_nome: '', telephone: '', email: '' },
+
+                aplicarMascaraCNPJ(valor) {
+                    valor = valor.replace(/\D/g, '');
+                    if (valor.length > 14) valor = valor.slice(0, 14);
+                    valor = valor.replace(/^(\d{2})(\d)/, '$1.$2').replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3').replace(/\.(\d{3})(\d)/, '.$1/$2').replace(/(\d{4})(\d)/, '$1-$2');
+                    this.dados.cnpj = valor;
+                },
+                validarCNPJMatematico(cnpj) {
+                    cnpj = cnpj.replace(/\D/g, ''); if (cnpj.length !== 14 || /^(\d)\1+$/.test(cnpj)) return false;
+                    let tamanho = cnpj.length - 2; let numeros = cnpj.substring(0, tamanho); let digitos = cnpj.substring(tamanho); let soma = 0; let pos = tamanho - 7;
+                    for (let i = tamanho; i >= 1; i--) { soma += numeros.charAt(tamanho - i) * pos--; if (pos < 2) pos = 9; }
+                    let resultado = soma % 11 < 2 ? 0 : 11 - (soma % 11); if (resultado != digitos.charAt(0)) return false;
+                    tamanho = tamanho + 1; numeros = cnpj.substring(0, tamanho); soma = 0; pos = tamanho - 7;
+                    for (let i = tamanho; i >= 1; i--) { soma += numeros.charAt(tamanho - i) * pos--; if (pos < 2) pos = 9; }
+                    resultado = soma % 11 < 2 ? 0 : 11 - (soma % 11); return resultado == digitos.charAt(1);
+                },
+                verificarCampoCNPJ() {
+                    if (this.dados.cnpj.replace(/\D/g, '').length === 14 && !this.validarCNPJMatematico(this.dados.cnpj)) {
+                        this.erroCNPJ = 'CNPJ MATEMATICAMENTE INVÁLIDO!'; this.dados.cnpj = ''; setTimeout(() => { this.erroCNPJ = ''; }, 5000);
+                    }
+                },
+                tratarRazaoSocial(valor) { this.dados.razao_social = valor.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase(); },
+                aplicarMascaraTelefone(valor) {
+                    valor = valor.replace(/\D/g, ''); if (valor.length > 11) valor = valor.slice(0, 11);
+                    if (valor.length > 6) valor = valor.replace(/^(\d{2})(\d{5})(\d{4})$/, '($1) $2-$3');
+                    else if (valor.length > 2) valor = valor.replace(/^(\d{2})(\d)/, '($1) $2');
+                    else valor = valor.replace(/^(\d*)/, '($1');
+                    this.dados.telefone = valor;
+                },
+                tratarEmail(valor) { 
+                    let fmt = valor.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+                    if (fmt.endsWith('@')) fmt += 'gmail.com'; this.dados.email = fmt; 
+                },
+
+                async atualizarFornecedor() {
+                    try {
+                        let resposta = await fetch('/fornecedores/atualizar', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                idEditar: this.idEditar,
+                                razao_social: this.dados.razao_social,
+                                contato_nome: this.dados.contato_nome,
+                                telefone: this.dados.telefone,
+                                email: this.dados.email
+                            })
+                        });
+
+                        if (resposta.ok) {
+                            alert('Registro atualizado com sucesso!');
+                            modalFornecedorEditarOpen = false;
+                            idSelecionado = null;
+                            window.location.reload();
+                        } else {
+                            let err = await resposta.json();
+                            alert('Erro na validação do backend: ' + err.erro);
+                        }
+                    } catch(e) {
+                        alert('Falha crítica de rede ao tentar atualizar o registro.');
+                    }
+                }
+             }">
+
+            <div x-show="erroCNPJ" x-transition class="fixed inset-0 flex items-center justify-center z-50 bg-black/20 backdrop-blur-xs">
+                <div class="bg-rose-600 text-white font-black text-center px-6 py-4 rounded-xl shadow-2xl border border border-rose-700 uppercase animate-bounce text-sm">
+                    <i class="fa-solid fa-triangle-exclamation mr-2"></i> <span x-text="erroCNPJ"></span>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-2xl border w-full max-w-sm p-6 shadow-2xl relative" @click.away="modalFornecedorEditarOpen = false">
+                <h3 class="text-sm font-bold text-slate-900 mb-4 uppercase flex items-center gap-2">
+                    <i class="fa-solid fa-pen-to-square text-amber-500"></i> Editar Fornecedor (ID: <span x-text="idEditar"></span>)
+                </h3>
+                
+                <form @submit.prevent="atualizarFornecedor()" class="space-y-3 text-xs font-semibold text-slate-600">
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-slate-500 mb-1">Razão Social</label>
+                            <input type="text" x-model="dados.razao_social" @input="tratarRazaoSocial($event.target.value)" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:outline-none" required>
+                        </div>
+                        <div>
+                            <label class="block text-slate-500 mb-1">CNPJ</label>
+                            <input type="text" x-model="dados.cnpj" @input="aplicarMascaraCNPJ($event.target.value)" @blur="verificarCampoCNPJ()" class="w-full p-2 bg-slate-200 border border-slate-300 rounded-lg text-slate-500 font-mono focus:outline-none cursor-not-allowed" disabled>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-slate-500 mb-1">Nome do Contato</label>
+                        <input type="text" x-model="dados.contato_nome" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:outline-none">
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-slate-500 mb-1">Telefone</label>
+                            <input type="text" x-model="dados.telefone" @input="aplicarMascaraTelefone($event.target.value)" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 font-mono focus:outline-none" required>
+                        </div>
+                        <div>
+                            <label class="block text-slate-500 mb-1">E-mail</label>
+                            <input type="text" x-model="dados.email" @input="tratarEmail($event.target.value)" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:outline-none" required>
+                        </div>
+                    </div>
+                    <div class="flex justify-end space-x-2 pt-2 border-t border-slate-100">
+                        <button type="button" @click="modalFornecedorEditarOpen = false" class="px-3 py-1.5 bg-slate-100 text-slate-700 font-bold rounded-lg hover:bg-slate-200">Cancelar</button>
+                        <button type="submit" class="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg shadow">Salvar Alterações</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div x-show="modalCategoriaEditarOpen" 
+             class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex justify-center items-center z-50 p-4"
+             @abrir-editar-categoria.window="
+                idEditar = $event.detail.id;
+                fetch('/categorias/' + idEditar)
+                    .then(res => res.json())
+                    .then(res => {
+                        dados.nome = res.nome;
+                        modalCategoriaEditarOpen = true;
+                    });
+             "
+             x-data="{
+                idEditar: null,
+                dados: { nome: '' },
+
+                async atualizarCategoria() {
+                    try {
+                        let resposta = await fetch('/categorias/atualizar', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                idEditar: this.idEditar,
+                                nome: this.dados.nome
+                            })
+                        });
+
+                        if (resposta.ok) {
+                            alert('Categoria atualizada com sucesso!');
+                            modalCategoriaEditarOpen = false;
+                            idSelecionado = null;
+                            window.location.reload();
+                        } else {
+                            let err = await resposta.json();
+                            alert('Erro operacional: ' + err.erro);
+                        }
+                    } catch(e) {
+                        alert('Falha crítica de comunicação com o servidor.');
+                    }
+                }
+             }">
+
+            <div class="bg-white rounded-2xl border w-full max-w-xs p-6 shadow-2xl relative" @click.away="modalCategoriaEditarOpen = false">
+                <h3 class="text-sm font-bold text-slate-900 mb-4 uppercase flex items-center gap-2">
+                    <i class="fa-solid fa-pen-to-square text-amber-500"></i> Editar Categoria (ID: <span x-text="idEditar"></span>)
+                </h3>
+                
+                <form @submit.prevent="atualizarCategoria()" class="space-y-3 text-xs font-semibold text-slate-600">
+                    <div>
+                        <label class="block text-slate-500 mb-1">Nome da Categoria</label>
+                        <input type="text" x-model="dados.nome" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:outline-none" required>
+                    </div>
+                    <div class="flex justify-end space-x-2 pt-2 border-t border-slate-100">
+                        <button type="button" @click="modalCategoriaEditarOpen = false" class="px-3 py-1.5 bg-slate-100 text-slate-700 font-bold rounded-lg hover:bg-slate-200">Cancelar</button>
+                        <button type="submit" class="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg shadow">Salvar Alterações</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div x-show="modalUsuarioEditarOpen" 
+             class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex justify-center items-center z-50 p-4"
+             @abrir-editar-usuario.window="
+                idEditar = $event.detail.id;
+                fetch('/usuarios/' + idEditar).then(res => res.json()).then(res => {
+                    dados = { nome: res.nome, email: res.email, senha: res.senha, perfilNovo: res.perfil, setorNovoId: res.setor_id };
+                    modalUsuarioEditarOpen = true;
+                });
+             "
+             x-data="{
+                idEditar: null,
+                dados: { nome: '', email: '', senha: '', perfilNovo: 'OPERADOR', setorNovoId: '' },
+                async atualizarUsuario() {
+                    try {
+                        let res = await fetch('/usuarios/atualizar', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ idEditar: this.idEditar, ...this.dados })
+                        });
+                        if (res.ok) {
+                            alert('Operador updatedo com sucesso com registro em auditoria!');
+                            modalUsuarioEditarOpen = false; idSelecionado = null; window.location.reload();
+                        } else { alert('Erro na atualização.'); }
+                    } catch(e) { alert('Erro de rede.'); }
+                }
+             }">
+            <div class="bg-white rounded-2xl border w-full max-w-sm p-6 shadow-2xl relative" @click.away="modalUsuarioEditarOpen = false">
+                <h3 class="text-sm font-bold text-slate-900 mb-4 uppercase"><i class="fa-solid fa-user-gear text-amber-500"></i> Editar Operador</h3>
+                <form @submit.prevent="atualizarUsuario()" class="space-y-3 text-xs font-semibold text-slate-600">
+                    <div><label class="block text-slate-500 mb-1">Nome Completo</label><input type="text" x-model="dados.nome" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none" required></div>
+                    <div><label class="block text-slate-500 mb-1">E-mail</label><input type="email" x-model="dados.email" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none" required></div>
+                    <div><label class="block text-slate-500 mb-1">Senha de Acesso</label><input type="password" x-model="dados.senha" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none" required></div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div><label class="block text-slate-500 mb-1">Nível de Perfil</label>
+                            <select x-model="dados.perfilNovo" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none">
+                                <option value="OPERADOR">OPERADOR</option><option value="VISUALIZADOR">VISUALIZADOR</option>
+                            </select>
+                        </div>
+                        <div><label class="block text-slate-500 mb-1">Setor Destino</label>
+                            <select x-model="dados.setorNovoId" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none" <%= usuarioLogado.perfil !== 'ADMIN' ? 'disabled' : '' %>>
+                                <% setores.forEach(s => { %><option value="<%= s.id %>"><%= s.sigla %></option><% }) %>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="flex justify-end space-x-2 pt-2 border-t border-slate-100">
+                        <button type="button" @click="modalUsuarioEditarOpen = false" class="px-3 py-1.5 bg-slate-100 text-slate-700 font-bold rounded-lg">Cancelar</button>
+                        <button type="submit" class="px-3 py-1.5 bg-amber-500 text-white font-bold rounded-lg shadow">Salvar Alterações</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div x-show="modalSetorOpen" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex justify-center items-center z-50 p-4">
+            <div class="bg-white rounded-2xl border w-full max-w-xs p-6 shadow-2xl" 
+                 @click.away="modalSetorOpen = false"
+                 x-data="{
+                    dados: { nome: '', sigla: '' },
+                    async submeterSetor() {
+                        try {
+                            let resposta = await fetch('/setores/salvar', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(this.dados)
+                            });
+
+                            if (resposta.ok) {
+                                alert('Setor cadastrado com sucesso!');
+                                this.dados = { nome: '', sigla: '' };
+                                modalSetorOpen = false;
+                                window.location.reload();
+                            } else {
+                                alert('Erro operacional ao salvar setor.');
+                            }
+                        } catch(e) {
+                            alert('Falha de comunicação com o servidor.');
+                        }
+                    }
+                 }">
+                <h3 class="text-sm font-bold text-slate-900 mb-4 uppercase"><i class="fa-solid fa-building text-indigo-700"></i> Criar Novo Setor</h3>
+                <form @submit.prevent="submeterSetor()" class="space-y-3 text-xs font-semibold text-slate-600">
+                    <div>
+                        <label class="block text-slate-500 mb-1">Nome Oficial da Repartição</label>
+                        <input type="text" 
+                               x-ref="focoSetor"
+                               x-model="dados.nome" 
+                               placeholder="Ex: Secretaria de Finanças" 
+                               class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none text-slate-900" required>
+                    </div>
+                    <div>
+                        <label class="block text-slate-500 mb-1">Sigla de Identificação</label>
+                        <input type="text" 
+                               x-model="dados.sigla" 
+                               placeholder="Ex: SEFIN" 
+                               class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none text-slate-900" required>
+                    </div>
+                    <div class="flex justify-end space-x-2 pt-2 border-t border-slate-100">
+                        <button type="button" @click="modalSetorOpen = false" class="px-3 py-1.5 bg-slate-100 text-slate-700 font-bold rounded-lg hover:bg-slate-200">Voltar</button>
+                        <button type="submit" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow">Injetar Setor</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div x-show="modalContratoEditarOpen" 
+             class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex justify-center items-center z-50 p-4"
+             @abrir-editar-contrato.window="
+                idEditar = $event.detail.id;
+                fetch('/contratos/buscar/' + idEditar).then(res => res.json()).then(res => {
+                    dados = { 
+                        numero_contrato: res.numero_contrato, 
+                        categoria_id: res.categoria_id, 
+                        fornecedor_id: res.fornecedor_id, 
+                        objeto_resumido: res.objeto_resumido, 
+                        valor_total: res.valor_total, 
+                        data_inicio: res.data_inicio, 
+                        vigencia_meses: res.vigencia_meses, 
+                        periodicidade_pagamento: res.periodicidade_pagamento, 
+                        setor_id: res.setor_id,
+                        necessita_apostilamento: res.necessita_apostilamento || false,
+                        data_apostilamento: res.data_apostilamento || ''
+                    };
+                    
+                    valorExibicao = parseFloat(res.valor_total).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                    modalContratoEditarOpen = true;
+                });
+             "
+             x-data="{
+                idEditar: null,
+                valorExibicao: '',
+                dados: { numero_contrato: '', categoria_id: '', fornecedor_id: '', objeto_resumido: '', valor_total: '', data_inicio: '', vigencia_meses: '', periodicidade_pagamento: 'Mensal', setor_id: '' },
+
+                aplicarMascaraMoeda(valor) {
+                    let apenasNumeros = valor.replace(/\D/g, '');
+                    if (!apenasNumeros) { this.valorExibicao = ''; this.dados.valor_total = ''; return; }
+                    let valorNumerico = (parseFloat(apenasNumeros) / 100).toFixed(2);
+                    this.dados.valor_total = valorNumerico;
+                    this.valorExibicao = parseFloat(valorNumerico).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                },
+
+                async atualizarContrato() {
+                    try {
+                        let res = await fetch('/contratos/atualizar', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ idEditar: this.idEditar, ...this.dados })
+                        });
+                        if (res.ok) {
+                            alert('Contrato atualizado com sucesso! Alterações computadas na auditoria.');
+                            modalContratoEditarOpen = false; idSelecionado = null; window.location.reload();
+                        } else {
+                            let err = await res.json();
+                            alert('Erro: ' + err.erro);
+                        }
+                    } catch(e) { alert('Falha crítica de comunicação com o servidor.'); }
+                }
+             }">
+
+            <div class="bg-white rounded-2xl border w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto shadow-2xl relative" @click.away="modalContratoEditarOpen = false">
+                <h3 class="text-sm font-bold text-slate-900 mb-4 uppercase flex items-center gap-2">
+                    <i class="fa-solid fa-pen-to-square text-amber-500"></i> Editar Contrato (ID: <span x-text="idEditar"></span>)
+                </h3>
+                
+                <form @submit.prevent="unifiedAtualizarContrato()" class="space-y-4 text-xs font-semibold text-slate-600">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-slate-500 mb-1">Nº do Contrato / Processo</label>
+                            <input type="text" x-model="dados.numero_contrato" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 focus:outline-none" required>
+                        </div>
+                        <div>
+                            <label class="block text-slate-500 mb-1">Categoria</label>
+                            <select x-model="dados.categoria_id" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 focus:outline-none" required>
+                                <% categorias.forEach(cat => { %><option value="<%= cat.id %>"><%= cat.nome %></option><% }) %>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-slate-500 mb-1">Fornecedor / Razão Social</label>
+                        <select x-model="dados.fornecedor_id" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 focus:outline-none" required>
+                            <% fornecedores.forEach(f => { %><option value="<%= f.id %>"><%= f.razao_social %></option><% }) %>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-slate-500 mb-1">Objeto Resumido (Descrição do Escopo)</label>
+                        <textarea x-model="dados.objeto_resumido" rows="2" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 focus:outline-none" required></textarea>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-3">
+                        <div>
+                            <label class="block text-slate-500 mb-1">Valor Global (R$)</label>
+                            <input type="text" x-model="valorExibicao" @input="aplicarMascaraMoeda($event.target.value)" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 font-mono text-right focus:outline-none" required>
+                        </div>
+                        <div>
+                            <label class="block text-slate-500 mb-1">Data de Início</label>
+                            <input type="date" x-model="dados.data_inicio" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 focus:outline-none" required>
+                        </div>
+                        <div>
+                            <label class="block text-slate-500 mb-1">Vigência (Meses)</label>
+                            <input type="number" x-model="dados.vigencia_meses" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 focus:outline-none" required>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3 p-3 bg-slate-50 border border-slate-200 rounded-xl items-center">
+                        <div class="flex items-center space-x-2">
+                            <input type="checkbox" 
+                                   id="edit_necessita_apostilamento" 
+                                   x-model="dados.necessita_apostilamento" 
+                                   @change="if(!dados.necessita_apostilamento) dados.data_apostilamento = ''"
+                                   class="w-4 h-4 text-sky-800 border-slate-300 rounded focus:ring-sky-500">
+                            <label for="edit_necessita_apostilamento" class="text-xs font-bold text-slate-700 cursor-pointer select-none">
+                                <i class="fa-solid fa-stamp text-slate-500 mr-1"></i> Necessita Apostilamento?
+                            </label>
+                        </div>
+                        <div>
+                            <label class="block text-slate-500 mb-0.5 text-[11px]">Data Efetiva do Apostilamento</label>
+                            <input type="date" 
+                                   x-model="dados.data_apostilamento" 
+                                   @disabled="!dados.necessita_apostilamento"
+                                   :class="!dados.necessita_apostilamento ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-white text-slate-800 border-slate-300'"
+                                   class="w-full p-2 border rounded-lg focus:outline-none transition-all font-mono"
+                                   :required="dados.necessita_apostilamento">
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end space-x-2 pt-3 border-t border-slate-100">
+                        <button type="button" @click="modalContratoEditarOpen = false" class="px-4 py-2 bg-slate-100 text-slate-700 font-bold rounded-lg">Cancelar</button>
+                        <button type="submit" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg shadow">Salvar Alterações</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <div x-show="modalMinhaSenhaOpen" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex justify-center items-center z-50 p-4" x-transition>
+            <div class="bg-white rounded-2xl border w-full max-w-xs p-5 shadow-2xl relative" @click.away="modalMinhaSenhaOpen = false"
+                 x-data="{
+                    senhaNova: '',
+                    async executarTrocaSenha() {
+                        if(this.senhaNova.trim().length < 4) {
+                            alert('A senha informada é muito curta!');
+                            return;
+                        }
+                        try {
+                            let resposta = await fetch('/api/v2/usuario/alterar-senha', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ senhaNova: this.senhaNova })
+                            });
+                            if (resposta.ok) {
+                                alert('Sua senha foi alterada com sucesso! O log de segurança foi registrado.');
+                                this.senhaNova = '';
+                                modalMinhaSenhaOpen = false;
+                            } else {
+                                let err = await resposta.json();
+                                alert('Erro operacional: ' + err.erro);
+                            }
+                        } catch(e) {
+                            alert('Falha na comunicação de rede.');
+                        }
+                    }
+                 }">
+                <h3 class="text-xs font-bold text-slate-900 mb-3 uppercase flex items-center gap-1.5">
+                    <i class="fa-solid fa-key text-amber-500"></i> Segurança da Conta
+                </h3>
+                <p class="text-[11px] text-slate-400 mb-3 font-medium">Modifique sua credencial pessoal de acesso abaixo.</p>
+                
+                <form @submit.prevent="executarTrocaSenha()" class="space-y-3 text-xs font-semibold text-slate-600">
+                    <div>
+                        <label class="block text-slate-500 mb-1">Nova Senha</label>
+                        <input type="password" 
+                               x-model="senhaNova" 
+                               placeholder="Mínimo 4 caracteres"
+                               class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:outline-none" required>
+                    </div>
+                    <div class="flex justify-end space-x-1.5 pt-2 border-t border-slate-100">
+                        <button type="button" @click="modalMinhaSenhaOpen = false" class="px-3 py-1.5 bg-slate-100 text-slate-700 font-bold rounded-lg hover:bg-slate-200">Cancelar</button>
+                        <button type="submit" class="px-3 py-1.5 bg-sky-800 hover:bg-sky-900 text-white font-bold rounded-lg shadow-sm">Atualizar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

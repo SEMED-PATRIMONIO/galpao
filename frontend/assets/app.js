@@ -2,6 +2,23 @@ const express = require('express');
 const session = require('express-session');
 const path = require('path');
 const { Pool } = require('pg');
+const multer = require('multer');
+const fs = require('fs');
+
+// Configuração de armazenamento apontando para a pasta exclusiva de contratos no HD secundário (sdb1)
+const storageContratos = multer.diskStorage({
+    destination: (req, file, cb) => {
+        // Mudança cirúrgica para a nova pasta isolada
+        cb(null, '/dados/contratos');
+    },
+    filename: (req, file, cb) => {
+        // Garante nomes de arquivos únicos injetando o timestamp atual
+        const nomeLimpo = file.originalname.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+        cb(null, Date.now() + '_' + nomeLimpo);
+    }
+});
+const uploadPdf = multer({ storage: storageContratos });
+
 
 const app = express();
 const PORT = 3036;
@@ -594,6 +611,62 @@ app.post('/api/v1/setor/configuracoes', verificarAutenticacao, async (req, res) 
         res.json({ sucesso: true });
     } catch (e) {
         res.status(500).json({ erro: e.message });
+    }
+});
+
+// A) ROTA PARA SALVAR O UPLOAD DO PDF E VINCULAR AO CONTRATO
+app.post('/api/v1/contratos/importar-pdf', verificarAutenticacao, uploadPdf.single('pdfContrato'), async (req, res) => {
+    if (req.usuarioLogado.perfil === 'VISUALIZADOR') return res.status(403).json({ erro: "Permissão negada." });
+    
+    const { contratoIdInput } = req.body;
+    if (!req.file || !contratoIdInput) {
+        return res.status(400).json({ erro: "Arquivo ou Contrato não informado." });
+    }
+
+    try {
+        await pool.query(`
+            INSERT INTO contratos_arquivos_pdf (contrato_id, nome_arquivo, caminho_fisico)
+            VALUES ($1, $2, $3)
+        `, [parseInt(contratoIdInput), req.file.filename, req.file.path]);
+
+        res.json({ sucesso: true });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ erro: "Falha ao registrar PDF: " + e.message });
+    }
+});
+
+// B) ROTA PARA LISTAR OS PDFS DE UM CONTRATO ESPECÍFICO (USADO NA EXPANSÃO DE LINHA)
+app.get('/api/v1/contratos/:id/pdfs', verificarAutenticacao, async (req, res) => {
+    try {
+        const busca = await pool.query(
+            'SELECT id, nome_arquivo FROM contratos_arquivos_pdf WHERE contrato_id = $1 ORDER BY criado_em DESC',
+            [req.params.id]
+        );
+        res.json(busca.rows);
+    } catch (e) {
+        res.status(500).json({ erro: e.message });
+    }
+});
+
+// ROTA PARA SERVIR O ARQUIVO PDF DIRETO DO HD SECUNDÁRIO (/dados/images/contratos)
+app.get('/api/v1/contratos/ver-pdf/:id', verificarAutenticacao, async (req, res) => {
+    try {
+        const busca = await pool.query('SELECT nome_arquivo, caminho_fisico FROM contratos_arquivos_pdf WHERE id = $1', [req.params.id]);
+        if (busca.rows.length === 0) return res.status(404).send("Arquivo não encontrado no sistema.");
+
+        const arquivo = busca.rows[0];
+        
+        // O fs.existsSync vai checar o caminho físico (/dados/images/contratos/...) no sdb1
+        if (!fs.existsSync(arquivo.caminho_fisico)) {
+            return res.status(404).send("O arquivo físico não foi localizado no HD secundário.");
+        }
+
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `inline; filename="${arquivo.nome_arquivo}"`);
+        fs.createReadStream(arquivo.caminho_fisico).pipe(res);
+    } catch (e) {
+        res.status(500).send("Erro ao processar arquivo: " + e.message);
     }
 });
 

@@ -29,10 +29,19 @@
             modalSetorEditarOpen: false,
             modalContratoEditarOpen: false,
             modalMinhaSenhaOpen: false,
+            
+            contratoExpandidoId: null,
+            listaPdfsContrato: [],
+            modalImportarPdfOpen: false,
+            contextMenuOpen: false,
+            contextMenuX: 0,
+            contextMenuY: 0,
+            pdfSelecionadoContexto: null,
+
             formContrato: { fornecedor_id: '', categoria_id: '', numero_contrato: '', objeto_resumido: '', valor_total: '', data_inicio: '', vigencia_meses: '', periodicidade_pagamento: 'Mensal', setor_id: '' },
             formLiquidar: { id: '', numero_contrato: '', valor_previsto: '', data_pagamento: '', valor_pago: '', juros_pagos: 0 },
             init() { this.$watch('abaAtual', value => this.idSelecionado = null) }
-        }">
+        }"
 
         <aside class="w-56 bg-slate-900 text-slate-300 flex flex-col h-screen shrink-0 border-r border-slate-800">
             <div class="p-3 flex items-center justify-between bg-white h-16 border-b border-slate-200 text-slate-900 shrink-0">
@@ -107,6 +116,12 @@
                 <h2 class="text-xs font-bold uppercase tracking-wider text-slate-600" x-text="'Painel Administrativo > ' + abaAtual"></h2>
                 
                 <div class="flex items-center space-x-2">
+                    <div x-show="abaAtual === 'contratos' && idSelecionado !== null && '<%= usuarioLogado.perfil %>' !== 'VISUALIZADOR'" x-transition>
+                        <button @click="modalImportarPdfOpen = true" class="bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold px-4 py-2 rounded-lg shadow flex items-center gap-1.5 transition-all">
+                            <i class="fa-solid fa-file-import"></i> Importar PDF
+                        </button>
+                    </div>
+
                     <div x-show="idSelecionado !== null" x-transition>
                         <button @click="
                             if(abaAtual === 'fornecedores') { $dispatch('abrir-editar-fornecedor', { id: idSelecionado }); }
@@ -152,19 +167,73 @@
                                 <th class="p-4 text-center">Ações</th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-slate-100">
-                            <% contratos.forEach(c => { %>
-                            <tr @click="idSelecionado = (idSelecionado === <%= c.id %> ? null : <%= c.id %>)"
-                                :class="idSelecionado === <%= c.id %> ? 'bg-sky-100/80 font-bold border-l-4 border-sky-600' : 'hover:bg-slate-50/60'"
-                                class="transition-all cursor-pointer">
-                                <td class="p-4 font-bold text-slate-900"><%= c.numero_contrato %></td>
-                                <td class="p-4 font-semibold text-slate-700"><%= c.fornecedor %></td>
-                                <td class="p-4 text-slate-500"><%= c.categoria %></td>
-                                <td class="p-4 text-right font-mono font-bold text-slate-900">R$ <%= parseFloat(c.valor_total).toLocaleString('pt-BR', {minimumFractionDigits: 2}) %></td>
-                                <td class="p-4 text-center">
-                                    <span class="text-slate-400 italic text-[11px]">Online</span>
-                                </td>
-                            </tr>
+                        <tbody class="divide-y divide-slate-100 font-medium text-slate-700">
+                            <% contratos.forEach(c => { 
+                                let dataFim = new Date(c.data_inicio);
+                                dataFim.setMonth(dataFim.getMonth() + c.vigencia_meses);
+                                let diffDias = Math.ceil((dataFim - new Date()) / (1000 * 60 * 60 * 24));
+                                
+                                let isExpiracao = (diffDias >= 0 && diffDias <= 45);
+                                let isApostilaPendente = (c.necessita_apostilamento && !c.data_apostilamento);
+                            %>
+                                <tr data-expiracao="<%= isExpiracao %>" 
+                                    data-apostila="<%= isApostilaPendente %>"
+                                    x-show="filtroAlerta === 'todos' || 
+                                            (filtroAlerta === 'expiracao' && $el.getAttribute('data-expiracao') === 'true') || 
+                                            (filtroAlerta === 'apostilamento' && $el.getAttribute('data-apostila') === 'true')"
+                                    @click="idSelecionado = <%= c.id %>"
+                                    @dblclick="if(contratoExpandidoId === <%= c.id %>) { contratoExpandidoId = null; } else { contratoExpandidoId = <%= c.id %>; fetch('/api/v1/contratos/<%= c.id %>/pdfs').then(res => res.json()).then(data => listaPdfsContrato = data); }"
+                                    :class="idSelecionado === <%= c.id %> ? 'bg-sky-900/10' : 'hover:bg-slate-50/60'"
+                                    class="transition-all cursor-pointer border-b border-slate-100">
+                                    
+                                    <td class="p-4 font-mono font-bold text-slate-900"><%= c.numero_contrato %></td>
+                                    <td class="p-4 font-semibold text-slate-700"><%= c.fornecedor %></td>
+                                    <td class="p-4 max-w-[240px] truncate text-slate-500"><%= c.objeto_resumido %></td>
+                                    
+                                    <td class="p-4 text-center">
+                                        <% if (isApostilaPendente) { %>
+                                            <span class="inline-flex items-center gap-1 bg-rose-100 text-rose-700 px-2.5 py-0.5 rounded-full text-[10px] font-bold border border-rose-200">
+                                                <i class="fa-solid fa-stamp text-[9px]"></i> Apostilamento Pendente
+                                            </span>
+                                        <% } %>
+                                        <% if (isExpiracao) { %>
+                                            <span class="inline-flex items-center gap-1 bg-amber-100 text-amber-700 px-2.5 py-0.5 rounded-full text-[10px] font-bold border border-amber-200">
+                                                <i class="fa-solid fa-hourglass-half text-[9px]"></i> Expira em <%= diffDias %> dias
+                                            </span>
+                                        <% } %>
+                                    </td>
+                                    
+                                    <td class="p-4 text-center">
+                                        <button @click.stop="$dispatch('abrir-editar-contrato', { id: <%= c.id %> })" 
+                                                class="bg-slate-100 hover:bg-amber-500 hover:text-white text-slate-600 font-bold px-3 py-1.5 rounded-lg transition-all text-[10px] flex items-center gap-1 mx-auto shadow-xs border border-slate-200">
+                                            <i class="fa-solid fa-pen-to-square"></i> Tratar
+                                        </button>
+                                    </td>
+                                </tr>
+
+                                <tr x-show="contratoExpandidoId === <%= c.id %>" x-transition class="bg-slate-50 border-b border-slate-100">
+                                    <td colspan="5" class="p-3 pl-12">
+                                        <div class="text-xs text-slate-500 font-bold mb-2 flex items-center space-x-1">
+                                            <i class="fa-solid fa-folder-open text-indigo-500"></i>
+                                            <span>Documentos PDF vinculados:</span>
+                                        </div>
+                                        <div class="flex flex-col space-y-1">
+                                            <div x-show="listaPdfsContrato.length === 0" class="text-[11px] text-slate-400 italic p-1">
+                                                Nenhum arquivo PDF importado para este contrato.
+                                            </div>
+                                            <template x-for="pdf in listaPdfsContrato">
+                                                <div @contextmenu.prevent="pdfSelecionadoContexto = pdf; contextMenuX = $event.clientX; contextMenuY = $event.clientY; contextMenuOpen = true;"
+                                                    class="flex items-center justify-between p-2 rounded bg-white border border-slate-200 text-slate-700 text-xs hover:bg-slate-50 font-medium select-none transition-colors">
+                                                    <div class="flex items-center space-x-2">
+                                                        <i class="fa-solid fa-file-pdf text-rose-500 text-sm"></i>
+                                                        <span x-text="pdf.nome_arquivo.substring(pdf.nome_arquivo.indexOf('_') + 1)"></span>
+                                                    </div>
+                                                    <span class="text-[10px] text-slate-400 font-normal italic pr-2">(Botão direito para opções)</span>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </td>
+                                </tr>
                             <% }) %>
                         </tbody>
                     </table>

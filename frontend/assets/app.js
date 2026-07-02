@@ -19,7 +19,6 @@ const storageContratos = multer.diskStorage({
 });
 const uploadPdf = multer({ storage: storageContratos });
 
-
 const app = express();
 const PORT = 3036;
 
@@ -85,6 +84,9 @@ app.get('/logout', (req, res) => {
     req.session.destroy(() => { res.redirect('/login'); });
 });
 
+// ==========================================
+// ROTA DO DASHBOARD CENTRAL (ANTIGA / )
+// ==========================================
 app.get('/', verificarAutenticacao, async (req, res) => {
     const { perfil, setor_id } = req.usuarioLogado;
     try {
@@ -93,6 +95,7 @@ app.get('/', verificarAutenticacao, async (req, res) => {
 
         const idBuscaConfig = (perfil === 'ADMIN' && !setor_id) ? 1 : setor_id;
 
+        // Configuração do setor do usuário atual
         const configSetorBusca = await pool.query(
             'SELECT * FROM configuracoes_setores WHERE setor_id = $1', 
             [idBuscaConfig]
@@ -103,6 +106,13 @@ app.get('/', verificarAutenticacao, async (req, res) => {
             dias_alerta_contrato: 45,
             alerta_apostilamento_ativo: true
         };
+
+        // NOVO: Busca todas as configurações de setores cadastradas para apoiar a checagem do Admin
+        const todasConfigsBusca = await pool.query('SELECT * FROM configuracoes_setores');
+        const mapaConfigsSetores = {};
+        todasConfigsBusca.rows.forEach(cfg => {
+            mapaConfigsSetores[cfg.setor_id] = cfg;
+        });
 
         if (perfil !== 'ADMIN') {
             filtroSetorContrato = 'WHERE c.setor_id = $1';
@@ -116,7 +126,20 @@ app.get('/', verificarAutenticacao, async (req, res) => {
             JOIN categorias cat ON c.categoria_id = cat.id
             ${filtroSetorContrato} ORDER BY c.data_inicio DESC;
         `;
-        const listaContratos = await pool.query(queryContratos, params);
+        const listaContratosResult = await pool.query(queryContratos, params);
+        let listaContratos = listaContratosResult.rows;
+
+        // NOVO: Mapeia parcelas pendentes reais diretamente no objeto de cada contrato
+        for (let contrato of listaContratos) {
+            const parcelasPendentesBusca = await pool.query(
+                `SELECT id, numero_parcela, to_char(data_vencimento, 'YYYY-MM-DD') as data_vencimento, valor_previsto 
+                 FROM parcelas 
+                 WHERE contrato_id = $1 AND status = 'Em aberto' 
+                 ORDER BY numero_parcela ASC`,
+                [contrato.id]
+            );
+            contrato.parcelas_pendentes = parcelasPendentesBusca.rows;
+        }
 
         let queryParcelas = '';
         let paramsParcelas = [parseInt(configSetor.dias_alerta_parcela)];
@@ -183,7 +206,8 @@ app.get('/', verificarAutenticacao, async (req, res) => {
 
         res.render('contratos_dashboard', {
             configSetor: configSetor,
-            contratos: listaContratos.rows,
+            configuracoes_setores: mapaConfigsSetores, // NOVO: Dicionário enviado para checagem refinada do Admin
+            contratos: listaContratos,
             alertasFinanceiros: parcelasCriticas.rows,
             fornecedores: fornecedores.rows,
             categorias: categorias.rows,
@@ -221,6 +245,9 @@ app.post('/usuarios/salvar', verificarAutenticacao, async (req, res) => {
 });
 
 app.post('/setores/salvar', verificarAutenticacao, async (req, res) => {
+    if (req.usuarioLogado.nome.toUpperCase() === 'MENEZES') {
+        return res.status(403).send("Acesso negado: Seu usuário não possui permissão para criar setores.");
+    }
     if (req.usuarioLogado.perfil !== 'ADMIN') return res.status(403).send("Acesso restrito ao Administrador Geral.");
     const { nome, sigla } = req.body;
     try {
@@ -258,38 +285,56 @@ app.post('/fornecedores/salvar', verificarAutenticacao, async (req, res) => {
 app.post('/contratos/salvar', verificarAutenticacao, async (req, res) => {
     if (req.usuarioLogado.perfil !== 'OPERADOR') return res.status(403).json({ erro: "Acesso negado. Apenas operadores podem criar contratos." });
     
-    const { numero_contrato, categoria_id, fornecedor_id, objeto_resumido, valor_total, data_inicio, vigencia_meses, periodicidade_pagamento, setor_id } = req.body;
+    const { numero_contrato, category_id, fornecedor_id, objeto_resumido, valor_total, data_inicio, vigencia_meses, periodicidade_pagamento, setor_id } = req.body;
     
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
 
-        // 1. Calcula a data_fim do contrato
         const dataInicioObj = new Date(data_inicio + 'T00:00:00');
         const meses = parseInt(vigencia_meses);
         const dataFimObj = new Date(dataInicioObj);
         dataFimObj.setMonth(dataFimObj.getMonth() + meses);
         const data_fim = dataFimObj.toISOString().split('T')[0];
 
-        // 2. Insere o contrato e captura o ID gerado
         const contratoInsert = await client.query(`
             INSERT INTO contratos (numero_contrato, categoria_id, fornecedor_id, objeto_resumido, valor_total, data_inicio, data_fim, vigencia_meses, periodicidade_pagamento, setor_id, status)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'Vigente') RETURNING id
         `, [numero_contrato, parseInt(categoria_id), parseInt(fornecedor_id), objeto_resumido, parseFloat(valor_total), data_inicio, data_fim, meses, periodicidade_pagamento, parseInt(setor_id)]);
         
         const contratoId = contratoInsert.rows[0].id;
-        const valorParcela = (parseFloat(valor_total) / meses).toFixed(2);
 
-        // 3. LAÇO CIRÚRGICO: Gera e insere cada parcela do contrato no banco
-        for (let i = 1; i <= meses; i++) {
-            const dataVencimentoParcela = new Date(dataInicioObj);
-            dataVencimentoParcela.setMonth(dataVencimentoParcela.getMonth() + (i - 1));
+        let totalParcelas = meses;
+        let valorParcelaPadrao = (parseFloat(valor_total) / meses).toFixed(2);
+
+        if (periodicidade_pagamento === 'Parcela Única') {
+            totalParcelas = 1;
+            valorParcelaPadrao = parseFloat(valor_total).toFixed(2);
+        }
+
+        for (let i = 1; i <= totalParcelas; i++) {
+            let dataVencimentoParcela = new Date(dataInicioObj);
+            
+            if (periodicidade_pagamento === 'Quinzenal') {
+                dataVencimentoParcela.setDate(dataVencimentoParcela.getDate() + (15 * i));
+            } else if (periodicidade_pagamento === 'Mensal') {
+                dataVencimentoParcela.setMonth(dataVencimentoParcela.getMonth() + i);
+            } else if (periodicidade_pagamento === 'Bimestral') {
+                dataVencimentoParcela.setMonth(dataVencimentoParcela.getMonth() + (2 * i));
+            } else if (periodicidade_pagamento === 'Trimestral') {
+                dataVencimentoParcela.setMonth(dataVencimentoParcela.getMonth() + (3 * i));
+            } else if (periodicidade_pagamento === 'Semestral') {
+                dataVencimentoParcela.setMonth(dataVencimentoParcela.getMonth() + (6 * i));
+            } else if (periodicidade_pagamento === 'Parcela Única') {
+                dataVencimentoParcela.setMonth(dataVencimentoParcela.getMonth() + 1);
+            }
+
             const dataVencFormatada = dataVencimentoParcela.toISOString().split('T')[0];
 
             await client.query(`
                 INSERT INTO parcelas (contrato_id, numero_parcela, data_vencimento, valor_previsto, status)
                 VALUES ($1, $2, $3, $4, 'Em aberto')
-            `, [contratoId, i, dataVencFormatada, valorParcela]);
+            `, [contratoId, i, dataVencFormatada, valorParcelaPadrao]);
         }
 
         await client.query('COMMIT');
@@ -514,8 +559,8 @@ app.post('/setores/atualizar', verificarAutenticacao, async (req, res) => {
             if (String(item.antigo).trim() !== String(item.novo).trim()) {
                 await client.query(`
                     INSERT INTO historico_auditoria (usuario_id, usuario_nome, setor_sigla, tabela_alterada, registro_id, campo_alterado, valor_antigo, valor_novo)
-                    VALUES ($1, $2, 'ADMIN', 'setores', $4, $5, $6, $7)
-                `, [req.usuarioLogado.id, req.usuarioLogado.nome, idEditar, item.campo, item.antigo, item.novo]);
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                `, [req.usuarioLogado.id, req.usuarioLogado.nome, 'ADMIN', 'setores', idEditar, item.campo, item.antigo, item.novo]);
             }
         }
 
@@ -736,32 +781,49 @@ app.get('/api/v1/contratos/ver-pdf/:id', verificarAutenticacao, async (req, res)
     }
 });
 
-// ROTA PARA DAR BAIXA (LIQUIDAR) OU AJUSTAR VALOR DE UMA PARCELA
 app.post('/api/v1/parcelas/liquidar', verificarAutenticacao, async (req, res) => {
-    // Bloqueio determinado pela diretoria: ADMIN e VISUALIZADOR não alteram finanças
     if (req.usuarioLogado.perfil !== 'OPERADOR') {
-        return res.status(403).json({ erro: "Acesso negado. Apenas operadores podem dar baixa ou ajustar parcelas." });
+        return res.status(403).json({ erro: "Acesso negado." });
     }
     
-    const { parcela_id, valor_pago, data_pagamento, juros_pagos, status_novo, valor_previsto } = req.body;
+    const { parcela_id, valor_pago, data_pagamento, juros_pagos, status_novo } = req.body;
     
+    // Normaliza o status
+    let statusFinal = status_novo || 'Em aberto';
+    if (statusFinal.toLowerCase() === 'paga' || statusFinal.toLowerCase() === 'liquidada') {
+        statusFinal = 'Paga';
+    } else {
+        statusFinal = 'Em aberto';
+    }
+    
+    const ehPago = (statusFinal === 'Paga');
+
     try {
+        let vPago = valor_pago ? parseFloat(valor_pago) : null;
+        let dPagamento = data_pagamento || null;
+
+        if (ehPago) {
+            if (!vPago || isNaN(vPago)) {
+                const buscaValor = await pool.query('SELECT valor_previsto FROM parcelas WHERE id = $1', [parseInt(parcela_id)]);
+                vPago = buscaValor.rows.length > 0 ? parseFloat(buscaValor.rows[0].valor_previsto) : 0.00;
+            }
+            if (!dPagamento) {
+                dPagamento = new Date().toISOString().split('T')[0];
+            }
+        } else {
+            vPago = null;
+            dPagamento = null;
+        }
+
         await pool.query(`
             UPDATE parcelas 
-            SET valor_pago = $1, data_pagamento = $2, juros_pagos = $3, status = $4, valor_previsto = $5
+            SET valor_pago = $1, data_pagamento = $2, juros_pagos = $3, status = $4, pago = $5
             WHERE id = $6
-        `, [
-            valor_pago ? parseFloat(valor_pago) : null, 
-            data_pagamento || null, 
-            juros_pagos ? parseFloat(juros_pagos) : 0, 
-            status_novo, 
-            parseFloat(valor_previsto),
-            parseInt(parcela_id)
-        ]);
+        `, [vPago, dPagamento, juros_pagos ? parseFloat(juros_pagos) : 0.00, statusFinal, ehPago, parseInt(parcela_id)]);
         
         res.json({ sucesso: true });
     } catch (e) {
-        console.error("Erro ao liquidar parcela:", e);
+        console.error("Erro na rota liquidar:", e);
         res.status(500).json({ erro: e.message });
     }
 });

@@ -305,55 +305,100 @@
                     </table>
                 </div>
                 
-                <div x-show="abaAtual === 'alertas'" class="space-y-6 animate-fade-in">
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div x-show="abaAtual === 'alertas'" class="space-y-6 animate-fade-in" x-data="{ filtroAlerta: 'todos', filtroTexto: '', idSelecionado: null, contratoExpandidoId: null, listaPdfsContrato: [] }">
+                    
+                    <% 
+                        let totalProximasVencer = 0;
+                        let totalJaVencidas = 0;
+                        let totalContratosExpirar = 0;
+                        let totalApostilamentos = 0;
+                        const hoje = new Date();
+
+                        contratos.forEach(c => {
+                            // Pega a config do setor do contrato, se não achar usa o default da tabela
+                            const conf = configsSetores[c.setor_id] || { dias_alerta_parcela: 30, dias_alerta_contrato: 45 };
+                            
+                            // 1. Lógica de Parcelas Próximas a Vencer e Já Vencidas
+                            if (c.parcelas_pendentes && c.parcelas_pendentes.length > 0) {
+                                c.parcelas_pendentes.forEach(p => {
+                                    let queryData = new Date(p.data_vencimento);
+                                    let diffTime = queryData - hoje;
+                                    let diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+                                    if (diffDays < 0) {
+                                        totalJaVencidas++;
+                                    } else if (diffDays >= 0 && diffDays <= conf.dias_alerta_parcela) {
+                                        totalProximasVencer++;
+                                    }
+                                });
+                            }
+
+                            // 2. Lógica de Vigência do Contrato
+                            let dataFimContrato = new Date(c.data_inicio);
+                            dataFimContrato.setMonth(dataFimContrato.getMonth() + c.vigencia_meses);
+                            let diffContratoDays = Math.ceil((dataFimContrato - hoje) / (1000 * 60 * 60 * 24));
+                            if (diffContratoDays >= 0 && diffContratoDays <= conf.dias_alerta_contrato) {
+                                totalContratosExpirar++;
+                            }
+
+                            // 3. Lógica de Apostilamento
+                            if (c.necessita_apostilamento && !c.data_apostilamento) {
+                                totalApostilamentos++;
+                            }
+                        });
+                    %>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                         
-                        <div class="p-4 bg-white rounded-xl border border-slate-200 shadow-sm flex justify-between items-center">
+                        <div @click="filtroAlerta = (filtroAlerta === 'proximas' ? 'todos' : 'proximas')"
+                             :class="filtroAlerta === 'proximas' ? 'ring-2 ring-rose-600 bg-rose-100 border-rose-400' : 'bg-rose-50/60 hover:shadow-md border-rose-200'"
+                             class="p-4 rounded-2xl border shadow-xs cursor-pointer transition-all flex items-center justify-between select-none animate-pulse">
                             <div>
-                                <p class="text-xs font-bold text-slate-500 uppercase">Contratos a Expirar</p>
-                                <h3 class="text-2xl font-black text-slate-900 my-1">
-                                    <%= contratos.filter(c => {
-                                        let dataFim = new Date(c.data_inicio);
-                                        dataFim.setMonth(dataFim.getMonth() + c.vigencia_meses);
-                                        let diff = Math.ceil((dataFim - new Date()) / (1000 * 60 * 60 * 24));
-                                        return diff >= 0 && diff <= configSetor.dias_alerta_contrato;
-                                    }).length %>
-                                </h3>
-                                <p class="text-[10px] text-slate-400 font-medium">Expiração nos próximos <%= configSetor.dias_alerta_contrato %> dias</p>
+                                <span class="text-xs font-black text-rose-600 uppercase tracking-wider block">Parcelas a Vencer</span>
+                                <h4 class="text-2xl font-black text-rose-700 my-0.5"><%= totalProximasVencer %></h4>
+                                <p class="text-[10px] text-rose-500 font-bold">Dentro do prazo configurado</p>
                             </div>
-                            <div class="p-3 bg-amber-50 rounded-lg text-amber-500">
+                            <div class="w-10 h-10 rounded-xl bg-rose-500/10 flex items-center justify-center text-rose-600">
+                                <i class="fa-solid fa-bell text-lg"></i>
+                            </div>
+                        </div>
+
+                        <div @click="filtroAlerta = (filtroAlerta === 'vencidas' ? 'todos' : 'vencidas')"
+                             :class="filtroAlerta === 'vencidas' ? 'ring-2 ring-red-500 bg-red-50 border-red-300' : 'bg-white hover:shadow-md border-slate-200'"
+                             class="p-4 rounded-2xl border shadow-xs cursor-pointer transition-all flex items-center justify-between select-none">
+                            <div>
+                                <span class="text-xs font-bold uppercase text-slate-500 tracking-wider block">Parcelas Vencidas</span>
+                                <h4 class="text-2xl font-black text-slate-900 my-0.5"><%= totalJaVencidas %></h4>
+                                <p class="text-[10px] text-red-500 font-semibold">Críticas em aberto</p>
+                            </div>
+                            <div class="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center text-red-600">
+                                <i class="fa-solid fa-calendar-xmark text-lg"></i>
+                            </div>
+                        </div>
+
+                        <div @click="filtroAlerta = (filtroAlerta === 'expirar' ? 'todos' : 'expirar')"
+                             :class="filtroAlerta === 'expirar' ? 'ring-2 ring-amber-500 bg-amber-50 border-amber-300' : 'bg-white hover:shadow-md border-slate-200'"
+                             class="p-4 rounded-2xl border shadow-xs cursor-pointer transition-all flex items-center justify-between select-none">
+                            <div>
+                                <span class="text-xs font-bold text-slate-500 uppercase tracking-wider block">Contratos a Expirar</span>
+                                <h3 class="text-2xl font-black text-slate-900 my-0.5"><%= totalContratosExpirar %></h3>
+                                <p class="text-[10px] text-slate-400 font-medium">Término de vigência próximo</p>
+                            </div>
+                            <div class="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center text-amber-500">
                                 <i class="fa-solid fa-clock-history text-lg"></i>
                             </div>
                         </div>
 
-                        <div @click="filtroAlerta = (filtroAlerta === 'parcelas' ? 'todos' : 'parcelas')"
-                             :class="filtroAlerta === 'parcelas' ? 'ring-2 ring-emerald-500 bg-emerald-50 border-emerald-300' : 'bg-white hover:shadow-md border-slate-200'"
-                             class="p-5 rounded-2xl border shadow-xs cursor-pointer transition-all flex items-center justify-between select-none">
-                            <div class="space-y-1">
-                                <span class="text-xs font-bold uppercase text-slate-500 tracking-wider">Vencimento de Parcelas</span>
-                                <h4 class="text-2xl font-black text-slate-900">
-                                    <%= alertasFinanceiros.length %>
-                                </h4>
-                                <p class="text-[10px] text-slate-400">Parcelas críticas em aberto</p>
-                            </div>
-                            <div class="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-600">
-                                <i class="fa-solid fa-calendar-check text-lg"></i>
-                            </div>
-                        </div>
-
                         <div @click="filtroAlerta = (filtroAlerta === 'apostilamento' ? 'todos' : 'apostilamento')"
-                             :class="filtroAlerta === 'apostilamento' ? 'ring-2 ring-rose-500 bg-rose-50 border-rose-300' : 'bg-white hover:shadow-md border-slate-200'"
-                             class="p-5 rounded-2xl border shadow-xs cursor-pointer transition-all flex items-center justify-between select-none">
-                            <div class="space-y-1">
-                                <span class="text-xs font-bold uppercase text-slate-500 tracking-wider">Apostilamentos Pendentes</span>
-                                <h4 class="text-2xl font-black text-rose-600">
-                                    <% let countApostila = contratos.filter(c => c.necessita_apostilamento && !c.data_apostilamento).length; %>
-                                    <%= countApostila %>
-                                </h4>
-                                <p class="text-[10px] text-rose-500/80 font-semibold">Marcados sem data preenchida</p>
+                             :class="filtroAlerta === 'apostilamento' ? 'ring-2 ring-sky-500 bg-sky-50 border-sky-300' : 'bg-white hover:shadow-md border-slate-200'"
+                             class="p-4 rounded-2xl border shadow-xs cursor-pointer transition-all flex items-center justify-between select-none">
+                            <div>
+                                <span class="text-xs font-bold uppercase text-slate-500 tracking-wider block">Apostilamentos</span>
+                                <h4 class="text-2xl font-black text-sky-700 my-0.5"><%= totalApostilamentos %></h4>
+                                <p class="text-[10px] text-slate-400 font-semibold">Sem data preenchida</p>
                             </div>
-                            <div class="w-10 h-10 rounded-xl bg-rose-500/10 flex items-center justify-center text-rose-600 animate-pulse">
-                                <i class="fa-solid fa-triangle-exclamation text-lg"></i>
+                            <div class="w-10 h-10 rounded-xl bg-sky-500/10 flex items-center justify-center text-sky-600">
+                                <i class="fa-solid fa-stamp text-lg"></i>
                             </div>
                         </div>
 
@@ -366,7 +411,7 @@
                                     <i class="fa-solid fa-list-check text-sky-800"></i> Listagem Detalhada de Atenção
                                 </h3>
                                 <p class="text-[11px] text-slate-400 mt-0.5">
-                                    Filtro Selecionado: <span class="font-bold text-sky-800 uppercase" x-text="filtroAlerta"></span>
+                                    Filtro Ativo: <span class="font-bold text-sky-800 uppercase" x-text="filtroAlerta"></span>
                                 </p>
                             </div>
                             <div x-show="filtroAlerta !== 'todos'">
@@ -381,29 +426,46 @@
                                 <thead>
                                     <tr class="bg-slate-100/70 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
                                         <th class="p-4">Nº Contrato</th>
-                                        <th class="p-4">Fornecedor</th>
+                                        <th class="p-4">Setor / Fornecedor</th>
                                         <th class="p-4">Objeto Resumido</th>
-                                        <th class="p-4 text-center">Tipo de Alerta</th>
+                                        <th class="p-4 text-center">Alertas Individuais do Contrato</th>
                                         <th class="p-4 text-center">Ações</th>
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-slate-100 font-medium text-slate-700">
                                     <% contratos.forEach(c => { 
+                                        const conf = configsSetores[c.setor_id] || { dias_alerta_parcela: 30, dias_alerta_contrato: 45 };
+                                        
+                                        // Variáveis de controle de alertas por linha
+                                        let countLinhaProximas = 0;
+                                        let countLinhaVencidas = 0;
+                                        
+                                        if (c.parcelas_pendentes && c.parcelas_pendentes.length > 0) {
+                                            c.parcelas_pendentes.forEach(p => {
+                                                let diff = Math.ceil((new Date(p.data_vencimento) - hoje) / (1000 * 60 * 60 * 24));
+                                                if (diff < 0) countLinhaVencidas++;
+                                                else if (diff >= 0 && diff <= conf.dias_alerta_parcela) countLinhaProximas++;
+                                            });
+                                        }
+
                                         let dataFim = new Date(c.data_inicio);
                                         dataFim.setMonth(dataFim.getMonth() + c.vigencia_meses);
-                                        let diffDias = Math.ceil((dataFim - new Date()) / (1000 * 60 * 60 * 24));
+                                        let diffDiasContrato = Math.ceil((dataFim - hoje) / (1000 * 60 * 60 * 24));
                                         
-                                        let isExpiracao = (diffDias >= 0 && diffDias <= configSetor.dias_alerta_contrato);
+                                        let isExpiracao = (diffDiasContrato >= 0 && diffDiasContrato <= conf.dias_alerta_contrato);
                                         let isApostilaPendente = (c.necessita_apostilamento && !c.data_apostilamento);
                                     %>
-                                        <tr data-expiracao="<%= isExpiracao %>" 
+                                        <tr data-proximas="<%= countLinhaProximas > 0 %>"
+                                            data-vencidas="<%= countLinhaVencidas > 0 %>"
+                                            data-expirar="<%= isExpiracao %>" 
                                             data-apostila="<%= isApostilaPendente %>"
                                             x-show="(filtroTexto === '' || 
                                                     '<%= c.numero_contrato %>'.toLowerCase().includes(filtroTexto.toLowerCase()) ||
-                                                    '<%= c.fornecedor %>'.toLowerCase().includes(filtroTexto.toLowerCase()) ||
-                                                    '<%= c.categoria %>'.toLowerCase().includes(filtroTexto.toLowerCase())) && 
+                                                    '<%= c.fornecedor %>'.toLowerCase().includes(filtroTexto.toLowerCase())) && 
                                                     (filtroAlerta === 'todos' || 
-                                                    (filtroAlerta === 'parcelas' && $el.getAttribute('data-expiracao') === 'true') || 
+                                                    (filtroAlerta === 'proximas' && $el.getAttribute('data-proximas') === 'true') || 
+                                                    (filtroAlerta === 'vencidas' && $el.getAttribute('data-vencidas') === 'true') || 
+                                                    (filtroAlerta === 'expirar' && $el.getAttribute('data-expirar') === 'true') || 
                                                     (filtroAlerta === 'apostilamento' && $el.getAttribute('data-apostila') === 'true'))"
                                             @click="idSelecionado = (idSelecionado === <%= c.id %> ? null : <%= c.id %>)"
                                             @dblclick="if(contratoExpandidoId === <%= c.id %>) { contratoExpandidoId = null; } else { contratoExpandidoId = <%= c.id %>; fetch('/api/v1/contratos/<%= c.id %>/pdfs').then(res => res.json()).then(data => listaPdfsContrato = data); }"
@@ -411,18 +473,34 @@
                                             class="transition-all cursor-pointer border-b border-slate-100 relative">
                                             
                                             <td class="p-4 font-mono font-bold text-slate-900"><%= c.numero_contrato %></td>
-                                            <td class="p-4 font-semibold text-slate-700"><%= c.fornecedor %></td>
+                                            <td class="p-4">
+                                                <span class="text-[10px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded font-bold block w-fit mb-1 uppercase"><%= c.nome_setor %></span>
+                                                <span class="font-semibold text-slate-700"><%= c.fornecedor %></span>
+                                            </td>
                                             <td class="p-4 max-w-[240px] truncate text-slate-500"><%= c.objeto_resumido %></td>
                                             
-                                            <td class="p-4 text-center">
-                                                <% if (isApostilaPendente) { %>
-                                                    <span class="inline-flex items-center gap-1 bg-rose-100 text-rose-700 px-2.5 py-0.5 rounded-full text-[10px] font-bold border border-rose-200">
-                                                        <i class="fa-solid fa-stamp text-[9px]"></i> Apostilamento Pendente
+                                            <td class="p-4 text-center space-y-1">
+                                                <% if (countLinhaProximas > 0) { %>
+                                                    <span class="inline-flex items-center gap-1 bg-rose-100 text-rose-700 px-2.5 py-0.5 rounded-full text-[10px] font-black border border-rose-200 animate-pulse block mx-auto w-fit">
+                                                        <i class="fa-solid fa-circle-exclamation text-[9px]"></i> <%= countLinhaProximas %> parc. a vencer (< <%= conf.dias_alerta_parcela %>d)
                                                     </span>
                                                 <% } %>
+
+                                                <% if (countLinhaVencidas > 0) { %>
+                                                    <span class="inline-flex items-center gap-1 bg-red-100 text-red-700 px-2.5 py-0.5 rounded-full text-[10px] font-bold border border-red-200 block mx-auto w-fit">
+                                                        <i class="fa-solid fa-triangle-exclamation text-[9px]"></i> <%= countLinhaVencidas %> parcela(s) VENCIDA(S)
+                                                    </span>
+                                                <% } %>
+
                                                 <% if (isExpiracao) { %>
-                                                    <span class="inline-flex items-center gap-1 bg-amber-100 text-amber-700 px-2.5 py-0.5 rounded-full text-[10px] font-bold border border-amber-200">
-                                                        <i class="fa-solid fa-hourglass-half text-[9px]"></i> Expira em <%= diffDias %> dias
+                                                    <span class="inline-flex items-center gap-1 bg-amber-100 text-amber-700 px-2.5 py-0.5 rounded-full text-[10px] font-bold border border-amber-200 block mx-auto w-fit">
+                                                        <i class="fa-solid fa-hourglass-half text-[9px]"></i> Vigência encerra em <%= diffDiasContrato %> dias
+                                                    </span>
+                                                <% } %>
+
+                                                <% if (isApostilaPendente) { %>
+                                                    <span class="inline-flex items-center gap-1 bg-sky-100 text-sky-700 px-2.5 py-0.5 rounded-full text-[10px] font-bold border border-sky-200 block mx-auto w-fit">
+                                                        <i class="fa-solid fa-stamp text-[9px]"></i> Apostilamento Requerido
                                                     </span>
                                                 <% } %>
                                             </td>

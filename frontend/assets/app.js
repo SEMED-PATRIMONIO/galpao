@@ -206,7 +206,7 @@ app.get('/', verificarAutenticacao, async (req, res) => {
 
         res.render('contratos_dashboard', {
             configSetor: configSetor,
-            configuracoes_setores: mapaConfigsSetores, // NOVO: Dicionário enviado para checagem refinada do Admin
+            config_setores: mapaConfigsSetores,
             contratos: listaContratos,
             alertasFinanceiros: parcelasCriticas.rows,
             fornecedores: fornecedores.rows,

@@ -5,14 +5,11 @@ const { Pool } = require('pg');
 const multer = require('multer');
 const fs = require('fs');
 
-// Configuração de armazenamento apontando para a pasta exclusiva de contratos no HD secundário (sdb1)
 const storageContratos = multer.diskStorage({
     destination: (req, file, cb) => {
-        // Mudança cirúrgica para a nova pasta isolada
         cb(null, '/dados/contratos');
     },
     filename: (req, file, cb) => {
-        // Garante nomes de arquivos únicos injetando o timestamp atual
         const nomeLimpo = file.originalname.replace(/[^a-zA-Z0-9.\-_]/g, '_');
         cb(null, Date.now() + '_' + nomeLimpo);
     }
@@ -84,9 +81,6 @@ app.get('/logout', (req, res) => {
     req.session.destroy(() => { res.redirect('/login'); });
 });
 
-// ==========================================
-// ROTA DO DASHBOARD CENTRAL (ANTIGA / )
-// ==========================================
 app.get('/', verificarAutenticacao, async (req, res) => {
     const { perfil, setor_id } = req.usuarioLogado;
     try {
@@ -206,7 +200,7 @@ app.get('/', verificarAutenticacao, async (req, res) => {
 
         res.render('contratos_dashboard', {
             configSetor: configSetor,
-            config_setores: mapaConfigsSetores,
+            configsSetores: mapaConfigsSetores,
             contratos: listaContratos,
             alertasFinanceiros: parcelasCriticas.rows,
             fornecedores: fornecedores.rows,
@@ -281,7 +275,6 @@ app.post('/fornecedores/salvar', verificarAutenticacao, async (req, res) => {
     }
 });
 
-// CADASTRO DE CONTRATOS COM GERAÇÃO AUTOMÁTICA DE PARCELAS
 app.post('/contratos/salvar', verificarAutenticacao, async (req, res) => {
     if (req.usuarioLogado.perfil !== 'OPERADOR') return res.status(403).json({ erro: "Acesso negado. Apenas operadores podem criar contratos." });
     
@@ -708,7 +701,6 @@ app.post('/api/v1/setor/configuracoes', verificarAutenticacao, async (req, res) 
     }
 });
 
-// A) ROTA PARA SALVAR O UPLOAD DO PDF E VINCULAR AO CONTRATO
 app.post('/api/v1/contratos/importar-pdf', verificarAutenticacao, uploadPdf.single('pdfContrato'), async (req, res) => {
     if (req.usuarioLogado.perfil === 'VISUALIZADOR') return res.status(403).json({ erro: "Permissão negada." });
     
@@ -730,7 +722,6 @@ app.post('/api/v1/contratos/importar-pdf', verificarAutenticacao, uploadPdf.sing
     }
 });
 
-// B) ROTA PARA LISTAR OS PDFS DE UM CONTRATO ESPECÍFICO (USADO NA EXPANSÃO DE LINHA)
 app.get('/api/v1/contratos/:id/pdfs', verificarAutenticacao, async (req, res) => {
     try {
         const busca = await pool.query(
@@ -743,7 +734,6 @@ app.get('/api/v1/contratos/:id/pdfs', verificarAutenticacao, async (req, res) =>
     }
 });
 
-// ROTA PARA LISTAR AS PARCELAS REAIS DE UM CONTRATO ESPECÍFICO
 app.get('/api/v1/contratos/:id/parcelas', verificarAutenticacao, async (req, res) => {
     try {
         const busca = await pool.query(`
@@ -760,7 +750,6 @@ app.get('/api/v1/contratos/:id/parcelas', verificarAutenticacao, async (req, res
     }
 });
 
-// ROTA PARA SERVIR O ARQUIVO PDF DIRETO DO HD SECUNDÁRIO (/dados/images/contratos)
 app.get('/api/v1/contratos/ver-pdf/:id', verificarAutenticacao, async (req, res) => {
     try {
         const busca = await pool.query('SELECT nome_arquivo, caminho_fisico FROM contratos_arquivos_pdf WHERE id = $1', [req.params.id]);
@@ -768,7 +757,6 @@ app.get('/api/v1/contratos/ver-pdf/:id', verificarAutenticacao, async (req, res)
 
         const arquivo = busca.rows[0];
         
-        // O fs.existsSync vai checar o caminho físico (/dados/images/contratos/...) no sdb1
         if (!fs.existsSync(arquivo.caminho_fisico)) {
             return res.status(404).send("O arquivo físico não foi localizado no HD secundário.");
         }
@@ -788,7 +776,6 @@ app.post('/api/v1/parcelas/liquidar', verificarAutenticacao, async (req, res) =>
     
     const { parcela_id, valor_pago, data_pagamento, juros_pagos, status_novo } = req.body;
     
-    // Normaliza o status
     let statusFinal = status_novo || 'Em aberto';
     if (statusFinal.toLowerCase() === 'paga' || statusFinal.toLowerCase() === 'liquidada') {
         statusFinal = 'Paga';

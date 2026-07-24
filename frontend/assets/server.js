@@ -13,9 +13,9 @@ app.use(express.static(path.join(__dirname, 'public'))); // Servir o index.html 
 // CONFIGURAÇÃO DO POSTGRESQL (Ajuste a senha se necessário)
 const pool = new Pool({
   user: process.env.DB_USER || 'opsemed',
-  host: process.env.DB_HOST || 'localhost',
+  host: process.env.DB_HOST || 'postgres',
   database: process.env.DB_NAME || 'lifyn_db',
-  password: process.env.DB_PASSWORD || 'sua_senha_postgres', 
+  password: process.env.DB_PASSWORD || 'Gatosap2009*2', 
   port: process.env.DB_PORT || 5432,
 });
 

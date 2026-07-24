@@ -301,7 +301,7 @@ app.patch('/api/medications/:id/toggle', authenticateToken, async (req, res) => 
 });
 
 // INICIAR SERVIDOR
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3038;
 app.listen(PORT, '0.0.0.0', async () => {
   await initDB();
   console.log(`🚀 Servidor Lifyn rodando em http://0.0.0.0:${PORT}`);

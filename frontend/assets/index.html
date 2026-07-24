@@ -45,7 +45,7 @@
         <p class="text-[9px] text-brand-500 tracking-wider font-semibold uppercase">Organize. Acompanhe. Evolua.</p>
       </div>
     </div>
-    <button onclick="logout()" class="p-2 text-slate-400 hover:text-rose-400 active:scale-95 transition">
+    <button onclick="logout()" class="p-2 text-slate-400 hover:text-rose-400 active:scale-95 transition" title="Sair do dispositivo">
       <i class="fa-solid fa-power-off text-base"></i>
     </button>
   </header>
@@ -62,22 +62,28 @@
       </div>
 
       <div id="authForms">
+        <!-- FORMULÁRIO DE LOGIN (PADRÃO PARA ACESSO EM OUTROS DISPOSITIVOS) -->
         <form id="loginForm" onsubmit="handleAuth(event, 'login')" class="space-y-4">
           <div>
-            <label class="text-xs text-slate-400 font-medium mb-1 block">Usuário Proprietário</label>
+            <label class="text-xs text-slate-400 font-medium mb-1 block">Usuário</label>
             <input type="text" id="loginUser" required class="w-full bg-slate-800 border border-slate-700/80 rounded-xl px-4 py-3 text-sm text-white focus:border-brand-500 focus:outline-none">
           </div>
           <div>
             <label class="text-xs text-slate-400 font-medium mb-1 block">Senha</label>
             <input type="password" id="loginPass" required class="w-full bg-slate-800 border border-slate-700/80 rounded-xl px-4 py-3 text-sm text-white focus:border-brand-500 focus:outline-none">
           </div>
-          <button type="submit" class="w-full bg-brand-600 hover:bg-brand-500 active:scale-98 font-semibold text-white py-3.5 rounded-xl text-sm shadow-lg shadow-brand-600/30 transition">Acessar no Smartphone</button>
+          <button type="submit" class="w-full bg-brand-600 hover:bg-brand-500 active:scale-98 font-semibold text-white py-3.5 rounded-xl text-sm shadow-lg shadow-brand-600/30 transition">Acessar Minha Conta</button>
+          
+          <button type="button" onclick="toggleAuthForm('register')" class="w-full text-xs text-slate-400 hover:text-brand-400 text-center pt-2 transition">
+            Dispositivo não registrado? <span class="text-brand-500 font-semibold underline">Criar conta</span>
+          </button>
         </form>
 
+        <!-- FORMULÁRIO DE CADASTRO -->
         <form id="registerForm" onsubmit="handleAuth(event, 'register')" class="space-y-4 hidden">
           <div class="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 p-3 rounded-xl text-xs leading-relaxed flex items-center gap-2">
             <i class="fa-solid fa-mobile-screen-button text-base"></i>
-            <span>Dispositivo não registrado. Crie a conta do proprietário único.</span>
+            <span>Criar uma nova conta de proprietário para este dispositivo.</span>
           </div>
           <div>
             <label class="text-xs text-slate-400 font-medium mb-1 block">Usuário</label>
@@ -88,6 +94,10 @@
             <input type="password" id="regPass" required class="w-full bg-slate-800 border border-slate-700/80 rounded-xl px-4 py-3 text-sm text-white focus:border-brand-500 focus:outline-none">
           </div>
           <button type="submit" class="w-full bg-brand-600 hover:bg-brand-500 active:scale-98 font-semibold text-white py-3.5 rounded-xl text-sm shadow-lg shadow-brand-600/30 transition">Registrar Conta & Dispositivo</button>
+
+          <button type="button" onclick="toggleAuthForm('login')" class="w-full text-xs text-slate-400 hover:text-brand-400 text-center pt-2 transition">
+            Já tem uma conta? <span class="text-brand-500 font-semibold underline">Fazer Login</span>
+          </button>
         </form>
       </div>
     </div>
@@ -270,7 +280,6 @@
       </form>
     </div>
   </div>
-
   <div id="medFormModal" class="modal hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end">
     <div class="bg-slate-900 border-t border-slate-800 rounded-t-3xl w-full p-5 space-y-4">
       <div class="flex justify-between items-center border-b border-slate-800 pb-2">
@@ -320,17 +329,39 @@
 
     let bpChartInstance = null;
 
-    async function checkStatus() {
-      const res = await fetch('/api/status');
-      const data = await res.json();
-      if (!data.registered) {
+    // Alternar entre formulário de Login e Registro
+    function toggleAuthForm(mode) {
+      if (mode === 'register') {
         document.getElementById('registerForm').classList.remove('hidden');
         document.getElementById('loginForm').classList.add('hidden');
-      } else if (!token) {
-        document.getElementById('authModal').classList.remove('hidden');
       } else {
+        document.getElementById('loginForm').classList.remove('hidden');
+        document.getElementById('registerForm').classList.add('hidden');
+      }
+    }
+
+    async function checkStatus() {
+      // 1. Se tem token salvo no celular/dispositivo, entra direto!
+      if (token) {
         document.getElementById('authModal').classList.add('hidden');
         loadDashboard();
+        return;
+      }
+
+      // 2. Se não tem token, exibe o Modal de Login com opção de Login por padrão
+      document.getElementById('authModal').classList.remove('hidden');
+      
+      // Checa se o sistema já possui conta registrada no backend para ajustar a exibição inicial
+      try {
+        const res = await fetch('/api/status');
+        const data = await res.json();
+        if (data && !data.registered) {
+          toggleAuthForm('register');
+        } else {
+          toggleAuthForm('login');
+        }
+      } catch (e) {
+        toggleAuthForm('login');
       }
     }
 
@@ -340,26 +371,33 @@
       const username = document.getElementById(type === 'register' ? 'regUser' : 'loginUser').value;
       const password = document.getElementById(type === 'register' ? 'regPass' : 'loginPass').value;
 
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password, deviceToken })
-      });
+      try {
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password, deviceToken })
+        });
 
-      const data = await res.json();
-      if (res.ok) {
-        token = data.token;
-        localStorage.setItem('lifyn_token', token);
-        document.getElementById('authModal').classList.add('hidden');
-        loadDashboard();
-      } else {
-        alert(data.error || 'Erro ao autenticar');
+        const data = await res.json();
+        if (res.ok && data.token) {
+          token = data.token;
+          // Salva no localStorage para NUNCA MAIS pedir login neste dispositivo
+          localStorage.setItem('lifyn_token', token);
+          document.getElementById('authModal').classList.add('hidden');
+          loadDashboard();
+        } else {
+          alert(data.error || 'Erro ao autenticar. Verifique usuário e senha.');
+        }
+      } catch (err) {
+        alert('Erro ao conectar ao servidor.');
       }
     }
 
     function logout() {
-      localStorage.removeItem('lifyn_token');
-      location.reload();
+      if (confirm("Deseja desconectar sua conta deste dispositivo?")) {
+        localStorage.removeItem('lifyn_token');
+        location.reload();
+      }
     }
 
     function switchTab(tabId) {
@@ -370,8 +408,11 @@
         btn.classList.remove('text-brand-500');
         btn.classList.add('text-slate-400');
       });
-      event.currentTarget.classList.add('text-brand-500');
-      event.currentTarget.classList.remove('text-slate-400');
+      
+      if (event && event.currentTarget) {
+        event.currentTarget.classList.add('text-brand-500');
+        event.currentTarget.classList.remove('text-slate-400');
+      }
 
       if (tabId === 'dashboard') loadDashboard();
       if (tabId === 'activities') loadActivities();
@@ -419,45 +460,54 @@
     }
 
     async function loadDashboard() {
-      const res = await fetch('/api/dashboard', { headers: { 'Authorization': `Bearer ${token}` } });
-      const data = await res.json();
-      document.getElementById('dashActCount').innerText = data.activitiesCount;
-      document.getElementById('dashUnpaidBills').innerText = `R$ ${data.unpaidBills.toFixed(2)}`;
-      document.getElementById('dashMedsCount').innerText = data.medsCount;
-      document.getElementById('dashLastBP').innerText = data.lastBP ? `${data.lastBP.systolic}/${data.lastBP.diastolic}` : 'N/A';
-      initCharts();
+      try {
+        const res = await fetch('/api/dashboard', { headers: { 'Authorization': `Bearer ${token}` } });
+        const data = await res.json();
+        document.getElementById('dashActCount').innerText = data.activitiesCount || 0;
+        document.getElementById('dashUnpaidBills').innerText = `R$ ${(data.unpaidBills || 0).toFixed(2)}`;
+        document.getElementById('dashMedsCount').innerText = data.medsCount || 0;
+        document.getElementById('dashLastBP').innerText = data.lastBP ? `${data.lastBP.systolic}/${data.lastBP.diastolic}` : 'N/A';
+        initCharts();
+      } catch (e) {
+        console.error("Erro ao carregar dashboard:", e);
+      }
     }
 
     async function initCharts() {
-      const res = await fetch('/api/vitals', { headers: { 'Authorization': `Bearer ${token}` } });
-      const vitals = (await res.json()).reverse();
+      try {
+        const res = await fetch('/api/vitals', { headers: { 'Authorization': `Bearer ${token}` } });
+        const vitalsData = await res.json();
+        const vitals = Array.isArray(vitalsData) ? vitalsData.reverse() : [];
 
-      const dates = vitals.map(v => v.date);
-      const systolic = vitals.map(v => v.systolic);
-      const diastolic = vitals.map(v => v.diastolic);
+        const dates = vitals.map(v => v.date);
+        const systolic = vitals.map(v => v.systolic);
+        const diastolic = vitals.map(v => v.diastolic);
 
-      if (bpChartInstance) bpChartInstance.destroy();
-      bpChartInstance = new Chart(document.getElementById('bpChart'), {
-        type: 'line',
-        data: {
-          labels: dates,
-          datasets: [
-            { label: 'Sistólica', data: systolic, borderColor: '#ef4444', tension: 0.3, borderWidth: 2 },
-            { label: 'Diastólica', data: diastolic, borderColor: '#3b82f6', tension: 0.3, borderWidth: 2 }
-          ]
-        },
-        options: { 
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: { legend: { labels: { color: '#94a3b8', font: { size: 10 } } } }
-        }
-      });
+        if (bpChartInstance) bpChartInstance.destroy();
+        bpChartInstance = new Chart(document.getElementById('bpChart'), {
+          type: 'line',
+          data: {
+            labels: dates,
+            datasets: [
+              { label: 'Sistólica', data: systolic, borderColor: '#ef4444', tension: 0.3, borderWidth: 2 },
+              { label: 'Diastólica', data: diastolic, borderColor: '#3b82f6', tension: 0.3, borderWidth: 2 }
+            ]
+          },
+          options: { 
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { labels: { color: '#94a3b8', font: { size: 10 } } } }
+          }
+        });
+      } catch (e) {
+        console.error("Erro ao inicializar gráficos:", e);
+      }
     }
 
     async function loadActivities() {
       const res = await fetch('/api/activities?showInactive=true', { headers: { 'Authorization': `Bearer ${token}` } });
       const list = await res.json();
-      document.getElementById('activitiesList').innerHTML = list.map(a => `
+      document.getElementById('activitiesList').innerHTML = Array.isArray(list) && list.length ? list.map(a => `
         <div class="bg-slate-900 border ${a.active ? 'border-slate-800' : 'border-rose-900/40 opacity-50'} p-3.5 rounded-2xl flex justify-between items-center shadow-md">
           <div>
             <h4 class="font-bold text-sm text-white">${a.type}</h4>
@@ -467,13 +517,13 @@
             ${a.active ? 'Inativar' : 'Reativar'}
           </button>
         </div>
-      `).join('') || '<p class="text-xs text-slate-500 text-center py-4">Nenhuma atividade registrada.</p>';
+      `).join('') : '<p class="text-xs text-slate-500 text-center py-4">Nenhuma atividade registrada.</p>';
     }
 
     async function loadVitals() {
       const res = await fetch('/api/vitals?showInactive=true', { headers: { 'Authorization': `Bearer ${token}` } });
       const list = await res.json();
-      document.getElementById('vitalsList').innerHTML = list.map(v => `
+      document.getElementById('vitalsList').innerHTML = Array.isArray(list) && list.length ? list.map(v => `
         <div class="bg-slate-900 border ${v.active ? 'border-slate-800' : 'border-rose-900/40 opacity-50'} p-3 rounded-xl flex justify-between items-center">
           <div>
             <span class="font-bold text-sm text-white">${v.systolic}/${v.diastolic} mmHg</span>
@@ -483,13 +533,13 @@
             ${v.active ? 'Inativar' : 'Reativar'}
           </button>
         </div>
-      `).join('') || '<p class="text-xs text-slate-500 text-center">Sem aferições.</p>';
+      `).join('') : '<p class="text-xs text-slate-500 text-center">Sem aferições.</p>';
     }
 
     async function loadExams() {
       const res = await fetch('/api/lab-exams?showInactive=true', { headers: { 'Authorization': `Bearer ${token}` } });
       const list = await res.json();
-      document.getElementById('examsList').innerHTML = list.map(e => `
+      document.getElementById('examsList').innerHTML = Array.isArray(list) && list.length ? list.map(e => `
         <div class="bg-slate-900 border ${e.active ? 'border-slate-800' : 'border-rose-900/40 opacity-50'} p-3 rounded-xl flex justify-between items-center">
           <div>
             <h5 class="text-xs font-bold text-slate-300">${e.exam_name} - ${e.parameter}</h5>
@@ -499,13 +549,13 @@
             ${e.active ? 'Inativar' : 'Reativar'}
           </button>
         </div>
-      `).join('') || '<p class="text-xs text-slate-500 text-center">Sem exames registrados.</p>';
+      `).join('') : '<p class="text-xs text-slate-500 text-center">Sem exames registrados.</p>';
     }
 
     async function loadBills() {
       const res = await fetch('/api/bills?showInactive=true', { headers: { 'Authorization': `Bearer ${token}` } });
       const list = await res.json();
-      document.getElementById('billsList').innerHTML = list.map(b => `
+      document.getElementById('billsList').innerHTML = Array.isArray(list) && list.length ? list.map(b => `
         <div class="bg-slate-900 border ${b.active ? 'border-slate-800' : 'border-rose-900/40 opacity-50'} p-3.5 rounded-2xl flex justify-between items-center">
           <div>
             <h4 class="font-bold text-sm text-white">${b.title}</h4>
@@ -515,13 +565,13 @@
             ${b.active ? 'Inativar' : 'Reativar'}
           </button>
         </div>
-      `).join('') || '<p class="text-xs text-slate-500 text-center py-4">Sem contas lançadas.</p>';
+      `).join('') : '<p class="text-xs text-slate-500 text-center py-4">Sem contas lançadas.</p>';
     }
 
     async function loadMeds() {
       const res = await fetch('/api/medications?showInactive=true', { headers: { 'Authorization': `Bearer ${token}` } });
       const list = await res.json();
-      document.getElementById('medsList').innerHTML = list.map(m => `
+      document.getElementById('medsList').innerHTML = Array.isArray(list) && list.length ? list.map(m => `
         <div class="bg-slate-900 border ${m.active ? 'border-slate-800' : 'border-rose-900/40 opacity-50'} p-3.5 rounded-2xl flex justify-between items-center">
           <div>
             <h4 class="font-bold text-sm text-white">${m.name} ${m.dosage ? '(' + m.dosage + ')' : ''}</h4>
@@ -531,9 +581,10 @@
             ${m.active ? 'Inativar' : 'Reativar'}
           </button>
         </div>
-      `).join('') || '<p class="text-xs text-slate-500 text-center py-4">Sem medicamentos cadastrados.</p>';
+      `).join('') : '<p class="text-xs text-slate-500 text-center py-4">Sem medicamentos cadastrados.</p>';
     }
 
+    // Iniciar verificação de autenticação ao carregar
     checkStatus();
   </script>
 </body>

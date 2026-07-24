@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: lifyn_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: Gatosap2009*2
+      POSTGRES_DB: lifyn_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  lifyn:
+    build: .
+    container_name: lifyn_app
+    restart: always
+    depends_on:
+      - postgres
+    ports:
+      - "3038:3038"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: Gatosap2009*2
+      POSTGRES_DB: lifyn_db
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+
+volumes:
+  postgres_data:
